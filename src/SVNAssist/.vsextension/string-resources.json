@@ -1,0 +1,12 @@
+{
+  "SVNAssist.StatusCommand.DisplayName": "Mostra Status",
+  "SVNAssist.CommitCommand.DisplayName": "Commit...",
+  "SVNAssist.UpdateCommand.DisplayName": "Update",
+  "SVNAssist.ShowLogCommand.DisplayName": "Log / History",
+  "SVNAssist.Settings.Category": "SVNAssist",
+  "SVNAssist.Settings.AiEndpoint": "AI Endpoint URL",
+  "SVNAssist.Settings.AiApiKey": "AI API Key",
+  "SVNAssist.Settings.AiModel": "AI Model",
+  "SVNAssist.Settings.DefaultLanguage": "Default Language (auto / italiano / english)",
+  "SVNAssist.Settings.WorkingCopyPath": "Working Copy Path"
+}

@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!--
+      VisualStudio.Extensibility (nuovo modello):
+      - Gira su .NET 8 in un processo separato (out-of-process)
+      - Non serve .vsct, non servono GUID, non serve .NET Framework
+      - VS resta stabile anche se l'estensione crasha (processo isolato)
+    -->
+    <TargetFramework>net8.0-windows8.0</TargetFramework>
+    <LangVersion>12.0</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
+    <!-- L'API Settings di VisualStudio.Extensibility è ancora in preview —
+         questo sopprime il warning VSEXTPREVIEW_SETTINGS senza #pragma in ogni file -->
+    <NoWarn>$(NoWarn);VSEXTPREVIEW_SETTINGS</NoWarn>
+    <RootNamespace>SVNAssist</RootNamespace>
+    <AssemblyName>SVNAssist</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Microsoft.VisualStudio.Extensibility.Sdk:
+      Unico pacchetto necessario — include tutto il framework di estensibilità,
+      i source generator per [VisualStudioContribution], e i build tools
+      che generano automaticamente il manifest VSIX dal codice C#.
+    -->
+    <!-- PrivateAssets="all": impedisce all'Extensibility SDK di propagarsi
+         ai progetti che referenziano questo (es. il progetto test).
+         Il source generator e i build targets restano solo qui. -->
+    <PackageReference Include="Microsoft.VisualStudio.Extensibility.Build" Version="17.14.40608" />
+    <PackageReference Include="Microsoft.VisualStudio.Extensibility.Sdk" Version="17.14.40608">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <!-- Remote UI: i file XAML per le tool window devono essere embedded come risorse.
+       RemoteUserControl li cerca per convenzione usando il nome completo della classe. -->
+  <ItemGroup>
+    <EmbeddedResource Include="ToolWindows\SvnStatusToolWindowControl.xaml" />
+    <EmbeddedResource Include="ToolWindows\SvnLogToolWindowControl.xaml" />
+    <EmbeddedResource Include="Dialogs\CommitDialogControl.xaml" />
+  </ItemGroup>
+
+</Project>
