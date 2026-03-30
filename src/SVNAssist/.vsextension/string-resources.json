@@ -1,12 +1,13 @@
 {
-  "SVNAssist.StatusCommand.DisplayName": "Mostra Status",
+  "SVNAssist.Menu.DisplayName": "SVNAssist",
+  "SVNAssist.StatusCommand.DisplayName": "SVN Changes",
   "SVNAssist.CommitCommand.DisplayName": "Commit...",
   "SVNAssist.UpdateCommand.DisplayName": "Update",
   "SVNAssist.ShowLogCommand.DisplayName": "Log / History",
   "SVNAssist.Settings.Category": "SVNAssist",
-  "SVNAssist.Settings.AiEndpoint": "AI Endpoint URL",
-  "SVNAssist.Settings.AiApiKey": "AI API Key",
-  "SVNAssist.Settings.AiModel": "AI Model",
+  "SVNAssist.Settings.AiEndpoint": "AI Endpoint URL (default: GitHub Models, compatibile OpenAI)",
+  "SVNAssist.Settings.AiApiKey": "AI API Key (GitHub PAT per GitHub Models, oppure API key OpenAI)",
+  "SVNAssist.Settings.AiModel": "AI Model (es. gpt-4o-mini, gpt-4o)",
   "SVNAssist.Settings.DefaultLanguage": "Default Language (auto / italiano / english)",
   "SVNAssist.Settings.WorkingCopyPath": "Working Copy Path"
 }

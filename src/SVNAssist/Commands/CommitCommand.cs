@@ -23,7 +23,6 @@ internal class CommitCommand : Command
     /// <inheritdoc />
     public override CommandConfiguration CommandConfiguration => new("%SVNAssist.CommitCommand.DisplayName%")
     {
-        Placements = [CommandPlacement.KnownPlacements.ExtensionsMenu],
     };
 
     /// <summary>

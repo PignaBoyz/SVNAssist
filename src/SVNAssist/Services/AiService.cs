@@ -11,14 +11,22 @@ namespace SVNAssist.Services;
 /// </summary>
 /// <remarks>
 /// Perché un'interfaccia REST generica e non l'SDK OpenAI?
-/// - Funziona con qualsiasi provider compatibile (OpenAI, Azure OpenAI, LM Studio, Ollama, ecc.)
+/// - Funziona con qualsiasi provider compatibile (GitHub Models, OpenAI, Azure OpenAI, Ollama, ecc.)
 /// - Nessuna dipendenza aggiuntiva da NuGet
 /// - Il formato Chat Completions è uno standard de facto
 ///
+/// Provider consigliato: <b>GitHub Models</b>
+/// - Endpoint: <c>https://models.inference.ai.azure.com/chat/completions</c>
+/// - Auth: GitHub Personal Access Token (PAT) come Bearer token
+/// - Modelli: gpt-4o-mini, gpt-4o, Phi-3, Llama, ecc.
+/// - Gratuito per gli utenti GitHub (con rate limit)
+/// - Non richiede di scaricare modelli — è una API cloud
+///
+/// Per chi ha GitHub Copilot in VS, basta creare un PAT su
+/// <c>github.com/settings/tokens</c> e inserirlo nelle impostazioni.
+///
 /// <see cref="HttpClient"/> viene iniettato dal costruttore come singleton —
 /// non va creato per ogni chiamata (rischio socket exhaustion).
-/// Endpoint, API key e modello vengono passati al costruttore
-/// e in futuro arriveranno da <c>SettingsService</c> (Step 9).
 /// </remarks>
 public class AiService : IAiService
 {
@@ -110,9 +118,15 @@ public class AiService : IAiService
         using var content = new StringContent(json, Encoding.UTF8, "application/json");
 
         using var response = await _httpClient.PostAsync(_endpoint, content, ct);
-        response.EnsureSuccessStatusCode();
 
         var responseJson = await response.Content.ReadAsStringAsync(ct);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new HttpRequestException(
+                $"AI API error {(int)response.StatusCode} {response.StatusCode}: {responseJson}");
+        }
+
         return ParseCompletionResponse(responseJson);
     }
 

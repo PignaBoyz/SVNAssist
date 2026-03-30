@@ -58,9 +58,14 @@ public class SvnService : ISvnService
         foreach (var entry in doc.Descendants("entry"))
         {
             var path = entry.Attribute("path")?.Value ?? string.Empty;
-            var itemStatus = entry.Descendants("wc-status")
-                                  .FirstOrDefault()
-                                  ?.Attribute("item")?.Value ?? "unknown";
+            var wcStatus = entry.Descendants("wc-status").FirstOrDefault();
+            var itemStatus = wcStatus?.Attribute("item")?.Value ?? "unknown";
+            var propsStatus = wcStatus?.Attribute("props")?.Value ?? "none";
+
+            // Quando cambia solo una proprietà (es. svn:ignore), svn status --xml
+            // restituisce item="normal" e props="modified": va trattato come modifica.
+            if (itemStatus == "normal" && propsStatus == "modified")
+                itemStatus = "modified";
 
             results.Add(new SvnFileStatus(path, ParseStatusKind(itemStatus)));
         }
@@ -76,6 +81,86 @@ public class SvnService : ISvnService
         var pathArgs = string.Join(" ", paths.Select(p => $"\"{p}\""));
         var escapedMessage = message.Replace("\"", "\\\"");
         await RunSvnAsync($"commit -m \"{escapedMessage}\" {pathArgs}", workingDirectory: null, ct);
+    }
+
+    /// <inheritdoc />
+    public async Task AddAsync(IEnumerable<string> paths, CancellationToken ct)
+    {
+        var pathArgs = string.Join(" ", paths.Select(p => $"\"{p}\""));
+        if (string.IsNullOrWhiteSpace(pathArgs))
+            return;
+
+        await RunSvnAsync($"add --force {pathArgs}", workingDirectory: null, ct);
+    }
+
+    /// <inheritdoc />
+    public async Task DeleteAsync(IEnumerable<string> paths, CancellationToken ct)
+    {
+        var pathArgs = string.Join(" ", paths.Select(p => $"\"{p}\""));
+        if (string.IsNullOrWhiteSpace(pathArgs))
+            return;
+
+        await RunSvnAsync($"delete {pathArgs}", workingDirectory: null, ct);
+    }
+
+    /// <inheritdoc />
+    public async Task RevertAsync(IEnumerable<string> paths, CancellationToken ct)
+    {
+        var pathArgs = string.Join(" ", paths.Select(p => $"\"{p}\""));
+        if (string.IsNullOrWhiteSpace(pathArgs))
+            return;
+
+        await RunSvnAsync($"revert --depth infinity {pathArgs}", workingDirectory: null, ct);
+    }
+
+    /// <inheritdoc />
+    public async Task ResolveAsync(string path, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            throw new ArgumentException("Il percorso non può essere vuoto.", nameof(path));
+
+        await RunSvnAsync($"resolve --accept working \"{path}\"", workingDirectory: null, ct);
+    }
+
+    /// <inheritdoc />
+    public async Task AddToIgnoreListAsync(string path, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            throw new ArgumentException("Il percorso non può essere vuoto.", nameof(path));
+
+        var targetName = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        if (string.IsNullOrWhiteSpace(targetName))
+            throw new InvalidOperationException("Impossibile determinare il nome dell'elemento da ignorare.");
+
+        var parentDirectory = Directory.Exists(path)
+            ? Directory.GetParent(path)?.FullName
+            : Path.GetDirectoryName(path);
+
+        if (string.IsNullOrWhiteSpace(parentDirectory))
+            throw new InvalidOperationException("Impossibile determinare la directory padre per svn:ignore.");
+
+        string existingIgnore;
+        try
+        {
+            existingIgnore = (await RunSvnAsync($"propget svn:ignore \"{parentDirectory}\"", workingDirectory: null, ct)).TrimEnd();
+        }
+        catch
+        {
+            existingIgnore = string.Empty;
+        }
+
+        var entries = existingIgnore
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(v => v.Trim())
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .ToList();
+
+        if (entries.Any(v => string.Equals(v, targetName, StringComparison.OrdinalIgnoreCase)))
+            return;
+
+        entries.Add(targetName);
+        var newIgnoreValue = string.Join("\n", entries).Replace("\"", "\\\"");
+        await RunSvnAsync($"propset svn:ignore \"{newIgnoreValue}\" \"{parentDirectory}\"", workingDirectory: null, ct);
     }
 
     /// <inheritdoc />
@@ -130,6 +215,89 @@ public class SvnService : ISvnService
         // svn diff senza -c mostra le modifiche locali non committate
         // rispetto alla revisione BASE della working copy.
         return await RunSvnAsync("diff", workingCopyPath, ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<string> GetFileDiffAsync(string filePath, CancellationToken ct)
+    {
+        // svn diff per un singolo file mostra le modifiche locali non committate
+        // rispetto alla revisione BASE.
+        return await RunSvnAsync($"diff \"{filePath}\"", workingDirectory: null, ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> OpenNativeDiffAsync(string filePath, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+            throw new ArgumentException("Il percorso file non può essere vuoto.", nameof(filePath));
+
+        ct.ThrowIfCancellationRequested();
+
+        var tortoiseProcPath = FindTortoiseProcExecutable();
+        if (string.IsNullOrWhiteSpace(tortoiseProcPath))
+            return false;
+
+        var escapedPath = filePath.Replace("\"", "\\\"");
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = tortoiseProcPath,
+            Arguments = $"/command:diff /path:\"{escapedPath}\"",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+
+        return await Task.Run(() =>
+        {
+            ct.ThrowIfCancellationRequested();
+            using var process = Process.Start(startInfo);
+            return process is not null;
+        }, ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<string> GetBranchNameAsync(string workingCopyPath, CancellationToken ct)
+    {
+        // svn info --show-item relative-url restituisce il path relativo alla root del repository.
+        // Esempio output: ^/trunk  oppure  ^/branches/feature-test
+        try
+        {
+            var relativeUrl = await RunSvnAsync(
+                "info --show-item relative-url", workingCopyPath, ct);
+
+            var url = relativeUrl.Trim().TrimStart('^', '/');
+
+            // Estrai il nome del branch dall'URL relativo:
+            // "trunk" → "trunk"
+            // "branches/feature-x" → "branches/feature-x"
+            // "tags/v1.0" → "tags/v1.0"
+            return string.IsNullOrWhiteSpace(url) ? "unknown" : url;
+        }
+        catch
+        {
+            return "unknown";
+        }
+    }
+
+    /// <summary>
+    /// Cerca la root della working copy SVN navigando verso l'alto nel filesystem.
+    /// Cerca la cartella <c>.svn</c> nella directory corrente e in quelle superiori.
+    /// </summary>
+    /// <param name="startPath">Percorso da cui iniziare la ricerca.</param>
+    /// <param name="maxLevels">Numero massimo di livelli da risalire (default 10).</param>
+    /// <returns>Il percorso della root SVN, oppure <c>null</c> se non trovata.</returns>
+    public static string? FindSvnRoot(string startPath, int maxLevels = 10)
+    {
+        var current = new DirectoryInfo(startPath);
+
+        for (int i = 0; i < maxLevels && current != null; i++)
+        {
+            if (Directory.Exists(Path.Combine(current.FullName, ".svn")))
+                return current.FullName;
+
+            current = current.Parent;
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -216,6 +384,35 @@ public class SvnService : ISvnService
         throw new FileNotFoundException(
             "svn.exe non trovato. Installa Subversion e assicurati che sia nel PATH, " +
             "oppure installa TortoiseSVN con l'opzione 'command line client tools'.");
+    }
+
+    /// <summary>
+    /// Cerca <c>TortoiseProc.exe</c> nel PATH e nelle posizioni note di TortoiseSVN.
+    /// Restituisce null se il client nativo non è disponibile.
+    /// </summary>
+    private static string? FindTortoiseProcExecutable()
+    {
+        var pathDirs = Environment.GetEnvironmentVariable("PATH")?.Split(Path.PathSeparator) ?? [];
+        foreach (var dir in pathDirs)
+        {
+            var candidate = Path.Combine(dir, "TortoiseProc.exe");
+            if (File.Exists(candidate))
+                return candidate;
+        }
+
+        string[] knownPaths =
+        [
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "TortoiseSVN", "bin", "TortoiseProc.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "TortoiseSVN", "bin", "TortoiseProc.exe"),
+        ];
+
+        foreach (var path in knownPaths)
+        {
+            if (File.Exists(path))
+                return path;
+        }
+
+        return null;
     }
 
     /// <summary>

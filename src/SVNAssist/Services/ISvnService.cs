@@ -26,6 +26,41 @@ public interface ISvnService
     Task CommitAsync(IEnumerable<string> paths, string message, CancellationToken ct);
 
     /// <summary>
+    /// Aggiunge file/cartelle al versionamento SVN (<c>svn add</c>).
+    /// </summary>
+    /// <param name="paths">Percorsi completi da aggiungere.</param>
+    /// <param name="ct">Token per annullare l'operazione.</param>
+    Task AddAsync(IEnumerable<string> paths, CancellationToken ct);
+
+    /// <summary>
+    /// Schedula la rimozione di file/cartelle versionati (<c>svn delete</c>).
+    /// </summary>
+    /// <param name="paths">Percorsi completi da rimuovere.</param>
+    /// <param name="ct">Token per annullare l'operazione.</param>
+    Task DeleteAsync(IEnumerable<string> paths, CancellationToken ct);
+
+    /// <summary>
+    /// Annulla le modifiche locali su file/cartelle (<c>svn revert</c>).
+    /// </summary>
+    /// <param name="paths">Percorsi completi su cui annullare le modifiche.</param>
+    /// <param name="ct">Token per annullare l'operazione.</param>
+    Task RevertAsync(IEnumerable<string> paths, CancellationToken ct);
+
+    /// <summary>
+    /// Marca un conflitto come risolto mantenendo il contenuto locale.
+    /// </summary>
+    /// <param name="path">Percorso completo del file in conflitto.</param>
+    /// <param name="ct">Token per annullare l'operazione.</param>
+    Task ResolveAsync(string path, CancellationToken ct);
+
+    /// <summary>
+    /// Aggiunge il nome file/cartella alla proprietà <c>svn:ignore</c> della directory padre.
+    /// </summary>
+    /// <param name="path">Percorso completo da ignorare.</param>
+    /// <param name="ct">Token per annullare l'operazione.</param>
+    Task AddToIgnoreListAsync(string path, CancellationToken ct);
+
+    /// <summary>
     /// Aggiorna la working copy all'ultima revisione dal repository.
     /// </summary>
     /// <param name="workingCopyPath">Percorso root della working copy SVN.</param>
@@ -55,4 +90,28 @@ public interface ISvnService
     /// <param name="workingCopyPath">Percorso root della working copy SVN.</param>
     /// <param name="ct">Token per annullare l'operazione.</param>
     Task<string> GetWorkingCopyDiffAsync(string workingCopyPath, CancellationToken ct);
+
+    /// <summary>
+    /// Restituisce il diff delle modifiche locali non committate per un singolo file.
+    /// </summary>
+    /// <param name="filePath">Percorso completo del file.</param>
+    /// <param name="ct">Token per annullare l'operazione.</param>
+    Task<string> GetFileDiffAsync(string filePath, CancellationToken ct);
+
+    /// <summary>
+    /// Apre la finestra diff del client SVN nativo (es. TortoiseSVN) per il file indicato.
+    /// </summary>
+    /// <param name="filePath">Percorso completo del file da confrontare.</param>
+    /// <param name="ct">Token per annullare l'operazione.</param>
+    /// <returns><c>true</c> se la finestra è stata aperta; <c>false</c> se non è disponibile un client nativo.</returns>
+    Task<bool> OpenNativeDiffAsync(string filePath, CancellationToken ct);
+
+    /// <summary>
+    /// Restituisce il nome del branch SVN corrente nella working copy.
+    /// Usa <c>svn info</c> per estrarre l'URL relativo e derivare il branch name.
+    /// </summary>
+    /// <param name="workingCopyPath">Percorso root della working copy SVN.</param>
+    /// <param name="ct">Token per annullare l'operazione.</param>
+    /// <returns>Il nome del branch (es. "trunk", "branches/feature-x").</returns>
+    Task<string> GetBranchNameAsync(string workingCopyPath, CancellationToken ct);
 }

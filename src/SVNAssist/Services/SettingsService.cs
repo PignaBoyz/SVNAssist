@@ -37,12 +37,19 @@ internal static class SettingDefinitions
     /// <summary>
     /// URL completo dell'endpoint Chat Completions (compatibile OpenAI).
     /// </summary>
+    /// <remarks>
+    /// Default: GitHub Models — gratuito per chi ha un account GitHub.
+    /// Usa lo stesso formato OpenAI Chat Completions, quindi funziona anche con:
+    /// - OpenAI: https://api.openai.com/v1/chat/completions
+    /// - Azure OpenAI: https://{instance}.openai.azure.com/openai/deployments/{model}/chat/completions
+    /// - Ollama locale: http://localhost:11434/v1/chat/completions
+    /// </remarks>
     [VisualStudioContribution]
     internal static Setting.String AiEndpoint { get; } = new(
         "aiendpoint",
         "%SVNAssist.Settings.AiEndpoint%",
         SvnAssistCategory,
-        defaultValue: "https://api.openai.com/v1/chat/completions");
+        defaultValue: "https://models.inference.ai.azure.com/chat/completions");
 
     /// <summary>
     /// API key per l'autenticazione con l'endpoint AI.
@@ -123,7 +130,7 @@ internal class SettingsService
     public async Task<string> GetAiEndpointAsync(CancellationToken ct)
     {
         var snapshot = await _observer.GetSnapshotAsync(ct);
-        return snapshot.AiEndpoint.ValueOrDefault("https://api.openai.com/v1/chat/completions");
+        return snapshot.AiEndpoint.ValueOrDefault("https://models.inference.ai.azure.com/chat/completions");
     }
 
     /// <summary>Legge l'API key dalle impostazioni.</summary>

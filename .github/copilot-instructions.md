@@ -114,10 +114,18 @@ Implementa `ISvnService` con questi metodi:
 ```csharp
 Task<IReadOnlyList<SvnFileStatus>> GetStatusAsync(string workingCopyPath, CancellationToken ct);
 Task CommitAsync(IEnumerable<string> paths, string message, CancellationToken ct);
+Task AddAsync(IEnumerable<string> paths, CancellationToken ct);
+Task DeleteAsync(IEnumerable<string> paths, CancellationToken ct);
+Task RevertAsync(IEnumerable<string> paths, CancellationToken ct);
+Task ResolveAsync(string path, CancellationToken ct);
+Task AddToIgnoreListAsync(string path, CancellationToken ct);
 Task UpdateAsync(string workingCopyPath, CancellationToken ct);
 Task<IReadOnlyList<SvnLogEntry>> GetLogAsync(string targetPath, int maxEntries, CancellationToken ct);
 Task<string> GetDiffAsync(string targetPath, long revision, CancellationToken ct);
 Task<string> GetWorkingCopyDiffAsync(string workingCopyPath, CancellationToken ct);
+Task<string> GetFileDiffAsync(string filePath, CancellationToken ct);
+Task<bool> OpenNativeDiffAsync(string filePath, CancellationToken ct);
+Task<string> GetBranchNameAsync(string workingCopyPath, CancellationToken ct);
 ```
 
 Regole:
@@ -125,6 +133,7 @@ Regole:
 - Leggi stdout e stderr in parallelo per evitare deadlock
 - `svn status --xml` per lo status, `svn log --xml -l N` per il log
 - `svn diff` (unified diff testuale) per i diff
+- Interpreta `item="normal"` + `props="modified"` come modifica committabile (es. cambio `svn:ignore`)
 - Cerca `svn.exe` nel PATH e nelle posizioni note (TortoiseSVN, SlikSVN, CollabNet)
 
 ---
@@ -141,6 +150,11 @@ Task<string> ImproveCommitMessageAsync(string draft, string diff, string languag
 - Usa `HttpClient` singleton iniettato dal costruttore
 - Formato richiesta: OpenAI Chat Completions (`/v1/chat/completions`)
 - `max_tokens: 200`
+- **Provider consigliato**: GitHub Models (gratuito, nessun modello da scaricare)
+  - Endpoint: `https://models.inference.ai.azure.com/chat/completions`
+  - Auth: GitHub Personal Access Token (PAT) come Bearer token
+  - Modelli: `gpt-4o-mini`, `gpt-4o`, Phi-3, Llama, ecc.
+  - Compatibile anche con OpenAI, Azure OpenAI, Ollama
 
 ---
 
@@ -151,8 +165,8 @@ Le impostazioni appaiono automaticamente in **Tools → Options → SVNAssist**.
 
 | Proprietà | Tipo | Default |
 |---|---|---|
-| `AiEndpoint` | string | `https://api.openai.com/v1/chat/completions` |
-| `AiApiKey` | string | `""` |
+| `AiEndpoint` | string | `https://models.inference.ai.azure.com/chat/completions` |
+| `AiApiKey` | string | `""` (inserire GitHub PAT o API key del provider) |
 | `AiModel` | string | `gpt-4o-mini` |
 | `DefaultLanguage` | string | `auto` |
 | `WorkingCopyPath` | string | `""` (auto-rilevato) |
@@ -170,22 +184,27 @@ Le impostazioni appaiono automaticamente in **Tools → Options → SVNAssist**.
 ## Stato attuale — cosa è stato completato ✅
 
 1. ✅ Setup VSIX con VisualStudio.Extensibility — l'estensione si carica nell'istanza sperimentale
-2. ✅ `ISvnService` + `SvnService` con tutti i metodi (status, commit, update, log, diff) via `svn.exe`
-3. ✅ `ISvnService` + test base
-4. ✅ Tool window Status (`SvnStatusToolWindow`) con lista file, checkbox, Refresh, Commit selezionati
-5. ✅ `CommitDialog` modale con lista file, messaggio, bottoni AI, selettore lingua
-6. ✅ `IAiService` + `AiService` con generazione e miglioramento commit message
-7. ✅ Tool window Log (`SvnLogToolWindow`) con lista revisioni e pannello diff
-8. ✅ `UpdateCommand`
-9. ✅ `SettingsService` con settings observer (endpoint, API key, modello, lingua, working copy path)
-10. ✅ Fix `string-resources.json` — convertito da array `[{key,value}]` a dizionario `{key: value}`
-11. ✅ Repository SVN di test creato in `C:\dev\svn-test-repo` con branch `feature-test-svnassist`
+2. ✅ `ISvnService` + `SvnService` via `svn.exe` (status/commit/update/log/diff + add/delete/revert/resolve/ignore)
+3. ✅ Tool window Status (`SvnStatusToolWindow`) con UI compatta stile SVN Changes
+4. ✅ Commit inline nella tool window (senza dialog obbligatorio)
+5. ✅ Diff file da lista: click nome file / bottone Diff + fallback TortoiseSVN native diff
+6. ✅ Auto-detect working copy SVN da solution aperta
+7. ✅ Watcher solution + watcher filesystem con refresh automatico stato (stile Git Changes)
+8. ✅ Menu contestuale file con azioni SVN: Add, Add to Ignore List, Delete, Revert, Resolve, Show Diff
+9. ✅ Lista file commit-like con stato breve + azione esplicita (`Added/Modified/Deleted/...`)
+10. ✅ Fix theming dark/light per SVN Changes (niente testo nero su nero, niente crash XAML)
+11. ✅ `svn:ignore` committabile: parsing corretto `item=normal` + `props=modified`
+12. ✅ Tool window Log (`SvnLogToolWindow`) con lista revisioni e pannello diff
+13. ✅ `UpdateCommand`
+14. ✅ `IAiService` + `AiService` con generazione e miglioramento commit message
+15. ✅ `SettingsService` con settings observer (endpoint, API key, modello, lingua, working copy path)
+16. ✅ Test xUnit esistenti verdi (`dotnet build` + `dotnet test`, 13/13)
 
 ---
 
 ## Backlog — cosa deve essere implementato 🔧
 
-### P0 — BUG CRITICO: il comando Commit non produce output visibile
+### ✅ P0 — BUG CRITICO: il comando Commit non produce output visibile (COMPLETATO)
 
 **Problema**: cliccando "Commit..." dal menu Extensions non succede nulla di visibile.
 Il comando chiama `ShowToolWindowAsync<SvnStatusToolWindow>` ma la tool window potrebbe non apparire
@@ -199,7 +218,7 @@ Il comando chiama `ShowToolWindowAsync<SvnStatusToolWindow>` ma la tool window p
 
 ---
 
-### P1 — Auto-detect SVN working copy dalla solution caricata
+### ✅ P1 — Auto-detect SVN working copy dalla solution caricata (COMPLETATO)
 
 **Requisito**: quando l'utente apre la tool window Status o clicca Commit, l'estensione deve:
 
@@ -246,7 +265,7 @@ e il metodo `GetCommandStateAsync()`.
 
 ---
 
-### P4 — UI compatta stile "SVN Changes" (ispirata a Git Changes di VS)
+### ✅ P4 — UI compatta stile "SVN Changes" (COMPLETATO, v1)
 
 **Requisito**: la tool window Status deve avere un layout compatto simile al pannello "Git Changes"
 di Visual Studio, non una finestra piena con troppo spazio vuoto.
@@ -275,7 +294,7 @@ di Visual Studio, non una finestra piena con troppo spazio vuoto.
 
 ---
 
-### P5 — Diff su doppio click di un file
+### ✅ P5 — Diff su file dalla lista (COMPLETATO)
 
 **Requisito**: nella lista file della tool window Status, il doppio click su un file deve mostrare
 il diff delle modifiche locali non committate per quel singolo file.
@@ -368,15 +387,27 @@ ma verificare che:
 
 ---
 
+### P10 — UX Pro menu contestuale multi-selezione (NUOVO)
+
+**Obiettivo**: quando la selezione contiene file con stati misti, il menu contestuale deve mostrare in modo intelligente solo le azioni applicabili al set selezionato.
+
+**Stato attuale**:
+- comandi funzionanti per file cliccato e fallback selezione
+- enable/disable per singolo file già presente
+
+**Da fare**:
+- calcolo capability aggregata sulla selezione multipla
+- menu dinamico coerente con stati misti
+- testi/tooltip esplicativi quando un'azione non è applicabile
+
+---
+
 ## Priorità di sviluppo — ordine consigliato
 
-1. **P0** — Fix bug Commit (senza questo non si può testare nulla)
-2. **P1** — Auto-detect SVN root (prerequisito per una UX accettabile)
-3. **P5** — Diff su doppio click (funzionalità core SVN)
-4. **P4** — UI compatta stile Git Changes (redesign layout)
-5. **P2** — Sottomenu SVNAssist
-6. **P3** — Auto-detect al menu hover + enable/disable comandi
-7. **P6** — Dropdown provider AI con modelli
-8. **P8** — Gestione credenziali multi-provider
-9. **P7** — Integrazione GitHub Copilot
-10. **P9** — Polish UI temi e icone
+1. **P10** — UX Pro menu contestuale multi-selezione
+2. **P2** — Sottomenu SVNAssist
+3. **P3** — Auto-detect al menu hover + enable/disable comandi
+4. **P6** — Dropdown provider AI con modelli
+5. **P8** — Gestione credenziali multi-provider
+6. **P7** — Integrazione GitHub Copilot
+7. **P9** — Polish UI temi e icone

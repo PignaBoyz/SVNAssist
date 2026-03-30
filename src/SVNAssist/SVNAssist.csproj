@@ -41,6 +41,9 @@
     <EmbeddedResource Include="ToolWindows\SvnStatusToolWindowControl.xaml" />
     <EmbeddedResource Include="ToolWindows\SvnLogToolWindowControl.xaml" />
     <EmbeddedResource Include="Dialogs\CommitDialogControl.xaml" />
+    <Page Remove="ToolWindows\SvnStatusToolWindowControl.xaml" />
+    <Page Remove="ToolWindows\SvnLogToolWindowControl.xaml" />
+    <Page Remove="Dialogs\CommitDialogControl.xaml" />
   </ItemGroup>
 
 </Project>

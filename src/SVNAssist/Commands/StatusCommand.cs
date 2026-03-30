@@ -23,7 +23,6 @@ internal class StatusCommand : Command
     /// <inheritdoc />
     public override CommandConfiguration CommandConfiguration => new("%SVNAssist.StatusCommand.DisplayName%")
     {
-        Placements = [CommandPlacement.KnownPlacements.ExtensionsMenu],
     };
 
     /// <summary>

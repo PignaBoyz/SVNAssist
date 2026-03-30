@@ -13,7 +13,6 @@ internal class ShowLogCommand : Command
     /// <inheritdoc />
     public override CommandConfiguration CommandConfiguration => new("%SVNAssist.ShowLogCommand.DisplayName%")
     {
-        Placements = [CommandPlacement.KnownPlacements.ExtensionsMenu],
     };
 
     /// <summary>

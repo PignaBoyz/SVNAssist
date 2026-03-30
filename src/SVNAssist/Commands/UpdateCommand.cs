@@ -23,7 +23,6 @@ internal class UpdateCommand : Command
     /// <inheritdoc />
     public override CommandConfiguration CommandConfiguration => new("%SVNAssist.UpdateCommand.DisplayName%")
     {
-        Placements = [CommandPlacement.KnownPlacements.ExtensionsMenu],
     };
 
     /// <summary>
@@ -40,7 +39,7 @@ internal class UpdateCommand : Command
             if (string.IsNullOrWhiteSpace(solutionDir))
             {
                 await this.Extensibility.Shell().ShowPromptAsync(
-                    "⚠️ Nessuna solution aperta — apri una solution in una working copy SVN.",
+                    "Nessuna solution aperta. Apri una solution in una working copy SVN.",
                     PromptOptions.OK,
                     cancellationToken);
                 return;
@@ -50,14 +49,14 @@ internal class UpdateCommand : Command
             await svnService.UpdateAsync(solutionDir, cancellationToken);
 
             await this.Extensibility.Shell().ShowPromptAsync(
-                $"✅ Update completato per:\n{solutionDir}",
+                $"Update completato per:\n{solutionDir}",
                 PromptOptions.OK,
                 cancellationToken);
         }
         catch (Exception ex)
         {
             await this.Extensibility.Shell().ShowPromptAsync(
-                $"❌ Errore durante l'update:\n{ex.Message}",
+                $"Errore durante l'update:\n{ex.Message}",
                 PromptOptions.OK,
                 cancellationToken);
         }
