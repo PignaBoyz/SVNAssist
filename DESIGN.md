@@ -232,6 +232,30 @@ Verificato ispezionando le assembly dell'SDK installato (`microsoft.visualstudio
 Stato: la base (testabilità, servizi, AI a setup minimo, ambiente di test) è completa e testata.
 Restano le feature di prodotto e il polish.
 
+### ⭐ PROSSIMO STEP (prima degli altri): versione per VS Code
+
+Obiettivo: portare SVNAssist anche su **Visual Studio Code**, riusando il più possibile.
+
+**Realtà tecnica.** Le estensioni VS Code sono in **TypeScript/Node**, con API completamente
+diverse da `VisualStudio.Extensibility` (.NET): non esiste un "wrapper" che ricicli direttamente
+l'assembly .NET dentro VS Code. Le strade percorribili:
+
+1. **Core .NET condiviso + due frontend** (consigliato da valutare): estrarre la logica comune
+   (invocazione `svn.exe`, parsing status/log/diff, chiamate AI — sostanzialmente i nostri
+   `Services/`) in un piccolo **CLI/daemon `svnassist-core`**. Sia l'estensione VS sia quella
+   VS Code lo invocano; la UI resta specifica (Remote UI su VS, SCM API/webview su VS Code).
+2. **Reimplementazione in TS** della logica leggera, riusando i *concetti* (non il codice).
+
+**Perché è interessante farlo su VS Code:**
+- VS Code espone l'**API Language Model (`vscode.lm`)** che può usare il **Copilot dell'utente** →
+  il "commit message a credenziali zero" che su VS **non** è possibile, lì **diventa fattibile**.
+- VS Code ha la **SCM API (`vscode.scm`)** pensata per i source control provider: integrazione
+  nativa nel pannello *Source Control* (più pulita di un webview custom).
+
+**Primo task**: spike di fattibilità — estrarre un `svnassist-core` (CLI) ed un'estensione VS Code
+minimale che faccia status + commit e generi il messaggio con `vscode.lm`. Da lì si decide se
+condividere il core o reimplementare.
+
 ### Feature SVN core (priorità alta)
 - [ ] **Update su singola folder/file** dal menu contestuale (oltre all'update dell'intera working copy)
 - [ ] **Update to revision** (scegliere una revisione specifica)
