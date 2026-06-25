@@ -224,3 +224,81 @@ Verificato ispezionando le assembly dell'SDK installato (`microsoft.visualstudio
 > ⚠️ **Nota toolchain**: la macchina di sviluppo non aveva .NET SDK né SVN; sono stati
 > installati .NET 8 SDK e SlikSVN via winget per buildare e testare. Build/test girano con
 > SDK .NET 8+ e i command-line tools SVN nel PATH.
+
+---
+
+## 8. Cosa manca — backlog prioritizzato
+
+Stato: la base (testabilità, servizi, AI a setup minimo, ambiente di test) è completa e testata.
+Restano le feature di prodotto e il polish.
+
+### Feature SVN core (priorità alta)
+- [ ] **Update su singola folder/file** dal menu contestuale (oltre all'update dell'intera working copy)
+- [ ] **Update to revision** (scegliere una revisione specifica)
+- [ ] **Cleanup** della working copy (comando `svn cleanup`) — utile dopo interruzioni
+- [ ] **History più ricca**: filtri per autore/path, diff a doppio pannello, paginazione (load more)
+
+### UX / qualità
+- [ ] **Menu contestuale multi-selezione** (P10): azioni coerenti su selezioni con stati misti
+- [ ] **Sottomenu + enable/disable comandi** quando non c'è working copy (P3)
+- [ ] **Icone vettoriali** al posto delle emoji; verifica colori stati in tema chiaro/scuro (P9)
+- [ ] **Test degli handler del ViewModel** (richiede di chiarire l'ergonomia di `AsyncCommand` nei test)
+
+### AI (incrementale)
+- [ ] **Dropdown provider** (OpenAI/Azure/Ollama/Gemini/Custom) invece dell'endpoint a mano (P6)
+- [ ] **Claude nativo** (`/v1/messages`, header `x-api-key` + `anthropic-version`) — oggi solo OpenAI-compatibile
+- [ ] **Credenziali per-provider** salvate con DPAPI/ProtectedData (P8) invece di plain nel settings store
+
+### Branch/merge (oltre il core "da IDE", valutare)
+- [ ] `switch`, `merge`, `copy` (branch/tag), lista branch — potente ma più complesso da UX
+
+### Limiti noti / da verificare a runtime in VS (non testabili senza Visual Studio)
+- ⚠️ **Comportamento dentro l'IDE non verificato qui** (manca VS): apertura tool window, rendering
+  Remote UI, risoluzione DI dei costruttori, prompt `ShowPromptAsync`, watcher solution/filesystem.
+  Questi vanno provati con F5 (vedi §9).
+- ⚠️ Token GitHub via `gh`/PAT: il percorso è testato con stub; la chiamata **reale** a GitHub Models
+  va validata con un account loggato (formato endpoint/permessi del token possono cambiare).
+- ⚠️ `OpenNativeDiffAsync` richiede TortoiseSVN installato; altrimenti fa fallback al diff testuale inline.
+
+---
+
+## 9. Guida al test manuale (prova locale)
+
+Come provare l'estensione end-to-end sulla tua macchina.
+
+### Prerequisiti
+1. **Visual Studio 2026** con il tooling *VisualStudio.Extensibility* (per fare F5-debug del VSIX).
+2. **.NET 8 SDK** (`dotnet --version` ≥ 8).
+3. **svn.exe** nel PATH — oppure lascia che l'estensione te lo proponga al primo avvio
+   (`winget install --id Slik.Subversion -e`).
+4. *(Solo per l'AI)* GitHub CLI loggato (`gh auth login`) **oppure** un PAT GitHub gratuito pronto.
+
+### Passi
+1. **Crea l'ambiente SVN di test** (una volta):
+   ```powershell
+   ./tools/setup-local-svn.ps1
+   ```
+   Annota il percorso stampato della `DemoApp.sln` (working copy).
+2. **Avvia l'estensione**: apri `SVNAssist.sln` in VS, imposta `SVNAssist` come progetto di avvio,
+   premi **F5** → si apre un'**istanza sperimentale** di VS con l'estensione caricata.
+3. Nell'istanza sperimentale **apri `DemoApp.sln`** (dentro la working copy creata dallo script).
+4. Apri il pannello: **Extensions → SVNAssist → Mostra Status** (*SVN Changes*).
+   - ✅ Attesa: l'header mostra il branch `trunk`; la lista modifiche è vuota.
+5. **Modifica** `DemoApp/Program.cs` e salva.
+   - ✅ Attesa: il file compare con stato **M** (refresh automatico).
+6. **Commit**: scrivi un messaggio (o clicca 🤖 per generarlo con l'AI), seleziona il file, **Commit**.
+   - Se l'AI non ha un token: ✅ compare il prompt che apre la pagina del PAT.
+   - ✅ Attesa: dopo il commit la lista si svuota.
+7. **Update / Log**: prova **Update** e **Log / History** (vedi le revisioni create dallo script).
+8. *(Opzionale)* **Verifica detection SVN**: con svn rimosso dal PATH, all'apertura del pannello
+   ✅ compare la proposta di installazione.
+
+### Cosa segnalarmi se qualcosa non va
+- Errori/eccezioni mostrati nel pannello (`StatusMessage`) o popup.
+- La tool window non si apre o appare vuota.
+- Testo nero su sfondo nero (problemi di tema).
+- Il refresh automatico non scatta dopo una modifica.
+
+### Alternativa: usa il tuo SVN
+Invece dello script puoi aprire in VS una solution che sta già in una **tua working copy SVN
+mappata**: SVNAssist farà comunque l'auto-detect della cartella `.svn`.
