@@ -195,8 +195,9 @@ ambiente usa-e-getta riproducibile.
 - [x] Verifica `svn.exe` all'avvio + proposta di installazione (winget/SlikSVN o pagina download)
 - [x] `InternalsVisibleTo` + test factory AI
 - [x] **Build + 24/24 test verdi** (verificato con .NET 8 SDK + SlikSVN installati in locale)
-- [x] **Commit message "zero setup"**: token GitHub auto-rilevato (`gh auth token` → `GITHUB_TOKEN`/`GH_TOKEN`),
-      endpoint+modello di default, Options solo come override avanzato (`GitHubTokenResolver` + test)
+- [x] **Commit message a setup minimo**: prerequisito = un PAT GitHub gratuito (incolla una volta);
+      `gh auth token`/`GITHUB_TOKEN`/`GH_TOKEN` rilevati in automatico come bonus; endpoint+modello di default.
+      Al primo uso senza token, `AiSetupPrompt` apre la pagina del PAT (`GitHubTokenResolver` + test)
 - [x] Script `tools/setup-local-svn.ps1` + mini app demo (repo `file://` usa-e-getta; verificato end-to-end)
 - [ ] Test handler ViewModel (ergonomia `AsyncCommand` da verificare)
 - [ ] Provider AI da dropdown (P6) + Claude nativo (`/v1/messages`)

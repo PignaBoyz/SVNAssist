@@ -30,6 +30,7 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
 {
     private readonly ISvnService _svnService;
     private readonly IAiServiceFactory _aiServiceFactory;
+    private readonly IAiSetupPrompt _aiSetupPrompt;
     private readonly ISvnAssistSettings _settingsService;
     private readonly SemaphoreSlim _autoDetectLock = new(1, 1);
 
@@ -48,11 +49,13 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
     public SvnStatusToolWindowData(
         ISvnAssistSettings settingsService,
         ISvnService svnService,
-        IAiServiceFactory aiServiceFactory)
+        IAiServiceFactory aiServiceFactory,
+        IAiSetupPrompt aiSetupPrompt)
     {
         _settingsService = settingsService;
         _svnService = svnService;
         _aiServiceFactory = aiServiceFactory;
+        _aiSetupPrompt = aiSetupPrompt;
         Files = [];
         RefreshCommand = new AsyncCommand(OnRefreshAsync);
         CommitCommand = new AsyncCommand(OnCommitAsync);
@@ -437,8 +440,8 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
 
         if (aiService is null)
         {
-            AiStatusMessage = "Nessun token GitHub trovato. Esegui 'gh auth login' (GitHub CLI) " +
-                              "oppure imposta la variabile GITHUB_TOKEN. In alternativa, incolla un PAT in Tools > Options > SVNAssist.";
+            AiStatusMessage = "Token GitHub non trovato: serve un PAT gratuito (una volta sola).";
+            await _aiSetupPrompt.ShowMissingTokenHelpAsync(ct);
             return;
         }
 
@@ -485,8 +488,8 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
 
         if (aiService is null)
         {
-            AiStatusMessage = "Nessun token GitHub trovato. Esegui 'gh auth login' (GitHub CLI) " +
-                              "oppure imposta la variabile GITHUB_TOKEN. In alternativa, incolla un PAT in Tools > Options > SVNAssist.";
+            AiStatusMessage = "Token GitHub non trovato: serve un PAT gratuito (una volta sola).";
+            await _aiSetupPrompt.ShowMissingTokenHelpAsync(ct);
             return;
         }
 

@@ -50,6 +50,15 @@ L'estensione comparirà nel menu **Extensions** con i comandi:
 
 ## 🤖 Configurazione AI — GitHub Models (Consigliato)
 
+> **Unico prerequisito per l'AI: un token GitHub gratuito.**
+> Endpoint e modello sono **già preimpostati** — non devi configurarli. L'unica cosa da fare,
+> una volta sola, è fornire un token:
+> - **Hai GitHub CLI?** Se sei loggato (`gh auth login`), il token viene rilevato **in automatico**: niente da fare.
+> - **Altrimenti** crea un Personal Access Token gratuito e incollalo in *Tools → Options → SVNAssist → AI API Key*
+>   (al primo clic su 🤖 l'estensione apre direttamente la pagina del token).
+>
+> In alternativa SVNAssist legge anche la variabile d'ambiente `GITHUB_TOKEN` / `GH_TOKEN`.
+
 SVNAssist usa di default **GitHub Models**, un servizio gratuito di GitHub che offre accesso a modelli AI (GPT-4o, GPT-4o-mini, Phi-3, Llama, ecc.) tramite il tuo account GitHub.
 
 ### Step 1 — Crea un GitHub Personal Access Token (PAT)
