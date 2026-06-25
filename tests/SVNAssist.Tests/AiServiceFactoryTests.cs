@@ -25,10 +25,22 @@ public class AiServiceFactoryTests
         public Task<string> GetWorkingCopyPathAsync(CancellationToken ct) => Task.FromResult(WorkingCopyPath);
     }
 
-    [Fact]
-    public async Task CreateAsync_ApiKeyMancante_RestituisceNull()
+    /// <summary>Resolver finto: restituisce un token preimpostato (o null).</summary>
+    private sealed class FakeTokenResolver(string? token) : IGitHubTokenResolver
     {
-        var factory = new AiServiceFactory(new FakeSettings { ApiKey = "" });
+        public int CallCount { get; private set; }
+
+        public Task<string?> ResolveAsync(CancellationToken ct)
+        {
+            CallCount++;
+            return Task.FromResult(token);
+        }
+    }
+
+    [Fact]
+    public async Task CreateAsync_NessunaApiKeyNessunToken_RestituisceNull()
+    {
+        var factory = new AiServiceFactory(new FakeSettings { ApiKey = "" }, new FakeTokenResolver(null));
 
         var result = await factory.CreateAsync(CancellationToken.None);
 
@@ -36,9 +48,23 @@ public class AiServiceFactoryTests
     }
 
     [Fact]
-    public async Task CreateAsync_ApiKeyPresente_RestituisceServizio()
+    public async Task CreateAsync_ApiKeyEsplicita_VinceSulResolver()
     {
-        var factory = new AiServiceFactory(new FakeSettings { ApiKey = "ghp_test123" });
+        var resolver = new FakeTokenResolver("token-dal-resolver");
+        var factory = new AiServiceFactory(new FakeSettings { ApiKey = "ghp_esplicita" }, resolver);
+
+        var result = await factory.CreateAsync(CancellationToken.None);
+
+        Assert.NotNull(result);
+        Assert.IsType<AiService>(result);
+        // Con una key esplicita non interroghiamo il resolver automatico.
+        Assert.Equal(0, resolver.CallCount);
+    }
+
+    [Fact]
+    public async Task CreateAsync_SenzaApiKeyMaConTokenAutomatico_RestituisceServizio()
+    {
+        var factory = new AiServiceFactory(new FakeSettings { ApiKey = "" }, new FakeTokenResolver("ghp_auto"));
 
         var result = await factory.CreateAsync(CancellationToken.None);
 

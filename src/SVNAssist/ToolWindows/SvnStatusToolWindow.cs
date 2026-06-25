@@ -55,8 +55,9 @@ internal class SvnStatusToolWindow : ToolWindow
         // falliranno in modo gestito (catch nel ViewModel) e la verifica all'apertura
         // (EnsureSvnAvailableAsync) proporrà l'installazione.
         var settingsService = new SettingsService(settingsObserver);
-        var svnService = new SvnService(SvnLocator.FindSvn() ?? "svn.exe", new ProcessRunner());
-        var aiServiceFactory = new AiServiceFactory(settingsService);
+        var processRunner = new ProcessRunner();
+        var svnService = new SvnService(SvnLocator.FindSvn() ?? "svn.exe", processRunner);
+        var aiServiceFactory = new AiServiceFactory(settingsService, new GitHubTokenResolver(processRunner));
         _dataContext = new SvnStatusToolWindowData(settingsService, svnService, aiServiceFactory);
         _dataContext.PropertyChanged += OnDataContextPropertyChanged;
     }

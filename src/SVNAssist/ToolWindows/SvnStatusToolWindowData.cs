@@ -437,7 +437,8 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
 
         if (aiService is null)
         {
-            AiStatusMessage = "AI non configurata. Imposta API key in Tools > Options > SVNAssist.";
+            AiStatusMessage = "Nessun token GitHub trovato. Esegui 'gh auth login' (GitHub CLI) " +
+                              "oppure imposta la variabile GITHUB_TOKEN. In alternativa, incolla un PAT in Tools > Options > SVNAssist.";
             return;
         }
 
@@ -484,7 +485,8 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
 
         if (aiService is null)
         {
-            AiStatusMessage = "AI non configurata. Imposta API key in Tools > Options > SVNAssist.";
+            AiStatusMessage = "Nessun token GitHub trovato. Esegui 'gh auth login' (GitHub CLI) " +
+                              "oppure imposta la variabile GITHUB_TOKEN. In alternativa, incolla un PAT in Tools > Options > SVNAssist.";
             return;
         }
 

@@ -195,8 +195,10 @@ ambiente usa-e-getta riproducibile.
 - [x] Verifica `svn.exe` all'avvio + proposta di installazione (winget/SlikSVN o pagina download)
 - [x] `InternalsVisibleTo` + test factory AI
 - [x] **Build + 24/24 test verdi** (verificato con .NET 8 SDK + SlikSVN installati in locale)
+- [x] **Commit message "zero setup"**: token GitHub auto-rilevato (`gh auth token` → `GITHUB_TOKEN`/`GH_TOKEN`),
+      endpoint+modello di default, Options solo come override avanzato (`GitHubTokenResolver` + test)
 - [ ] Script `tools/setup-local-svn.ps1` + mini app demo
-- [ ] Estrarre `ISvnAssistSettings` su VS + test handler ViewModel (ergonomia `AsyncCommand` da verificare)
+- [ ] Test handler ViewModel (ergonomia `AsyncCommand` da verificare)
 - [ ] Provider AI da dropdown (P6) + Claude nativo (`/v1/messages`)
 - [ ] Feature core: update su singola folder, history più ricca
 

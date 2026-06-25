@@ -32,18 +32,26 @@ internal sealed class AiServiceFactory : IAiServiceFactory
     private static readonly HttpClient SharedHttpClient = new();
 
     private readonly ISvnAssistSettings _settingsService;
+    private readonly IGitHubTokenResolver _tokenResolver;
 
-    public AiServiceFactory(ISvnAssistSettings settingsService)
+    public AiServiceFactory(ISvnAssistSettings settingsService, IGitHubTokenResolver tokenResolver)
     {
         _settingsService = settingsService;
+        _tokenResolver = tokenResolver;
     }
 
     /// <inheritdoc />
     public async Task<IAiService?> CreateAsync(CancellationToken ct)
     {
         var endpoint = await _settingsService.GetAiEndpointAsync(ct);
-        var apiKey = await _settingsService.GetAiApiKeyAsync(ct);
         var model = await _settingsService.GetAiModelAsync(ct);
+
+        // L'API key esplicita nelle opzioni è un override avanzato (di solito vuota):
+        // se non c'è, proviamo a recuperare automaticamente un token GitHub (gh CLI / env),
+        // così l'utente non deve configurare nulla per generare i commit con GitHub Models.
+        var apiKey = await _settingsService.GetAiApiKeyAsync(ct);
+        if (string.IsNullOrWhiteSpace(apiKey))
+            apiKey = await _tokenResolver.ResolveAsync(ct);
 
         if (string.IsNullOrWhiteSpace(apiKey))
             return null;
