@@ -379,6 +379,9 @@ ASALocalRun/
 *.binlog
 MSBuild_Logs/
 
+# MSBuild preprocessed project output (dotnet msbuild -pp)
+pp.xml
+
 # AWS SAM Build and Temporary Artifacts folder
 .aws-sam
 

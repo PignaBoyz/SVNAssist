@@ -1,10 +1,7 @@
 using System.IO;
-using System.Net.Http;
 using System.Runtime.Serialization;
 using Microsoft.VisualStudio.Extensibility;
-using Microsoft.VisualStudio.Extensibility.Shell;
 using Microsoft.VisualStudio.Extensibility.UI;
-using Microsoft.VisualStudio.RpcContracts.Notifications;
 using SVNAssist.Services;
 
 namespace SVNAssist.ToolWindows;
@@ -31,16 +28,10 @@ namespace SVNAssist.ToolWindows;
 [DataContract]
 internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
 {
-    private readonly SvnService _svnService;
-    private readonly VisualStudioExtensibility _extensibility;
-    private readonly SettingsService _settingsService;
+    private readonly ISvnService _svnService;
+    private readonly IAiServiceFactory _aiServiceFactory;
+    private readonly ISvnAssistSettings _settingsService;
     private readonly SemaphoreSlim _autoDetectLock = new(1, 1);
-
-    /// <summary>
-    /// HttpClient singleton per le chiamate AI — non va ricreato ad ogni chiamata
-    /// per evitare socket exhaustion.
-    /// </summary>
-    private static readonly HttpClient SharedHttpClient = new();
 
     private string _workingCopyPath = string.Empty;
     private string _statusMessage = "Caricamento in corso...";
@@ -54,11 +45,14 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
     private string _aiStatusMessage = string.Empty;
     private bool _isAiBusy;
 
-    public SvnStatusToolWindowData(VisualStudioExtensibility extensibility, SettingsService settingsService)
+    public SvnStatusToolWindowData(
+        ISvnAssistSettings settingsService,
+        ISvnService svnService,
+        IAiServiceFactory aiServiceFactory)
     {
-        _extensibility = extensibility;
         _settingsService = settingsService;
-        _svnService = new SvnService();
+        _svnService = svnService;
+        _aiServiceFactory = aiServiceFactory;
         Files = [];
         RefreshCommand = new AsyncCommand(OnRefreshAsync);
         CommitCommand = new AsyncCommand(OnCommitAsync);
@@ -439,7 +433,7 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
     /// </summary>
     private async Task OnGenerateAiAsync(object? parameter, CancellationToken ct)
     {
-        IAiService? aiService = await CreateAiServiceAsync(ct);
+        IAiService? aiService = await _aiServiceFactory.CreateAsync(ct);
 
         if (aiService is null)
         {
@@ -486,7 +480,7 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
     /// </summary>
     private async Task OnImproveAiAsync(object? parameter, CancellationToken ct)
     {
-        IAiService? aiService = await CreateAiServiceAsync(ct);
+        IAiService? aiService = await _aiServiceFactory.CreateAsync(ct);
 
         if (aiService is null)
         {
@@ -726,25 +720,6 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
         {
             StatusMessage = $"Errore ignore list: {ex.Message}";
         }
-    }
-
-    /// <summary>
-    /// Crea un'istanza di <see cref="AiService"/> leggendo le impostazioni da VS.
-    /// Restituisce <c>null</c> se l'AI non è configurata (API key vuota).
-    /// </summary>
-    private async Task<IAiService?> CreateAiServiceAsync(CancellationToken ct)
-    {
-        var endpoint = await _settingsService.GetAiEndpointAsync(ct);
-        var apiKey = await _settingsService.GetAiApiKeyAsync(ct);
-        var model = await _settingsService.GetAiModelAsync(ct);
-
-        if (string.IsNullOrWhiteSpace(apiKey))
-            return null;
-
-        SharedHttpClient.DefaultRequestHeaders.Authorization =
-            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
-
-        return new AiService(SharedHttpClient, endpoint, model);
     }
 
     /// <summary>

@@ -31,6 +31,10 @@ internal class UpdateCommand : Command
     /// </summary>
     public override async Task ExecuteCommandAsync(IClientContext context, CancellationToken cancellationToken)
     {
+        // Verifica che svn.exe sia installato; se manca propone l'installazione ed esce.
+        if (!await SvnSetupAssistant.EnsureSvnAvailableAsync(this.Extensibility, cancellationToken))
+            return;
+
         try
         {
             // Auto-rileva la directory della solution aperta in VS

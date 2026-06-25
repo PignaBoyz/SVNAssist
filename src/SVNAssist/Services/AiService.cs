@@ -46,24 +46,34 @@ public class AiService : IAiService
     private readonly HttpClient _httpClient;
     private readonly string _endpoint;
     private readonly string _model;
+    private readonly string _apiKey;
 
     /// <summary>
     /// Crea una nuova istanza di <see cref="AiService"/>.
     /// </summary>
     /// <param name="httpClient">
-    /// Client HTTP singleton — deve avere già l'header <c>Authorization: Bearer {apiKey}</c>
-    /// configurato se l'endpoint lo richiede.
+    /// Client HTTP singleton condiviso. L'autenticazione viene impostata
+    /// <b>per singola richiesta</b>, non sui <c>DefaultRequestHeaders</c>:
+    /// così più istanze possono condividere lo stesso client senza sovrascriversi
+    /// l'header <c>Authorization</c> a vicenda (la mutazione dei default header
+    /// di un client condiviso non è thread-safe).
     /// </param>
     /// <param name="endpoint">
     /// URL completo dell'endpoint Chat Completions
     /// (es. <c>https://api.openai.com/v1/chat/completions</c>).
     /// </param>
     /// <param name="model">Nome del modello da usare (es. <c>gpt-4o-mini</c>).</param>
-    public AiService(HttpClient httpClient, string endpoint, string model)
+    /// <param name="apiKey">
+    /// API key/PAT inviata come <c>Authorization: Bearer {apiKey}</c>.
+    /// Se vuota, la richiesta parte senza header di autenticazione
+    /// (utile per endpoint locali come Ollama).
+    /// </param>
+    public AiService(HttpClient httpClient, string endpoint, string model, string apiKey)
     {
         _httpClient = httpClient;
         _endpoint = endpoint;
         _model = model;
+        _apiKey = apiKey;
     }
 
     /// <inheritdoc />
@@ -305,9 +315,20 @@ public class AiService : IAiService
         };
 
         var json = JsonSerializer.Serialize(requestBody);
-        using var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-        using var response = await _httpClient.PostAsync(_endpoint, content, ct);
+        // Costruiamo una HttpRequestMessage per impostare l'header Authorization
+        // sulla singola richiesta invece che sui DefaultRequestHeaders del client
+        // condiviso: questo evita race condition quando più operazioni AI girano
+        // in parallelo sullo stesso HttpClient singleton.
+        using var request = new HttpRequestMessage(HttpMethod.Post, _endpoint)
+        {
+            Content = new StringContent(json, Encoding.UTF8, "application/json"),
+        };
+
+        if (!string.IsNullOrWhiteSpace(_apiKey))
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
+
+        using var response = await _httpClient.SendAsync(request, ct);
 
         var responseJson = await response.Content.ReadAsStringAsync(ct);
 

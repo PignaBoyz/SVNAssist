@@ -23,6 +23,7 @@ public class AiServiceTests
 {
     private const string TestEndpoint = "https://api.test.com/v1/chat/completions";
     private const string TestModel = "test-model";
+    private const string TestApiKey = "test-key";
 
     /// <summary>
     /// Genera una risposta JSON nel formato OpenAI Chat Completions.
@@ -57,7 +58,7 @@ public class AiServiceTests
             .Respond("application/json", MakeChatResponse(expectedMessage));
 
         var httpClient = mockHttp.ToHttpClient();
-        var sut = new AiService(httpClient, TestEndpoint, TestModel);
+        var sut = new AiService(httpClient, TestEndpoint, TestModel, TestApiKey);
 
         // Act
         var result = await sut.GenerateCommitMessageAsync(
@@ -92,7 +93,7 @@ public class AiServiceTests
             });
 
         var httpClient = mockHttp.ToHttpClient();
-        var sut = new AiService(httpClient, TestEndpoint, TestModel);
+        var sut = new AiService(httpClient, TestEndpoint, TestModel, TestApiKey);
 
         // Act
         await sut.GenerateCommitMessageAsync("diff content", "auto", CancellationToken.None);
@@ -124,7 +125,7 @@ public class AiServiceTests
             });
 
         var httpClient = mockHttp.ToHttpClient();
-        var sut = new AiService(httpClient, TestEndpoint, TestModel);
+        var sut = new AiService(httpClient, TestEndpoint, TestModel, TestApiKey);
 
         // Act
         await sut.GenerateCommitMessageAsync("diff content", "english", CancellationToken.None);
@@ -146,7 +147,7 @@ public class AiServiceTests
             .Respond("application/json", MakeChatResponse(improvedMessage));
 
         var httpClient = mockHttp.ToHttpClient();
-        var sut = new AiService(httpClient, TestEndpoint, TestModel);
+        var sut = new AiService(httpClient, TestEndpoint, TestModel, TestApiKey);
 
         // Act
         var result = await sut.ImproveCommitMessageAsync(
@@ -181,7 +182,7 @@ public class AiServiceTests
             });
 
         var httpClient = mockHttp.ToHttpClient();
-        var sut = new AiService(httpClient, TestEndpoint, TestModel);
+        var sut = new AiService(httpClient, TestEndpoint, TestModel, TestApiKey);
 
         // Act
         await sut.ImproveCommitMessageAsync(
@@ -197,6 +198,40 @@ public class AiServiceTests
     }
 
     [Fact]
+    public async Task GenerateCommitMessageAsync_InviaAuthorizationHeaderPerRichiesta()
+    {
+        // Arrange — il client NON ha DefaultRequestHeaders.Authorization impostato:
+        // l'header deve arrivare comunque perché AiService lo applica per-richiesta.
+        var mockHttp = new MockHttpMessageHandler();
+
+        AuthenticationHeaderValue? capturedAuth = null;
+        mockHttp
+            .When(TestEndpoint)
+            .Respond(req =>
+            {
+                capturedAuth = req.Headers.Authorization;
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(
+                        MakeChatResponse("ok"),
+                        System.Text.Encoding.UTF8,
+                        "application/json"),
+                };
+            });
+
+        var httpClient = mockHttp.ToHttpClient();
+        var sut = new AiService(httpClient, TestEndpoint, TestModel, TestApiKey);
+
+        // Act
+        await sut.GenerateCommitMessageAsync("diff", "auto", CancellationToken.None);
+
+        // Assert
+        Assert.NotNull(capturedAuth);
+        Assert.Equal("Bearer", capturedAuth!.Scheme);
+        Assert.Equal(TestApiKey, capturedAuth.Parameter);
+    }
+
+    [Fact]
     public async Task GenerateCommitMessageAsync_Errore500_LanciaHttpRequestException()
     {
         // Arrange
@@ -207,7 +242,7 @@ public class AiServiceTests
             .Respond(HttpStatusCode.InternalServerError);
 
         var httpClient = mockHttp.ToHttpClient();
-        var sut = new AiService(httpClient, TestEndpoint, TestModel);
+        var sut = new AiService(httpClient, TestEndpoint, TestModel, TestApiKey);
 
         // Act & Assert
         await Assert.ThrowsAsync<HttpRequestException>(
@@ -225,7 +260,7 @@ public class AiServiceTests
             .Respond("application/json", """{ "choices": [] }""");
 
         var httpClient = mockHttp.ToHttpClient();
-        var sut = new AiService(httpClient, TestEndpoint, TestModel);
+        var sut = new AiService(httpClient, TestEndpoint, TestModel, TestApiKey);
 
         // Act & Assert
         await Assert.ThrowsAsync<InvalidOperationException>(
@@ -254,7 +289,7 @@ public class AiServiceTests
             });
 
         var httpClient = mockHttp.ToHttpClient();
-        var sut = new AiService(httpClient, TestEndpoint, TestModel);
+        var sut = new AiService(httpClient, TestEndpoint, TestModel, TestApiKey);
 
         // Act
         await sut.GenerateCommitMessageAsync("diff", "auto", CancellationToken.None);

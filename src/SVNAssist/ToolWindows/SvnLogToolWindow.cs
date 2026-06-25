@@ -1,6 +1,7 @@
 using Microsoft.VisualStudio.Extensibility;
 using Microsoft.VisualStudio.Extensibility.ToolWindows;
 using Microsoft.VisualStudio.RpcContracts.RemoteUI;
+using SVNAssist.Services;
 
 namespace SVNAssist.ToolWindows;
 
@@ -20,12 +21,16 @@ namespace SVNAssist.ToolWindows;
 [VisualStudioContribution]
 internal class SvnLogToolWindow : ToolWindow
 {
-    private readonly SvnLogToolWindowData _dataContext = new();
+    private readonly SvnLogToolWindowData _dataContext;
 
     public SvnLogToolWindow(VisualStudioExtensibility extensibility)
         : base(extensibility)
     {
         Title = "SVN Log";
+
+        // Composition root: inietta il servizio SVN nel ViewModel (path placeholder se svn manca).
+        var svnService = new SvnService(SvnLocator.FindSvn() ?? "svn.exe", new ProcessRunner());
+        _dataContext = new SvnLogToolWindowData(svnService);
     }
 
     /// <inheritdoc />

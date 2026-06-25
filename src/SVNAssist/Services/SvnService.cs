@@ -15,42 +15,41 @@ namespace SVNAssist.Services;
 /// - L'output XML (<c>--xml</c>) è stabile e ben documentato
 /// - Non ci sono dipendenze native da gestire
 ///
-/// Pattern usato: ogni metodo pubblico chiama <see cref="RunSvnAsync"/> che:
-/// 1. Avvia <c>svn.exe</c> come processo separato
-/// 2. Cattura stdout e stderr in modo asincrono
-/// 3. Lancia <see cref="InvalidOperationException"/> se il comando fallisce
+/// L'esecuzione del processo è delegata a <see cref="IProcessRunner"/>: così la costruzione
+/// degli argomenti è unit-testabile con un runner finto (senza SVN installato), mentre lo
+/// spawn reale vive solo in <see cref="ProcessRunner"/>. Gli argomenti sono passati come
+/// lista (non come stringa concatenata): l'escaping è gestito dal runtime.
 /// </remarks>
 public class SvnService : ISvnService
 {
     private readonly string _svnExePath;
+    private readonly IProcessRunner _processRunner;
 
     /// <summary>
     /// Crea una nuova istanza di <see cref="SvnService"/>.
-    /// Cerca <c>svn.exe</c> nel PATH e nelle posizioni di installazione note.
     /// </summary>
     /// <param name="svnExePath">
     /// Percorso esplicito di svn.exe (opzionale).
-    /// Se null, viene cercato automaticamente nel PATH e nei percorsi standard.
+    /// Se null, viene cercato automaticamente da <see cref="SvnLocator"/>.
+    /// </param>
+    /// <param name="processRunner">
+    /// Runner per l'esecuzione dei processi (opzionale). Se null, usa <see cref="ProcessRunner"/>.
+    /// Nei test si inietta un runner finto che cattura gli argomenti.
     /// </param>
     /// <exception cref="FileNotFoundException">Se svn.exe non viene trovato.</exception>
-    public SvnService(string? svnExePath = null)
+    public SvnService(string? svnExePath = null, IProcessRunner? processRunner = null)
     {
-        _svnExePath = svnExePath ?? FindSvnExecutable();
+        _svnExePath = svnExePath ?? SvnLocator.FindSvn() ?? throw new FileNotFoundException(
+            "svn.exe non trovato. Installa Subversion e assicurati che sia nel PATH, " +
+            "oppure installa TortoiseSVN con l'opzione 'command line client tools'.");
+        _processRunner = processRunner ?? new ProcessRunner();
     }
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<SvnFileStatus>> GetStatusAsync(string workingCopyPath, CancellationToken ct)
     {
         // svn status --xml restituisce un XML con tutti i file modificati.
-        // Esempio output:
-        //   <status>
-        //     <target path=".">
-        //       <entry path="file.txt">
-        //         <wc-status item="modified" .../>
-        //       </entry>
-        //     </target>
-        //   </status>
-        var xml = await RunSvnAsync("status --xml", workingCopyPath, ct);
+        var xml = await RunSvnAsync(["status", "--xml"], workingCopyPath, ct);
         var doc = XDocument.Parse(xml);
 
         var results = new List<SvnFileStatus>();
@@ -76,41 +75,51 @@ public class SvnService : ISvnService
     /// <inheritdoc />
     public async Task CommitAsync(IEnumerable<string> paths, string message, CancellationToken ct)
     {
-        // Costruisce il comando: svn commit -m "messaggio" "file1" "file2" ...
-        // Le virgolette attorno ai path gestiscono spazi nei nomi dei file.
-        var pathArgs = string.Join(" ", paths.Select(p => $"\"{p}\""));
-        var escapedMessage = message.Replace("\"", "\\\"");
-        await RunSvnAsync($"commit -m \"{escapedMessage}\" {pathArgs}", workingDirectory: null, ct);
+        var pathList = paths.ToList();
+        if (pathList.Count == 0)
+            return;
+
+        // svn commit -m <messaggio> <file...>
+        // Il messaggio e i path sono argomenti singoli: niente escaping manuale.
+        var args = new List<string> { "commit", "-m", message };
+        args.AddRange(pathList);
+        await RunSvnAsync(args, workingDirectory: null, ct);
     }
 
     /// <inheritdoc />
     public async Task AddAsync(IEnumerable<string> paths, CancellationToken ct)
     {
-        var pathArgs = string.Join(" ", paths.Select(p => $"\"{p}\""));
-        if (string.IsNullOrWhiteSpace(pathArgs))
+        var pathList = paths.ToList();
+        if (pathList.Count == 0)
             return;
 
-        await RunSvnAsync($"add --force {pathArgs}", workingDirectory: null, ct);
+        var args = new List<string> { "add", "--force" };
+        args.AddRange(pathList);
+        await RunSvnAsync(args, workingDirectory: null, ct);
     }
 
     /// <inheritdoc />
     public async Task DeleteAsync(IEnumerable<string> paths, CancellationToken ct)
     {
-        var pathArgs = string.Join(" ", paths.Select(p => $"\"{p}\""));
-        if (string.IsNullOrWhiteSpace(pathArgs))
+        var pathList = paths.ToList();
+        if (pathList.Count == 0)
             return;
 
-        await RunSvnAsync($"delete {pathArgs}", workingDirectory: null, ct);
+        var args = new List<string> { "delete" };
+        args.AddRange(pathList);
+        await RunSvnAsync(args, workingDirectory: null, ct);
     }
 
     /// <inheritdoc />
     public async Task RevertAsync(IEnumerable<string> paths, CancellationToken ct)
     {
-        var pathArgs = string.Join(" ", paths.Select(p => $"\"{p}\""));
-        if (string.IsNullOrWhiteSpace(pathArgs))
+        var pathList = paths.ToList();
+        if (pathList.Count == 0)
             return;
 
-        await RunSvnAsync($"revert --depth infinity {pathArgs}", workingDirectory: null, ct);
+        var args = new List<string> { "revert", "--depth", "infinity" };
+        args.AddRange(pathList);
+        await RunSvnAsync(args, workingDirectory: null, ct);
     }
 
     /// <inheritdoc />
@@ -119,7 +128,7 @@ public class SvnService : ISvnService
         if (string.IsNullOrWhiteSpace(path))
             throw new ArgumentException("Il percorso non può essere vuoto.", nameof(path));
 
-        await RunSvnAsync($"resolve --accept working \"{path}\"", workingDirectory: null, ct);
+        await RunSvnAsync(["resolve", "--accept", "working", path], workingDirectory: null, ct);
     }
 
     /// <inheritdoc />
@@ -142,7 +151,7 @@ public class SvnService : ISvnService
         string existingIgnore;
         try
         {
-            existingIgnore = (await RunSvnAsync($"propget svn:ignore \"{parentDirectory}\"", workingDirectory: null, ct)).TrimEnd();
+            existingIgnore = (await RunSvnAsync(["propget", "svn:ignore", parentDirectory], workingDirectory: null, ct)).TrimEnd();
         }
         catch
         {
@@ -159,31 +168,26 @@ public class SvnService : ISvnService
             return;
 
         entries.Add(targetName);
-        var newIgnoreValue = string.Join("\n", entries).Replace("\"", "\\\"");
-        await RunSvnAsync($"propset svn:ignore \"{newIgnoreValue}\" \"{parentDirectory}\"", workingDirectory: null, ct);
+
+        // Il valore multilinea è passato come singolo argomento: ArgumentList lo gestisce
+        // correttamente, senza bisogno di escaping manuale delle virgolette/newline.
+        var newIgnoreValue = string.Join("\n", entries);
+        await RunSvnAsync(["propset", "svn:ignore", newIgnoreValue, parentDirectory], workingDirectory: null, ct);
     }
 
     /// <inheritdoc />
     public async Task UpdateAsync(string workingCopyPath, CancellationToken ct)
     {
-        await RunSvnAsync("update", workingCopyPath, ct);
+        await RunSvnAsync(["update"], workingCopyPath, ct);
     }
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<SvnLogEntry>> GetLogAsync(string targetPath, int maxEntries, CancellationToken ct)
     {
-        // svn log --xml -l N restituisce le ultime N revisioni in XML.
-        // Esempio output:
-        //   <log>
-        //     <logentry revision="42">
-        //       <author>mario</author>
-        //       <date>2024-01-15T10:30:00.000000Z</date>
-        //       <msg>Fix del bug #123</msg>
-        //     </logentry>
-        //   </log>
-        // Nota: passiamo targetPath come argomento a svn, non come working directory.
-        // svn log funziona meglio con il percorso esplicito (supporta sia path locali che URL).
-        var xml = await RunSvnAsync($"log --xml -l {maxEntries} \"{targetPath}\"", workingDirectory: null, ct);
+        // svn log --xml -l N <target> restituisce le ultime N revisioni in XML.
+        // Passiamo targetPath come argomento (supporta sia path locali che URL).
+        var xml = await RunSvnAsync(
+            ["log", "--xml", "-l", maxEntries.ToString(), targetPath], workingDirectory: null, ct);
         var doc = XDocument.Parse(xml);
 
         var results = new List<SvnLogEntry>();
@@ -204,25 +208,22 @@ public class SvnService : ISvnService
     /// <inheritdoc />
     public async Task<string> GetDiffAsync(string targetPath, long revision, CancellationToken ct)
     {
-        // svn diff -c REVISION mostra le modifiche introdotte da quella revisione.
-        // L'output è in formato unified diff (testo, non XML).
-        return await RunSvnAsync($"diff -c {revision} \"{targetPath}\"", workingDirectory: null, ct);
+        // svn diff -c REVISION mostra le modifiche introdotte da quella revisione (unified diff).
+        return await RunSvnAsync(["diff", "-c", revision.ToString(), targetPath], workingDirectory: null, ct);
     }
 
     /// <inheritdoc />
     public async Task<string> GetWorkingCopyDiffAsync(string workingCopyPath, CancellationToken ct)
     {
-        // svn diff senza -c mostra le modifiche locali non committate
-        // rispetto alla revisione BASE della working copy.
-        return await RunSvnAsync("diff", workingCopyPath, ct);
+        // svn diff senza -c mostra le modifiche locali non committate rispetto alla revisione BASE.
+        return await RunSvnAsync(["diff"], workingCopyPath, ct);
     }
 
     /// <inheritdoc />
     public async Task<string> GetFileDiffAsync(string filePath, CancellationToken ct)
     {
-        // svn diff per un singolo file mostra le modifiche locali non committate
-        // rispetto alla revisione BASE.
-        return await RunSvnAsync($"diff \"{filePath}\"", workingDirectory: null, ct);
+        // svn diff per un singolo file: modifiche locali non committate rispetto a BASE.
+        return await RunSvnAsync(["diff", filePath], workingDirectory: null, ct);
     }
 
     /// <inheritdoc />
@@ -233,18 +234,18 @@ public class SvnService : ISvnService
 
         ct.ThrowIfCancellationRequested();
 
-        var tortoiseProcPath = FindTortoiseProcExecutable();
+        var tortoiseProcPath = SvnLocator.FindTortoiseProc();
         if (string.IsNullOrWhiteSpace(tortoiseProcPath))
             return false;
 
-        var escapedPath = filePath.Replace("\"", "\\\"");
         var startInfo = new ProcessStartInfo
         {
             FileName = tortoiseProcPath,
-            Arguments = $"/command:diff /path:\"{escapedPath}\"",
             UseShellExecute = false,
             CreateNoWindow = true,
         };
+        startInfo.ArgumentList.Add("/command:diff");
+        startInfo.ArgumentList.Add($"/path:{filePath}");
 
         return await Task.Run(() =>
         {
@@ -262,14 +263,9 @@ public class SvnService : ISvnService
         try
         {
             var relativeUrl = await RunSvnAsync(
-                "info --show-item relative-url", workingCopyPath, ct);
+                ["info", "--show-item", "relative-url"], workingCopyPath, ct);
 
             var url = relativeUrl.Trim().TrimStart('^', '/');
-
-            // Estrai il nome del branch dall'URL relativo:
-            // "trunk" → "trunk"
-            // "branches/feature-x" → "branches/feature-x"
-            // "tags/v1.0" → "tags/v1.0"
             return string.IsNullOrWhiteSpace(url) ? "unknown" : url;
         }
         catch
@@ -301,118 +297,25 @@ public class SvnService : ISvnService
     }
 
     /// <summary>
-    /// Esegue un comando <c>svn.exe</c> e restituisce l'output stdout.
+    /// Esegue un comando <c>svn.exe</c> tramite <see cref="IProcessRunner"/> e restituisce stdout.
     /// </summary>
-    /// <param name="arguments">Argomenti da passare a svn.exe.</param>
-    /// <param name="workingDirectory">Directory di lavoro (null = directory corrente).</param>
+    /// <param name="arguments">Argomenti del comando (uno per elemento).</param>
+    /// <param name="workingDirectory">Directory di lavoro (null = corrente).</param>
     /// <param name="ct">Token di cancellazione.</param>
     /// <returns>L'output standard del comando.</returns>
     /// <exception cref="InvalidOperationException">Se il comando termina con errore (exit code != 0).</exception>
-    /// <remarks>
-    /// Usiamo <see cref="Process"/> con redirect di stdout/stderr per catturare l'output
-    /// in modo asincrono. <c>CreateNoWindow = true</c> evita che appaia una finestra console.
-    /// L'alternativa sarebbe usare una libreria SVN nativa (es. SharpSVN), ma questa
-    /// richiederebbe .NET Framework e dipendenze native.
-    /// </remarks>
-    private async Task<string> RunSvnAsync(string arguments, string? workingDirectory, CancellationToken ct)
+    private async Task<string> RunSvnAsync(IReadOnlyList<string> arguments, string? workingDirectory, CancellationToken ct)
     {
-        using var process = new Process();
-        process.StartInfo = new ProcessStartInfo
+        var result = await _processRunner.RunAsync(_svnExePath, arguments, workingDirectory, ct);
+
+        if (result.ExitCode != 0)
         {
-            FileName = _svnExePath,
-            Arguments = arguments,
-            WorkingDirectory = workingDirectory ?? string.Empty,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-
-        process.Start();
-
-        // Leggiamo stdout e stderr in parallelo per evitare deadlock.
-        // Se leggessimo uno alla volta, il buffer dell'altro potrebbe riempirsi
-        // e bloccare il processo figlio.
-        var outputTask = process.StandardOutput.ReadToEndAsync(ct);
-        var errorTask = process.StandardError.ReadToEndAsync(ct);
-
-        await process.WaitForExitAsync(ct);
-
-        var output = await outputTask;
-        var error = await errorTask;
-
-        if (process.ExitCode != 0)
-        {
+            var subcommand = arguments.Count > 0 ? arguments[0] : "?";
             throw new InvalidOperationException(
-                $"svn {arguments.Split(' ')[0]} fallito (exit code {process.ExitCode}): {error}");
+                $"svn {subcommand} fallito (exit code {result.ExitCode}): {result.StandardError}");
         }
 
-        return output;
-    }
-
-    /// <summary>
-    /// Cerca <c>svn.exe</c> nel PATH di sistema e nelle posizioni di installazione note.
-    /// </summary>
-    /// <returns>Il percorso completo di svn.exe.</returns>
-    /// <exception cref="FileNotFoundException">Se svn.exe non viene trovato.</exception>
-    private static string FindSvnExecutable()
-    {
-        // 1. Prova nel PATH di sistema
-        var pathDirs = Environment.GetEnvironmentVariable("PATH")?.Split(Path.PathSeparator) ?? [];
-        foreach (var dir in pathDirs)
-        {
-            var candidate = Path.Combine(dir, "svn.exe");
-            if (File.Exists(candidate))
-                return candidate;
-        }
-
-        // 2. Posizioni di installazione note (TortoiseSVN, CollabNet, SlikSVN)
-        string[] knownPaths =
-        [
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "TortoiseSVN", "bin", "svn.exe"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "TortoiseSVN", "bin", "svn.exe"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Subversion", "bin", "svn.exe"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "SlikSvn", "bin", "svn.exe"),
-        ];
-
-        foreach (var path in knownPaths)
-        {
-            if (File.Exists(path))
-                return path;
-        }
-
-        throw new FileNotFoundException(
-            "svn.exe non trovato. Installa Subversion e assicurati che sia nel PATH, " +
-            "oppure installa TortoiseSVN con l'opzione 'command line client tools'.");
-    }
-
-    /// <summary>
-    /// Cerca <c>TortoiseProc.exe</c> nel PATH e nelle posizioni note di TortoiseSVN.
-    /// Restituisce null se il client nativo non è disponibile.
-    /// </summary>
-    private static string? FindTortoiseProcExecutable()
-    {
-        var pathDirs = Environment.GetEnvironmentVariable("PATH")?.Split(Path.PathSeparator) ?? [];
-        foreach (var dir in pathDirs)
-        {
-            var candidate = Path.Combine(dir, "TortoiseProc.exe");
-            if (File.Exists(candidate))
-                return candidate;
-        }
-
-        string[] knownPaths =
-        [
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "TortoiseSVN", "bin", "TortoiseProc.exe"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "TortoiseSVN", "bin", "TortoiseProc.exe"),
-        ];
-
-        foreach (var path in knownPaths)
-        {
-            if (File.Exists(path))
-                return path;
-        }
-
-        return null;
+        return result.StandardOutput;
     }
 
     /// <summary>

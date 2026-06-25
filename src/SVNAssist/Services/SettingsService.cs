@@ -103,6 +103,32 @@ internal static class SettingDefinitions
 }
 
 /// <summary>
+/// Astrazione delle impostazioni di SVNAssist lette a runtime.
+/// </summary>
+/// <remarks>
+/// Esiste per disaccoppiare i consumatori (ViewModel, <see cref="AiServiceFactory"/>) dalla
+/// classe concreta <see cref="SettingsService"/>, che dipende dall'observer generato e non è
+/// istanziabile nei test. Con l'interfaccia si può iniettare un settings finto e unit-testare.
+/// </remarks>
+internal interface ISvnAssistSettings
+{
+    /// <summary>Endpoint AI (formato OpenAI Chat Completions).</summary>
+    Task<string> GetAiEndpointAsync(CancellationToken ct);
+
+    /// <summary>API key/PAT per l'endpoint AI.</summary>
+    Task<string> GetAiApiKeyAsync(CancellationToken ct);
+
+    /// <summary>Nome del modello AI.</summary>
+    Task<string> GetAiModelAsync(CancellationToken ct);
+
+    /// <summary>Lingua predefinita per i commit message (auto/italiano/english).</summary>
+    Task<string> GetDefaultLanguageAsync(CancellationToken ct);
+
+    /// <summary>Percorso della working copy SVN (vuoto se auto-rilevato).</summary>
+    Task<string> GetWorkingCopyPathAsync(CancellationToken ct);
+}
+
+/// <summary>
 /// Servizio che legge le impostazioni dell'estensione SVNAssist.
 /// Wrappa l'observer generato dal source generator per fornire un'API pulita.
 /// </summary>
@@ -117,7 +143,7 @@ internal static class SettingDefinitions
 /// Le proprietà dello snapshot generato corrispondono ai nomi delle proprietà C#
 /// nella classe <see cref="SettingDefinitions"/> (es. <c>AiEndpoint</c>, <c>AiApiKey</c>).
 /// </remarks>
-internal class SettingsService
+internal class SettingsService : ISvnAssistSettings
 {
     private readonly Settings.SvnAssistCategoryObserver _observer;
 

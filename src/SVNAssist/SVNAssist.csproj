@@ -19,6 +19,11 @@
     <AssemblyName>SVNAssist</AssemblyName>
   </PropertyGroup>
 
+  <!-- Rende visibili i tipi internal al progetto di test (es. IAiServiceFactory, ISvnAssistSettings). -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="SVNAssist.Tests" />
+  </ItemGroup>
+
   <ItemGroup>
     <!--
       Microsoft.VisualStudio.Extensibility.Sdk:

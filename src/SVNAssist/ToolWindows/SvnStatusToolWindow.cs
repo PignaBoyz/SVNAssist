@@ -48,8 +48,16 @@ internal class SvnStatusToolWindow : ToolWindow
         : base(extensibility)
     {
         Title = "SVN Changes";
+
+        // Questa tool window funge da composition root: crea i servizi concreti e li inietta
+        // nel ViewModel, che dipende solo dalle astrazioni (ISvnService / IAiServiceFactory).
+        // Se svn.exe non è installato passiamo comunque un path placeholder: le operazioni
+        // falliranno in modo gestito (catch nel ViewModel) e la verifica all'apertura
+        // (EnsureSvnAvailableAsync) proporrà l'installazione.
         var settingsService = new SettingsService(settingsObserver);
-        _dataContext = new SvnStatusToolWindowData(extensibility, settingsService);
+        var svnService = new SvnService(SvnLocator.FindSvn() ?? "svn.exe", new ProcessRunner());
+        var aiServiceFactory = new AiServiceFactory(settingsService);
+        _dataContext = new SvnStatusToolWindowData(settingsService, svnService, aiServiceFactory);
         _dataContext.PropertyChanged += OnDataContextPropertyChanged;
     }
 
@@ -75,6 +83,9 @@ internal class SvnStatusToolWindow : ToolWindow
     /// </summary>
     public override async Task<IRemoteUserControl> GetContentAsync(CancellationToken cancellationToken)
     {
+        // Verifica che svn.exe sia installato; se manca, propone l'installazione (una volta per sessione).
+        await SvnSetupAssistant.EnsureSvnAvailableAsync(Extensibility, cancellationToken);
+
         // Auto-detect: cerca la root SVN dalla directory della solution aperta
         await RefreshAutoDetectFromSolutionAsync(cancellationToken);
         ConfigureWorkingCopyWatcher(_dataContext.WorkingCopyPath);

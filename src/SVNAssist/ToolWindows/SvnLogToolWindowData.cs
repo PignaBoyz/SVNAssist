@@ -20,15 +20,15 @@ namespace SVNAssist.ToolWindows;
 [DataContract]
 internal class SvnLogToolWindowData : NotifyPropertyChangedObject
 {
-    private readonly SvnService _svnService;
+    private readonly ISvnService _svnService;
     private string _workingCopyPath = string.Empty;
     private string _statusMessage = "Inserisci il percorso della working copy e premi Carica Log.";
     private string _diffText = string.Empty;
     private int _maxEntries = 50;
 
-    public SvnLogToolWindowData()
+    public SvnLogToolWindowData(ISvnService svnService)
     {
-        _svnService = new SvnService();
+        _svnService = svnService;
         LogEntries = [];
         LoadLogCommand = new AsyncCommand(OnLoadLogAsync);
         SelectRevisionCommand = new AsyncCommand(OnSelectRevisionAsync);
