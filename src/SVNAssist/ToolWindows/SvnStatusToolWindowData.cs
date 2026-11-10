@@ -1,79 +1,109 @@
 using System.IO;
 using System.Runtime.Serialization;
-using Microsoft.VisualStudio.Extensibility;
 using Microsoft.VisualStudio.Extensibility.UI;
+using SVNAssist.Models;
 using SVNAssist.Services;
 
 namespace SVNAssist.ToolWindows;
 
 /// <summary>
-/// Data context (ViewModel) per la tool window SVN Changes.
-/// Layout ispirato a Git Changes di Visual Studio:
-/// - Header con branch name e bottone Update
-/// - Messaggio di commit inline con bottoni AI e Commit
-/// - Lista file compatta con checkbox, stato, path relativo, bottone diff
-/// - Pannello diff espandibile
+/// Data context (ViewModel) del pannello "SVN Changes", sul modello di Git Changes di Visual Studio:
+/// branch + Update, messaggio di commit con AI, sezioni Conflitti / Modifiche / Non versionati
+/// in vista Albero o Lista, checkbox tri-state su cartelle e sezioni, checklist dei prerequisiti.
 /// </summary>
 /// <remarks>
-/// Nel modello VisualStudio.Extensibility, il data context deve:
-/// - Avere l'attributo <c>[DataContract]</c> — i dati vengono serializzati
-///   e inviati al processo di VS tramite un protocollo remoto
-/// - Le proprietà bindabili devono avere <c>[DataMember]</c>
-/// - Ereditare da <see cref="NotifyPropertyChangedObject"/> per il change notification
-/// - Usare <see cref="IAsyncCommand"/> per i comandi (non <c>ICommand</c>)
-///
-/// Questo è il pattern "Remote UI": il XAML gira nel processo VS,
-/// i dati e la logica girano nel processo dell'estensione (out-of-process).
+/// Nel modello Remote UI il data context è <c>[DataContract]</c>, le proprietà bindabili hanno
+/// <c>[DataMember]</c> e i comandi sono <see cref="IAsyncCommand"/>. L'albero è un'unica lista
+/// appiattita di <see cref="ChangeRowViewModel"/>. I pezzi indipendenti vivono in classi a parte:
+/// <see cref="ChangesTreeBuilder"/> / <see cref="ChangeRowFactory"/> (raggruppamento, puro),
+/// <see cref="CommitMessageViewModel"/> (messaggio + AI), <see cref="PrerequisitesViewModel"/>.
+/// Gli handler sono <c>internal</c> per poterli chiamare direttamente dai test.
 /// </remarks>
 [DataContract]
 internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
 {
+    /// <summary>Oltre questo numero il diff di una cartella viene troncato (ogni file è una chiamata a svn).</summary>
+    internal const int MaxFolderDiffFiles = 100;
+    private const int MaxListedInConfirmation = 8;
+
     private readonly ISvnService _svnService;
-    private readonly IAiServiceFactory _aiServiceFactory;
-    private readonly IAiSetupPrompt _aiSetupPrompt;
     private readonly ISvnAssistSettings _settingsService;
+    private readonly IDialogService _dialogs;
     private readonly SemaphoreSlim _autoDetectLock = new(1, 1);
+    private readonly SemaphoreSlim _refreshGate = new(1, 1);
+
+    // Modello: elementi di svn status, selezione per il commit e stato espanso/compresso.
+    private List<ChangeEntry> _entries = [];
+    private readonly HashSet<string> _selection = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<string> _known = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _collapsed = new(StringComparer.Ordinal);
 
     private string _workingCopyPath = string.Empty;
+    private string? _branchLoadedFor;
+    private bool _autoDetected;
+    private bool _statusIsAuto = true;
     private string _statusMessage = "Caricamento in corso...";
-    private string _fileListHeader = "Changes";
     private bool _showWorkingCopyInput;
+    private bool _isTreeView = true;
+    private bool _isEmpty = true;
+    private string _branchName = string.Empty;
     private string _diffContent = string.Empty;
     private string _diffTitle = string.Empty;
     private bool _isDiffVisible;
-    private string _branchName = string.Empty;
-    private string _commitMessage = string.Empty;
-    private string _aiStatusMessage = string.Empty;
-    private bool _isAiBusy;
 
     public SvnStatusToolWindowData(
         ISvnAssistSettings settingsService,
         ISvnService svnService,
         IAiServiceFactory aiServiceFactory,
-        IAiSetupPrompt aiSetupPrompt)
+        IAiSetupPrompt aiSetupPrompt,
+        IDialogService dialogs,
+        PrerequisitesViewModel prerequisites)
     {
         _settingsService = settingsService;
         _svnService = svnService;
-        _aiServiceFactory = aiServiceFactory;
-        _aiSetupPrompt = aiSetupPrompt;
-        Files = [];
+        _dialogs = dialogs;
+        Prerequisites = prerequisites;
+        Prerequisites.SvnBecameAvailable = ct => RefreshAsync(ct, reloadBranch: true);
+        CommitMessage = new CommitMessageViewModel(
+            settingsService, svnService, aiServiceFactory, aiSetupPrompt,
+            selectedPaths: () => SelectedEntries().Select(e => e.FullPath).ToList(),
+            workingCopyPath: () => WorkingCopyPath);
+
+        Rows = [];
         RefreshCommand = new AsyncCommand(OnRefreshAsync);
-        CommitCommand = new AsyncCommand(OnCommitAsync);
-        UpdateCommand = new AsyncCommand(OnUpdateAsync);
-        GenerateAiCommand = new AsyncCommand(OnGenerateAiAsync);
-        ImproveAiCommand = new AsyncCommand(OnImproveAiAsync);
-        ShowFileDiffCommand = new AsyncCommand(OnShowFileDiffAsync);
-        CloseDiffCommand = new AsyncCommand(OnCloseDiffAsync);
-        SelectAllCommand = new AsyncCommand(OnSelectAllAsync);
-        UnselectAllCommand = new AsyncCommand(OnUnselectAllAsync);
-        AddToSvnCommand = new AsyncCommand(OnAddToSvnAsync);
-        DeleteFromSvnCommand = new AsyncCommand(OnDeleteFromSvnAsync);
-        RevertSelectedCommand = new AsyncCommand(OnRevertSelectedAsync);
-        ResolveConflictCommand = new AsyncCommand(OnResolveConflictAsync);
-        AddToIgnoreListCommand = new AsyncCommand(OnAddToIgnoreListAsync);
+        CommitCommand = new AsyncCommand(CommitAsync);
+        UpdateCommand = new AsyncCommand(UpdateAsync);
+        ShowFileDiffCommand = new AsyncCommand(ShowFileDiffAsync);
+        ShowFolderDiffCommand = new AsyncCommand(ShowFolderDiffAsync);
+        CloseDiffCommand = new AsyncCommand(CloseDiffAsync);
+        SelectAllCommand = new AsyncCommand((_, _) => SetAllSelected(true));
+        UnselectAllCommand = new AsyncCommand((_, _) => SetAllSelected(false));
+        ToggleExpandCommand = new AsyncCommand(ToggleExpandAsync);
+        ExpandAllCommand = new AsyncCommand((_, _) => SetAllExpanded(true));
+        CollapseAllCommand = new AsyncCommand((_, _) => SetAllExpanded(false));
+        ShowTreeViewCommand = new AsyncCommand((_, _) => SetTreeView(true));
+        ShowListViewCommand = new AsyncCommand((_, _) => SetTreeView(false));
+        AddToSvnCommand = new AsyncCommand(AddAsync);
+        DeleteFromSvnCommand = new AsyncCommand(DeleteAsync);
+        RevertCommand = new AsyncCommand(RevertAsync);
+        ResolveConflictCommand = new AsyncCommand(ResolveAsync);
+        AddToIgnoreListCommand = new AsyncCommand(IgnoreAsync);
     }
 
-    // ── Header: Branch + Update ──────────────────────────────────────
+    /// <summary>Verifica se un percorso è una cartella (iniettabile nei test: di default il file system).</summary>
+    internal Func<string, bool> IsDirectory { get; set; } = Directory.Exists;
+
+    // ── Oggetti annidati ─────────────────────────────────────────────
+
+    /// <summary>Messaggio di commit e azioni AI.</summary>
+    [DataMember]
+    public CommitMessageViewModel CommitMessage { get; }
+
+    /// <summary>Checklist dei prerequisiti.</summary>
+    [DataMember]
+    public PrerequisitesViewModel Prerequisites { get; }
+
+    // ── Proprietà ────────────────────────────────────────────────────
 
     /// <summary>Nome del branch SVN corrente (es. "trunk", "branches/feature-x").</summary>
     [DataMember]
@@ -83,37 +113,9 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
         set => SetProperty(ref _branchName, value);
     }
 
-    // ── Inline commit message + AI ───────────────────────────────────
-
-    /// <summary>Messaggio di commit scritto dall'utente (o generato dall'AI).</summary>
+    /// <summary>Righe appiattite: sezioni, cartelle e file.</summary>
     [DataMember]
-    public string CommitMessage
-    {
-        get => _commitMessage;
-        set => SetProperty(ref _commitMessage, value);
-    }
-
-    /// <summary>Messaggio di stato dell'AI (es. "Generazione in corso...").</summary>
-    [DataMember]
-    public string AiStatusMessage
-    {
-        get => _aiStatusMessage;
-        set => SetProperty(ref _aiStatusMessage, value);
-    }
-
-    /// <summary>Indica se un'operazione AI è in corso.</summary>
-    [DataMember]
-    public bool IsAiBusy
-    {
-        get => _isAiBusy;
-        set => SetProperty(ref _isAiBusy, value);
-    }
-
-    // ── File list ────────────────────────────────────────────────────
-
-    /// <summary>Lista dei file con stato modificato nella working copy.</summary>
-    [DataMember]
-    public ObservableList<FileStatusItem> Files { get; }
+    public ObservableList<ChangeRowViewModel> Rows { get; }
 
     /// <summary>Percorso della working copy SVN da analizzare.</summary>
     [DataMember]
@@ -123,7 +125,7 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
         set => SetProperty(ref _workingCopyPath, value);
     }
 
-    /// <summary>Messaggio di stato mostrato in basso nella tool window.</summary>
+    /// <summary>Messaggio di stato mostrato in basso.</summary>
     [DataMember]
     public string StatusMessage
     {
@@ -131,10 +133,7 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
         set => SetProperty(ref _statusMessage, value);
     }
 
-    /// <summary>
-    /// Se true, mostra il campo di input manuale per il percorso della working copy.
-    /// Nascosto quando il path è auto-rilevato.
-    /// </summary>
+    /// <summary>Mostra il campo per il percorso manuale della working copy (nascosto se auto-rilevata).</summary>
     [DataMember]
     public bool ShowWorkingCopyInput
     {
@@ -142,17 +141,23 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
         set => SetProperty(ref _showWorkingCopyInput, value);
     }
 
-    /// <summary>Header della sezione file list con conteggio (es. "Changes (3)").</summary>
+    /// <summary><c>true</c> per la vista Albero, <c>false</c> per la vista Lista.</summary>
     [DataMember]
-    public string FileListHeader
+    public bool IsTreeView
     {
-        get => _fileListHeader;
-        set => SetProperty(ref _fileListHeader, value);
+        get => _isTreeView;
+        set => SetProperty(ref _isTreeView, value);
     }
 
-    // ── Diff panel ───────────────────────────────────────────────────
+    /// <summary>Non c'è nessuna modifica da mostrare.</summary>
+    [DataMember]
+    public bool IsEmpty
+    {
+        get => _isEmpty;
+        set => SetProperty(ref _isEmpty, value);
+    }
 
-    /// <summary>Contenuto testuale del diff visualizzato nel pannello inferiore.</summary>
+    /// <summary>Contenuto del diff mostrato nel pannello inferiore.</summary>
     [DataMember]
     public string DiffContent
     {
@@ -160,7 +165,7 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
         set => SetProperty(ref _diffContent, value);
     }
 
-    /// <summary>Titolo del pannello diff (nome del file).</summary>
+    /// <summary>Titolo del pannello diff.</summary>
     [DataMember]
     public string DiffTitle
     {
@@ -168,7 +173,7 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
         set => SetProperty(ref _diffTitle, value);
     }
 
-    /// <summary>Se true, il pannello diff è visibile sotto la lista file.</summary>
+    /// <summary>Il pannello diff è visibile.</summary>
     [DataMember]
     public bool IsDiffVisible
     {
@@ -178,73 +183,98 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
 
     // ── Comandi ──────────────────────────────────────────────────────
 
-    /// <summary>Comando Refresh — ricarica lista file e branch name.</summary>
+    /// <summary>Ricarica modifiche e branch.</summary>
     [DataMember]
     public IAsyncCommand RefreshCommand { get; }
 
-    /// <summary>Comando Commit — esegue il commit inline (senza dialog modale).</summary>
+    /// <summary>Commit dei file selezionati.</summary>
     [DataMember]
     public IAsyncCommand CommitCommand { get; }
 
-    /// <summary>Comando Update — esegue svn update sulla working copy.</summary>
+    /// <summary>Esegue <c>svn update</c>.</summary>
     [DataMember]
     public IAsyncCommand UpdateCommand { get; }
 
-    /// <summary>Genera il messaggio di commit con AI analizzando il diff.</summary>
-    [DataMember]
-    public IAsyncCommand GenerateAiCommand { get; }
-
-    /// <summary>Migliora il messaggio di commit esistente con AI.</summary>
-    [DataMember]
-    public IAsyncCommand ImproveAiCommand { get; }
-
-    /// <summary>Mostra il diff di un singolo file.</summary>
+    /// <summary>Diff di un file (parametro: la riga).</summary>
     [DataMember]
     public IAsyncCommand ShowFileDiffCommand { get; }
+
+    /// <summary>Diff combinato di una cartella (parametro: la riga).</summary>
+    [DataMember]
+    public IAsyncCommand ShowFolderDiffCommand { get; }
 
     /// <summary>Chiude il pannello diff.</summary>
     [DataMember]
     public IAsyncCommand CloseDiffCommand { get; }
 
-    /// <summary>Seleziona tutti i file.</summary>
+    /// <summary>Seleziona tutto.</summary>
     [DataMember]
     public IAsyncCommand SelectAllCommand { get; }
 
-    /// <summary>Deseleziona tutti i file.</summary>
+    /// <summary>Deseleziona tutto.</summary>
     [DataMember]
     public IAsyncCommand UnselectAllCommand { get; }
 
-    /// <summary>Aggiunge a SVN i file selezionati o il file cliccato.</summary>
+    /// <summary>Espande/comprime una sezione o cartella (parametro: la riga).</summary>
+    [DataMember]
+    public IAsyncCommand ToggleExpandCommand { get; }
+
+    /// <summary>Espande tutte le cartelle.</summary>
+    [DataMember]
+    public IAsyncCommand ExpandAllCommand { get; }
+
+    /// <summary>Comprime tutte le cartelle.</summary>
+    [DataMember]
+    public IAsyncCommand CollapseAllCommand { get; }
+
+    /// <summary>Passa alla vista Albero.</summary>
+    [DataMember]
+    public IAsyncCommand ShowTreeViewCommand { get; }
+
+    /// <summary>Passa alla vista Lista.</summary>
+    [DataMember]
+    public IAsyncCommand ShowListViewCommand { get; }
+
+    /// <summary>SVN Add su file, cartella o sezione (parametro: la riga).</summary>
     [DataMember]
     public IAsyncCommand AddToSvnCommand { get; }
 
-    /// <summary>Rimuove da SVN i file selezionati o il file cliccato.</summary>
+    /// <summary>SVN Delete su un file (parametro: la riga).</summary>
     [DataMember]
     public IAsyncCommand DeleteFromSvnCommand { get; }
 
-    /// <summary>Esegue revert sui file selezionati o sul file cliccato.</summary>
+    /// <summary>SVN Revert su file, cartella o sezione (parametro: la riga), con conferma.</summary>
     [DataMember]
-    public IAsyncCommand RevertSelectedCommand { get; }
+    public IAsyncCommand RevertCommand { get; }
 
-    /// <summary>Risoluzione conflitto sul file cliccato.</summary>
+    /// <summary>Risolve il conflitto di un file (parametro: la riga).</summary>
     [DataMember]
     public IAsyncCommand ResolveConflictCommand { get; }
 
-    /// <summary>Aggiunge il file/cartella alla ignore list SVN.</summary>
+    /// <summary>Aggiunge alla ignore list (parametro: la riga).</summary>
     [DataMember]
     public IAsyncCommand AddToIgnoreListCommand { get; }
 
-    // ── Metodi interni ───────────────────────────────────────────────
+    // ── Avvio e auto-detect ──────────────────────────────────────────
 
-    /// <summary>
-    /// Esegue il refresh in modo programmatico (senza <see cref="IClientContext"/>).
-    /// Usato dalla tool window per il refresh automatico all'apertura.
-    /// </summary>
-    internal Task RefreshAsync(CancellationToken ct) => OnRefreshAsync(null, ct);
+    /// <summary>Controlla i prerequisiti (apre la checklist se manca svn) e carica la lingua dell'AI.</summary>
+    internal async Task InitializeAsync(CancellationToken ct)
+    {
+        try
+        {
+            await Prerequisites.InitializeAsync(ct);
+            await CommitMessage.InitializeAsync(ct);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            Prerequisites.Feedback = $"Controllo prerequisiti non riuscito: {ex.Message}";
+        }
+    }
 
-    /// <summary>
-    /// Applica il risultato dell'auto-detect della working copy e aggiorna la UI.
-    /// </summary>
+    /// <summary>Refresh programmatico (usato dal watcher e all'apertura). Il branch si rilegge solo se serve.</summary>
+    internal Task RefreshAsync(CancellationToken ct) => RefreshAsync(ct, reloadBranch: false);
+
+    /// <summary>Applica il risultato dell'auto-detect della working copy dalla solution aperta.</summary>
     internal async Task ApplyAutoDetectedWorkingCopyAsync(string? svnRoot, CancellationToken ct)
     {
         await _autoDetectLock.WaitAsync(ct);
@@ -252,25 +282,37 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
         {
             if (string.IsNullOrWhiteSpace(svnRoot))
             {
-                WorkingCopyPath = string.Empty;
-                BranchName = string.Empty;
-                ShowWorkingCopyInput = true;
-                Files.Clear();
-                FileListHeader = "Changes (0)";
-                IsDiffVisible = false;
-                DiffTitle = string.Empty;
-                DiffContent = string.Empty;
-                StatusMessage = "La solution corrente non è una working copy SVN.";
+                // Un percorso scritto a mano non va azzerato dal polling della solution.
+                if (_autoDetected)
+                {
+                    _autoDetected = false;
+                    WorkingCopyPath = string.Empty;
+                    BranchName = string.Empty;
+                    _branchLoadedFor = null;
+                    _entries = [];
+                    ApplyEntries();
+                    ShowWorkingCopyInput = true;
+                    CloseDiff();
+                }
+
+                if (string.IsNullOrWhiteSpace(WorkingCopyPath))
+                {
+                    ShowWorkingCopyInput = true;
+                    StatusMessage = "La solution corrente non è una working copy SVN.";
+                }
+
                 return;
             }
 
-            if (string.Equals(WorkingCopyPath, svnRoot, StringComparison.OrdinalIgnoreCase) && Files.Count > 0)
+            // Stessa working copy: niente refresh (il watcher si occupa dei cambiamenti).
+            if (string.Equals(WorkingCopyPath, svnRoot, StringComparison.OrdinalIgnoreCase))
                 return;
 
+            _autoDetected = true;
             WorkingCopyPath = svnRoot;
             ShowWorkingCopyInput = false;
             StatusMessage = "Working copy SVN rilevata automaticamente, aggiornamento...";
-            await RefreshAsync(ct);
+            await RefreshAsync(ct, reloadBranch: true);
         }
         finally
         {
@@ -278,545 +320,582 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
         }
     }
 
-    // ── Handler dei comandi ──────────────────────────────────────────
+    /// <summary>Nessuna solution aperta / query fallita: avvisa solo se non c'è già una working copy.</summary>
+    internal void NotifyNoSolution()
+    {
+        if (string.IsNullOrWhiteSpace(WorkingCopyPath))
+            StatusMessage = "Inserisci il percorso della working copy e premi Refresh.";
+    }
+
+    // ── Refresh ──────────────────────────────────────────────────────
+
+    private Task OnRefreshAsync(object? parameter, CancellationToken ct)
+    {
+        // Refresh esplicito: rilegge anche il branch e torna a mostrare il riepilogo.
+        _statusIsAuto = true;
+        return RefreshAsync(ct, reloadBranch: true);
+    }
 
     /// <summary>
-    /// Handler del comando Refresh.
-    /// Chiama <c>svn status --xml</c> e popola la lista dei file,
-    /// poi carica il branch name corrente.
+    /// Legge <c>svn status</c> e ricostruisce le righe. <c>svn info</c> (branch) solo se la working copy
+    /// è cambiata o se <paramref name="reloadBranch"/> (update, commit, refresh esplicito).
     /// </summary>
-    private async Task OnRefreshAsync(object? parameter, CancellationToken ct)
+    internal async Task RefreshAsync(CancellationToken ct, bool reloadBranch, string? statusMessage = null)
     {
-        // Se il campo è vuoto, prova a leggere il percorso dalle impostazioni di VS
-        if (string.IsNullOrWhiteSpace(WorkingCopyPath))
-        {
-            var settingsPath = await _settingsService.GetWorkingCopyPathAsync(ct);
-            if (!string.IsNullOrWhiteSpace(settingsPath))
-                WorkingCopyPath = settingsPath;
-        }
-
-        if (string.IsNullOrWhiteSpace(WorkingCopyPath))
-        {
-            ShowWorkingCopyInput = true;
-            StatusMessage = "Inserisci il percorso della working copy.";
-            return;
-        }
-
-        ShowWorkingCopyInput = false;
-
+        await _refreshGate.WaitAsync(ct);
         try
         {
-            StatusMessage = "Caricamento...";
-
-            // Carica branch name e status in parallelo
-            var branchTask = _svnService.GetBranchNameAsync(WorkingCopyPath, ct);
-            var statusTask = _svnService.GetStatusAsync(WorkingCopyPath, ct);
-
-            await Task.WhenAll(branchTask, statusTask);
-
-            BranchName = await branchTask;
-            var statuses = await statusTask;
-
-            Files.Clear();
-            foreach (var status in statuses)
+            if (string.IsNullOrWhiteSpace(WorkingCopyPath))
             {
-                var normalizedFullPath = NormalizeStatusPath(status.Path, WorkingCopyPath);
-
-                // Calcola il path relativo rispetto alla working copy root
-                var relativePath = string.Equals(normalizedFullPath, WorkingCopyPath, StringComparison.OrdinalIgnoreCase)
-                    ? "."
-                    : Path.GetRelativePath(WorkingCopyPath, normalizedFullPath);
-
-                // Abbrevia lo stato (M, A, D, ?, !, R) per un layout compatto
-                var shortStatus = GetShortStatus(status.Status);
-
-                Files.Add(new FileStatusItem
-                {
-                    FullPath = normalizedFullPath,
-                    Path = relativePath,
-                    Status = shortStatus,
-                    Action = GetStatusDisplayName(status.Status),
-                    StatusColor = GetStatusColor(status.Status),
-                    IsSelected = status.Status != Models.SvnStatusKind.Unversioned,
-                    CanAddToSvn = status.Status == Models.SvnStatusKind.Unversioned,
-                    CanDeleteFromSvn = status.Status != Models.SvnStatusKind.Unversioned && status.Status != Models.SvnStatusKind.Unknown,
-                    CanRevert = status.Status is Models.SvnStatusKind.Modified
-                        or Models.SvnStatusKind.Added
-                        or Models.SvnStatusKind.Deleted
-                        or Models.SvnStatusKind.Conflicted
-                        or Models.SvnStatusKind.Missing
-                        or Models.SvnStatusKind.Replaced,
-                    CanResolveConflict = status.Status == Models.SvnStatusKind.Conflicted,
-                    CanAddToIgnoreList = status.Status == Models.SvnStatusKind.Unversioned,
-                });
+                var settingsPath = await _settingsService.GetWorkingCopyPathAsync(ct);
+                if (!string.IsNullOrWhiteSpace(settingsPath))
+                    WorkingCopyPath = settingsPath;
             }
 
-            FileListHeader = $"Changes ({Files.Count})";
-            StatusMessage = Files.Count == 0
-                ? "Nessuna modifica."
-                : $"{Files.Count} file modificati";
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"Errore: {ex.Message}";
-            ShowWorkingCopyInput = true;
-        }
-    }
-
-    /// <summary>
-    /// Handler del comando Commit — esegue il commit inline senza dialog modale.
-    /// Usa il messaggio scritto nella TextBox della tool window.
-    /// </summary>
-    private async Task OnCommitAsync(object? parameter, CancellationToken ct)
-    {
-        var selectedFiles = Files.Where(f => f.IsSelected).ToList();
-
-        if (selectedFiles.Count == 0)
-        {
-            StatusMessage = "Seleziona almeno un file per il commit.";
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(CommitMessage))
-        {
-            StatusMessage = "Scrivi un messaggio di commit.";
-            return;
-        }
-
-        try
-        {
-            StatusMessage = "Commit in corso...";
-
-            // Costruisci i path completi per SvnService
-            var fullPaths = selectedFiles.Select(ToFullPath).Distinct(StringComparer.OrdinalIgnoreCase);
-
-            var revision = await _svnService.CommitAsync(fullPaths, CommitMessage.Trim(), ct);
-
-            StatusMessage = revision is { } rev
-                ? $"Commit completato: revisione {rev} ({selectedFiles.Count} file)."
-                : $"Commit completato: {selectedFiles.Count} file.";
-            CommitMessage = string.Empty;
-            AiStatusMessage = string.Empty;
-
-            // Refresh dopo il commit
-            await OnRefreshAsync(null, ct);
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"Errore commit: {ex.Message}";
-        }
-    }
-
-    /// <summary>
-    /// Handler del comando Update — esegue svn update sulla working copy.
-    /// </summary>
-    private async Task OnUpdateAsync(object? parameter, CancellationToken ct)
-    {
-        if (string.IsNullOrWhiteSpace(WorkingCopyPath))
-        {
-            StatusMessage = "Nessuna working copy configurata.";
-            return;
-        }
-
-        try
-        {
-            StatusMessage = "Update in corso...";
-            var update = await _svnService.UpdateAsync(WorkingCopyPath, ct);
-            var updated = update.Revision is { } updatedRev ? $"Aggiornato alla revisione {updatedRev}" : "Update completato";
-            StatusMessage = update.ConflictedPaths.Count > 0
-                ? $"{updated}: {update.ConflictedPaths.Count} file in conflitto."
-                : $"{updated}.";
-
-            // Refresh dopo l'update
-            await OnRefreshAsync(null, ct);
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"Errore update: {ex.Message}";
-        }
-    }
-
-    /// <summary>
-    /// Handler per "Genera con AI" — analizza il diff e genera il commit message.
-    /// </summary>
-    private async Task OnGenerateAiAsync(object? parameter, CancellationToken ct)
-    {
-        IAiService? aiService = await _aiServiceFactory.CreateAsync(ct);
-
-        if (aiService is null)
-        {
-            AiStatusMessage = "Nessun provider AI disponibile (Copilot, Claude o token GitHub).";
-            await _aiSetupPrompt.ShowMissingTokenHelpAsync(ct);
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(WorkingCopyPath))
-        {
-            AiStatusMessage = "Nessuna working copy configurata.";
-            return;
-        }
-
-        // L'AI descrive solo i file selezionati (gli stessi che finiranno nel commit).
-        var selectedPaths = GetSelectedFullPaths();
-        if (selectedPaths.Count == 0)
-        {
-            AiStatusMessage = "Seleziona almeno un file per generare il messaggio.";
-            return;
-        }
-
-        try
-        {
-            IsAiBusy = true;
-            AiStatusMessage = "Generazione in corso...";
-
-            var diff = await _svnService.GetDiffForAiAsync(selectedPaths, WorkingCopyPath, ct);
-
-            if (string.IsNullOrWhiteSpace(diff))
+            if (string.IsNullOrWhiteSpace(WorkingCopyPath))
             {
-                AiStatusMessage = "Nessun diff disponibile.";
+                ShowWorkingCopyInput = true;
+                StatusMessage = "Inserisci il percorso della working copy.";
                 return;
             }
 
-            var language = await _settingsService.GetDefaultLanguageAsync(ct);
-            CommitMessage = await aiService.GenerateCommitMessageAsync(diff, language, ct);
+            ShowWorkingCopyInput = false;
+            var path = WorkingCopyPath;
+            var needBranch = reloadBranch || !string.Equals(_branchLoadedFor, path, StringComparison.OrdinalIgnoreCase);
 
-            AiStatusMessage = "Messaggio generato con AI.";
+            var statusTask = _svnService.GetStatusAsync(path, ct);
+            var branchTask = needBranch ? _svnService.GetBranchNameAsync(path, ct) : null;
+
+            var statuses = await statusTask;
+            if (branchTask is not null)
+            {
+                BranchName = await branchTask;
+                _branchLoadedFor = path;
+            }
+
+            _entries = statuses
+                .Where(s => s.Status != SvnStatusKind.Normal)
+                .Select(s => ToEntry(s, path))
+                .ToList();
+            UpdateSelectionAfterRefresh();
+            ApplyEntries();
+
+            if (statusMessage is not null)
+                SetStatus(statusMessage);
+            else if (_statusIsAuto)
+                StatusMessage = BuildSummary();
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            AiStatusMessage = $"Errore AI: {ex.Message}";
+            SetStatus($"Errore: {ex.Message}");
+            ShowWorkingCopyInput = true;
         }
         finally
         {
-            IsAiBusy = false;
+            _refreshGate.Release();
         }
     }
 
-    /// <summary>Percorsi completi dei file selezionati (senza duplicati).</summary>
-    private List<string> GetSelectedFullPaths() => Files
-        .Where(f => f.IsSelected)
-        .Select(ToFullPath)
-        .Distinct(StringComparer.OrdinalIgnoreCase)
-        .ToList();
+    private ChangeEntry ToEntry(SvnFileStatus status, string workingCopy)
+    {
+        var fullPath = NormalizeStatusPath(status.Path, workingCopy);
+        var relative = string.Equals(fullPath, workingCopy, StringComparison.OrdinalIgnoreCase)
+            ? "."
+            : Path.GetRelativePath(workingCopy, fullPath);
+        return new ChangeEntry(fullPath, relative, status.Status, status.IsTreeConflict, IsDirectory(fullPath));
+    }
+
+    /// <summary>I nuovi elementi hanno la selezione di default (come TortoiseSVN); gli altri mantengono la scelta dell'utente.</summary>
+    private void UpdateSelectionAfterRefresh()
+    {
+        var current = new HashSet<string>(_entries.Select(e => e.FullPath), StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in _entries.Where(e => !_known.Contains(e.FullPath)))
+        {
+            if (entry.Status is SvnStatusKind.Modified or SvnStatusKind.Added or SvnStatusKind.Deleted
+                or SvnStatusKind.Replaced or SvnStatusKind.Missing)
+                _selection.Add(entry.FullPath);
+        }
+
+        _selection.RemoveWhere(p => !current.Contains(p));
+        _known = current;
+    }
+
+    private string BuildSummary()
+    {
+        if (_entries.Count == 0)
+            return "Nessuna modifica.";
+
+        var parts = new List<string>();
+        var conflicts = _entries.Count(e => e.Section == ChangeSection.Conflicts);
+        var changes = _entries.Count(e => e.Section == ChangeSection.Changes);
+        var unversioned = _entries.Count(e => e.Section == ChangeSection.Unversioned);
+        if (conflicts > 0)
+            parts.Add($"{conflicts} in conflitto");
+        if (changes > 0)
+            parts.Add($"{changes} modificati");
+        if (unversioned > 0)
+            parts.Add($"{unversioned} non versionati");
+        return string.Join(", ", parts) + ".";
+    }
+
+    /// <summary>Ricostruisce le righe: se la struttura è invariata aggiorna quelle esistenti (la ListBox non scatta in cima).</summary>
+    private void ApplyEntries()
+    {
+        var fresh = ChangeRowFactory.Build(_entries, IsTreeView, _collapsed, WorkingCopyPath);
+        foreach (var row in fresh)
+            row.ToggleRequested = ToggleRowChecked;
+
+        var sameShape = fresh.Count == Rows.Count && fresh.Select(r => r.Key).SequenceEqual(Rows.Select(r => r.Key));
+        if (sameShape)
+        {
+            for (var i = 0; i < fresh.Count; i++)
+                Rows[i].CopyPresentationFrom(fresh[i]);
+        }
+        else
+        {
+            Rows.Clear();
+            Rows.AddRange(fresh);
+        }
+
+        IsEmpty = Rows.Count == 0;
+        UpdateCheckStates();
+    }
+
+    // ── Selezione (checkbox tri-state) ───────────────────────────────
+
+    private bool IsSelected(ChangeEntry entry) => _selection.Contains(entry.FullPath);
+
+    private IEnumerable<ChangeEntry> SelectedEntries() => _entries.Where(IsSelected);
+
+    private void UpdateCheckStates(ChangeRowViewModel? forced = null)
+    {
+        foreach (var row in Rows)
+            row.ApplyChecked(ChangesTreeBuilder.GetCheckState(row.Entries, IsSelected), force: ReferenceEquals(row, forced));
+    }
 
     /// <summary>
-    /// Handler per "Migliora con AI" — migliora il messaggio di commit esistente.
+    /// Click sulla checkbox di una riga: se non tutto è selezionato seleziona tutto, altrimenti deseleziona.
+    /// Il valore proposto dal ciclo tri-state di WPF viene ignorato, così partendo da "parziale" si seleziona tutto.
     /// </summary>
-    private async Task OnImproveAiAsync(object? parameter, CancellationToken ct)
+    internal void ToggleRowChecked(ChangeRowViewModel row)
     {
-        IAiService? aiService = await _aiServiceFactory.CreateAsync(ct);
-
-        if (aiService is null)
+        var select = ChangesTreeBuilder.GetCheckState(row.Entries, IsSelected) != true;
+        foreach (var entry in row.Entries)
         {
-            AiStatusMessage = "Nessun provider AI disponibile (Copilot, Claude o token GitHub).";
-            await _aiSetupPrompt.ShowMissingTokenHelpAsync(ct);
+            if (select)
+                _selection.Add(entry.FullPath);
+            else
+                _selection.Remove(entry.FullPath);
+        }
+
+        UpdateCheckStates(forced: row);
+    }
+
+    internal Task SetAllSelected(bool selected)
+    {
+        if (selected)
+            _selection.UnionWith(_entries.Select(e => e.FullPath));
+        else
+            _selection.Clear();
+
+        UpdateCheckStates();
+        return Task.CompletedTask;
+    }
+
+    // ── Albero: espandi / comprimi / vista ───────────────────────────
+
+    internal Task ToggleExpandAsync(object? parameter, CancellationToken ct)
+    {
+        if (parameter is ChangeRowViewModel { IsFile: false } row && !_collapsed.Remove(row.Key))
+            _collapsed.Add(row.Key);
+
+        ApplyEntries();
+        return Task.CompletedTask;
+    }
+
+    internal Task SetAllExpanded(bool expanded)
+    {
+        _collapsed.Clear();
+        if (!expanded)
+        {
+            foreach (var (section, entries) in ChangeRowFactory.Sections(_entries))
+                foreach (var key in ChangesTreeBuilder.FolderKeys(ChangesTreeBuilder.BuildTree(section, entries)))
+                    _collapsed.Add(key);
+        }
+
+        ApplyEntries();
+        return Task.CompletedTask;
+    }
+
+    internal Task SetTreeView(bool tree)
+    {
+        IsTreeView = tree;
+        ApplyEntries();
+        return Task.CompletedTask;
+    }
+
+    // ── Commit e update ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Commit dei soli elementi selezionati. Come TortoiseSVN: i non versionati spuntati vengono prima
+    /// aggiunti e i mancanti spuntati prima cancellati (svn commit da solo li rifiuterebbe).
+    /// </summary>
+    internal async Task CommitAsync(object? parameter, CancellationToken ct)
+    {
+        var selected = SelectedEntries().ToList();
+        if (selected.Count == 0)
+        {
+            SetStatus("Seleziona almeno un file per il commit.");
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(CommitMessage))
+        if (string.IsNullOrWhiteSpace(CommitMessage.Text))
         {
-            AiStatusMessage = "Scrivi prima una bozza del messaggio da migliorare.";
+            SetStatus("Scrivi un messaggio di commit.");
             return;
         }
 
-        var selectedPaths = GetSelectedFullPaths();
-        if (selectedPaths.Count == 0)
+        var conflicted = selected.Where(e => e.Status == SvnStatusKind.Conflicted).ToList();
+        if (conflicted.Count > 0)
         {
-            AiStatusMessage = "Seleziona almeno un file per migliorare il messaggio.";
+            SetStatus($"Risolvi prima i conflitti ({conflicted.Count} file) o deselezionali: svn non committa file in conflitto.");
             return;
         }
 
         try
         {
-            IsAiBusy = true;
-            AiStatusMessage = "Miglioramento in corso...";
+            SetStatus("Commit in corso...");
 
-            var diff = await _svnService.GetDiffForAiAsync(selectedPaths, WorkingCopyPath, ct);
-            var language = await _settingsService.GetDefaultLanguageAsync(ct);
-            CommitMessage = await aiService.ImproveCommitMessageAsync(CommitMessage, diff, language, ct);
+            var toAdd = selected.Where(e => e.Status == SvnStatusKind.Unversioned).Select(e => e.FullPath).ToList();
+            if (toAdd.Count > 0)
+                await _svnService.AddAsync(toAdd, ct);
 
-            AiStatusMessage = "Messaggio migliorato.";
+            var toDelete = selected.Where(e => e.Status == SvnStatusKind.Missing).Select(e => e.FullPath).ToList();
+            if (toDelete.Count > 0)
+                await _svnService.DeleteAsync(toDelete, ct);
+
+            var paths = selected.Select(e => e.FullPath).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var revision = await _svnService.CommitAsync(paths, CommitMessage.Text.Trim(), ct);
+
+            CommitMessage.Text = string.Empty;
+            CommitMessage.AiStatus = string.Empty;
+
+            await RefreshAsync(ct, reloadBranch: true, revision is { } rev
+                ? $"Commit completato: revisione {rev} ({selected.Count} elementi)."
+                : $"Commit completato: {selected.Count} elementi.");
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            AiStatusMessage = $"Errore AI: {ex.Message}";
-        }
-        finally
-        {
-            IsAiBusy = false;
+            SetStatus($"Errore commit: {ex.Message}");
         }
     }
 
-    /// <summary>
-    /// Handler per mostrare il diff di un singolo file.
-    /// </summary>
-    private async Task OnShowFileDiffAsync(object? parameter, CancellationToken ct)
+    internal async Task UpdateAsync(object? parameter, CancellationToken ct)
     {
-        if (parameter is not FileStatusItem fileItem)
+        if (string.IsNullOrWhiteSpace(WorkingCopyPath))
+        {
+            SetStatus("Nessuna working copy configurata.");
+            return;
+        }
+
+        try
+        {
+            SetStatus("Update in corso...");
+            var update = await _svnService.UpdateAsync(WorkingCopyPath, ct);
+            var updated = update.Revision is { } rev ? $"Aggiornato alla revisione {rev}" : "Update completato";
+            await RefreshAsync(ct, reloadBranch: true, update.ConflictedPaths.Count > 0
+                ? $"{updated}: {update.ConflictedPaths.Count} file in conflitto."
+                : $"{updated}.");
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            SetStatus($"Errore update: {ex.Message}");
+        }
+    }
+
+    // ── Operazioni su file, cartelle e sezioni ───────────────────────
+
+    /// <summary>SVN Add. Su una cartella non versionata passa il percorso della cartella (svn add --force è ricorsivo).</summary>
+    internal async Task AddAsync(object? parameter, CancellationToken ct)
+    {
+        if (parameter is not ChangeRowViewModel row)
+            return;
+
+        var affected = row.Entries.Where(e => e.Status == SvnStatusKind.Unversioned).ToList();
+        var paths = row.Kind == ChangeRowKind.Folder && row.Section == ChangeSection.Unversioned
+            ? [row.FolderFullPath]
+            : affected.Select(e => e.FullPath).ToList();
+        if (affected.Count == 0)
+        {
+            SetStatus("Nessun elemento non versionato da aggiungere.");
+            return;
+        }
+
+        try
+        {
+            SetStatus("Aggiunta a SVN in corso...");
+            await _svnService.AddAsync(paths, ct);
+
+            // Chi aggiunge di solito vuole anche committare: gli elementi aggiunti restano spuntati.
+            foreach (var entry in affected)
+                _selection.Add(entry.FullPath);
+
+            await RefreshAsync(ct, reloadBranch: false, $"Aggiunti a SVN: {affected.Count} elementi.");
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            SetStatus($"Errore add: {ex.Message}");
+        }
+    }
+
+    /// <summary>SVN Delete di un file, con conferma (e avviso se ha modifiche locali).</summary>
+    internal async Task DeleteAsync(object? parameter, CancellationToken ct)
+    {
+        if (parameter is not ChangeRowViewModel { Entry: { } entry } || !ChangeRowCanDelete(entry))
+        {
+            SetStatus("Nessun file idoneo per SVN Delete.");
+            return;
+        }
+
+        var message = $"SVN Delete di \"{entry.RelativePath}\": il file verrà eliminato dalla cartella di lavoro " +
+                      "e rimosso da SVN al prossimo commit.";
+        if (entry.Status is SvnStatusKind.Modified or SvnStatusKind.Replaced or SvnStatusKind.Conflicted or SvnStatusKind.Added)
+            message += "\n\nATTENZIONE: il file ha modifiche locali non committate, che andranno perse.";
+
+        if (!await _dialogs.ConfirmAsync(message, ct))
             return;
 
         try
         {
-            var fullPath = Path.IsPathRooted(fileItem.FullPath)
-                ? fileItem.FullPath
-                : Path.Combine(WorkingCopyPath, fileItem.FullPath);
+            SetStatus("Rimozione da SVN in corso...");
+            await _svnService.DeleteAsync([entry.FullPath], ct);
+            await RefreshAsync(ct, reloadBranch: false, $"Elemento schedulato per delete: {entry.RelativePath}.");
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            SetStatus($"Errore delete: {ex.Message}");
+        }
+    }
 
-            // Priorità UX: se disponibile, apri il diff nativo (TortoiseSVN),
-            // simile alla finestra diff integrata che l'utente si aspetta.
-            var openedNativeDiff = await _svnService.OpenNativeDiffAsync(fullPath, ct);
-            if (openedNativeDiff)
+    private static bool ChangeRowCanDelete(ChangeEntry entry)
+        => entry.Status is not (SvnStatusKind.Unversioned or SvnStatusKind.Unknown);
+
+    /// <summary>SVN Revert su file, cartella o sezione. Chiede conferma elencando cosa verrà annullato.</summary>
+    internal async Task RevertAsync(object? parameter, CancellationToken ct)
+    {
+        if (parameter is not ChangeRowViewModel row)
+            return;
+
+        // Percorsi espliciti (non la cartella): si annulla esattamente ciò che la lista mostra.
+        var targets = row.Entries.Where(e => ChangeRowFactory.IsRevertable(e.Status)).ToList();
+        if (targets.Count == 0)
+        {
+            SetStatus("Nessun elemento idoneo per SVN Revert.");
+            return;
+        }
+
+        var scope = row.Kind switch
+        {
+            ChangeRowKind.Folder => $" nella cartella \"{row.FolderRelativePath}\"",
+            ChangeRowKind.Section => $" ({ChangeRowFactory.SectionTitle(row.Section)})",
+            _ => string.Empty,
+        };
+        var message = $"Annullare le modifiche locali su {targets.Count} elementi{scope}?\n\n{ListForConfirmation(targets)}\n\n" +
+                      "Le modifiche andranno perse e l'operazione non è annullabile.";
+        if (!await _dialogs.ConfirmAsync(message, ct))
+            return;
+
+        try
+        {
+            SetStatus("Revert in corso...");
+            await _svnService.RevertAsync(targets.Select(e => e.FullPath).ToList(), ct);
+            await RefreshAsync(ct, reloadBranch: false, $"Revert completato su {targets.Count} elementi.");
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            SetStatus($"Errore revert: {ex.Message}");
+        }
+    }
+
+    private static string ListForConfirmation(IReadOnlyList<ChangeEntry> entries)
+    {
+        var lines = entries.Take(MaxListedInConfirmation)
+            .Select(e => $"• {e.RelativePath} ({StatusPresentation.DisplayName(e.Status, e.IsTreeConflict)})");
+        var text = string.Join("\n", lines);
+        return entries.Count > MaxListedInConfirmation
+            ? $"{text}\n… e altri {entries.Count - MaxListedInConfirmation}"
+            : text;
+    }
+
+    /// <summary>
+    /// Risolve un conflitto. Conflitto di testo: l'utente sceglie Working / Mine-full / Theirs-full / Base.
+    /// Conflitto ad albero: non ci sono marcatori, si chiede solo conferma di segnarlo risolto.
+    /// </summary>
+    internal async Task ResolveAsync(object? parameter, CancellationToken ct)
+    {
+        if (parameter is not ChangeRowViewModel { Entry: { Status: SvnStatusKind.Conflicted } entry })
+        {
+            SetStatus("Seleziona un file in conflitto da risolvere.");
+            return;
+        }
+
+        SvnConflictChoice choice;
+        if (entry.IsTreeConflict)
+        {
+            if (!await _dialogs.ConfirmAsync(
+                    $"Conflitto ad albero su \"{entry.RelativePath}\" (rinomina/cancellazione). " +
+                    "Sistema prima la struttura a mano, poi conferma per segnarlo come risolto.", ct))
+                return;
+            choice = SvnConflictChoice.Working;
+        }
+        else
+        {
+            var chosen = await _dialogs.ChooseConflictResolutionAsync(entry.Name, ct);
+            if (chosen is not { } picked)
+                return;
+            choice = picked;
+        }
+
+        try
+        {
+            SetStatus("Risoluzione conflitto in corso...");
+            await _svnService.ResolveAsync(entry.FullPath, choice, ct);
+            await RefreshAsync(ct, reloadBranch: false, $"Conflitto risolto: {entry.RelativePath}");
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            SetStatus($"Errore resolve: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Aggiunge alla ignore list. Su una cartella (che raggruppa elementi non versionati) ignora
+    /// ciascun elemento non versionato contenuto, dopo conferma.
+    /// </summary>
+    internal async Task IgnoreAsync(object? parameter, CancellationToken ct)
+    {
+        if (parameter is not ChangeRowViewModel row)
+            return;
+
+        var targets = row.Entries.Where(e => e.Status == SvnStatusKind.Unversioned).ToList();
+        if (targets.Count == 0)
+        {
+            SetStatus("Add to Ignore List è disponibile solo per elementi non versionati.");
+            return;
+        }
+
+        if (row.Kind != ChangeRowKind.File
+            && !await _dialogs.ConfirmAsync(
+                $"Aggiungere {targets.Count} elementi non versionati alla ignore list (svn:ignore) " +
+                $"delle rispettive cartelle?\n\n{ListForConfirmation(targets)}", ct))
+            return;
+
+        try
+        {
+            SetStatus("Aggiornamento ignore list in corso...");
+            foreach (var entry in targets)
+                await _svnService.AddToIgnoreListAsync(entry.FullPath, ct);
+
+            await RefreshAsync(ct, reloadBranch: false, $"Aggiunti alla ignore list: {targets.Count} elementi.");
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            SetStatus($"Errore ignore list: {ex.Message}");
+        }
+    }
+
+    // ── Diff ─────────────────────────────────────────────────────────
+
+    /// <summary>Diff di un file: prima TortoiseSVN se disponibile, altrimenti inline.</summary>
+    internal async Task ShowFileDiffAsync(object? parameter, CancellationToken ct)
+    {
+        if (parameter is not ChangeRowViewModel { Entry: { } entry })
+            return;
+
+        try
+        {
+            if (await _svnService.OpenNativeDiffAsync(entry.FullPath, ct))
             {
                 IsDiffVisible = false;
-                StatusMessage = $"Diff aperto in TortoiseSVN: {fileItem.Path}";
+                SetStatus($"Diff aperto in TortoiseSVN: {entry.RelativePath}");
                 return;
             }
 
-            // Fallback: mostra il diff testuale inline nella tool window.
-            DiffTitle = $"Diff: {fileItem.Path}";
+            DiffTitle = $"Diff: {entry.RelativePath}";
             DiffContent = "Caricamento diff...";
             IsDiffVisible = true;
 
-            var diff = await _svnService.GetFileDiffAsync(fullPath, ct);
-
+            var diff = await _svnService.GetFileDiffAsync(entry.FullPath, ct);
             DiffContent = string.IsNullOrWhiteSpace(diff)
                 ? "(Nessuna differenza testuale — il file potrebbe essere binario o non versionato)"
                 : diff;
-            StatusMessage = $"Diff inline caricato: {fileItem.Path}";
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!ct.IsCancellationRequested)
         {
             DiffContent = $"Errore: {ex.Message}";
             IsDiffVisible = true;
         }
     }
 
-    /// <summary>
-    /// Handler per chiudere il pannello diff.
-    /// </summary>
-    private Task OnCloseDiffAsync(object? parameter, CancellationToken ct)
+    /// <summary>Diff combinato dei file modificati dentro una cartella, mostrato inline.</summary>
+    internal async Task ShowFolderDiffAsync(object? parameter, CancellationToken ct)
+    {
+        if (parameter is not ChangeRowViewModel row)
+            return;
+
+        var files = row.Entries.Where(e => e.Status != SvnStatusKind.Unversioned && !e.IsDirectory).ToList();
+        if (files.Count == 0)
+        {
+            SetStatus("Nessuna modifica da confrontare in questa cartella.");
+            return;
+        }
+
+        try
+        {
+            DiffTitle = $"Diff cartella: {(row.FolderRelativePath.Length > 0 ? row.FolderRelativePath : row.Name)} ({files.Count} file)";
+            DiffContent = "Caricamento diff...";
+            IsDiffVisible = true;
+
+            var parts = new List<string>();
+            foreach (var file in files.Take(MaxFolderDiffFiles))
+            {
+                var diff = await _svnService.GetFileDiffAsync(file.FullPath, ct);
+                if (!string.IsNullOrWhiteSpace(diff))
+                    parts.Add(diff.TrimEnd());
+            }
+
+            if (files.Count > MaxFolderDiffFiles)
+                parts.Add($"… altri {files.Count - MaxFolderDiffFiles} file omessi.");
+
+            DiffContent = parts.Count == 0 ? "(Nessuna differenza testuale)" : string.Join("\n\n", parts);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            DiffContent = $"Errore: {ex.Message}";
+        }
+    }
+
+    private Task CloseDiffAsync(object? parameter, CancellationToken ct)
+    {
+        CloseDiff();
+        return Task.CompletedTask;
+    }
+
+    private void CloseDiff()
     {
         IsDiffVisible = false;
         DiffContent = string.Empty;
         DiffTitle = string.Empty;
-        return Task.CompletedTask;
     }
 
-    /// <summary>Seleziona tutti i file nella lista.</summary>
-    private Task OnSelectAllAsync(object? parameter, CancellationToken ct)
+    // ── Utilità ──────────────────────────────────────────────────────
+
+    /// <summary>Imposta un messaggio d'azione: resta visibile finché non lo sostituisce un altro (i refresh automatici non lo toccano).</summary>
+    private void SetStatus(string message)
     {
-        foreach (var file in Files)
-            file.IsSelected = true;
-        return Task.CompletedTask;
+        _statusIsAuto = false;
+        StatusMessage = message;
     }
-
-    /// <summary>Deseleziona tutti i file nella lista.</summary>
-    private Task OnUnselectAllAsync(object? parameter, CancellationToken ct)
-    {
-        foreach (var file in Files)
-            file.IsSelected = false;
-        return Task.CompletedTask;
-    }
-
-    /// <summary>Aggiunge a SVN i file selezionati o il file target.</summary>
-    private async Task OnAddToSvnAsync(object? parameter, CancellationToken ct)
-    {
-        var targets = GetSelectedOrSingleFilePaths(parameter)
-            .Where(p => Files.Any(f =>
-                string.Equals(ToFullPath(f), p, StringComparison.OrdinalIgnoreCase) &&
-                f.CanAddToSvn))
-            .ToList();
-        if (targets.Count == 0)
-        {
-            StatusMessage = "Nessun file idoneo per SVN Add.";
-            return;
-        }
-
-        try
-        {
-            StatusMessage = "Aggiunta a SVN in corso...";
-            await _svnService.AddAsync(targets, ct);
-            StatusMessage = $"Aggiunti a SVN: {targets.Count} elementi.";
-            await OnRefreshAsync(null, ct);
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"Errore add: {ex.Message}";
-        }
-    }
-
-    /// <summary>Schedula la rimozione da SVN dei file selezionati o target.</summary>
-    private async Task OnDeleteFromSvnAsync(object? parameter, CancellationToken ct)
-    {
-        var targets = GetSelectedOrSingleFilePaths(parameter)
-            .Where(p => Files.Any(f =>
-                string.Equals(ToFullPath(f), p, StringComparison.OrdinalIgnoreCase) &&
-                f.CanDeleteFromSvn))
-            .ToList();
-        if (targets.Count == 0)
-        {
-            StatusMessage = "Nessun file idoneo per SVN Delete.";
-            return;
-        }
-
-        try
-        {
-            StatusMessage = "Rimozione da SVN in corso...";
-            await _svnService.DeleteAsync(targets, ct);
-            StatusMessage = $"Elementi schedulati per delete: {targets.Count}.";
-            await OnRefreshAsync(null, ct);
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"Errore delete: {ex.Message}";
-        }
-    }
-
-    /// <summary>Annulla modifiche locali dei file selezionati o target.</summary>
-    private async Task OnRevertSelectedAsync(object? parameter, CancellationToken ct)
-    {
-        var targets = GetSelectedOrSingleFilePaths(parameter)
-            .Where(p => Files.Any(f =>
-                string.Equals(ToFullPath(f), p, StringComparison.OrdinalIgnoreCase) &&
-                f.CanRevert))
-            .ToList();
-        if (targets.Count == 0)
-        {
-            StatusMessage = "Nessun file idoneo per SVN Revert.";
-            return;
-        }
-
-        try
-        {
-            StatusMessage = "Revert in corso...";
-            await _svnService.RevertAsync(targets, ct);
-            StatusMessage = $"Revert completato su {targets.Count} elementi.";
-            await OnRefreshAsync(null, ct);
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"Errore revert: {ex.Message}";
-        }
-    }
-
-    /// <summary>Marca come risolto un file in conflitto.</summary>
-    private async Task OnResolveConflictAsync(object? parameter, CancellationToken ct)
-    {
-        if (parameter is not FileStatusItem fileItem)
-        {
-            StatusMessage = "Seleziona un file in conflitto da risolvere.";
-            return;
-        }
-
-        if (!fileItem.CanResolveConflict)
-        {
-            StatusMessage = "Il file selezionato non è in conflitto.";
-            return;
-        }
-
-        try
-        {
-            StatusMessage = "Risoluzione conflitto in corso...";
-            await _svnService.ResolveAsync(ToFullPath(fileItem), Models.SvnConflictChoice.Working, ct);
-            StatusMessage = $"Conflitto risolto: {fileItem.Path}";
-            await OnRefreshAsync(null, ct);
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"Errore resolve: {ex.Message}";
-        }
-    }
-
-    /// <summary>Aggiunge il file/cartella unversioned alla ignore list SVN della directory padre.</summary>
-    private async Task OnAddToIgnoreListAsync(object? parameter, CancellationToken ct)
-    {
-        if (parameter is not FileStatusItem fileItem)
-        {
-            StatusMessage = "Seleziona un file o cartella da ignorare.";
-            return;
-        }
-
-        if (!fileItem.CanAddToIgnoreList)
-        {
-            StatusMessage = "Add to Ignore List è disponibile solo per elementi unversioned.";
-            return;
-        }
-
-        try
-        {
-            StatusMessage = "Aggiornamento ignore list in corso...";
-            await _svnService.AddToIgnoreListAsync(ToFullPath(fileItem), ct);
-            StatusMessage = $"Aggiunto alla ignore list: {fileItem.Path}";
-            await OnRefreshAsync(null, ct);
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"Errore ignore list: {ex.Message}";
-        }
-    }
-
-    /// <summary>
-    /// Converte un <see cref="Models.SvnStatusKind"/> in un codice breve
-    /// per la visualizzazione compatta nella lista file.
-    /// </summary>
-    private static string GetShortStatus(Models.SvnStatusKind status) => status switch
-    {
-        Models.SvnStatusKind.Modified => "M",
-        Models.SvnStatusKind.Added => "A",
-        Models.SvnStatusKind.Deleted => "D",
-        Models.SvnStatusKind.Conflicted => "C",
-        Models.SvnStatusKind.Unversioned => "?",
-        Models.SvnStatusKind.Missing => "!",
-        Models.SvnStatusKind.Replaced => "R",
-        _ => "·",
-    };
-
-    /// <summary>
-    /// Converte lo stato SVN in una descrizione esplicita, simile alla lista del commit SVN.
-    /// </summary>
-    private static string GetStatusDisplayName(Models.SvnStatusKind status) => status switch
-    {
-        Models.SvnStatusKind.Modified => "Modified",
-        Models.SvnStatusKind.Added => "Added",
-        Models.SvnStatusKind.Deleted => "Deleted",
-        Models.SvnStatusKind.Conflicted => "Conflicted",
-        Models.SvnStatusKind.Unversioned => "Unversioned",
-        Models.SvnStatusKind.Missing => "Missing",
-        Models.SvnStatusKind.Replaced => "Replaced",
-        Models.SvnStatusKind.Normal => "Normal",
-        _ => "Unknown",
-    };
-
-    /// <summary>
-    /// Restituisce un colore Brush (come stringa) per lo stato SVN.
-    /// I colori sono scelti per essere leggibili sia in tema chiaro che scuro.
-    /// </summary>
-    private static string GetStatusColor(Models.SvnStatusKind status) => status switch
-    {
-        Models.SvnStatusKind.Modified => "DodgerBlue",
-        Models.SvnStatusKind.Added => "Green",
-        Models.SvnStatusKind.Deleted => "Crimson",
-        Models.SvnStatusKind.Conflicted => "Red",
-        Models.SvnStatusKind.Unversioned => "SlateGray",
-        Models.SvnStatusKind.Missing => "DarkOrange",
-        Models.SvnStatusKind.Replaced => "MediumPurple",
-        _ => "SlateGray",
-    };
-
-    private List<string> GetSelectedOrSingleFilePaths(object? parameter)
-    {
-        if (parameter is FileStatusItem item)
-            return [ToFullPath(item)];
-
-        var selected = Files.Where(f => f.IsSelected).Select(ToFullPath).ToList();
-        if (selected.Count > 0)
-            return selected;
-
-        return [];
-    }
-
-    private string ToFullPath(FileStatusItem file) => Path.IsPathRooted(file.FullPath)
-        ? file.FullPath
-        : Path.Combine(WorkingCopyPath, file.FullPath);
 
     private static string NormalizeStatusPath(string statusPath, string workingCopyPath)
     {
@@ -827,111 +906,4 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
             ? statusPath
             : Path.GetFullPath(Path.Combine(workingCopyPath, statusPath));
     }
-}
-
-/// <summary>
-/// Rappresenta un file nella lista della tool window Status.
-/// Ogni proprietà è bindabile dal XAML tramite Remote UI.
-/// </summary>
-[DataContract]
-internal class FileStatusItem : NotifyPropertyChangedObject
-{
-    private string _fullPath = string.Empty;
-    private string _path = string.Empty;
-    private string _status = string.Empty;
-    private string _action = string.Empty;
-    private string _statusColor = "Gray";
-    private bool _isSelected;
-    private bool _canAddToSvn;
-    private bool _canDeleteFromSvn = true;
-    private bool _canRevert = true;
-    private bool _canResolveConflict;
-    private bool _canAddToIgnoreList;
-
-    /// <summary>Percorso completo del file (usato internamente per svn diff/commit).</summary>
-    [DataMember]
-    public string FullPath
-    {
-        get => _fullPath;
-        set => SetProperty(ref _fullPath, value);
-    }
-
-    /// <summary>Percorso del file relativo alla working copy (visualizzato nella UI).</summary>
-    [DataMember]
-    public string Path
-    {
-        get => _path;
-        set => SetProperty(ref _path, value);
-    }
-
-    /// <summary>Stato SVN abbreviato (M, A, D, ?, !, R, C).</summary>
-    [DataMember]
-    public string Status
-    {
-        get => _status;
-        set => SetProperty(ref _status, value);
-    }
-
-    /// <summary>Descrizione esplicita dell'azione SVN (Added, Modified, Deleted, ...).</summary>
-    [DataMember]
-    public string Action
-    {
-        get => _action;
-        set => SetProperty(ref _action, value);
-    }
-
-    /// <summary>
-    /// Colore del testo dello stato SVN (nome colore WPF).
-    /// M=CornflowerBlue, A=MediumSeaGreen, D=IndianRed, ?=Gray, !=DarkOrange, C=Crimson.
-    /// </summary>
-    [DataMember]
-    public string StatusColor
-    {
-        get => _statusColor;
-        set => SetProperty(ref _statusColor, value);
-    }
-
-    /// <summary>Se il file è selezionato per il commit.</summary>
-    [DataMember]
-    public bool IsSelected
-    {
-        get => _isSelected;
-        set => SetProperty(ref _isSelected, value);
-    }
-
-    [DataMember]
-    public bool CanAddToSvn
-    {
-        get => _canAddToSvn;
-        set => SetProperty(ref _canAddToSvn, value);
-    }
-
-    [DataMember]
-    public bool CanDeleteFromSvn
-    {
-        get => _canDeleteFromSvn;
-        set => SetProperty(ref _canDeleteFromSvn, value);
-    }
-
-    [DataMember]
-    public bool CanRevert
-    {
-        get => _canRevert;
-        set => SetProperty(ref _canRevert, value);
-    }
-
-    [DataMember]
-    public bool CanResolveConflict
-    {
-        get => _canResolveConflict;
-        set => SetProperty(ref _canResolveConflict, value);
-    }
-
-    [DataMember]
-    public bool CanAddToIgnoreList
-    {
-        get => _canAddToIgnoreList;
-        set => SetProperty(ref _canAddToIgnoreList, value);
-    }
-
 }

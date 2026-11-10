@@ -133,6 +133,9 @@ internal sealed class FallbackAiService : IAiService
     /// <summary>Nomi dei provider nell'ordine in cui vengono provati.</summary>
     public IEnumerable<string> ProviderNames => _providers.Select(p => p.Name);
 
+    /// <summary>Nome del provider che ha risposto all'ultima richiesta riuscita (<c>null</c> se nessuna).</summary>
+    public string? LastUsedProvider { get; private set; }
+
     public Task<string> GenerateCommitMessageAsync(string diff, string language, CancellationToken ct)
         => TryEachAsync(s => s.GenerateCommitMessageAsync(diff, language, ct), ct);
 
@@ -146,7 +149,9 @@ internal sealed class FallbackAiService : IAiService
         {
             try
             {
-                return await call(service);
+                var result = await call(service);
+                LastUsedProvider = name;
+                return result;
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {

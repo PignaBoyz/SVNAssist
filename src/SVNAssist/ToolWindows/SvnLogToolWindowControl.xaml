@@ -21,17 +21,8 @@
       <RowDefinition Height="*"/>
       <RowDefinition Height="Auto"/>
     </Grid.RowDefinitions>
-
-    <!-- Riga 0: Percorso e numero massimo revisioni -->
+    <!-- Riga 0: percorso (rilevato dalla solution, modificabile) -->
     <DockPanel Grid.Row="0" Margin="0,0,0,8">
-      <TextBlock Text="Max:"
-                 DockPanel.Dock="Right"
-                 VerticalAlignment="Center"
-                 Margin="8,0,4,0"/>
-      <TextBox Text="{Binding MaxEntries, Mode=TwoWay}"
-               DockPanel.Dock="Right"
-               Width="50"
-               VerticalAlignment="Center"/>
       <TextBlock Text="Percorso:"
                  DockPanel.Dock="Left"
                  VerticalAlignment="Center"
@@ -41,11 +32,25 @@
                VerticalAlignment="Center"/>
     </DockPanel>
 
-    <!-- Riga 1: Bottone Carica Log -->
+    <!-- Riga 1: Carica log / Carica altre 50 -->
     <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
-      <Button Content="📜 Carica Log"
+      <Button Content="Carica log"
               Command="{Binding LoadLogCommand}"
               Padding="12,4"/>
+      <Button Content="Carica altre 50"
+              Command="{Binding LoadMoreCommand}"
+              Padding="12,4"
+              Margin="6,0,0,0">
+        <Button.Style>
+          <Style TargetType="Button">
+            <Style.Triggers>
+              <DataTrigger Binding="{Binding CanLoadMore}" Value="False">
+                <Setter Property="Visibility" Value="Collapsed"/>
+              </DataTrigger>
+            </Style.Triggers>
+          </Style>
+        </Button.Style>
+      </Button>
     </StackPanel>
 
     <!-- Riga 2: Pannello superiore — Lista revisioni -->

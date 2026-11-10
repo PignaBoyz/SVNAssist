@@ -1,22 +1,30 @@
 # SVNAssist — Analisi del progetto e visione finale
 
 > Documento di lavoro. Cosa fa oggi l'estensione, dove il codice può migliorare
-> (Clean Code / SOLID / testing) e dove vogliamo arrivare.
+> (Clean Code / SOLID / testing) e dove vogliamo arrivare. Il backlog dettagliato e i debiti
+> noti sono in `docs/ROADMAP.md`.
 
 ---
 
-## 1. Cos'è il progetto (come l'ho capito)
+## 1. Cos'è il progetto (stato attuale)
 
 **SVNAssist** è un'estensione **VSIX per Visual Studio 2026** che porta **Subversion** dentro l'IDE
-con un'esperienza moderna in stile *Git Changes*, più la generazione automatica dei commit message via AI.
+con un'esperienza in stile *Git Changes*, più la generazione automatica dei commit message via AI.
 
-- **Modello**: nuovo `VisualStudio.Extensibility` **out-of-process** (.NET 8), non il vecchio VSSDK.
-  Vantaggio chiave: se l'estensione crasha, **VS non crasha**.
-- **SVN**: invocato tramite `svn.exe` come processo esterno (no SharpSVN → niente dipendenze native).
-- **AI**: chiamate HTTP generiche in formato **OpenAI Chat Completions**, quindi multi-provider
-  (GitHub Models di default, OpenAI, Azure, Ollama, ecc.).
-- **UI**: Remote UI (XAML `DataTemplate` + ViewModel `[DataContract]`), sincronizzata via JSON-RPC
-  tra processo estensione e processo VS.
+- **Modello**: `VisualStudio.Extensibility` **out-of-process** (.NET 8), non il vecchio VSSDK:
+  se l'estensione crasha, **VS non crasha**.
+- **SVN**: `svn.exe` come processo esterno (`IProcessRunner`, `ArgumentList`, output in inglese e non
+  interattivo). Comportamento allineato a svn/TortoiseSVN (non versionati spuntati aggiunti al commit,
+  mancanti cancellati, conflitti che bloccano il commit, Revert/Delete con conferma).
+- **AI multi-provider**: `AiServiceFactory` costruisce la catena **GitHub Copilot** (runtime scaricato al
+  primo uso) → **Claude Code** → **Claude API** → **OpenAI-compatibile** (GitHub Models di default), con
+  fallback tra provider. All'AI va il **diff minimo** dei soli file selezionati (`GetDiffForAiAsync`).
+  Lingua scelta nel pannello (Italiano / English / Auto), default da *Default Language*.
+- **UI**: Remote UI (XAML + ViewModel `[DataContract]`, senza code-behind né convertitori). Il pannello
+  *SVN Changes* ricalca Git Changes: sezioni Conflitti / Modifiche / Non versionati, vista Albero (cartelle
+  compattate) o Lista, checkbox tri-state, menu contestuali per file/cartella/sezione, checklist dei
+  prerequisiti con installazione/login a un clic. L'albero è una `ListBox` **appiattita** di righe
+  (`ChangeRowViewModel`: sezione/cartella/file, indentazione e chevron precalcolati).
 - **Natura**: progetto **didattico** → il codice deve restare chiaro e commentato.
 
 ### Mappa dei componenti
@@ -24,25 +32,22 @@ con un'esperienza moderna in stile *Git Changes*, più la generazione automatica
 | Componente | File | Responsabilità |
 |---|---|---|
 | Entry point | `SVNAssistExtension.cs` | Registra servizi DI + settings observer |
-| Menu | `Commands/SvnAssistMenu.cs` | Sottomenu *Extensions → SVNAssist* |
-| Comandi | `Commands/*.cs` | Status, Commit, Update, Log → aprono tool window |
-| SVN | `Services/SvnService.cs` (+ `ISvnService`) | Wrapper su `svn.exe`: status/commit/update/log/diff/add/delete/revert/resolve/ignore |
-| AI | `Services/AiService.cs` (+ `IAiService`) | Genera/migliora commit message, con chunking dei diff grandi |
-| Settings | `Services/SettingsService.cs` | Legge endpoint/key/model/lingua/path da Tools→Options |
-| Tool window Status | `ToolWindows/SvnStatus*` | Pannello *SVN Changes*: lista file, commit inline, diff, AI, watcher |
-| Tool window Log | `ToolWindows/SvnLog*` | Cronologia revisioni + diff |
-| Modelli | `Models/*.cs` | `SvnFileStatus`, `SvnStatusKind`, `SvnLogEntry`, `CommitOptions` |
-| Test | `tests/SVNAssist.Tests` | xUnit: integrazione su `SvnService`, mock HTTP su `AiService` (13 test) |
-
-### Cosa funziona già (dal backlog)
-
-Auto-detect della working copy dalla solution, pannello *SVN Changes* compatto, commit inline,
-diff per file (con fallback TortoiseSVN), menu contestuale (add/delete/revert/resolve/ignore),
-watcher filesystem + polling solution per refresh automatico, tool window Log, settings multi-provider.
+| Menu e comandi | `Commands/*.cs` | Sottomenu *Extensions → SVNAssist*; Status, Commit, Update, Log |
+| SVN | `Services/SvnService.cs` (+ `ISvnService`) | Wrapper su `svn.exe`; `ReloadableSvnService` ritrova svn installato dopo l'avvio |
+| AI | `Services/Ai*.cs`, `CopilotAiService`, `ClaudeCodeAiService`, `AnthropicAiService` | Provider, factory con fallback, runtime Copilot (`CopilotRuntimeInstaller`) |
+| Settings | `Services/SettingsService.cs` | Provider AI, modelli, chiavi, lingua, path da Tools→Options |
+| Prerequisiti | `Services/PrerequisitesService.cs`, `ConsoleLauncher.cs` | Controllo svn/TortoiseSVN/provider AI (sonde iniettabili); comandi in console visibile |
+| Dialoghi | `Services/IDialogService.cs`, `VsDialogService.cs` | Conferme e scelta risoluzione conflitto (`ShowPromptAsync`) |
+| Pannello Changes | `ToolWindows/SvnStatusToolWindow*.cs` | Composition root, watcher, ViewModel orchestratore |
+| Raggruppamento | `ToolWindows/ChangesTreeBuilder.cs`, `ChangeRowFactory.cs` | Sezioni, alberi con cartelle compattate, tri-state (logica pura) |
+| ViewModel di supporto | `CommitMessageViewModel`, `PrerequisitesViewModel`, `ChangeRowViewModel` | Messaggio + AI + lingua; checklist; righe appiattite |
+| Refresh | `ToolWindows/RefreshDebouncer.cs` | Un solo ciclo con debounce, filtro `bin/ obj/ .vs/ .svn/` |
+| Log | `ToolWindows/SvnLog*` | Cronologia (auto-detect, "Carica altre 50") + diff |
+| Test | `tests/SVNAssist.Tests` | xUnit: servizi SVN/AI, factory, albero, ViewModel con servizi finti, prerequisiti |
 
 ---
 
-## 2. Dove il codice può migliorare (Clean Code / SOLID / testing)
+## 2. Analisi iniziale del codice (storico: i punti sotto sono stati risolti)
 
 Punti concreti emersi dalla lettura del codice. Sono opportunità, non bocciature.
 
@@ -199,8 +204,11 @@ ambiente usa-e-getta riproducibile.
       `gh auth token`/`GITHUB_TOKEN`/`GH_TOKEN` rilevati in automatico come bonus; endpoint+modello di default.
       Al primo uso senza token, `AiSetupPrompt` apre la pagina del PAT (`GitHubTokenResolver` + test)
 - [x] Script `tools/setup-local-svn.ps1` + mini app demo (repo `file://` usa-e-getta; verificato end-to-end)
-- [ ] Test handler ViewModel (ergonomia `AsyncCommand` da verificare)
-- [ ] Provider AI da dropdown (P6) + Claude nativo (`/v1/messages`)
+- [x] Test ViewModel con servizi finti (handler `internal` chiamati direttamente, niente `AsyncCommand`)
+- [x] Pannello in stile Git Changes: sezioni, albero/lista, tri-state, menu contestuali, conferme Revert/Delete, scelta risoluzione conflitti
+- [x] Checklist prerequisiti con installazione/login a un clic; lingua del commit scelta nel pannello
+- [x] Refresh unificato con debounce; `svn info` solo quando serve; CommitDialog morto rimosso
+- [x] AI multi-provider (Copilot, Claude Code, Claude API, OpenAI) con fallback; dropdown provider nelle impostazioni
 - [ ] Feature core: update su singola folder, history più ricca
 
 ## 7. AI e GitHub Copilot — cosa è fattibile (indagine sull'SDK 17.14)
@@ -266,11 +274,11 @@ condividere il core o reimplementare.
 - [ ] **Menu contestuale multi-selezione** (P10): azioni coerenti su selezioni con stati misti
 - [ ] **Sottomenu + enable/disable comandi** quando non c'è working copy (P3)
 - [ ] **Icone vettoriali** al posto delle emoji; verifica colori stati in tema chiaro/scuro (P9)
-- [ ] **Test degli handler del ViewModel** (richiede di chiarire l'ergonomia di `AsyncCommand` nei test)
+
 
 ### AI (incrementale)
-- [ ] **Dropdown provider** (OpenAI/Azure/Ollama/Gemini/Custom) invece dell'endpoint a mano (P6)
-- [ ] **Claude nativo** (`/v1/messages`, header `x-api-key` + `anthropic-version`) — oggi solo OpenAI-compatibile
+
+
 - [ ] **Credenziali per-provider** salvate con DPAPI/ProtectedData (P8) invece di plain nel settings store
 
 ### Branch/merge (oltre il core "da IDE", valutare)
@@ -310,7 +318,7 @@ Come provare l'estensione end-to-end sulla tua macchina.
    - ✅ Attesa: l'header mostra il branch `trunk`; la lista modifiche è vuota.
 5. **Modifica** `DemoApp/Program.cs` e salva.
    - ✅ Attesa: il file compare con stato **M** (refresh automatico).
-6. **Commit**: scrivi un messaggio (o clicca 🤖 per generarlo con l'AI), seleziona il file, **Commit**.
+6. **Commit**: scrivi un messaggio (o clicca **Genera con AI**), seleziona il file, **Commit**.
    - Se l'AI non ha un token: ✅ compare il prompt che apre la pagina del PAT.
    - ✅ Attesa: dopo il commit la lista si svuota.
 7. **Update / Log**: prova **Update** e **Log / History** (vedi le revisioni create dallo script).

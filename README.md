@@ -10,17 +10,18 @@ Estensione VSIX per Visual Studio 2026 che integra **Subversion (SVN)** nell'IDE
 
 ## ✨ Funzionalità
 
-- **Pannello SVN Changes** — Tool window dockabile (stile Git Changes) con:
-  - Header con nome del branch SVN corrente e bottone Update
-  - Messaggio di commit inline con supporto multiriga
-  - Lista file compatta con checkbox, stato (M/A/D/?/!) e path relativo
-  - Pannello diff espandibile per ogni file
-  - Select All / Deselect All
-- **Generazione commit message con AI** — Analizza il diff e genera automaticamente il messaggio
-- **Miglioramento commit message con AI** — Migliora una bozza scritta dall'utente
-- **Auto-detect SVN** — Rileva automaticamente la working copy SVN dalla solution aperta
-- **Operazioni SVN** — Status, Commit, Update, Log/History, Diff
-- **Multi-provider AI** — GitHub Models (default), OpenAI, Azure OpenAI, Ollama, o qualsiasi endpoint compatibile OpenAI
+- **Pannello SVN Changes** — Tool window dockabile, stile Git Changes:
+  - Branch corrente, Refresh e Update in alto
+  - Messaggio di commit multiriga con **Commit**, **Genera con AI**, **Migliora** e scelta della lingua (Italiano / English / Auto)
+  - Sezioni comprimibili **Conflitti**, **Modifiche** e **Non versionati**, con conteggio; vista **Albero** (cartelle compattate, come Git) o **Lista**
+  - Checkbox tri-state su file, cartelle e sezioni: ciò che è spuntato è ciò che viene committato (nessuno "staging")
+  - Menu contestuali: Add, Revert, Delete, Ignore, Risolvi conflitto, Diff (file e cartella) — Revert e Delete chiedono conferma elencando cosa cambia
+  - Pannello diff inline (o TortoiseSVN se installato)
+  - **Checklist dei prerequisiti** in-panel: svn, TortoiseSVN, provider AI, con pulsanti di installazione/login a un clic
+- **Commit message con AI** — Genera dal diff **minimo** dei soli file selezionati, o migliora la bozza; multi-provider con fallback
+- **Auto-detect SVN** — Rileva la working copy dalla solution aperta; refresh automatico (FileSystemWatcher con debounce)
+- **Log / History** — Cronologia con diff per revisione e "Carica altre 50"
+- **Comportamento fedele a svn/TortoiseSVN** — i non versionati spuntati vengono aggiunti prima del commit, i mancanti cancellati, i conflitti bloccano il commit
 
 ---
 
@@ -55,7 +56,7 @@ L'estensione comparirà nel menu **Extensions** con i comandi:
 > una volta sola, è fornire un token:
 > - **Hai GitHub CLI?** Se sei loggato (`gh auth login`), il token viene rilevato **in automatico**: niente da fare.
 > - **Altrimenti** crea un Personal Access Token gratuito e incollalo in *Tools → Options → SVNAssist → AI API Key*
->   (al primo clic su 🤖 l'estensione apre direttamente la pagina del token).
+>   (al primo clic su "Genera con AI" l'estensione apre direttamente la pagina del token).
 >
 > In alternativa SVNAssist legge anche la variabile d'ambiente `GITHUB_TOKEN` / `GH_TOKEN`.
 
@@ -89,7 +90,7 @@ SVNAssist usa di default **GitHub Models**, un servizio gratuito di GitHub che o
 1. Apri una solution che si trova in una working copy SVN
 2. Modifica un file e salva
 3. Apri il pannello SVN Changes (**Extensions → Mostra Status**)
-4. Clicca **🤖 AI** per generare il messaggio di commit
+4. Clicca **Genera con AI** per generare il messaggio di commit
 5. Il messaggio apparirà nella TextBox di commit
 
 > **Modelli consigliati per GitHub Models:**
@@ -160,60 +161,50 @@ Per il provider `openai` puoi usare qualsiasi endpoint compatibile con il format
 
 ### Pannello SVN Changes
 
-Il pannello SVN Changes è il cuore dell'estensione. Si apre tramite **Extensions → Mostra Status** e si ancora tipicamente a destra, accanto a Solution Explorer (come Git Changes).
-
-#### Layout
+Si apre da **Extensions → Mostra Status** e si ancora di solito a destra, accanto a Solution Explorer.
 
 ```
 ┌─ SVN Changes ─────────────────────────┐
-│ ⟳    branches/feature-x    ↑ Update  │  ← Header con branch e update
-│───────────────────────────────────────│
-│ Messaggio di commit...                │  ← TextBox multiriga
-│ [Commit] [🤖 AI] [✨]                │  ← Bottoni azione
-│───────────────────────────────────────│
-│ Changes (3)          [✓ All] [✗ None] │  ← Conteggio + selezione
-│  ☑ M  src/File1.cs             [diff] │  ← Lista file
-│  ☑ A  src/File2.cs             [diff] │
-│  ☐ ?  NuovoFile.txt            [diff] │
-│───────────────────────────────────────│
-│ Diff: src/File1.cs                 ✕  │  ← Pannello diff
+│ trunk                  [Refresh][Update]│
+│ ┌ Messaggio di commit ───────────────┐ │
+│ └────────────────────────────────────┘ │
+│ [Commit] [Genera con AI] [Migliora] [Italiano ▾]
+│ Seleziona tutto  Deseleziona   [Albero][Lista]
+│ ▾ ☑ Modifiche (3)                      │
+│   ▾ ☑ src                          2   │
+│       ☑ M Program.cs                   │
+│       ☐ M Util.cs                      │
+│ ▾ ☐ Non versionati (1)                 │
+│       ☐ ? notes.txt                    │
+│ Stato · [Prerequisiti (1 da sistemare)]│
 └───────────────────────────────────────┘
 ```
 
 #### Workflow tipico
 
-1. **Apri** il pannello SVN Changes
-2. L'estensione **rileva automaticamente** la working copy SVN dalla solution
-3. I file modificati appaiono nella lista con il loro stato:
-   - **M** = Modificato
-   - **A** = Aggiunto
-   - **D** = Cancellato
-   - **?** = Non versionato
-   - **!** = Mancante
-4. **Seleziona** i file da committare con le checkbox
-5. **Scrivi** il messaggio di commit, oppure clicca **🤖 AI** per generarlo automaticamente
-6. Clicca **Commit** per eseguire il commit
-7. Usa **↑ Update** per aggiornare la working copy
+1. Apri il pannello: la working copy viene rilevata dalla solution e le modifiche appaiono raggruppate per sezione e cartella
+2. Spunta ciò che vuoi committare (una checkbox su una cartella o sezione spunta tutti i discendenti; lo stato parziale è indeterminato)
+3. Scrivi il messaggio o premi **Genera con AI** (la lingua si sceglie nel menu accanto ai bottoni; vale per la sessione, il default viene da *Default Language*)
+4. **Commit**: i non versionati spuntati vengono aggiunti, i mancanti cancellati; con un conflitto selezionato il commit viene rifiutato
+5. **Update** aggiorna la working copy e segnala eventuali conflitti (sezione *Conflitti*, menu *Risolvi conflitto...*)
 
-#### Bottoni
+Stati: **M** modificato, **A** aggiunto, **D** eliminato, **R** sostituito, **C** conflitto (anche ad albero), **?** non versionato, **!** mancante/incompleto, **~** ostruito.
 
-| Bottone | Azione |
+#### Menu contestuali
+
+| Dove | Voci |
 |---|---|
-| ⟳ | Refresh — ricarica la lista file e il branch |
-| ↑ Update | Esegue `svn update` sulla working copy |
-| Commit | Committa i file selezionati con il messaggio scritto |
-| 🤖 AI | Genera il messaggio di commit analizzando il diff con AI |
-| ✨ | Migliora il messaggio di commit esistente con AI |
-| ✓ All | Seleziona tutti i file |
-| ✗ None | Deseleziona tutti i file |
-| diff | Mostra il diff del singolo file nel pannello inferiore |
+| File | SVN Add, Aggiungi a ignore list, SVN Delete (avvisa se perde modifiche locali), SVN Revert (conferma), Risolvi conflitto (Working / Mio / Server / Base), Mostra diff |
+| Cartella | SVN Add (contenuto non versionato), SVN Revert cartella, Aggiungi a ignore list, Diff cartella, Espandi/Comprimi tutto |
+| Sezione | Aggiungi tutti a SVN (Non versionati), Revert tutto (Modifiche), Espandi/Comprimi tutto |
+
+#### Prerequisiti
+
+Il pulsante in basso apre la checklist: **svn.exe** (obbligatorio; "Installa con winget" o pagina di download), **TortoiseSVN** (opzionale, diff nativo) e lo stato dei provider AI (GitHub CLI + login, Claude Code, Anthropic API Key, runtime Copilot). I pulsanti aprono una finestra console visibile (`winget`, `gh auth login`, `claude`, installer di Claude Code): al termine premi **Ricontrolla**. La checklist si apre da sola al primo uso se manca svn.
 
 ### Log / History
 
-Apri la cronologia delle revisioni SVN tramite **Extensions → Log / History**:
-- Lista revisioni con numero, autore, data e messaggio
-- Click su una revisione per vedere il diff completo
-- Pannello ridimensionabile con GridSplitter
+**Extensions → Log / History**: rileva la working copy dalla solution, mostra le ultime 50 revisioni (autore, data, messaggio), il diff al clic su una revisione e **Carica altre 50**.
 
 ---
 
@@ -234,9 +225,11 @@ Tutte le impostazioni sono in **Tools → Options → SVNAssist**:
 ## 🏗️ Architettura
 
 - **Modello**: VisualStudio.Extensibility (out-of-process, .NET 8)
-- **UI**: Remote UI (DataTemplate XAML + DataContract ViewModel)
-- **SVN**: `svn.exe` via `System.Diagnostics.Process` (no SharpSVN)
-- **AI**: `HttpClient` con formato OpenAI Chat Completions
+- **UI**: Remote UI (XAML + ViewModel `[DataContract]`, senza code-behind né convertitori). L'albero è una `ListBox` appiattita di righe (sezione/cartella/file); raggruppamento e tri-state sono in `ChangesTreeBuilder` (puro, testato)
+- **ViewModel**: `SvnStatusToolWindowData` (orchestrazione), `CommitMessageViewModel` (messaggio + AI + lingua), `PrerequisitesViewModel`, righe `ChangeRowViewModel`; dipendono solo da `ISvnService`, `IAiServiceFactory`, `IDialogService`
+- **SVN**: `svn.exe` via `Process` (no SharpSVN), output forzato in inglese e non interattivo; `ReloadableSvnService` ritrova svn se installato a VS aperto
+- **AI multi-provider**: `AiServiceFactory` costruisce la catena Copilot → Claude Code → Claude API → OpenAI-compatibile (con fallback); il diff inviato è minimo (`GetDiffForAiAsync`: niente contesto, binari e cancellati omessi)
+- **Refresh**: un solo ciclo con debounce (`RefreshDebouncer`) alimentato dal FileSystemWatcher (ignora `bin/ obj/ .vs/ .svn/`); `svn info` solo quando cambia la working copy o dopo update/commit
 - **Settings**: `SettingCategory` con source-generated observer
 
 ---
@@ -255,7 +248,7 @@ dotnet build src/SVNAssist/SVNAssist.csproj
 dotnet test tests/SVNAssist.Tests/SVNAssist.Tests.csproj
 ```
 
-I test richiedono `svn.exe` nel PATH e creano repository SVN temporanei per i test di integrazione.
+I test di integrazione richiedono `svn.exe` nel PATH (repository temporanei `file://`); i test dei ViewModel usano servizi finti.
 
 ### Debug
 

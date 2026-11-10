@@ -9,38 +9,32 @@ using SVNAssist.Services;
 namespace SVNAssist.ToolWindows;
 
 /// <summary>
-/// Tool window "SVN Status" — mostra la lista dei file modificati nella working copy.
+/// Tool window "SVN Changes": modifiche della working copy in stile Git Changes.
 /// </summary>
 /// <remarks>
-/// Nel nuovo modello VisualStudio.Extensibility, una tool window:
-/// - Eredita da <see cref="ToolWindow"/> (non da <c>ToolWindowPane</c> del vecchio modello)
-/// - Usa <c>[VisualStudioContribution]</c> per registrarsi automaticamente
-/// - Restituisce un <see cref="IRemoteUserControl"/> come contenuto (Remote UI)
-/// - Gira out-of-process — il crash della tool window non fa crashare VS
+/// Nel modello VisualStudio.Extensibility una tool window eredita da <see cref="ToolWindow"/>,
+/// si registra con <c>[VisualStudioContribution]</c> e restituisce un <see cref="IRemoteUserControl"/>
+/// (Remote UI): gira out-of-process, un crash non fa crashare VS.
 ///
-/// <see cref="ToolWindowConfiguration"/> definisce come VS gestisce la finestra:
-/// - Placement: dove appare di default. Si usa <c>Floating</c> per garantire
-///   visibilità immediata — <c>DocumentWell</c> può nascondere la finestra
-///   dietro ai tab dei documenti, causando il bug "nessun output visibile".
-///
-/// Il parametro <see cref="Services.Settings.SvnAssistCategoryObserver"/> viene
-/// iniettato dal container DI — registrato da <c>AddSettingsObservers()</c>
-/// in <see cref="SVNAssistExtension.InitializeServices"/>.
+/// Fa da composition root: crea i servizi concreti e li inietta nel ViewModel, che dipende solo
+/// dalle astrazioni. Il refresh automatico usa un solo ciclo con debounce
+/// (<see cref="RefreshDebouncer"/>) alimentato dal FileSystemWatcher, più un polling leggero
+/// della solution (VS out-of-process non espone un evento affidabile di "solution changed").
 /// </remarks>
 [VisualStudioContribution]
 internal class SvnStatusToolWindow : ToolWindow
 {
+    /// <summary>Quiete richiesta dopo l'ultimo evento del file system prima di rileggere lo stato.</summary>
+    private static readonly TimeSpan RefreshQuietPeriod = TimeSpan.FromMilliseconds(800);
+
     private readonly SvnStatusToolWindowData _dataContext;
     private readonly PeriodicTimer _solutionWatcherTimer = new(TimeSpan.FromSeconds(5));
-    private readonly PeriodicTimer _liveRefreshTimer = new(TimeSpan.FromSeconds(1));
-    private readonly SemaphoreSlim _liveRefreshLock = new(1, 1);
+    private readonly RefreshDebouncer _debouncer;
     private CancellationTokenSource? _watcherCts;
-    private Task? _watcherTask;
-    private Task? _liveRefreshTask;
+    private Task? _solutionTask;
+    private Task? _refreshTask;
     private FileSystemWatcher? _workingCopyWatcher;
     private string _watchedRoot = string.Empty;
-    private volatile bool _pendingFsRefresh;
-    private DateTime _lastFsEventUtc = DateTime.MinValue;
 
     public SvnStatusToolWindow(
         VisualStudioExtensibility extensibility,
@@ -49,28 +43,29 @@ internal class SvnStatusToolWindow : ToolWindow
     {
         Title = "SVN Changes";
 
-        // Questa tool window funge da composition root: crea i servizi concreti e li inietta
-        // nel ViewModel, che dipende solo dalle astrazioni (ISvnService / IAiServiceFactory).
-        // Se svn.exe non è installato passiamo comunque un path placeholder: le operazioni
-        // falliranno in modo gestito (catch nel ViewModel) e la verifica all'apertura
-        // (EnsureSvnAvailableAsync) proporrà l'installazione.
         var settingsService = new SettingsService(settingsObserver);
         var processRunner = new ProcessRunner();
-        var svnService = new SvnService(SvnLocator.FindSvn() ?? "svn.exe", processRunner);
-        var aiServiceFactory = new AiServiceFactory(settingsService, new GitHubTokenResolver(processRunner), processRunner);
-        var aiSetupPrompt = new AiSetupPrompt(extensibility);
-        _dataContext = new SvnStatusToolWindowData(settingsService, svnService, aiServiceFactory, aiSetupPrompt);
+        var tokenResolver = new GitHubTokenResolver(processRunner);
+
+        // Se svn.exe manca all'avvio, ReloadableSvnService lo ritrova appena viene installato.
+        var svnService = new ReloadableSvnService();
+        var aiServiceFactory = new AiServiceFactory(settingsService, tokenResolver, processRunner);
+        var prerequisites = new PrerequisitesViewModel(new PrerequisitesService(
+            settingsService, PrerequisiteProbes.CreateDefault(processRunner, tokenResolver)));
+
+        _dataContext = new SvnStatusToolWindowData(
+            settingsService, svnService, aiServiceFactory, new AiSetupPrompt(extensibility),
+            new VsDialogService(extensibility), prerequisites);
         _dataContext.PropertyChanged += OnDataContextPropertyChanged;
+        _debouncer = new RefreshDebouncer(RefreshQuietPeriod, ct =>
+            string.IsNullOrWhiteSpace(_dataContext.WorkingCopyPath) ? Task.CompletedTask : _dataContext.RefreshAsync(ct));
     }
 
     /// <inheritdoc />
     /// <remarks>
-    /// <c>ToolWindowPlacement.DockedTo</c> con <c>DocumentWellGuid</c> paga il rischio
-    /// di finire nascosta nei tab — usiamo invece il placement laterale.
-    /// Il pannello Git Changes usa il dock "Solution Explorer side" che corrisponde
-    /// a <c>DocumentWell</c> con un ID specifico. Con <c>Floating</c> la finestra
-    /// appare sempre visibile la prima volta, poi l'utente la ancora dove preferisce
-    /// (tipicamente a destra, accanto a Solution Explorer, come Git Changes).
+    /// <c>Floating</c> garantisce che la finestra sia visibile la prima volta (nel document well
+    /// può sparire dietro ai tab); poi l'utente la ancora dove preferisce, di solito a destra
+    /// accanto a Solution Explorer, come Git Changes.
     /// </remarks>
     public override ToolWindowConfiguration ToolWindowConfiguration => new()
     {
@@ -79,38 +74,24 @@ internal class SvnStatusToolWindow : ToolWindow
     };
 
     /// <summary>
-    /// Restituisce il controllo Remote UI da mostrare nella tool window.
-    /// Al primo caricamento, tenta l'auto-detect della working copy SVN
-    /// dalla solution corrente e triggera un refresh automatico.
+    /// Controlla i prerequisiti (la checklist si apre da sola se manca svn), rileva la working copy
+    /// dalla solution aperta e avvia i watcher.
     /// </summary>
     public override async Task<IRemoteUserControl> GetContentAsync(CancellationToken cancellationToken)
     {
-        // Verifica che svn.exe sia installato; se manca, propone l'installazione (una volta per sessione).
-        await SvnSetupAssistant.EnsureSvnAvailableAsync(Extensibility, cancellationToken);
-
-        // Auto-detect: cerca la root SVN dalla directory della solution aperta
+        await _dataContext.InitializeAsync(cancellationToken);
         await RefreshAutoDetectFromSolutionAsync(cancellationToken);
         ConfigureWorkingCopyWatcher(_dataContext.WorkingCopyPath);
-        StartSolutionWatcher();
-        StartLiveRefreshWatcher();
+        StartBackgroundLoops();
 
         return new SvnStatusToolWindowControl(_dataContext);
     }
 
-    /// <summary>
-    /// Tenta di rilevare automaticamente la root SVN dalla solution aperta in VS.
-    /// </summary>
-    /// <remarks>
-    /// Usa la Project System Query API per ottenere la directory della solution,
-    /// poi naviga verso l'alto nel filesystem cercando <c>.svn</c>.
-    /// Se la trova, popola <see cref="SvnStatusToolWindowData.WorkingCopyPath"/>
-    /// e triggera il refresh automatico.
-    /// </remarks>
+    /// <summary>Rileva la root SVN dalla directory della solution aperta (risale cercando <c>.svn</c>).</summary>
     private async Task RefreshAutoDetectFromSolutionAsync(CancellationToken ct)
     {
         try
         {
-            // Query della solution corrente per ottenere la directory
             var result = await Extensibility.Workspaces().QuerySolutionAsync(
                 solution => solution.With(s => s.Directory),
                 ct);
@@ -121,87 +102,34 @@ internal class SvnStatusToolWindow : ToolWindow
                 : null;
             await _dataContext.ApplyAutoDetectedWorkingCopyAsync(svnRoot, ct);
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch
         {
-            // Se la query fallisce (es. nessuna solution aperta), non blocchiamo
-            _dataContext.StatusMessage = "Inserisci il percorso della working copy e premi Refresh.";
+            // Nessuna solution aperta: non blocchiamo, si può indicare il percorso a mano.
+            _dataContext.NotifyNoSolution();
         }
     }
 
-    private void StartSolutionWatcher()
+    private void StartBackgroundLoops()
     {
-        if (_watcherTask is not null)
+        if (_solutionTask is not null)
             return;
 
         _watcherCts = new CancellationTokenSource();
-        _watcherTask = RunSolutionWatcherAsync(_watcherCts.Token);
+        _solutionTask = RunSolutionWatcherAsync(_watcherCts.Token);
+        _refreshTask = _debouncer.RunAsync(_watcherCts.Token);
     }
 
-    private void StartLiveRefreshWatcher()
-    {
-        if (_liveRefreshTask is not null)
-            return;
-
-        _watcherCts ??= new CancellationTokenSource();
-        _liveRefreshTask = RunLiveRefreshWatcherAsync(_watcherCts.Token);
-    }
-
-    /// <summary>
-    /// Polling asincrono del contesto solution: quando cambia solution/cartella,
-    /// aggiorna automaticamente la working copy e la lista SVN.
-    /// </summary>
-    /// <remarks>
-    /// VisualStudio.Extensibility out-of-process non espone ancora un evento
-    /// affidabile di "solution changed" equivalente al vecchio modello.
-    /// Usiamo quindi un polling leggero tramite <see cref="PeriodicTimer"/> +
-    /// <see cref="WorkspacesExtensibility.QuerySolutionAsync{T}"/>.
-    /// </remarks>
+    /// <summary>Quando cambia solution/cartella aggiorna la working copy (refresh solo se la root cambia).</summary>
     private async Task RunSolutionWatcherAsync(CancellationToken ct)
     {
         try
         {
             while (await _solutionWatcherTimer.WaitForNextTickAsync(ct))
-            {
                 await RefreshAutoDetectFromSolutionAsync(ct);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // normale durante Dispose
-        }
-    }
-
-    /// <summary>
-    /// Polling leggero del filesystem con debounce per aggiornare lo stato SVN
-    /// quando cambiano file/cartelle nella working copy (modifica, copia, rename, delete).
-    /// </summary>
-    private async Task RunLiveRefreshWatcherAsync(CancellationToken ct)
-    {
-        try
-        {
-            while (await _liveRefreshTimer.WaitForNextTickAsync(ct))
-            {
-                if (!_pendingFsRefresh)
-                    continue;
-
-                if ((DateTime.UtcNow - _lastFsEventUtc) < TimeSpan.FromMilliseconds(800))
-                    continue;
-
-                _pendingFsRefresh = false;
-
-                if (!await _liveRefreshLock.WaitAsync(0, ct))
-                    continue;
-
-                try
-                {
-                    if (!string.IsNullOrWhiteSpace(_dataContext.WorkingCopyPath))
-                        await _dataContext.RefreshAsync(ct);
-                }
-                finally
-                {
-                    _liveRefreshLock.Release();
-                }
-            }
         }
         catch (OperationCanceledException)
         {
@@ -212,9 +140,7 @@ internal class SvnStatusToolWindow : ToolWindow
     private void OnDataContextPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(SvnStatusToolWindowData.WorkingCopyPath))
-        {
             ConfigureWorkingCopyWatcher(_dataContext.WorkingCopyPath);
-        }
     }
 
     private void ConfigureWorkingCopyWatcher(string? workingCopyPath)
@@ -253,18 +179,11 @@ internal class SvnStatusToolWindow : ToolWindow
 
     private void OnWorkingCopyFsChanged(object sender, FileSystemEventArgs e)
     {
-        if (IsSvnAdminPath(e.FullPath))
+        // bin/ obj/ .vs/ .svn/ cambiano di continuo senza toccare lo stato SVN.
+        if (WorkingCopyPathFilter.IsNoise(_watchedRoot, e.FullPath))
             return;
 
-        _lastFsEventUtc = DateTime.UtcNow;
-        _pendingFsRefresh = true;
-    }
-
-    private static bool IsSvnAdminPath(string fullPath)
-    {
-        var marker = $"{Path.DirectorySeparatorChar}.svn{Path.DirectorySeparatorChar}";
-        return fullPath.Contains(marker, StringComparison.OrdinalIgnoreCase)
-            || fullPath.EndsWith($"{Path.DirectorySeparatorChar}.svn", StringComparison.OrdinalIgnoreCase);
+        _debouncer.Request();
     }
 
     protected override void Dispose(bool disposing)
@@ -274,10 +193,8 @@ internal class SvnStatusToolWindow : ToolWindow
             _dataContext.PropertyChanged -= OnDataContextPropertyChanged;
             _watcherCts?.Cancel();
             _solutionWatcherTimer.Dispose();
-            _liveRefreshTimer.Dispose();
             _watcherCts?.Dispose();
             _workingCopyWatcher?.Dispose();
-            _liveRefreshLock.Dispose();
         }
 
         base.Dispose(disposing);
