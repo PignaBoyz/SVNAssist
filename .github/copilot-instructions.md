@@ -151,7 +151,7 @@ Task<string> ImproveCommitMessageAsync(string draft, string diff, string languag
 - Formato richiesta: OpenAI Chat Completions (`/v1/chat/completions`)
 - `max_tokens: 200`
 - **Provider consigliato**: GitHub Models (gratuito, nessun modello da scaricare)
-  - Endpoint: `https://models.inference.ai.azure.com/chat/completions`
+  - Endpoint: `https://models.github.ai/inference/chat/completions`
   - Auth: GitHub Personal Access Token (PAT) come Bearer token
   - Modelli: `gpt-4o-mini`, `gpt-4o`, Phi-3, Llama, ecc.
   - Compatibile anche con OpenAI, Azure OpenAI, Ollama
@@ -165,7 +165,7 @@ Le impostazioni appaiono automaticamente in **Tools → Options → SVNAssist**.
 
 | Proprietà | Tipo | Default |
 |---|---|---|
-| `AiEndpoint` | string | `https://models.inference.ai.azure.com/chat/completions` |
+| `AiEndpoint` | string | `https://models.github.ai/inference/chat/completions` |
 | `AiApiKey` | string | `""` (inserire GitHub PAT o API key del provider) |
 | `AiModel` | string | `gpt-4o-mini` |
 | `DefaultLanguage` | string | `auto` |

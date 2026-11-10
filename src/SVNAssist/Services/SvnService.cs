@@ -148,15 +148,18 @@ public class SvnService : ISvnService
         if (string.IsNullOrWhiteSpace(parentDirectory))
             throw new InvalidOperationException("Impossibile determinare la directory padre per svn:ignore.");
 
+        // Solo "proprietà non impostata" (W200017/E200017) significa lista vuota. Qualsiasi altro
+        // errore va propagato: proseguire riscriverebbe svn:ignore perdendo le voci esistenti.
+        var propget = await _processRunner.RunAsync(
+            _svnExePath, ["propget", "svn:ignore", parentDirectory], workingDirectory: null, ct);
         string existingIgnore;
-        try
-        {
-            existingIgnore = (await RunSvnAsync(["propget", "svn:ignore", parentDirectory], workingDirectory: null, ct)).TrimEnd();
-        }
-        catch
-        {
+        if (propget.ExitCode == 0)
+            existingIgnore = propget.StandardOutput.TrimEnd();
+        else if (propget.StandardError.Contains("200017", StringComparison.Ordinal))
             existingIgnore = string.Empty;
-        }
+        else
+            throw new InvalidOperationException(
+                $"svn propget fallito (exit code {propget.ExitCode}): {propget.StandardError}");
 
         var entries = existingIgnore
             .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)

@@ -5,9 +5,13 @@
   "SVNAssist.UpdateCommand.DisplayName": "Update",
   "SVNAssist.ShowLogCommand.DisplayName": "Log / History",
   "SVNAssist.Settings.Category": "SVNAssist",
-  "SVNAssist.Settings.AiEndpoint": "AI Endpoint URL (default: GitHub Models, compatibile OpenAI)",
-  "SVNAssist.Settings.AiApiKey": "AI API Key (GitHub PAT per GitHub Models, oppure API key OpenAI)",
-  "SVNAssist.Settings.AiModel": "AI Model (es. gpt-4o-mini, gpt-4o)",
+  "SVNAssist.Settings.AiProvider": "AI Provider (auto / copilot / claudecode / claude / openai)",
+  "SVNAssist.Settings.ClaudeModel": "Claude Model (Claude Code e Claude API, es. claude-opus-5-5, claude-haiku-5-5)",
+  "SVNAssist.Settings.AnthropicApiKey": "Anthropic API Key (provider Claude API; vuota = ANTHROPIC_API_KEY)",
+  "SVNAssist.Settings.CopilotModel": "GitHub Copilot Model (vuoto = predefinito di Copilot)",
+  "SVNAssist.Settings.AiEndpoint": "AI Endpoint URL (provider openai; default: GitHub Models)",
+  "SVNAssist.Settings.AiApiKey": "AI API Key (provider openai: GitHub PAT per GitHub Models, oppure API key OpenAI)",
+  "SVNAssist.Settings.AiModel": "AI Model (provider openai, es. gpt-4o-mini)",
   "SVNAssist.Settings.DefaultLanguage": "Default Language (auto / italiano / english)",
   "SVNAssist.Settings.WorkingCopyPath": "Working Copy Path"
 }

@@ -16,7 +16,8 @@ public class GitHubTokenResolverTests
         public bool Throws { get; init; }
 
         public Task<ProcessResult> RunAsync(
-            string fileName, IReadOnlyList<string> arguments, string? workingDirectory, CancellationToken ct)
+            string fileName, IReadOnlyList<string> arguments, string? workingDirectory, CancellationToken ct,
+            string? standardInput = null)
         {
             if (Throws)
                 throw new InvalidOperationException("gh non avviabile");
@@ -79,7 +80,8 @@ public class GitHubTokenResolverTests
     private sealed class CapturingRunner(Action<IReadOnlyList<string>> capture) : IProcessRunner
     {
         public Task<ProcessResult> RunAsync(
-            string fileName, IReadOnlyList<string> arguments, string? workingDirectory, CancellationToken ct)
+            string fileName, IReadOnlyList<string> arguments, string? workingDirectory, CancellationToken ct,
+            string? standardInput = null)
         {
             capture(arguments);
             return Task.FromResult(new ProcessResult(0, "ghp_x", string.Empty));

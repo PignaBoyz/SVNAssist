@@ -31,10 +31,12 @@ public interface IProcessRunner
     /// <param name="fileName">Percorso dell'eseguibile.</param>
     /// <param name="arguments">Argomenti (uno per elemento, senza escaping manuale).</param>
     /// <param name="workingDirectory">Directory di lavoro (null = corrente).</param>
-    /// <param name="ct">Token per annullare l'operazione.</param>
+    /// <param name="ct">Token per annullare l'operazione (il processo viene terminato).</param>
+    /// <param name="standardInput">Testo da scrivere su stdin (null = nessun input).</param>
     Task<ProcessResult> RunAsync(
         string fileName,
         IReadOnlyList<string> arguments,
         string? workingDirectory,
-        CancellationToken ct);
+        CancellationToken ct,
+        string? standardInput = null);
 }

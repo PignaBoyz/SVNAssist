@@ -34,6 +34,8 @@
     <!-- PrivateAssets="all": impedisce all'Extensibility SDK di propagarsi
          ai progetti che referenziano questo (es. il progetto test).
          Il source generator e i build targets restano solo qui. -->
+    <PackageReference Include="Anthropic" Version="13.8.0" />
+    <PackageReference Include="GitHub.Copilot.SDK" Version="1.0.31" />
     <PackageReference Include="Microsoft.VisualStudio.Extensibility.Build" Version="17.14.40608" />
     <PackageReference Include="Microsoft.VisualStudio.Extensibility.Sdk" Version="17.14.40608">
       <PrivateAssets>all</PrivateAssets>

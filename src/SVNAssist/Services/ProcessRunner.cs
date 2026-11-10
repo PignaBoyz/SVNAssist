@@ -19,15 +19,22 @@ public sealed class ProcessRunner : IProcessRunner
         string fileName,
         IReadOnlyList<string> arguments,
         string? workingDirectory,
-        CancellationToken ct)
+        CancellationToken ct,
+        string? standardInput = null)
     {
         using var process = new Process();
         process.StartInfo = new ProcessStartInfo
         {
             FileName = fileName,
             WorkingDirectory = workingDirectory ?? string.Empty,
+            RedirectStandardInput = standardInput is not null,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            // UTF-8 esplicito: svn --xml, svn diff e le CLI AI scrivono UTF-8; la codepage
+            // OEM di default storpierebbe accenti nei path e nei messaggi di commit.
+            StandardInputEncoding = standardInput is null ? null : new System.Text.UTF8Encoding(false),
+            StandardOutputEncoding = System.Text.Encoding.UTF8,
+            StandardErrorEncoding = System.Text.Encoding.UTF8,
             UseShellExecute = false,
             CreateNoWindow = true,
         };
@@ -39,8 +46,23 @@ public sealed class ProcessRunner : IProcessRunner
 
         process.Start();
 
+        // Se l'operazione viene annullata, il processo figlio va terminato:
+        // altrimenti (es. svn commit) continuerebbe a girare da solo in background.
+        using var killOnCancel = ct.Register(() =>
+        {
+            try { process.Kill(entireProcessTree: true); }
+            catch (InvalidOperationException) { /* già terminato */ }
+        });
+
         var outputTask = process.StandardOutput.ReadToEndAsync(ct);
         var errorTask = process.StandardError.ReadToEndAsync(ct);
+
+        if (standardInput is not null)
+        {
+            // stdin evita il limite di ~32K caratteri della riga di comando di Windows (es. diff lunghi).
+            await process.StandardInput.WriteAsync(standardInput.AsMemory(), ct);
+            process.StandardInput.Close();
+        }
 
         await process.WaitForExitAsync(ct);
 

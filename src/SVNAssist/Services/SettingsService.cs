@@ -28,6 +28,12 @@ namespace SVNAssist.Services;
 /// </remarks>
 internal static class SettingDefinitions
 {
+    /// <summary>Endpoint attuale di GitHub Models (compatibile OpenAI).</summary>
+    internal const string GitHubModelsEndpoint = "https://models.github.ai/inference/chat/completions";
+
+    /// <summary>Vecchio endpoint di GitHub Models, dismesso (il dominio non risolve più).</summary>
+    internal const string LegacyGitHubModelsEndpoint = "https://models.inference.ai.azure.com/chat/completions";
+
     [VisualStudioContribution]
     internal static SettingCategory SvnAssistCategory { get; } = new("svnassist", "%SVNAssist.Settings.Category%")
     {
@@ -49,7 +55,7 @@ internal static class SettingDefinitions
         "aiendpoint",
         "%SVNAssist.Settings.AiEndpoint%",
         SvnAssistCategory,
-        defaultValue: "https://models.inference.ai.azure.com/chat/completions");
+        defaultValue: GitHubModelsEndpoint);
 
     /// <summary>
     /// API key per l'autenticazione con l'endpoint AI.
@@ -66,6 +72,41 @@ internal static class SettingDefinitions
     internal static Setting.String AiApiKey { get; } = new(
         "aiapikey",
         "%SVNAssist.Settings.AiApiKey%",
+        SvnAssistCategory,
+        defaultValue: "");
+
+    /// <summary>
+    /// Provider AI: <c>auto</c> (prova Copilot → Claude Code → Claude API → OpenAI-compatibile),
+    /// oppure uno fisso: <c>copilot</c>, <c>claudecode</c>, <c>claude</c>, <c>openai</c>.
+    /// </summary>
+    [VisualStudioContribution]
+    internal static Setting.String AiProvider { get; } = new(
+        "aiprovider",
+        "%SVNAssist.Settings.AiProvider%",
+        SvnAssistCategory,
+        defaultValue: "auto");
+
+    /// <summary>Modello Claude (usato da Claude Code e Claude API).</summary>
+    [VisualStudioContribution]
+    internal static Setting.String ClaudeModel { get; } = new(
+        "claudemodel",
+        "%SVNAssist.Settings.ClaudeModel%",
+        SvnAssistCategory,
+        defaultValue: "claude-opus-5-5");
+
+    /// <summary>API key Anthropic per il provider Claude API (vuota = variabile ANTHROPIC_API_KEY).</summary>
+    [VisualStudioContribution]
+    internal static Setting.String AnthropicApiKey { get; } = new(
+        "anthropicapikey",
+        "%SVNAssist.Settings.AnthropicApiKey%",
+        SvnAssistCategory,
+        defaultValue: "");
+
+    /// <summary>Modello GitHub Copilot (vuoto = modello predefinito di Copilot).</summary>
+    [VisualStudioContribution]
+    internal static Setting.String CopilotModel { get; } = new(
+        "copilotmodel",
+        "%SVNAssist.Settings.CopilotModel%",
         SvnAssistCategory,
         defaultValue: "");
 
@@ -112,6 +153,18 @@ internal static class SettingDefinitions
 /// </remarks>
 internal interface ISvnAssistSettings
 {
+    /// <summary>Provider AI scelto (auto/copilot/claudecode/claude/openai).</summary>
+    Task<string> GetAiProviderAsync(CancellationToken ct);
+
+    /// <summary>Modello Claude.</summary>
+    Task<string> GetClaudeModelAsync(CancellationToken ct);
+
+    /// <summary>API key Anthropic.</summary>
+    Task<string> GetAnthropicApiKeyAsync(CancellationToken ct);
+
+    /// <summary>Modello GitHub Copilot (vuoto = default).</summary>
+    Task<string> GetCopilotModelAsync(CancellationToken ct);
+
     /// <summary>Endpoint AI (formato OpenAI Chat Completions).</summary>
     Task<string> GetAiEndpointAsync(CancellationToken ct);
 
@@ -156,8 +209,29 @@ internal class SettingsService : ISvnAssistSettings
     public async Task<string> GetAiEndpointAsync(CancellationToken ct)
     {
         var snapshot = await _observer.GetSnapshotAsync(ct);
-        return snapshot.AiEndpoint.ValueOrDefault("https://models.inference.ai.azure.com/chat/completions");
+        var endpoint = snapshot.AiEndpoint.ValueOrDefault(SettingDefinitions.GitHubModelsEndpoint);
+
+        // Chi aveva salvato il vecchio endpoint (dismesso) passa in automatico al nuovo.
+        return string.Equals(endpoint.Trim(), SettingDefinitions.LegacyGitHubModelsEndpoint, StringComparison.OrdinalIgnoreCase)
+            ? SettingDefinitions.GitHubModelsEndpoint
+            : endpoint;
     }
+
+    /// <inheritdoc />
+    public async Task<string> GetAiProviderAsync(CancellationToken ct)
+        => (await _observer.GetSnapshotAsync(ct)).AiProvider.ValueOrDefault("auto");
+
+    /// <inheritdoc />
+    public async Task<string> GetClaudeModelAsync(CancellationToken ct)
+        => (await _observer.GetSnapshotAsync(ct)).ClaudeModel.ValueOrDefault("claude-opus-5-5");
+
+    /// <inheritdoc />
+    public async Task<string> GetAnthropicApiKeyAsync(CancellationToken ct)
+        => (await _observer.GetSnapshotAsync(ct)).AnthropicApiKey.ValueOrDefault("");
+
+    /// <inheritdoc />
+    public async Task<string> GetCopilotModelAsync(CancellationToken ct)
+        => (await _observer.GetSnapshotAsync(ct)).CopilotModel.ValueOrDefault("");
 
     /// <summary>Legge l'API key dalle impostazioni.</summary>
     public async Task<string> GetAiApiKeyAsync(CancellationToken ct)

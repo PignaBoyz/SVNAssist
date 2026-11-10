@@ -440,7 +440,7 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
 
         if (aiService is null)
         {
-            AiStatusMessage = "Token GitHub non trovato: serve un PAT gratuito (una volta sola).";
+            AiStatusMessage = "Nessun provider AI disponibile (Copilot, Claude o token GitHub).";
             await _aiSetupPrompt.ShowMissingTokenHelpAsync(ct);
             return;
         }
@@ -488,7 +488,7 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
 
         if (aiService is null)
         {
-            AiStatusMessage = "Token GitHub non trovato: serve un PAT gratuito (una volta sola).";
+            AiStatusMessage = "Nessun provider AI disponibile (Copilot, Claude o token GitHub).";
             await _aiSetupPrompt.ShowMissingTokenHelpAsync(ct);
             return;
         }

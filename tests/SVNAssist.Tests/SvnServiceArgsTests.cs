@@ -24,14 +24,18 @@ public class SvnServiceArgsTests
         public string? LastWorkingDirectory { get; private set; }
         public ProcessResult Result { get; set; } = new(0, string.Empty, string.Empty);
 
+        /// <summary>Risposta per-comando (opzionale): se impostata ha la precedenza su <see cref="Result"/>.</summary>
+        public Func<IReadOnlyList<string>, ProcessResult>? Responder { get; set; }
+
         public Task<ProcessResult> RunAsync(
-            string fileName, IReadOnlyList<string> arguments, string? workingDirectory, CancellationToken ct)
+            string fileName, IReadOnlyList<string> arguments, string? workingDirectory, CancellationToken ct,
+            string? standardInput = null)
         {
             CallCount++;
             LastFileName = fileName;
             LastArguments = arguments;
             LastWorkingDirectory = workingDirectory;
-            return Task.FromResult(Result);
+            return Task.FromResult(Responder?.Invoke(arguments) ?? Result);
         }
     }
 
@@ -160,5 +164,37 @@ public class SvnServiceArgsTests
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => sut.UpdateAsync(@"C:\wc", CancellationToken.None));
         Assert.Contains("E155007", ex.Message);
+    }
+
+    [Fact]
+    public async Task AddToIgnoreListAsync_ProprietaNonImpostata_CreaLaLista()
+    {
+        var runner = new FakeProcessRunner
+        {
+            Responder = args => args[0] == "propget"
+                ? new ProcessResult(1, string.Empty, "svn: warning: W200017: Property 'svn:ignore' not found")
+                : new ProcessResult(0, string.Empty, string.Empty),
+        };
+        var sut = CreateSut(runner);
+
+        await sut.AddToIgnoreListAsync(@"C:\wc\bin", CancellationToken.None);
+
+        Assert.Equal(["propset", "svn:ignore", "bin", @"C:\wc"], runner.LastArguments);
+    }
+
+    [Fact]
+    public async Task AddToIgnoreListAsync_PropgetFallitoPerAltroMotivo_NonSovrascriveLaLista()
+    {
+        var runner = new FakeProcessRunner
+        {
+            Result = new ProcessResult(1, string.Empty, "svn: E170013: Unable to connect"),
+        };
+        var sut = CreateSut(runner);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => sut.AddToIgnoreListAsync(@"C:\wc\bin", CancellationToken.None));
+
+        // Nessun propset: le voci esistenti di svn:ignore restano intatte.
+        Assert.Equal(1, runner.CallCount);
     }
 }

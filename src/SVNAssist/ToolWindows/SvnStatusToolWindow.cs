@@ -57,7 +57,7 @@ internal class SvnStatusToolWindow : ToolWindow
         var settingsService = new SettingsService(settingsObserver);
         var processRunner = new ProcessRunner();
         var svnService = new SvnService(SvnLocator.FindSvn() ?? "svn.exe", processRunner);
-        var aiServiceFactory = new AiServiceFactory(settingsService, new GitHubTokenResolver(processRunner));
+        var aiServiceFactory = new AiServiceFactory(settingsService, new GitHubTokenResolver(processRunner), processRunner);
         var aiSetupPrompt = new AiSetupPrompt(extensibility);
         _dataContext = new SvnStatusToolWindowData(settingsService, svnService, aiServiceFactory, aiSetupPrompt);
         _dataContext.PropertyChanged += OnDataContextPropertyChanged;

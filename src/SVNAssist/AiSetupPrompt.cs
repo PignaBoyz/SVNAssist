@@ -34,10 +34,11 @@ internal sealed class AiSetupPrompt : IAiSetupPrompt
             return;
 
         var openPage = await _extensibility.Shell().ShowPromptAsync(
-            "Per generare i commit con l'AI serve un token GitHub gratuito (una volta sola).\n\n" +
-            "Vuoi aprire la pagina per creare un Personal Access Token? " +
-            "Poi incollalo in Tools > Options > SVNAssist > AI API Key.\n\n" +
-            "(Se usi GitHub CLI con 'gh auth login', non devi fare nulla: il token viene rilevato in automatico.)",
+            "Nessun provider AI trovato per generare i commit. Basta UNA di queste opzioni:\n\n" +
+            "• GitHub Copilot o GitHub CLI: esegui 'gh auth login'\n" +
+            "• Claude: installa Claude Code e fai login, oppure inserisci una Anthropic API Key\n" +
+            "• Gratis: crea un token GitHub e incollalo in Tools > Options > SVNAssist > AI API Key\n\n" +
+            "Vuoi aprire la pagina per creare il token GitHub gratuito?",
             PromptOptions.OKCancel,
             ct);
 

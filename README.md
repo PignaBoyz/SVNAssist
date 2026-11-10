@@ -77,7 +77,7 @@ SVNAssist usa di default **GitHub Models**, un servizio gratuito di GitHub che o
 
 | Impostazione | Valore |
 |---|---|
-| **AI Endpoint** | `https://models.inference.ai.azure.com/chat/completions` *(già impostato di default)* |
+| **AI Endpoint** | `https://models.github.ai/inference/chat/completions` *(già impostato di default)* |
 | **AI API Key** | Incolla il tuo GitHub PAT (`ghp_...`) |
 | **AI Model** | `gpt-4o-mini` *(default, gratuito e veloce)* |
 | **Default Language** | `auto` *(rileva la lingua dal codice)* oppure `italiano` / `english` |
@@ -101,7 +101,22 @@ SVNAssist usa di default **GitHub Models**, un servizio gratuito di GitHub che o
 
 ## 🔄 Cambiare provider AI
 
-SVNAssist supporta qualsiasi endpoint compatibile con il formato **OpenAI Chat Completions** (`/v1/chat/completions`). Puoi cambiare provider in qualsiasi momento da **Tools → Options → SVNAssist**.
+L'impostazione **AI Provider** (*Tools → Options → SVNAssist*) sceglie chi genera il commit:
+
+| Valore | Cosa usa | Cosa serve |
+|---|---|---|
+| `auto` *(default)* | Il primo disponibile nell'ordine qui sotto; se uno fallisce passa al successivo | — |
+| `copilot` | Il tuo abbonamento **GitHub Copilot** | `gh auth login` (oggi solo nelle build locali: vedi nota) |
+| `claudecode` | Il tuo abbonamento **Claude** tramite Claude Code (`claude -p`) | Claude Code installato e loggato |
+| `claude` | **Claude API** (SDK ufficiale Anthropic) | *Anthropic API Key* o variabile `ANTHROPIC_API_KEY` |
+| `openai` | Qualsiasi endpoint compatibile OpenAI (sotto) | *AI API Key*, oppure token GitHub per GitHub Models |
+
+Il modello Claude si sceglie in **Claude Model** (default `claude-opus-5-5`; `claude-haiku-5-5` costa molto meno).
+Ogni credenziale va solo al proprio servizio: il token GitHub rilevato in automatico non viene mai inviato a endpoint di terzi.
+
+> **Nota Copilot:** il runtime Copilot (~330 MB) non è incluso nel VSIX; con `auto` il provider Copilot viene saltato se il runtime manca.
+
+Per il provider `openai` puoi usare qualsiasi endpoint compatibile con il formato **OpenAI Chat Completions** (`/v1/chat/completions`):
 
 ### OpenAI
 
@@ -130,16 +145,6 @@ SVNAssist supporta qualsiasi endpoint compatibile con il formato **OpenAI Chat C
 | AI Endpoint | `http://localhost:11434/v1/chat/completions` |
 | AI API Key | `ollama` *(qualsiasi valore, Ollama non richiede autenticazione)* |
 | AI Model | `llama3.2`, `codellama`, `mistral`, ecc. |
-
-### Anthropic Claude
-
-| Impostazione | Valore |
-|---|---|
-| AI Endpoint | `https://api.anthropic.com/v1/messages` |
-| AI API Key | La tua API key Anthropic (`sk-ant-...`) |
-| AI Model | `claude-sonnet-4-20250514`, `claude-3.5-haiku` |
-
-> ⚠️ **Nota:** L'API di Anthropic usa un formato leggermente diverso — potrebbe richiedere adattamenti futuri per il pieno supporto.
 
 ### Google Gemini
 
@@ -218,7 +223,7 @@ Tutte le impostazioni sono in **Tools → Options → SVNAssist**:
 
 | Impostazione | Default | Descrizione |
 |---|---|---|
-| AI Endpoint | `https://models.inference.ai.azure.com/chat/completions` | URL dell'endpoint AI (formato OpenAI Chat Completions) |
+| AI Endpoint | `https://models.github.ai/inference/chat/completions` | URL dell'endpoint AI (formato OpenAI Chat Completions) |
 | AI API Key | *(vuoto)* | API key o GitHub PAT per l'autenticazione |
 | AI Model | `gpt-4o-mini` | Nome del modello AI da usare |
 | Default Language | `auto` | Lingua dei commit message (`auto`, `italiano`, `english`) |
