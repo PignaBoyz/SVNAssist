@@ -1,11 +1,11 @@
-using System.IO;
+using System.Net.Http;
 using GitHub.Copilot;
 
 namespace SVNAssist.Services;
 
 /// <summary>
 /// Provider AI che usa l'abbonamento <b>GitHub Copilot</b> dell'utente tramite
-/// <c>GitHub.Copilot.SDK</c> (pilota il runtime Copilot incluso nel pacchetto).
+/// <c>GitHub.Copilot.SDK</c> (il runtime Copilot viene scaricato al primo uso da <see cref="CopilotRuntimeInstaller"/>).
 /// </summary>
 /// <remarks>
 /// È la cosa più vicina al "commit message generato da Copilot" di Git Changes: l'SDK delle
@@ -21,23 +21,15 @@ internal sealed class CopilotAiService : AiServiceBase
     private static CopilotClient? _sharedClient;
     private static string? _sharedClientToken;
 
-    /// <summary>
-    /// <c>true</c> se il runtime Copilot è presente accanto all'estensione.
-    /// </summary>
-    /// <remarks>
-    /// shortcut: il runtime (~330 MB) viene scaricato dall'SDK solo nelle build locali e non entra
-    /// nel VSIX; finché non decidiamo come distribuirlo, nel VSIX installato Copilot viene saltato.
-    /// </remarks>
-    public static bool IsRuntimeAvailable =>
-        File.Exists(Path.Combine(Path.GetDirectoryName(typeof(CopilotAiService).Assembly.Location) ?? string.Empty, "runtimes", "win-x64", "native", "copilot-runtime.exe"));
-
+    private readonly HttpClient _httpClient;
     private readonly string? _gitHubToken;
     private readonly string _model;
 
     /// <param name="gitHubToken">Token GitHub; se null usa il login della Copilot CLI.</param>
     /// <param name="model">Modello Copilot; vuoto = default di Copilot.</param>
-    public CopilotAiService(string? gitHubToken, string model)
+    public CopilotAiService(HttpClient httpClient, string? gitHubToken, string model)
     {
+        _httpClient = httpClient;
         _gitHubToken = string.IsNullOrWhiteSpace(gitHubToken) ? null : gitHubToken;
         _model = model;
     }
@@ -80,7 +72,12 @@ internal sealed class CopilotAiService : AiServiceBase
                 await _sharedClient.DisposeAsync();
             _sharedClient = null;
 
-            var client = new CopilotClient(new CopilotClientOptions { GitHubToken = _gitHubToken });
+            var runtimePath = await CopilotRuntimeInstaller.EnsureInstalledAsync(_httpClient, ct);
+            var client = new CopilotClient(new CopilotClientOptions
+            {
+                GitHubToken = _gitHubToken,
+                Connection = RuntimeConnection.ForStdio(runtimePath),
+            });
             await client.StartAsync(ct);
             _sharedClient = client;
             _sharedClientToken = _gitHubToken;

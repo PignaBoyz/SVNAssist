@@ -5,7 +5,7 @@
   "SVNAssist.UpdateCommand.DisplayName": "Update",
   "SVNAssist.ShowLogCommand.DisplayName": "Log / History",
   "SVNAssist.Settings.Category": "SVNAssist",
-  "SVNAssist.Settings.AiProvider": "AI Provider (auto / copilot / claudecode / claude / openai)",
+  "SVNAssist.Settings.AiProvider": "AI Provider (auto / copilot / claudecode / claude / openai) - copilot scarica ~100 MB al primo uso",
   "SVNAssist.Settings.ClaudeModel": "Claude Model (Claude Code e Claude API, es. claude-opus-5-5, claude-haiku-5-5)",
   "SVNAssist.Settings.AnthropicApiKey": "Anthropic API Key (provider Claude API; vuota = ANTHROPIC_API_KEY)",
   "SVNAssist.Settings.CopilotModel": "GitHub Copilot Model (vuoto = predefinito di Copilot)",

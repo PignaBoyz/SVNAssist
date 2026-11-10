@@ -24,6 +24,16 @@
     <InternalsVisibleTo Include="SVNAssist.Tests" />
   </ItemGroup>
 
+  <!-- Runtime GitHub Copilot (~100 MB compresso): non lo includiamo nella build/VSIX.
+       Viene scaricato al primo uso del provider "copilot" (CopilotRuntimeInstaller).
+       La versione richiesta dall'SDK viene salvata nell'assembly, così non può divergere. -->
+  <PropertyGroup>
+    <CopilotSkipCliDownload>true</CopilotSkipCliDownload>
+  </PropertyGroup>
+  <ItemGroup>
+    <AssemblyMetadata Include="CopilotCliVersion" Value="$(CopilotCliVersion)" />
+  </ItemGroup>
+
   <ItemGroup>
     <!--
       Microsoft.VisualStudio.Extensibility.Sdk:

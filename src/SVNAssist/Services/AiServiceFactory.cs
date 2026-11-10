@@ -21,7 +21,8 @@ internal interface IAiServiceFactory
 /// <inheritdoc />
 /// <remarks>
 /// Con il provider <c>auto</c> (default) l'ordine è:
-/// 1. <b>GitHub Copilot</b> — se c'è un token GitHub (gh CLI / variabili d'ambiente) e il runtime Copilot
+/// 1. <b>GitHub Copilot</b> — se c'è un token GitHub e il runtime è già stato scaricato
+///    (scegliendo <c>copilot</c> esplicitamente il runtime si scarica al primo uso)
 /// 2. <b>Claude Code</b> — se <c>claude.exe</c> è installato (abbonamento Claude)
 /// 3. <b>Claude API</b> — se c'è una API key Anthropic
 /// 4. <b>OpenAI-compatibile</b> — se c'è una API key (o un token GitHub per GitHub Models)
@@ -43,7 +44,7 @@ internal sealed class AiServiceFactory : IAiServiceFactory
     private readonly IProcessRunner _processRunner;
     private readonly Func<string?> _claudeLocator;
     private readonly Func<string, string?> _environmentReader;
-    private readonly Func<bool> _copilotRuntimeAvailable;
+    private readonly Func<bool> _copilotRuntimeInstalled;
 
     public AiServiceFactory(
         ISvnAssistSettings settings,
@@ -51,14 +52,14 @@ internal sealed class AiServiceFactory : IAiServiceFactory
         IProcessRunner? processRunner = null,
         Func<string?>? claudeLocator = null,
         Func<string, string?>? environmentReader = null,
-        Func<bool>? copilotRuntimeAvailable = null)
+        Func<bool>? copilotRuntimeInstalled = null)
     {
         _settings = settings;
         _tokenResolver = tokenResolver;
         _processRunner = processRunner ?? new ProcessRunner();
         _claudeLocator = claudeLocator ?? ClaudeCodeAiService.FindClaudeExecutable;
         _environmentReader = environmentReader ?? Environment.GetEnvironmentVariable;
-        _copilotRuntimeAvailable = copilotRuntimeAvailable ?? (() => CopilotAiService.IsRuntimeAvailable);
+        _copilotRuntimeInstalled = copilotRuntimeInstalled ?? (() => CopilotRuntimeInstaller.IsInstalled);
     }
 
     /// <inheritdoc />
@@ -69,12 +70,13 @@ internal sealed class AiServiceFactory : IAiServiceFactory
 
         var candidates = new List<(string Name, IAiService Service)>();
 
-        if (Use("copilot") && _copilotRuntimeAvailable())
+        // Copilot scelto esplicitamente: il runtime (~100 MB) si scarica al primo uso.
+        // In auto lo usiamo solo se è già installato, per non avviare download a sorpresa.
+        if (provider == "copilot" || (Use("copilot") && _copilotRuntimeInstalled()))
         {
             var token = await _tokenResolver.ResolveAsync(ct);
-            // In auto serve un token per provarci; scelto esplicitamente usa anche il login della Copilot CLI.
             if (token is not null || provider == "copilot")
-                candidates.Add(("GitHub Copilot", new CopilotAiService(token, await _settings.GetCopilotModelAsync(ct))));
+                candidates.Add(("GitHub Copilot", new CopilotAiService(SharedHttpClient, token, await _settings.GetCopilotModelAsync(ct))));
         }
 
         if (Use("claudecode") && _claudeLocator() is { } claudeExe)

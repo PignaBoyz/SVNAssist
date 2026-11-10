@@ -47,7 +47,7 @@ public class AiServiceFactoryTests
     /// <summary>Factory senza Claude Code installato e senza variabili d'ambiente.</summary>
     private static AiServiceFactory Create(FakeSettings settings, IGitHubTokenResolver resolver, string? claudeExe = null)
         => new(settings, resolver, processRunner: null, claudeLocator: () => claudeExe, environmentReader: _ => null,
-            copilotRuntimeAvailable: () => true);
+            copilotRuntimeInstalled: () => true);
 
     [Fact]
     public async Task CreateAsync_NessunProviderDisponibile_RestituisceNull()
@@ -119,4 +119,23 @@ public class AiServiceFactoryTests
     [InlineData("https://api.openai.com/v1/chat/completions", false)]
     public void IsGitHubModelsEndpoint_SoloHostUfficialeHttps(string endpoint, bool expected)
         => Assert.Equal(expected, AiServiceFactory.IsGitHubModelsEndpoint(endpoint));
+
+    [Fact]
+    public async Task CreateAsync_Auto_RuntimeCopilotNonScaricato_NonAvviaDownload()
+    {
+        var factory = new AiServiceFactory(new FakeSettings(), new FakeTokenResolver("ghp_auto"),
+            claudeLocator: () => null, environmentReader: _ => null, copilotRuntimeInstalled: () => false);
+
+        // Solo token GitHub + endpoint di terzi: nessun provider, e soprattutto nessun download a sorpresa.
+        Assert.Null(await factory.CreateAsync(CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task CreateAsync_CopilotEsplicito_RuntimeNonScaricato_UsaCopilot()
+    {
+        var factory = new AiServiceFactory(new FakeSettings { Provider = "copilot" }, new FakeTokenResolver(null),
+            claudeLocator: () => null, environmentReader: _ => null, copilotRuntimeInstalled: () => false);
+
+        Assert.IsType<CopilotAiService>(await factory.CreateAsync(CancellationToken.None));
+    }
 }

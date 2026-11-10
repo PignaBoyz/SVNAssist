@@ -106,7 +106,7 @@ L'impostazione **AI Provider** (*Tools → Options → SVNAssist*) sceglie chi g
 | Valore | Cosa usa | Cosa serve |
 |---|---|---|
 | `auto` *(default)* | Il primo disponibile nell'ordine qui sotto; se uno fallisce passa al successivo | — |
-| `copilot` | Il tuo abbonamento **GitHub Copilot** | `gh auth login` (oggi solo nelle build locali: vedi nota) |
+| `copilot` | Il tuo abbonamento **GitHub Copilot** | `gh auth login`; al primo uso scarica il runtime Copilot (vedi nota) |
 | `claudecode` | Il tuo abbonamento **Claude** tramite Claude Code (`claude -p`) | Claude Code installato e loggato |
 | `claude` | **Claude API** (SDK ufficiale Anthropic) | *Anthropic API Key* o variabile `ANTHROPIC_API_KEY` |
 | `openai` | Qualsiasi endpoint compatibile OpenAI (sotto) | *AI API Key*, oppure token GitHub per GitHub Models |
@@ -114,7 +114,7 @@ L'impostazione **AI Provider** (*Tools → Options → SVNAssist*) sceglie chi g
 Il modello Claude si sceglie in **Claude Model** (default `claude-opus-5-5`; `claude-haiku-5-5` costa molto meno).
 Ogni credenziale va solo al proprio servizio: il token GitHub rilevato in automatico non viene mai inviato a endpoint di terzi.
 
-> **Nota Copilot:** il runtime Copilot (~330 MB) non è incluso nel VSIX; con `auto` il provider Copilot viene saltato se il runtime manca.
+> **Nota Copilot:** il runtime Copilot non è incluso nel VSIX. Scegliendo `copilot` viene scaricato **una volta** (~100 MB, ~200 MB su disco) dalla release ufficiale GitHub, verificato con SHA-256, in `%LOCALAPPDATA%\SVNAssist\copilot-runtime`. Con `auto` Copilot viene usato solo se il runtime è già stato scaricato.
 
 Per il provider `openai` puoi usare qualsiasi endpoint compatibile con il formato **OpenAI Chat Completions** (`/v1/chat/completions`):
 
