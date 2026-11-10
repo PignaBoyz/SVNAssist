@@ -20,14 +20,22 @@ public interface ISvnService
     /// <summary>
     /// Esegue il commit dei file specificati con il messaggio dato.
     /// </summary>
-    /// <param name="paths">Percorsi dei file da committare.</param>
+    /// <param name="paths">
+    /// Percorsi da committare, esattamente quelli (come TortoiseSVN): le cartelle si committano a
+    /// <c>--depth empty</c>, senza trascinarsi dietro i figli non elencati.
+    /// </param>
     /// <param name="message">Messaggio di commit.</param>
     /// <param name="ct">Token per annullare l'operazione.</param>
+    /// <param name="includeAllUnder">
+    /// Cartelle appena aggiunte per intero (es. una cartella non versionata spuntata): il commit include anche
+    /// tutto ciò che hanno dentro.
+    /// </param>
     /// <returns>Il numero della nuova revisione (<c>null</c> se non c'era nulla da committare).</returns>
     /// <exception cref="InvalidOperationException">
     /// Se il commit fallisce (es. file non aggiornato: il messaggio suggerisce di fare Update).
     /// </exception>
-    Task<long?> CommitAsync(IEnumerable<string> paths, string message, CancellationToken ct);
+    Task<long?> CommitAsync(
+        IEnumerable<string> paths, string message, CancellationToken ct, IEnumerable<string>? includeAllUnder = null);
 
     /// <summary>
     /// Aggiunge file/cartelle al versionamento SVN (<c>svn add</c>).
@@ -41,7 +49,11 @@ public interface ISvnService
     /// </summary>
     /// <param name="paths">Percorsi completi da rimuovere.</param>
     /// <param name="ct">Token per annullare l'operazione.</param>
-    Task DeleteAsync(IEnumerable<string> paths, CancellationToken ct);
+    /// <param name="force">
+    /// <c>true</c> (<c>--force</c>) per file con modifiche locali o aggiunti non ancora committati, che svn altrimenti
+    /// rifiuta (E195006): da usare solo dopo la conferma dell'utente.
+    /// </param>
+    Task DeleteAsync(IEnumerable<string> paths, CancellationToken ct, bool force = false);
 
     /// <summary>
     /// Annulla le modifiche locali su file/cartelle (<c>svn revert</c>).

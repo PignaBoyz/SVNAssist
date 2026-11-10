@@ -58,7 +58,7 @@ public class SvnServiceArgsTests
         // Assert — niente escaping manuale: il messaggio è un unico argomento intatto
         Assert.Equal(FakeSvnPath, runner.LastFileName);
         Assert.Equal(
-            ["commit", "--non-interactive", "-m", message, @"C:\wc\a.cs", @"C:\wc\file con spazi.cs"],
+            ["commit", "--non-interactive", "--depth", "empty", "-m", message, @"C:\wc\a.cs", @"C:\wc\file con spazi.cs"],
             runner.LastArguments);
     }
 
@@ -196,5 +196,156 @@ public class SvnServiceArgsTests
 
         // Nessun propset: le voci esistenti di svn:ignore restano intatte.
         Assert.Equal(1, runner.CallCount);
+    }
+
+    // ── Riga di comando lunga (--targets / spezzettamento) ───────────
+
+    private static List<string> LongPaths(int count) =>
+        Enumerable.Range(0, count).Select(i => $@"C:\wc\{new string('d', 80)}\{new string('f', 60)}_{i}.cs").ToList();
+
+    private static int CommandLineChars(IReadOnlyList<string> args) => FakeSvnPath.Length + args.Sum(a => a.Length + 3);
+
+    [Fact]
+    public async Task Add_Commit_Delete_Revert_ConSecentoPercorsi_UsanoTargetsEMaiOltreILimiteWindows()
+    {
+        var paths = LongPaths(600);
+        var runner = new FakeProcessRunner { Result = new ProcessResult(0, "Committed revision 3.\n", string.Empty) };
+        var targetsFiles = new List<string>();
+        var targetsLines = new List<string[]>();
+        runner.Responder = args =>
+        {
+            Assert.True(CommandLineChars(args) < 30000, "riga di comando oltre il limite");
+            var i = args.ToList().IndexOf("--targets");
+            Assert.True(i > 0, "atteso --targets");
+            targetsFiles.Add(args[i + 1]);
+            targetsLines.Add(File.ReadAllLines(args[i + 1]));
+            return new ProcessResult(0, "Committed revision 3.\n", string.Empty);
+        };
+        var sut = CreateSut(runner);
+
+        await sut.AddAsync(paths, CancellationToken.None);
+        await sut.DeleteAsync(paths, CancellationToken.None, force: true);
+        await sut.RevertAsync(paths, CancellationToken.None);
+        var revision = await sut.CommitAsync(paths, "msg", CancellationToken.None);
+
+        Assert.Equal(3, revision);
+        Assert.Equal(4, runner.CallCount);
+        Assert.All(targetsLines, lines => Assert.Equal(paths, lines));
+        Assert.All(targetsFiles, f => Assert.False(File.Exists(f), "il file temporaneo va cancellato"));
+        // Le opzioni restano prima di --targets e i percorsi non compaiono più in riga di comando.
+        Assert.Equal(
+            ["commit", "--non-interactive", "--depth", "empty", "-m", "msg", "--targets", targetsFiles[3]],
+            runner.LastArguments);
+    }
+
+    [Fact]
+    public async Task Add_ConPochiPercorsi_NonUsaTargets()
+    {
+        var runner = new FakeProcessRunner();
+
+        await CreateSut(runner).AddAsync(LongPaths(3), CancellationToken.None);
+
+        Assert.DoesNotContain("--targets", runner.LastArguments);
+    }
+
+    [Fact]
+    public async Task Targets_FileCancellatoAncheSeSvnFallisce()
+    {
+        string? targetsFile = null;
+        var runner = new FakeProcessRunner
+        {
+            Responder = args =>
+            {
+                targetsFile = args[args.ToList().IndexOf("--targets") + 1];
+                return new ProcessResult(1, string.Empty, "svn: E155004: locked");
+            },
+        };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => CreateSut(runner).RevertAsync(LongPaths(600), CancellationToken.None));
+
+        Assert.NotNull(targetsFile);
+        Assert.False(File.Exists(targetsFile));
+    }
+
+    [Fact]
+    public async Task Delete_Force_AggiungeLOpzioneSoloSeRichiesto()
+    {
+        var runner = new FakeProcessRunner();
+        var sut = CreateSut(runner);
+
+        await sut.DeleteAsync([@"C:\wc\a.cs"], CancellationToken.None);
+        Assert.Equal(["delete", "--non-interactive", @"C:\wc\a.cs"], runner.LastArguments);
+
+        await sut.DeleteAsync([@"C:\wc\a.cs"], CancellationToken.None, force: true);
+        Assert.Equal(["delete", "--non-interactive", "--force", @"C:\wc\a.cs"], runner.LastArguments);
+    }
+
+    [Fact]
+    public async Task NomeConChiocciola_OgniComandoAggiungeLaChiocciolaFinale()
+    {
+        var runner = new FakeProcessRunner();
+        var sut = CreateSut(runner);
+
+        await sut.AddAsync([@"C:\wc\icona@2x.png"], CancellationToken.None);
+        Assert.Equal(@"C:\wc\icona@2x.png@", runner.LastArguments[^1]);
+
+        await sut.CommitAsync([@"C:\wc\icona@2x.png"], "m", CancellationToken.None);
+        Assert.Equal(@"C:\wc\icona@2x.png@", runner.LastArguments[^1]);
+    }
+
+    [Fact]
+    public async Task GetDiffForAiAsync_ConSecentoFileVersionati_SpezzaStatusEDiffEConcatena()
+    {
+        var wc = @"C:\wc";
+        var paths = LongPaths(600);
+        var runner = new FakeProcessRunner();
+        var calls = new List<IReadOnlyList<string>>();
+        runner.Responder = args =>
+        {
+            calls.Add(args);
+            Assert.True(CommandLineChars(args) < 30000, "riga di comando oltre il limite");
+            var targets = args.Skip(args.ToList().IndexOf(args[0] == "status" ? "empty" : "--no-diff-deleted") + 1);
+            if (args[0] == "status")
+            {
+                var entries = string.Concat(targets.Select(t => $"""<entry path="{t}"><wc-status item="normal" props="none"/></entry>"""));
+                return new ProcessResult(0, $"<status><target path=\".\">{entries}</target></status>", string.Empty);
+            }
+
+            return new ProcessResult(0, string.Concat(targets.Select(t => $"Index: {t}\n")), string.Empty);
+        };
+
+        var diff = await CreateSut(runner).GetDiffForAiAsync(paths, wc, CancellationToken.None);
+
+        Assert.True(calls.Count(c => c[0] == "status") > 1);
+        Assert.True(calls.Count(c => c[0] == "diff") > 1);
+        Assert.Equal(600, diff.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length);
+    }
+
+    [Fact]
+    public void RestoreAnsiHeaders_RimappaINomiStorpiatiSuiPercorsiNoti()
+    {
+        // Intestazioni in codepage ANSI lette come UTF-8 (come fa il runner), contenuto già corretto.
+        var ansi = SvnService.GetAnsiEncoding();
+        var garbled = System.Text.Encoding.UTF8.GetString(ansi.GetBytes("sotto/città.cs"));
+        var diff = $"Index: {garbled}\r\n====\r\n--- {garbled}\t(revision 1)\r\n+++ {garbled}\t(working copy)\r\n@@ -1 +1,2 @@\r\n+perché\n"
+                   + $"Index: {System.Text.Encoding.UTF8.GetString(ansi.GetBytes("dir/è.txt"))}\n";
+
+        var fixedDiff = SvnService.RestoreAnsiHeaders(diff, [@"sotto\città.cs", @"dir\è.txt", "plain.txt"]);
+
+        Assert.Contains("Index: sotto/città.cs\r\n", fixedDiff);
+        Assert.Contains("--- sotto/città.cs\t(revision 1)", fixedDiff);
+        Assert.Contains("+++ sotto/città.cs\t(working copy)", fixedDiff);
+        Assert.Contains("Index: dir/è.txt\n", fixedDiff);
+        Assert.Contains("+perché", fixedDiff); // il contenuto non si tocca
+        Assert.DoesNotContain('\uFFFD', fixedDiff);
+    }
+
+    [Fact]
+    public void RestoreAnsiHeaders_SoloPercorsiAscii_RestituisceInvariato()
+    {
+        const string diff = "Index: a.cs\n--- a.cs\t(revision 1)\n";
+
+        Assert.Same(diff, SvnService.RestoreAnsiHeaders(diff, ["a.cs"]));
     }
 }

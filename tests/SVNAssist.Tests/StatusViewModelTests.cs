@@ -71,7 +71,7 @@ public class StatusViewModelTests
         var f = new Fixture().With((@"src\Core\A.cs", SvnStatusKind.Modified));
         await f.Refresh();
 
-        await f.Vm.SetTreeView(false);
+        await f.Vm.SetTreeViewAsync(false);
 
         Assert.Equal(["Modifiche (1)", "A.cs"], f.RowNames);
         Assert.Equal(@"src\Core", f.Row("A.cs").Detail);
@@ -176,6 +176,111 @@ public class StatusViewModelTests
     }
 
     [Fact]
+    public async Task Commit_SoloUnFiglioDiCartellaAggiunta_IncludeLaCartellaPadre()
+    {
+        var f = new Fixture().With(
+            (@"src\New", SvnStatusKind.Added),
+            (@"src\New\a.cs", SvnStatusKind.Added),
+            (@"src\New\b.cs", SvnStatusKind.Added));
+        await f.Refresh();
+        await f.Vm.SetAllSelectedAsync(false);
+        f.Row("a.cs").IsChecked = true;
+        f.Vm.CommitMessage.Text = "m";
+
+        await f.Vm.CommitAsync(null, Ct);
+
+        var commit = Assert.Single(f.Svn.Commits);
+        Assert.Equal([Full(@"src\New"), Full(@"src\New\a.cs")], commit.Paths);
+        Assert.Empty(f.Svn.Added); // la cartella è già aggiunta: nessun add
+        Assert.Empty(f.Svn.CommitWholeFolders);
+    }
+
+    [Fact]
+    public async Task Commit_PadreNonSpuntatoMaVersionato_NonVieneAggiunto()
+    {
+        var f = new Fixture().With((@"src\Old\a.cs", SvnStatusKind.Modified), (@"src", SvnStatusKind.Modified));
+        await f.Refresh();
+        await f.Vm.SetAllSelectedAsync(false);
+        f.Row("a.cs").IsChecked = true;
+        f.Vm.CommitMessage.Text = "m";
+
+        await f.Vm.CommitAsync(null, Ct);
+
+        // Una cartella solo "modificata" (proprietà) non è un padre nuovo: non si committa se non spuntata.
+        Assert.Equal([Full(@"src\Old\a.cs")], Assert.Single(f.Svn.Commits).Paths);
+    }
+
+    [Fact]
+    public async Task Commit_CartellaNonVersionataSpuntata_VieneAggiuntaECommittataPerIntero()
+    {
+        var wc = Path.Combine(Path.GetTempPath(), "SVNAssist_VM_" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(Path.Combine(wc, "nuova"));
+        try
+        {
+            var f = new Fixture().With(("nuova", SvnStatusKind.Unversioned));
+            f.Vm.WorkingCopyPath = wc;
+            await f.Refresh();
+            f.Row("nuova\\").IsChecked = true;
+            f.Vm.CommitMessage.Text = "m";
+
+            await f.Vm.CommitAsync(null, Ct);
+
+            var folder = Path.Combine(wc, "nuova");
+            Assert.Equal([folder], Assert.Single(f.Svn.Added));
+            Assert.Equal([folder], Assert.Single(f.Svn.Commits).Paths);
+            Assert.Equal([folder], f.Svn.CommitWholeFolders);
+        }
+        finally
+        {
+            Directory.Delete(wc, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Delete_ForceSoloPerFileConModificheLocali()
+    {
+        var f = new Fixture().With(
+            ("mod.cs", SvnStatusKind.Modified), ("add.cs", SvnStatusKind.Added), ("gone.cs", SvnStatusKind.Missing),
+            ("ok.cs", SvnStatusKind.Deleted));
+        await f.Refresh();
+
+        await f.Vm.DeleteAsync(f.Row("mod.cs"), Ct);
+        await f.Vm.DeleteAsync(f.Row("add.cs"), Ct);
+        await f.Vm.DeleteAsync(f.Row("gone.cs"), Ct);
+
+        Assert.Equal([true, true, false], f.Svn.DeleteForced);
+    }
+
+    [Fact]
+    public async Task Delete_SeAnnulli_NonPassaForceNeCancella()
+    {
+        var f = new Fixture().With(("mod.cs", SvnStatusKind.Modified));
+        await f.Refresh();
+        f.Dialogs.ConfirmResult = false;
+
+        await f.Vm.DeleteAsync(f.Row("mod.cs"), Ct);
+
+        Assert.Empty(f.Svn.DeleteForced);
+    }
+
+    [Fact]
+    public async Task Commit_Fallito_MostraL_ErroreERileggeLaListaDopoAddEDelete()
+    {
+        var f = new Fixture().With(("new.txt", SvnStatusKind.Unversioned));
+        await f.Refresh();
+        f.Row("new.txt").IsChecked = true;
+        f.Vm.CommitMessage.Text = "msg";
+        f.Svn.CommitError = "file più recenti sul server";
+        var statusCalls = f.Svn.StatusCalls;
+
+        await f.Vm.CommitAsync(null, Ct);
+
+        Assert.Contains("Errore commit: file più recenti", f.Vm.StatusMessage);
+        Assert.Equal(statusCalls + 1, f.Svn.StatusCalls);
+        Assert.Equal("msg", f.Vm.CommitMessage.Text); // il messaggio non va perso
+    }
+
+    [Fact]
     public async Task Commit_SenzaMessaggioONessunFile_NonCommitta()
     {
         var f = new Fixture().With(("a.cs", SvnStatusKind.Modified));
@@ -186,7 +291,7 @@ public class StatusViewModelTests
         Assert.Contains("messaggio", f.Vm.StatusMessage);
 
         f.Vm.CommitMessage.Text = "m";
-        await f.Vm.SetAllSelected(false);
+        await f.Vm.SetAllSelectedAsync(false);
         await f.Vm.CommitAsync(null, Ct);
         Assert.Empty(f.Svn.Commits);
     }
@@ -392,10 +497,10 @@ public class StatusViewModelTests
         Assert.DoesNotContain("a.cs", f.RowNames);
         Assert.Equal(ChangeRowFactory.CollapsedChevron, f.Row("src").Chevron);
 
-        await f.Vm.SetAllExpanded(true);
+        await f.Vm.SetAllExpandedAsync(true);
         Assert.Contains("a.cs", f.RowNames);
 
-        await f.Vm.SetAllExpanded(false);
+        await f.Vm.SetAllExpandedAsync(false);
         Assert.DoesNotContain("a.cs", f.RowNames);
 
         await f.Vm.ToggleExpandAsync(f.Row("Modifiche (2)"), Ct);

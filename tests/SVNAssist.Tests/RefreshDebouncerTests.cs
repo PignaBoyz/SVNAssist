@@ -27,7 +27,7 @@ public class RefreshDebouncerTests
 
         await done.Task.WaitAsync(TimeSpan.FromSeconds(5));
         await Task.Delay(250);
-        cts.Cancel();
+        await cts.CancelAsync();
         await loop;
 
         Assert.Equal(1, count);
@@ -52,7 +52,7 @@ public class RefreshDebouncerTests
 
         debouncer.Request();
         await second.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        cts.Cancel();
+        await cts.CancelAsync();
         await loop;
 
         Assert.Equal(2, count);
@@ -77,7 +77,7 @@ public class RefreshDebouncerTests
         await Task.Delay(200);
         debouncer.Request();
         await second.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        cts.Cancel();
+        await cts.CancelAsync();
         await loop;
     }
 

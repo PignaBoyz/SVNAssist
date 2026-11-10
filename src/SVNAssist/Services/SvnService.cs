@@ -114,18 +114,35 @@ public class SvnService : ISvnService
     }
 
     /// <inheritdoc />
-    public async Task<long?> CommitAsync(IEnumerable<string> paths, string message, CancellationToken ct)
+    /// <remarks>
+    /// Come TortoiseSVN si committa <b>esattamente</b> ciò che è elencato: <c>--depth empty</c> evita che una
+    /// cartella aggiunta si trascini dietro i figli non selezionati (che restano <c>A</c>). Per le cartelle
+    /// nuove appena aggiunte per intero (<paramref name="includeAllUnder"/>) si elencano esplicitamente
+    /// tutti gli elementi che contengono, così il commit resta uno solo e atomico.
+    /// </remarks>
+    public async Task<long?> CommitAsync(
+        IEnumerable<string> paths, string message, CancellationToken ct, IEnumerable<string>? includeAllUnder = null)
     {
-        var pathList = paths.ToList();
+        var pathList = paths.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         if (pathList.Count == 0)
             return null;
 
-        // svn commit -m <messaggio> <file...>
-        // Il messaggio e i path sono argomenti singoli: niente escaping manuale.
-        var args = new List<string> { "commit", "-m", message };
-        args.AddRange(pathList);
+        foreach (var folder in includeAllUnder ?? [])
+        {
+            var statusXml = await RunSvnAsync(["status", "--xml", Peg(folder)], workingDirectory: null, ct);
+            foreach (var entry in XDocument.Parse(statusXml).Descendants("entry"))
+            {
+                var item = entry.Element("wc-status")?.Attribute("item")?.Value;
+                var path = entry.Attribute("path")?.Value;
+                if (path is not null && item is "added" or "deleted" or "modified" or "replaced")
+                    pathList.Add(Path.GetFullPath(path));
+            }
+        }
+
         // Il commit può durare a lungo (molti file, server lento): niente timeout, l'utente può annullare.
-        var output = await RunSvnAsync(args, workingDirectory: null, ct, applyTimeout: false);
+        var output = await RunSvnWithTargetsAsync(
+            ["commit", "--depth", "empty", "-m", message],
+            pathList.Distinct(StringComparer.OrdinalIgnoreCase).ToList(), workingDirectory: null, ct, applyTimeout: false);
         return ParseCommittedRevision(output);
     }
 
@@ -146,21 +163,21 @@ public class SvnService : ISvnService
         if (pathList.Count == 0)
             return;
 
-        var args = new List<string> { "add", "--force" };
-        args.AddRange(pathList);
-        await RunSvnAsync(args, workingDirectory: null, ct);
+        await RunSvnWithTargetsAsync(["add", "--force"], pathList, workingDirectory: null, ct);
     }
 
     /// <inheritdoc />
-    public async Task DeleteAsync(IEnumerable<string> paths, CancellationToken ct)
+    /// <remarks>
+    /// Senza <c>--force</c> svn rifiuta file con modifiche locali (E195006) e non versionati (E200005):
+    /// il flag si passa solo dopo che l'utente ha confermato la perdita delle modifiche.
+    /// </remarks>
+    public async Task DeleteAsync(IEnumerable<string> paths, CancellationToken ct, bool force = false)
     {
         var pathList = paths.ToList();
         if (pathList.Count == 0)
             return;
 
-        var args = new List<string> { "delete" };
-        args.AddRange(pathList);
-        await RunSvnAsync(args, workingDirectory: null, ct);
+        await RunSvnWithTargetsAsync(force ? ["delete", "--force"] : ["delete"], pathList, workingDirectory: null, ct);
     }
 
     /// <inheritdoc />
@@ -170,9 +187,7 @@ public class SvnService : ISvnService
         if (pathList.Count == 0)
             return;
 
-        var args = new List<string> { "revert", "--depth", "infinity" };
-        args.AddRange(pathList);
-        await RunSvnAsync(args, workingDirectory: null, ct);
+        await RunSvnWithTargetsAsync(["revert", "--depth", "infinity"], pathList, workingDirectory: null, ct);
     }
 
     /// <inheritdoc />
@@ -197,7 +212,7 @@ public class SvnService : ISvnService
             _ => throw new ArgumentOutOfRangeException(nameof(accept)),
         };
 
-        await RunSvnAsync(["resolve", "--accept", acceptValue, path], workingDirectory: null, ct);
+        await RunSvnAsync(["resolve", "--accept", acceptValue, Peg(path)], workingDirectory: null, ct);
     }
 
     /// <summary>
@@ -358,12 +373,17 @@ public class SvnService : ISvnService
 
         // svn diff non conosce i file non versionati (E155010): vanno separati prima.
         // Con -v svn elenca anche i versionati "normal": chi non compare (o è '?') è nuovo.
-        var statusXml = await RunSvnAsync(
-            ["status", "--xml", "-v", "--depth", "empty", .. targets.Select(t => t.Arg)], workingDirectory, ct);
-        var versioned = XDocument.Parse(statusXml).Descendants("entry")
-            .Where(e => e.Element("wc-status")?.Attribute("item")?.Value is not ("unversioned" or "ignored" or null))
-            .Select(e => NormalizePath(e.Attribute("path")?.Value ?? string.Empty, workingDirectory))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // svn status non accetta --targets: la lista lunga si spezza in più invocazioni.
+        var versioned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var chunk in ChunkByCommandLine(["status", "--xml", "-v", "--depth", "empty"], targets.Select(t => Peg(t.Arg)).ToList()))
+        {
+            var statusXml = await RunSvnAsync(chunk, workingDirectory, ct);
+            foreach (var entry in XDocument.Parse(statusXml).Descendants("entry"))
+            {
+                if (entry.Element("wc-status")?.Attribute("item")?.Value is not ("unversioned" or "ignored" or null))
+                    versioned.Add(NormalizePath(entry.Attribute("path")?.Value ?? string.Empty, workingDirectory));
+            }
+        }
 
         var versionedTargets = targets.Where(t => versioned.Contains(NormalizePath(t.Arg, workingDirectory))).ToList();
         var newTargets = targets.Except(versionedTargets).ToList();
@@ -371,9 +391,19 @@ public class SvnService : ISvnService
         var builder = new StringBuilder();
         if (versionedTargets.Count > 0)
         {
-            builder.Append(await RunSvnAsync(
-                ["diff", "-x", "-U 0 -p", "--no-diff-deleted", .. versionedTargets.Select(t => t.Arg)],
-                workingDirectory, ct));
+            // svn diff non accetta --targets (1.14): stessa strategia, spezzare in più invocazioni (concatenate).
+            // Niente "@" finale qui: "svn diff nome@2x.png@" fallisce (E155010), mentre senza funziona.
+            var diffText = new StringBuilder();
+            foreach (var chunk in ChunkByCommandLine(
+                         ["diff", "-x", "-U 0 -p", "--no-diff-deleted"], versionedTargets.Select(t => t.Arg).ToList()))
+            {
+                var chunkOutput = await RunSvnAsync(chunk, workingDirectory, ct);
+                if (diffText.Length > 0 && diffText[^1] != '\n' && chunkOutput.Length > 0)
+                    diffText.Append('\n');
+                diffText.Append(chunkOutput);
+            }
+
+            builder.Append(RestoreAnsiHeaders(diffText.ToString(), versionedTargets.Select(t => t.Arg)));
         }
 
         foreach (var (full, arg) in newTargets)
@@ -534,9 +564,9 @@ public class SvnService : ISvnService
     /// Cerca la cartella <c>.svn</c> nella directory corrente e in quelle superiori.
     /// </summary>
     /// <param name="startPath">Percorso da cui iniziare la ricerca.</param>
-    /// <param name="maxLevels">Numero massimo di livelli da risalire (default 10).</param>
+    /// <param name="maxLevels">Numero massimo di livelli da risalire (default: fino alla radice del disco; una working copy ha un solo <c>.svn</c> in cima, anche con alberi più profondi di 10 livelli).</param>
     /// <returns>Il percorso della root SVN, oppure <c>null</c> se non trovata.</returns>
-    public static string? FindSvnRoot(string startPath, int maxLevels = 10)
+    public static string? FindSvnRoot(string startPath, int maxLevels = int.MaxValue)
     {
         var current = new DirectoryInfo(startPath);
 
@@ -549,6 +579,179 @@ public class SvnService : ISvnService
         }
 
         return null;
+    }
+
+    // ── Riga di comando lunga, peg revision, codepage ANSI ───────────
+
+    /// <summary>
+    /// Budget (caratteri) per gli argomenti in riga di comando: il limite di Windows è ~32.767 per l'intera
+    /// riga, qui si lascia margine per svn.exe, le opzioni, il messaggio di commit e il quoting.
+    /// </summary>
+    internal const int MaxCommandLineChars = 24000;
+
+    /// <summary>
+    /// Un nome con <c>@</c> (es. <c>icona@2x.png</c>) verrebbe letto come "percorso@revisione":
+    /// svn vuole una <c>@</c> finale per dire che non c'è alcuna peg revision.
+    /// </summary>
+    private static string Peg(string path) => path.Contains('@') ? path + "@" : path;
+
+    private static int CommandLineLength(IEnumerable<string> args) => args.Sum(a => a.Length + 3);
+
+    /// <summary>
+    /// Spezza <paramref name="targets"/> in gruppi tali che <paramref name="head"/> + gruppo stia nel budget
+    /// della riga di comando. Per i comandi che non conoscono <c>--targets</c> (status, diff).
+    /// </summary>
+    internal static IEnumerable<IReadOnlyList<string>> ChunkByCommandLine(
+        IReadOnlyList<string> head, IReadOnlyList<string> targets)
+    {
+        var budget = Math.Max(1000, MaxCommandLineChars - CommandLineLength(head));
+        var current = new List<string>();
+        var length = 0;
+        foreach (var target in targets)
+        {
+            var cost = target.Length + 3;
+            if (current.Count > 0 && length + cost > budget)
+            {
+                yield return [.. head, .. current];
+                current.Clear();
+                length = 0;
+            }
+
+            current.Add(target);
+            length += cost;
+        }
+
+        if (current.Count > 0)
+            yield return [.. head, .. current];
+    }
+
+    /// <summary>
+    /// Esegue <paramref name="head"/> (sottocomando e opzioni) sui <paramref name="targets"/>. Se la riga di comando
+    /// sarebbe troppo lunga i percorsi vanno in un file temporaneo passato con <c>--targets</c>.
+    /// </summary>
+    /// <remarks>
+    /// Verificato su svn 1.14 per Windows: il file di <c>--targets</c> è letto nella <b>codepage ANSI</b> di sistema,
+    /// non in UTF-8 (un percorso con accento scritto in UTF-8 non viene trovato). I percorsi non rappresentabili
+    /// nella codepage restano sulla riga di comando.
+    /// </remarks>
+    private async Task<string> RunSvnWithTargetsAsync(
+        IReadOnlyList<string> head, IReadOnlyList<string> targets, string? workingDirectory, CancellationToken ct,
+        bool applyTimeout = true)
+    {
+        var pegged = targets.Select(Peg).ToList();
+        if (CommandLineLength(head) + CommandLineLength(pegged) + _svnExePath.Length <= MaxCommandLineChars)
+            return await RunSvnAsync([.. head, .. pegged], workingDirectory, ct, applyTimeout);
+
+        var ansi = GetAnsiEncoding();
+        var inFile = new List<string>();
+        var inline = new List<string>();
+        foreach (var target in pegged)
+        {
+            if (!target.Contains('\n') && !target.Contains('\r') && CanEncode(ansi, target))
+                inFile.Add(target);
+            else
+                inline.Add(target);
+        }
+
+        var tempFile = Path.Combine(Path.GetTempPath(), $"svnassist-targets-{Guid.NewGuid():N}.txt");
+        try
+        {
+            await File.WriteAllTextAsync(tempFile, string.Join("\n", inFile) + "\n", ansi, ct);
+            return await RunSvnAsync([.. head, "--targets", tempFile, .. inline], workingDirectory, ct, applyTimeout);
+        }
+        finally
+        {
+            try { File.Delete(tempFile); }
+            catch (IOException) { /* best effort: è un file temporaneo */ }
+            catch (UnauthorizedAccessException) { /* idem */ }
+        }
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern uint GetACP();
+
+    /// <summary>Codepage ANSI di sistema (quella in cui svn.exe legge <c>--targets</c> e scrive le intestazioni dei diff).</summary>
+    internal static Encoding GetAnsiEncoding()
+    {
+        try
+        {
+            // Su .NET (Core) le codepage legacy (es. 1252) non sono disponibili finché non si registra il provider.
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+            return Encoding.GetEncoding((int)GetACP(), EncoderFallback.ExceptionFallback, DecoderFallback.ReplacementFallback);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or DllNotFoundException
+                                       or EntryPointNotFoundException)
+        {
+            return new UTF8Encoding(false, throwOnInvalidBytes: true);
+        }
+    }
+
+    private static bool CanEncode(Encoding encoding, string text)
+    {
+        try
+        {
+            encoding.GetByteCount(text);
+            return true;
+        }
+        catch (EncoderFallbackException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// <c>svn diff</c> su Windows scrive le intestazioni (<c>Index:</c>, <c>---</c>, <c>+++</c>) con i percorsi nella
+    /// codepage ANSI mentre il contenuto è UTF-8: letto tutto come UTF-8, <c>città.cs</c> diventa <c>citt?.cs</c>.
+    /// Poiché i percorsi sono quelli passati dal chiamante, si rimappano i nomi storpiati su quelli noti
+    /// (anche come prefisso, per le cartelle). Con codepage UTF-8 il nome storpiato coincide e non cambia nulla.
+    /// </summary>
+    internal static string RestoreAnsiHeaders(string diff, IEnumerable<string> targetPaths)
+    {
+        var ansi = GetAnsiEncoding();
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var target in targetPaths)
+        {
+            // svn stampa i percorsi relativi con '/' anche su Windows.
+            var path = target.Replace('\\', '/');
+            if (path.All(c => c < 128) || !CanEncode(ansi, path))
+                continue;
+
+            var garbled = Encoding.UTF8.GetString(ansi.GetBytes(path));
+            if (garbled != path)
+                map[garbled] = path;
+        }
+
+        if (map.Count == 0 || diff.Length == 0)
+            return diff;
+
+        var lines = diff.Split('\n');
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var line = lines[i];
+            var prefix = line.StartsWith("Index: ", StringComparison.Ordinal) ? "Index: "
+                : line.StartsWith("--- ", StringComparison.Ordinal) ? "--- "
+                : line.StartsWith("+++ ", StringComparison.Ordinal) ? "+++ "
+                : null;
+            if (prefix is null)
+                continue;
+
+            var rest = line[prefix.Length..];
+            var end = rest.IndexOf('\t');
+            if (end < 0)
+                end = rest.EndsWith('\r') ? rest.Length - 1 : rest.Length;
+            var shown = rest[..end];
+
+            foreach (var (garbled, original) in map)
+            {
+                if (shown == garbled || shown.StartsWith(garbled + "/", StringComparison.Ordinal))
+                {
+                    lines[i] = prefix + original + shown[garbled.Length..] + rest[end..];
+                    break;
+                }
+            }
+        }
+
+        return string.Join('\n', lines);
     }
 
     /// <summary>

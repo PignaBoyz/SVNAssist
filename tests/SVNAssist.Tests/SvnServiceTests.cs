@@ -215,6 +215,225 @@ public class SvnServiceTests : IDisposable
         Assert.DoesNotContain(_wcDir, diff); // percorsi relativi alla working copy
     }
 
+    // ─── Delete: --force solo dove svn lo richiede ────────────────────
+
+    [Fact]
+    public async Task DeleteAsync_FileModificato_SenzaForceSvnRifiuta_ConForceLoCancella()
+    {
+        await CreateRepoAndCheckoutAsync();
+        var file = Path.Combine(_wcDir, "mod.txt");
+        await File.WriteAllTextAsync(file, "originale\n");
+        await RunAsync(_svnExe, $"add \"{file}\"", _wcDir);
+        await RunAsync(_svnExe, "commit -m init", _wcDir);
+        await File.WriteAllTextAsync(file, "originale\nmodificato\n");
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.DeleteAsync([file], CancellationToken.None));
+        Assert.Contains("E195006", ex.Message);
+        Assert.True(File.Exists(file));
+
+        await _sut.DeleteAsync([file], CancellationToken.None, force: true);
+
+        Assert.False(File.Exists(file));
+        Assert.Equal(SvnStatusKind.Deleted, Assert.Single(await _sut.GetStatusAsync(_wcDir, CancellationToken.None)).Status);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_FileAggiuntoNonCommittato_RichiedeForce()
+    {
+        await CreateRepoAndCheckoutAsync();
+        var file = Path.Combine(_wcDir, "nuovo.txt");
+        await File.WriteAllTextAsync(file, "x\n");
+        await RunAsync(_svnExe, $"add \"{file}\"", _wcDir);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _sut.DeleteAsync([file], CancellationToken.None));
+        await _sut.DeleteAsync([file], CancellationToken.None, force: true);
+
+        Assert.Empty(await _sut.GetStatusAsync(_wcDir, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task DeleteAsync_FileMancante_NonServeForce()
+    {
+        await CreateRepoAndCheckoutAsync();
+        var file = Path.Combine(_wcDir, "gone.txt");
+        await File.WriteAllTextAsync(file, "x\n");
+        await RunAsync(_svnExe, $"add \"{file}\"", _wcDir);
+        await RunAsync(_svnExe, "commit -m init", _wcDir);
+        File.Delete(file);
+
+        await _sut.DeleteAsync([file], CancellationToken.None);
+
+        Assert.Equal(SvnStatusKind.Deleted, Assert.Single(await _sut.GetStatusAsync(_wcDir, CancellationToken.None)).Status);
+    }
+
+    // ─── Commit come TortoiseSVN: esattamente ciò che è elencato ──────
+
+    [Fact]
+    public async Task CommitAsync_CartellaAggiuntaEUnSoloFiglio_CommittaSoloQuelloEIlFratelloRestaAdded()
+    {
+        await CreateRepoAndCheckoutAsync();
+        var folder = Path.Combine(_wcDir, "f");
+        Directory.CreateDirectory(folder);
+        await File.WriteAllTextAsync(Path.Combine(folder, "a.txt"), "a\n");
+        await File.WriteAllTextAsync(Path.Combine(folder, "b.txt"), "b\n");
+        await RunAsync(_svnExe, $"add \"{folder}\"", _wcDir);
+
+        var revision = await _sut.CommitAsync(
+            [folder, Path.Combine(folder, "a.txt")], "solo a", CancellationToken.None);
+
+        Assert.Equal(1, revision);
+        var left = Assert.Single(await _sut.GetStatusAsync(_wcDir, CancellationToken.None));
+        Assert.EndsWith("b.txt", left.Path);
+        Assert.Equal(SvnStatusKind.Added, left.Status);
+    }
+
+    [Fact]
+    public async Task CommitAsync_SoloIlFiglioDiUnaCartellaAggiunta_SvnRifiuta_ConLaCartellaRiesce()
+    {
+        // È il motivo per cui il ViewModel include da sé le cartelle padre nuove.
+        await CreateRepoAndCheckoutAsync();
+        var folder = Path.Combine(_wcDir, "g");
+        var child = Path.Combine(folder, "a.txt");
+        Directory.CreateDirectory(folder);
+        await File.WriteAllTextAsync(child, "a\n");
+        await RunAsync(_svnExe, $"add \"{folder}\"", _wcDir);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.CommitAsync([child], "m", CancellationToken.None));
+        Assert.Contains("E200009", ex.Message);
+
+        Assert.NotNull(await _sut.CommitAsync([folder, child], "m", CancellationToken.None));
+        Assert.Empty(await _sut.GetStatusAsync(_wcDir, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task CommitAsync_CartellaNuovaAggiuntaPerIntero_IncludeTuttoIlContenuto()
+    {
+        await CreateRepoAndCheckoutAsync();
+        var folder = Path.Combine(_wcDir, "nuova");
+        Directory.CreateDirectory(Path.Combine(folder, "sub"));
+        await File.WriteAllTextAsync(Path.Combine(folder, "a.txt"), "a\n");
+        await File.WriteAllTextAsync(Path.Combine(folder, "sub", "b.txt"), "b\n");
+        await _sut.AddAsync([folder], CancellationToken.None);
+
+        await _sut.CommitAsync([folder], "tutta la cartella", CancellationToken.None, includeAllUnder: [folder]);
+
+        Assert.Empty(await _sut.GetStatusAsync(_wcDir, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task CommitAsync_CartellaCancellata_ConDepthEmptyCancellaTuttoIlRamo()
+    {
+        await CreateRepoAndCheckoutAsync();
+        var folder = Path.Combine(_wcDir, "d");
+        Directory.CreateDirectory(folder);
+        await File.WriteAllTextAsync(Path.Combine(folder, "a.txt"), "a\n");
+        await RunAsync(_svnExe, $"add \"{folder}\"", _wcDir);
+        await RunAsync(_svnExe, "commit -m init", _wcDir);
+        await _sut.DeleteAsync([folder], CancellationToken.None);
+
+        await _sut.CommitAsync([folder], "via", CancellationToken.None);
+
+        Assert.False(Directory.Exists(folder));
+        Assert.Empty(await _sut.GetStatusAsync(_wcDir, CancellationToken.None));
+    }
+
+    // ─── Riga di comando lunga e nomi particolari ─────────────────────
+
+    [Fact]
+    public async Task Add_Commit_Revert_ConCentinaiaDiPercorsiLunghi_UsanoTargetsEFunzionano()
+    {
+        await CreateRepoAndCheckoutAsync();
+        // ~200 file con nomi lunghi (e qualche accento): la riga di comando supererebbe i 24.000 caratteri.
+        var files = new List<string>();
+        for (var i = 0; i < 200; i++)
+        {
+            var name = new string('n', 100) + (i % 10 == 0 ? $"_perché_{i}" : $"_{i}") + ".txt";
+            var path = Path.Combine(_wcDir, name);
+            await File.WriteAllTextAsync(path, $"contenuto {i}\n");
+            files.Add(path);
+        }
+
+        Assert.True(files.Sum(f => f.Length + 3) > SvnService.MaxCommandLineChars);
+
+        await _sut.AddAsync(files, CancellationToken.None);
+        Assert.Equal(200, (await _sut.GetStatusAsync(_wcDir, CancellationToken.None)).Count(s => s.Status == SvnStatusKind.Added));
+
+        await _sut.RevertAsync(files, CancellationToken.None);
+        Assert.Equal(200, (await _sut.GetStatusAsync(_wcDir, CancellationToken.None)).Count(s => s.Status == SvnStatusKind.Unversioned));
+
+        await _sut.AddAsync(files, CancellationToken.None);
+        var revision = await _sut.CommitAsync(files, "tanti file", CancellationToken.None);
+        Assert.Equal(1, revision);
+        Assert.Empty(await _sut.GetStatusAsync(_wcDir, CancellationToken.None));
+
+        await _sut.DeleteAsync(files, CancellationToken.None);
+        Assert.Equal(200, (await _sut.GetStatusAsync(_wcDir, CancellationToken.None)).Count(s => s.Status == SvnStatusKind.Deleted));
+    }
+
+    [Fact]
+    public async Task GetDiffForAiAsync_ConCentinaiaDiFileLunghi_SpezzaInPiuInvocazioni()
+    {
+        await CreateRepoAndCheckoutAsync();
+        var files = new List<string>();
+        for (var i = 0; i < 200; i++)
+        {
+            var path = Path.Combine(_wcDir, new string('m', 100) + $"_{i}.txt");
+            await File.WriteAllTextAsync(path, "uno\n");
+            files.Add(path);
+        }
+
+        await _sut.AddAsync(files, CancellationToken.None);
+        await _sut.CommitAsync(files, "init", CancellationToken.None);
+        foreach (var path in files)
+            await File.WriteAllTextAsync(path, "uno\nDUE\n");
+
+        var diff = await _sut.GetDiffForAiAsync(files, _wcDir, CancellationToken.None);
+
+        Assert.Equal(200, System.Text.RegularExpressions.Regex.Matches(
+            diff, @"^\+DUE", System.Text.RegularExpressions.RegexOptions.Multiline).Count);
+    }
+
+    [Fact]
+    public async Task FileConChiocciolaNelNome_AddCommitDiffRevertDelete_NonSonoLettiComePegRevision()
+    {
+        await CreateRepoAndCheckoutAsync();
+        var file = Path.Combine(_wcDir, "icona@2x.png");
+        await File.WriteAllTextAsync(file, "x\n");
+
+        await _sut.AddAsync([file], CancellationToken.None);
+        await _sut.CommitAsync([file], "icona", CancellationToken.None);
+        await File.WriteAllTextAsync(file, "y\n");
+        var diff = await _sut.GetDiffForAiAsync([file], _wcDir, CancellationToken.None);
+        await _sut.RevertAsync([file], CancellationToken.None);
+        await _sut.DeleteAsync([file], CancellationToken.None);
+
+        Assert.Contains("+y", diff);
+        Assert.Equal(SvnStatusKind.Deleted, Assert.Single(await _sut.GetStatusAsync(_wcDir, CancellationToken.None)).Status);
+    }
+
+    [Fact]
+    public async Task GetDiffForAiAsync_NomeConAccento_IntestazioniLeggibili()
+    {
+        // svn su Windows scrive le intestazioni nella codepage ANSI e il contenuto in UTF-8.
+        await CreateRepoAndCheckoutAsync();
+        Directory.CreateDirectory(Path.Combine(_wcDir, "sotto"));
+        var file = Path.Combine(_wcDir, "sotto", "città.cs");
+        await File.WriteAllTextAsync(file, "ciao\n");
+        await RunAsync(_svnExe, $"add \"{Path.Combine(_wcDir, "sotto")}\"", _wcDir);
+        await RunAsync(_svnExe, "commit -m init", _wcDir);
+        await File.WriteAllTextAsync(file, "ciao\nperché\n");
+
+        var diff = await _sut.GetDiffForAiAsync([file], _wcDir, CancellationToken.None);
+
+        Assert.Contains("Index: sotto/città.cs", diff);
+        Assert.Contains("--- sotto/città.cs\t", diff);
+        Assert.Contains("+++ sotto/città.cs\t", diff);
+        Assert.Contains("+perché", diff);
+        Assert.DoesNotContain('�', diff);
+    }
+
     // ─── Helper methods ───────────────────────────────────────────────
 
     /// <summary>

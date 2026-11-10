@@ -76,13 +76,13 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
         ShowFileDiffCommand = new AsyncCommand(ShowFileDiffAsync);
         ShowFolderDiffCommand = new AsyncCommand(ShowFolderDiffAsync);
         CloseDiffCommand = new AsyncCommand(CloseDiffAsync);
-        SelectAllCommand = new AsyncCommand((_, _) => SetAllSelected(true));
-        UnselectAllCommand = new AsyncCommand((_, _) => SetAllSelected(false));
+        SelectAllCommand = new AsyncCommand((_, _) => SetAllSelectedAsync(true));
+        UnselectAllCommand = new AsyncCommand((_, _) => SetAllSelectedAsync(false));
         ToggleExpandCommand = new AsyncCommand(ToggleExpandAsync);
-        ExpandAllCommand = new AsyncCommand((_, _) => SetAllExpanded(true));
-        CollapseAllCommand = new AsyncCommand((_, _) => SetAllExpanded(false));
-        ShowTreeViewCommand = new AsyncCommand((_, _) => SetTreeView(true));
-        ShowListViewCommand = new AsyncCommand((_, _) => SetTreeView(false));
+        ExpandAllCommand = new AsyncCommand((_, _) => SetAllExpandedAsync(true));
+        CollapseAllCommand = new AsyncCommand((_, _) => SetAllExpandedAsync(false));
+        ShowTreeViewCommand = new AsyncCommand((_, _) => SetTreeViewAsync(true));
+        ShowListViewCommand = new AsyncCommand((_, _) => SetTreeViewAsync(false));
         AddToSvnCommand = new AsyncCommand(AddAsync);
         DeleteFromSvnCommand = new AsyncCommand(DeleteAsync);
         RevertCommand = new AsyncCommand(RevertAsync);
@@ -491,7 +491,7 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
         UpdateCheckStates(forced: row);
     }
 
-    internal Task SetAllSelected(bool selected)
+    internal Task SetAllSelectedAsync(bool selected)
     {
         if (selected)
             _selection.UnionWith(_entries.Select(e => e.FullPath));
@@ -513,7 +513,7 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
         return Task.CompletedTask;
     }
 
-    internal Task SetAllExpanded(bool expanded)
+    internal Task SetAllExpandedAsync(bool expanded)
     {
         _collapsed.Clear();
         if (!expanded)
@@ -527,7 +527,7 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
         return Task.CompletedTask;
     }
 
-    internal Task SetTreeView(bool tree)
+    internal Task SetTreeViewAsync(bool tree)
     {
         IsTreeView = tree;
         ApplyEntries();
@@ -566,16 +566,27 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
         {
             SetStatus("Commit in corso...");
 
-            var toAdd = selected.Where(e => e.Status == SvnStatusKind.Unversioned).Select(e => e.FullPath).ToList();
+            // Come TortoiseSVN: le cartelle padre nuove (aggiunte o non versionate) di un elemento spuntato vanno
+            // nel commit anche se non spuntate, altrimenti svn rifiuta ("is not known to exist in the repository
+            // and is not part of the commit, yet its child is part of the commit").
+            var parents = NewParentFolders(selected);
+            var commitEntries = parents.Concat(selected).ToList();
+
+            var toAdd = commitEntries.Where(e => e.Status == SvnStatusKind.Unversioned).Select(e => e.FullPath).ToList();
             if (toAdd.Count > 0)
                 await _svnService.AddAsync(toAdd, ct);
 
-            var toDelete = selected.Where(e => e.Status == SvnStatusKind.Missing).Select(e => e.FullPath).ToList();
+            var toDelete = commitEntries.Where(e => e.Status == SvnStatusKind.Missing).Select(e => e.FullPath).ToList();
             if (toDelete.Count > 0)
                 await _svnService.DeleteAsync(toDelete, ct);
 
-            var paths = selected.Select(e => e.FullPath).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-            var revision = await _svnService.CommitAsync(paths, CommitMessage.Text.Trim(), ct);
+            // Una cartella non versionata spuntata è una riga sola ma contiene un albero: "svn add" lo aggiunge
+            // tutto, quindi nel commit entra per intero (le sue sottovoci non sono elencate singolarmente).
+            var wholeFolders = commitEntries
+                .Where(e => e.Status == SvnStatusKind.Unversioned && e.IsDirectory).Select(e => e.FullPath).ToList();
+
+            var paths = commitEntries.Select(e => e.FullPath).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var revision = await _svnService.CommitAsync(paths, CommitMessage.Text.Trim(), ct, wholeFolders);
 
             CommitMessage.Text = string.Empty;
             CommitMessage.AiStatus = string.Empty;
@@ -586,8 +597,37 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            SetStatus($"Errore commit: {ex.Message}");
+            // Add/delete già eseguiti prima del commit fallito (es. "fai prima Update"): la lista va riallineata.
+            await RefreshAsync(ct, reloadBranch: false, $"Errore commit: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Cartelle aggiunte (o non versionate) che contengono un elemento spuntato ma non sono spuntate esse stesse,
+    /// dalla più esterna alla più interna.
+    /// </summary>
+    private List<ChangeEntry> NewParentFolders(IReadOnlyList<ChangeEntry> selected)
+    {
+        var chosen = new HashSet<string>(selected.Select(e => e.FullPath), StringComparer.OrdinalIgnoreCase);
+        var byPath = _entries.ToDictionary(e => e.FullPath, StringComparer.OrdinalIgnoreCase);
+        var root = WorkingCopyPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var found = new Dictionary<string, ChangeEntry>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var entry in selected)
+        {
+            var parent = Path.GetDirectoryName(entry.FullPath);
+            while (!string.IsNullOrEmpty(parent) && parent.Length > root.Length
+                   && parent.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+            {
+                if (!chosen.Contains(parent) && byPath.TryGetValue(parent, out var folder)
+                    && folder.Status is SvnStatusKind.Added or SvnStatusKind.Unversioned or SvnStatusKind.Replaced)
+                    found[parent] = folder;
+
+                parent = Path.GetDirectoryName(parent);
+            }
+        }
+
+        return found.Values.OrderBy(e => e.FullPath.Length).ToList();
     }
 
     internal async Task UpdateAsync(object? parameter, CancellationToken ct)
@@ -668,7 +708,10 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
         try
         {
             SetStatus("Rimozione da SVN in corso...");
-            await _svnService.DeleteAsync([entry.FullPath], ct);
+            // Senza --force svn rifiuta file con modifiche locali (E195006): l'utente è stato già avvisato sopra.
+            var force = entry.Status is SvnStatusKind.Modified or SvnStatusKind.Replaced
+                or SvnStatusKind.Conflicted or SvnStatusKind.Added;
+            await _svnService.DeleteAsync([entry.FullPath], ct, force);
             await RefreshAsync(ct, reloadBranch: false, $"Elemento schedulato per delete: {entry.RelativePath}.");
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)

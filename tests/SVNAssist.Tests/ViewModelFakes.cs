@@ -47,14 +47,22 @@ internal sealed class FakeSvnService : ISvnService
         return Task.FromResult<IReadOnlyList<SvnFileStatus>>(Statuses.ToList());
     }
 
-    public Task<long?> CommitAsync(IEnumerable<string> paths, string message, CancellationToken ct)
+    public List<string> CommitWholeFolders { get; } = [];
+    public List<bool> DeleteForced { get; } = [];
+    public string? CommitError { get; set; }
+
+    public Task<long?> CommitAsync(
+        IEnumerable<string> paths, string message, CancellationToken ct, IEnumerable<string>? includeAllUnder = null)
     {
+        if (CommitError is not null)
+            throw new InvalidOperationException(CommitError);
+        CommitWholeFolders.AddRange(includeAllUnder ?? []);
         Commits.Add((paths.ToList(), message));
         return Task.FromResult<long?>(42);
     }
 
     public Task AddAsync(IEnumerable<string> paths, CancellationToken ct) { Added.Add(paths.ToList()); return Task.CompletedTask; }
-    public Task DeleteAsync(IEnumerable<string> paths, CancellationToken ct) { Deleted.Add(paths.ToList()); return Task.CompletedTask; }
+    public Task DeleteAsync(IEnumerable<string> paths, CancellationToken ct, bool force = false) { Deleted.Add(paths.ToList()); DeleteForced.Add(force); return Task.CompletedTask; }
     public Task RevertAsync(IEnumerable<string> paths, CancellationToken ct) { Reverted.Add(paths.ToList()); return Task.CompletedTask; }
     public Task ResolveAsync(string path, SvnConflictChoice accept, CancellationToken ct) { Resolved.Add((path, accept)); return Task.CompletedTask; }
     public Task AddToIgnoreListAsync(string path, CancellationToken ct) { Ignored.Add(path); return Task.CompletedTask; }

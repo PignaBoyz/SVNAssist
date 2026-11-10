@@ -15,8 +15,16 @@
     <PackageReference Include="coverlet.collector" Version="10.1.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.11.1" />
     <PackageReference Include="Microsoft.VisualStudio.Extensibility.Framework" Version="17.14.2098" />
+    <!-- Versioni risolte da NuGet (le minime dichiarate dall'Extensibility Framework non esistono più sul feed:
+         NU1603). Referenziarle esplicitamente evita il warning senza nasconderlo. -->
+    <PackageReference Include="Microsoft.NET.StringTools" Version="17.13.9" />
+    <PackageReference Include="Microsoft.ServiceHub.Framework" Version="4.8.55" />
+    <PackageReference Include="Microsoft.ServiceHub.Resources" Version="4.5.2035" />
+    <PackageReference Include="Microsoft.VisualStudio.RpcContracts" Version="17.14.20" />
+    <PackageReference Include="Microsoft.VisualStudio.Telemetry" Version="17.14.2" />
     <PackageReference Include="Nerdbank.Streams" Version="2.12.87" />
     <PackageReference Include="RichardSzalay.MockHttp" Version="7.1.0" />
+    <PackageReference Include="StreamJsonRpc" Version="2.21.69" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1" />
   </ItemGroup>

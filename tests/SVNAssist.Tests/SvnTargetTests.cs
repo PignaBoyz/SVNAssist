@@ -25,6 +25,20 @@ public class SvnTargetTests : IDisposable
     }
 
     [Fact]
+    public void Resolve_FileInUnAlberoMoltoProfondo_TrovaComunqueLaRoot()
+    {
+        // Prima la ricerca si fermava a 10 livelli: i progetti annidati risultavano "non working copy".
+        var deep = Path.Combine(_root, "wc", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l");
+        Directory.CreateDirectory(deep);
+        var file = Path.Combine(deep, "Deep.cs");
+        File.WriteAllText(file, "x");
+
+        var target = SvnTarget.Resolve(file);
+
+        Assert.Equal(Path.Combine(_root, "wc"), target!.WorkingCopyRoot);
+    }
+
+    [Fact]
     public void Resolve_PercorsoVuotoOInesistente_RestituisceNull()
     {
         Assert.Null(SvnTarget.Resolve(null));
