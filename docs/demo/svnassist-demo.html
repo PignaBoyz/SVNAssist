@@ -1,0 +1,1902 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SVNAssist - Demo interattiva</title>
+<style>
+:root{
+  --bg0:#181818; --bg1:#1f1f1f; --bg2:#252526; --bg3:#2d2d30; --bg4:#37373d; --bd:#3f3f46; --bd2:#4b4b52;
+  --fg:#d4d4d4; --fg2:#9d9d9d; --fg3:#6e6e6e; --acc:#0e70c0; --acc2:#1c97ea; --acc-bg:#04395e;
+  --ok:#4ec9b0; --warn:#e5b84b; --err:#f48771; --pur:#b180d7;
+  --st-M:#1e90ff; --st-A:#3fb950; --st-D:#dc143c; --st-C:#ff4040; --st-U:#8a9bab; --st-X:#ff8c00; --st-R:#9370db;
+  --font:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif; --mono:Consolas,"Cascadia Mono","Courier New",monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg0);color:var(--fg);font:13px/1.4 var(--font);overflow:hidden;display:flex;flex-direction:column;height:100vh}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--acc2);outline-offset:1px}
+[hidden]{display:none!important}
+.btn{background:var(--bg4);border:1px solid var(--bd2);border-radius:2px;padding:3px 10px;color:var(--fg)}
+.btn:hover:not(:disabled){background:#45454c;border-color:var(--acc2)}
+.btn:disabled{opacity:.45;cursor:default}
+.btn.primary{background:var(--acc);border-color:var(--acc);color:#fff}
+.btn.primary:hover:not(:disabled){background:var(--acc2)}
+.btn.sm{padding:1px 7px;font-size:11px}
+.btn.ghost{background:transparent;border-color:transparent}
+.btn.ghost:hover:not(:disabled){background:var(--bg4);border-color:var(--bd2)}
+input[type=text],input[type=number],textarea,select{background:var(--bg1);border:1px solid var(--bd2);border-radius:2px;padding:3px 6px;width:100%}
+textarea{resize:vertical;font-family:var(--font)}
+.spin{display:inline-block;width:11px;height:11px;border:2px solid var(--fg3);border-top-color:var(--acc2);border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px;margin-right:5px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.tag{display:inline-block;font-size:10px;padding:1px 6px;border-radius:9px;background:#5a3d00;color:#ffd27a;border:1px solid #8a6100;white-space:nowrap}
+.tag.soon{background:#3b2a52;color:#d9b8ff;border-color:#6a4a8f}
+.tag.info{background:#10324f;color:#9fd0ff;border-color:#1c5a91}
+.tag.ok{background:#12372d;color:#8be3c7;border-color:#1d6b55}
+.muted{color:var(--fg2)} .small{font-size:11px}
+
+/* ---------- barra superiore della demo ---------- */
+.demo-top{min-height:46px;display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding:4px 14px;flex:none;background:#0f0f10;border-bottom:1px solid var(--bd)}
+.demo-top h1{font-size:15px;margin:0;font-weight:600;white-space:nowrap}
+.demo-top h1 span{color:var(--acc2)}
+.tabs{display:flex;gap:2px}
+.tabs button{background:transparent;border:0;border-bottom:2px solid transparent;padding:12px 12px 10px;color:var(--fg2)}
+.tabs button[aria-selected=true]{color:#fff;border-bottom-color:var(--acc2)}
+.tabs button:hover{color:#fff}
+.demo-top .sp{flex:1}
+#page{flex:1;min-height:0;position:relative}
+.view{height:100%}
+.sim{display:flex;height:100%}
+.vs{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg1)}
+.sim-panel{width:330px;flex:none;background:var(--bg2);border-left:1px solid var(--bd);overflow:auto;padding:10px 12px 40px}
+body.panel-closed .sim-panel{display:none}
+@media (max-width:1250px){
+  .sim-panel{position:absolute;right:0;top:0;bottom:0;z-index:40;box-shadow:-8px 0 24px #000a}
+}
+
+/* ---------- Visual Studio mock ---------- */
+.vs-title{height:30px;display:flex;align-items:center;background:var(--bg0);border-bottom:1px solid var(--bd);padding-left:8px;gap:2px;position:relative}
+.vs-logo{width:18px;height:18px;margin-right:6px;background:linear-gradient(135deg,#8661c5,#5c2d91);border-radius:3px;color:#fff;font-weight:700;font-size:11px;display:grid;place-items:center}
+.menubar{display:flex;gap:0}
+.menubar>div{position:relative}
+.menubar>div>button{background:transparent;border:0;padding:5px 9px;font-size:12.5px}
+.menubar>div>button:hover,.menubar>div>button[aria-expanded=true]{background:var(--bg4)}
+.vs-title .sp{flex:1}
+.vs-title .sol-name{color:var(--fg2);font-size:12px;margin-right:14px}
+.dd{position:absolute;top:100%;left:0;min-width:230px;background:var(--bg3);border:1px solid var(--bd2);box-shadow:0 6px 18px #000a;padding:3px 0;z-index:60}
+.dd button,.ctx button{display:flex;width:100%;justify-content:space-between;gap:20px;background:transparent;border:0;text-align:left;padding:4px 22px 4px 18px;font-size:12.5px;white-space:nowrap}
+.dd button:hover:not(:disabled),.ctx button:hover:not(:disabled){background:var(--acc-bg)}
+.dd button:disabled,.ctx button:disabled{color:var(--fg3);cursor:default}
+.dd hr,.ctx hr{border:0;border-top:1px solid var(--bd);margin:3px 0}
+.dd .sub{position:relative}
+.dd .sub>.dd{left:100%;top:-4px}
+.dd kbd{color:var(--fg3);font-family:inherit;font-size:11px}
+.vs-body{flex:1;display:flex;min-height:0}
+.se{width:230px;flex:none;background:var(--bg2);border-right:1px solid var(--bd);display:flex;flex-direction:column;min-height:0}
+.pane-h{background:var(--bg3);padding:5px 8px;font-size:11.5px;text-transform:none;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--bd);min-height:27px}
+.se-tree{flex:1;overflow:auto;padding:4px 0}
+.se-empty{padding:16px 12px;color:var(--fg2)}
+.node{display:flex;align-items:center;gap:5px;padding:2px 6px;cursor:default;white-space:nowrap;border:0;background:transparent;width:100%;text-align:left;font-size:12.5px}
+.node:hover{background:var(--bg4)}
+.node.sel{background:var(--acc-bg)}
+.node .ic{width:14px;text-align:center;color:var(--fg2);font-size:11px;flex:none}
+.node .cs{color:#68b36b}.node .cfg{color:#9aa}.node .fld{color:#dcb67a}
+.center{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg1)}
+.doc-tabs{display:flex;background:var(--bg0);border-bottom:1px solid var(--bd);min-height:30px;overflow:hidden}
+.doc-tabs button{background:transparent;border:0;border-right:1px solid var(--bd);padding:6px 12px;color:var(--fg2);font-size:12.5px;white-space:nowrap}
+.doc-tabs button[aria-selected=true]{background:var(--bg1);color:#fff;border-top:2px solid var(--acc2);padding-top:4px}
+.doc-body{flex:1;min-height:0;position:relative;display:flex;flex-direction:column}
+.editor{flex:1;display:flex;min-height:0}
+.gutter{background:var(--bg1);color:var(--fg3);font:12px/1.5 var(--mono);text-align:right;padding:8px 8px 8px 12px;user-select:none;overflow:hidden;white-space:pre}
+.editor textarea{flex:1;border:0;border-radius:0;background:var(--bg1);font:12px/1.5 var(--mono);padding:8px;resize:none;white-space:pre;overflow:auto;width:auto}
+.ed-bar{display:flex;align-items:center;gap:10px;padding:4px 10px;background:var(--bg2);border-top:1px solid var(--bd);font-size:11.5px;color:var(--fg2)}
+.welcome{margin:auto;max-width:430px;text-align:center;color:var(--fg2);padding:20px}
+.welcome h2{color:var(--fg);font-weight:400;margin:0 0 8px}
+.dock{width:470px;flex:none;background:var(--bg2);border-left:1px solid var(--bd);display:flex;flex-direction:column;min-height:0}
+.dock-tabs{display:flex;background:var(--bg3);border-bottom:1px solid var(--bd)}
+.dock-tabs button{background:transparent;border:0;padding:5px 12px;color:var(--fg2);font-size:12px;border-top:2px solid transparent}
+.dock-tabs button[aria-selected=true]{color:#fff;background:var(--bg2);border-top-color:var(--acc2)}
+.dock-tabs .x{padding:5px 7px;margin-left:-8px;color:var(--fg3)}
+.dock-body{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column}
+.dock-empty{margin:auto;padding:20px;text-align:center;color:var(--fg2)}
+.vs-status{height:23px;background:#68217a;color:#fff;display:flex;align-items:center;padding:0 10px;font-size:12px;gap:16px}
+.vs-status.err{background:#a1260d}
+.vs-status .sp{flex:1}
+@media (max-width:1100px){.se{width:170px}.dock{width:400px}}
+
+/* ---------- tool window: SVN Changes ---------- */
+.tw{display:flex;flex-direction:column;height:100%;padding:6px 8px;gap:4px;min-height:0;overflow-y:auto}
+.tw .row{display:flex;align-items:center;gap:6px}
+.tw hr{border:0;border-top:1px solid var(--bd);margin:3px 0;width:100%}
+.branch{font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#commitMsg{min-height:54px;max-height:110px}
+.ai-status{font-size:11px;color:var(--fg2)}
+.trace{display:flex;flex-wrap:wrap;gap:4px;align-items:center;font-size:11px;margin-top:2px}
+.chip{padding:1px 7px;border-radius:9px;border:1px solid var(--bd2);background:var(--bg3);white-space:nowrap}
+.chip.ok{border-color:#1d6b55;background:#12372d;color:#8be3c7}
+.chip.fail{border-color:#8a3a2a;background:#3d1d17;color:#ffb3a3}
+.chip.skip{color:var(--fg3);border-style:dashed}
+.chip.run{border-color:#1c5a91;background:#10324f;color:#9fd0ff}
+.pbar{height:8px;background:var(--bg1);border:1px solid var(--bd2);border-radius:4px;overflow:hidden;margin:3px 0}
+.pbar>i{display:block;height:100%;background:linear-gradient(90deg,var(--acc),var(--acc2));width:0}
+.dl{background:var(--bg3);border:1px solid var(--bd2);padding:6px 8px;border-radius:3px;font-size:11.5px}
+.list-h{display:flex;align-items:center;gap:6px;justify-content:space-between}
+.flist{flex:1 1 150px;min-height:150px;overflow:auto;background:var(--bg1);border:1px solid var(--bd)}
+.frow{display:grid;grid-template-columns:auto 20px 88px 1fr auto;align-items:center;gap:6px;padding:2px 6px}
+.frow:hover{background:var(--bg3)}
+.frow .st{font:700 12px var(--mono);text-align:center}
+.frow .pth{background:transparent;border:0;text-align:left;padding:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px;color:var(--fg)}
+.frow .act{font-size:12px;color:var(--fg2)}
+.frow.ctxed{background:var(--acc-bg)}
+.grow{display:flex;align-items:center;gap:5px;padding:2px 6px;min-height:25px;white-space:nowrap}
+.grow:hover{background:var(--bg3)} .grow.cur{background:var(--acc-bg)}
+.grow input[type=checkbox]{margin:0;flex:none}
+.grow .chev{width:16px;flex:none;background:transparent;border:0;padding:0;color:var(--fg2);text-align:center;font-size:11px}
+.grow .nm{background:transparent;border:0;padding:0;text-align:left;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto;color:var(--fg)}
+.grow .fill{flex:1 1 0}
+.grow .dirp{color:var(--fg3);font-size:11.5px;overflow:hidden;text-overflow:ellipsis;flex:1 1 0;min-width:0;margin-left:2px}
+.grow .btn{flex:none}
+.srow{background:var(--bg3);font-weight:600;border-bottom:1px solid var(--bd);position:sticky;top:0;z-index:1}
+.btn[aria-pressed=true]{background:var(--acc-bg);border-color:var(--acc2)}
+.empty-list{padding:16px;text-align:center;color:var(--fg2)}
+.diffbox{display:flex;flex-direction:column;height:210px;flex:none}
+.diffpre{flex:1;margin:0;overflow:auto;background:var(--bg1);border:1px solid var(--bd);font:11.5px/1.45 var(--mono);padding:4px 0;white-space:pre}
+.diffpre div{padding:0 8px;min-height:1.45em}
+.diffpre .add{background:#12331c;color:#9be5a8}.diffpre .del{background:#3b1519;color:#ffb0ab}.diffpre .hunk{color:#7cb7ff;background:#13263d}.diffpre .meta{color:var(--fg2)}
+.tw-status{font-style:italic;color:var(--fg);padding:2px 0 0;font-size:12px}
+.tw-status.err{color:var(--err)}
+.watch{font-size:10.5px;color:var(--fg3);display:flex;gap:8px;align-items:center}
+.watch .dot{width:7px;height:7px;border-radius:50%;background:#3fb950;display:inline-block}
+.watch .dot.fire{background:var(--warn);box-shadow:0 0 6px var(--warn)}
+.ctx{position:fixed;background:var(--bg3);border:1px solid var(--bd2);box-shadow:0 6px 18px #000a;padding:3px 0;z-index:200;min-width:190px}
+/* log */
+.logwin{display:flex;flex-direction:column;height:100%;padding:8px 10px;gap:6px;min-height:0}
+.logwin .row{display:flex;gap:8px;align-items:center}
+.logwin label{white-space:nowrap}
+.loglist{flex:1;min-height:100px;overflow:auto;border:1px solid var(--bd);background:var(--bg1)}
+.logrow{display:grid;grid-template-columns:60px 100px 130px 1fr;width:100%;background:transparent;border:0;text-align:left;padding:2px 4px;gap:4px;border-bottom:1px solid #2a2a2a}
+.logrow:hover{background:var(--bg3)}
+.logrow.sel{background:var(--acc-bg)}
+.logrow b{font-weight:700}
+.logrow .m{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ---------- sim panel ---------- */
+.sim-panel h3{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--fg2);margin:16px 0 6px;font-weight:600}
+.sim-panel h3:first-child{margin-top:0}
+.tg{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:12.5px;cursor:pointer}
+.tg input{width:auto;accent-color:var(--acc2)}
+.tg .hint{font-size:10.5px;color:var(--fg3);display:block}
+.sim-panel .btn{margin:2px 4px 2px 0}
+.cmdlog{background:var(--bg0);border:1px solid var(--bd);height:130px;overflow:auto;font:11px/1.4 var(--mono);padding:5px 7px;color:#b5c7d6;white-space:pre-wrap}
+.cmdlog .c{color:#e5c07b}
+.note{background:#10324f;border:1px solid #1c5a91;color:#bfe0ff;border-radius:3px;padding:6px 8px;font-size:11.5px;margin:6px 0}
+.chain{font-size:11.5px;color:var(--fg2);margin-top:4px}
+
+/* ---------- modali ---------- */
+#overlay{position:fixed;inset:0;background:#000a;display:none;z-index:300;align-items:center;justify-content:center;padding:20px}
+#overlay.on{display:flex}
+.modal{background:var(--bg2);border:1px solid var(--bd2);box-shadow:0 12px 48px #000d;min-width:360px;max-width:min(680px,96vw);max-height:92vh;display:flex;flex-direction:column}
+.modal.wide{width:min(900px,96vw);max-width:96vw}
+.m-title{padding:8px 12px;background:var(--bg3);border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;font-weight:600;font-size:12.5px}
+.m-body{padding:16px 16px 12px;overflow:auto;white-space:normal}
+.m-body.msg{display:flex;gap:14px}
+.m-ico{font-size:28px;line-height:1}
+.m-body p{margin:0 0 8px;white-space:pre-wrap}
+.m-foot{padding:10px 14px;display:flex;justify-content:flex-end;gap:8px;background:var(--bg3);border-top:1px solid var(--bd);flex-wrap:wrap;align-items:center}
+.m-foot .l{margin-right:auto}
+.banner{background:#3b2a52;color:#e6d0ff;border:1px dashed #8a63b8;padding:5px 10px;font-size:11.5px;text-align:center}
+.opt-grid{display:grid;grid-template-columns:200px 1fr;gap:0;min-height:380px}
+.opt-tree{background:var(--bg1);border-right:1px solid var(--bd);padding:6px 0;font-size:12.5px}
+.opt-tree div{padding:3px 12px;color:var(--fg2)}
+.opt-tree .on{background:var(--acc-bg);color:#fff}
+.opt-form{padding:10px 14px;overflow:auto;max-height:62vh}
+.opt-row{margin-bottom:11px}
+.opt-row label{display:block;font-size:12px;margin-bottom:3px}
+.opt-row .h{font-size:11px;color:var(--fg3);margin-top:2px}
+.opt-row .bad{color:var(--warn)}
+#toasts{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);display:flex;flex-direction:column;gap:6px;z-index:500;align-items:center;pointer-events:none}
+.toast{background:#0b3a63;border:1px solid var(--acc2);padding:8px 16px;border-radius:3px;box-shadow:0 4px 16px #000a;animation:fi .2s;max-width:80vw}
+@keyframes fi{from{opacity:0;transform:translateY(8px)}}
+.vsix{width:520px}
+.vsix .row{display:flex;gap:12px;align-items:center}
+.vsix .logo{width:54px;height:54px;border-radius:8px;background:linear-gradient(135deg,#0e70c0,#5c2d91);display:grid;place-items:center;font-weight:700;font-size:20px;color:#fff}
+
+/* ---------- tour ---------- */
+#tour{flex:none;background:#12263a;border-top:2px solid var(--acc2);padding:8px 14px 10px;max-height:40vh;overflow:auto;position:relative;z-index:30}
+#tour .tcard{display:flex;gap:18px;align-items:flex-start}
+#tour .tl{flex:1;min-width:0}
+#tour .tr{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;max-width:360px}
+#tour .th2{display:flex;gap:12px;align-items:center;font-size:12px;color:#9fd0ff;margin-bottom:2px}
+#tour h4{margin:0 0 3px;font-size:14px}
+#tour p{margin:0 0 5px;font-size:12.5px}
+#tour .done{color:var(--ok);font-weight:600}
+#tour .hint{background:#0b1b2b;border-left:3px solid var(--acc2);padding:5px 8px;font-size:11.5px;margin:5px 0}
+#tour .ptr{font-size:11.5px;color:#ffd24a}
+.dots{display:flex;gap:4px}.dots i{width:18px;height:4px;background:#2c4a66;border-radius:2px}.dots i.on{background:var(--acc2)}.dots i.cur{background:#fff}
+.tour-target{outline:2px solid #ffd24a!important;outline-offset:2px;animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{50%{outline-color:#ffd24a00}}
+@media (max-width:800px){#tour .tcard{flex-direction:column;gap:6px}#tour .tr{justify-content:flex-start;max-width:none}#tour{max-height:34vh;padding:6px 12px}#tour .btn{padding:2px 8px}.demo-top .btn{padding:2px 8px}}
+
+/* ---------- prerequisiti ---------- */
+.prq{flex:none;background:var(--bg3);border:1px solid var(--bd2);padding:6px 8px;max-height:46%;overflow:auto;flex:none}
+.prq h5{margin:8px 0 2px;font-size:11px;color:var(--fg2);text-transform:uppercase;letter-spacing:.05em}
+.prow{display:flex;gap:6px;align-items:flex-start;padding:3px 0;border-bottom:1px solid #333}
+.prow .pi{width:16px;flex:none;font-weight:700;text-align:center}
+.prow .pi.ok{color:var(--ok)}.prow .pi.ko{color:var(--err)}
+.prow .pn{flex:1;min-width:0;font-size:12px}
+.prow .pb{display:flex;gap:4px;flex-wrap:wrap}
+pre.cmd{background:#0c0c0c;border:1px solid var(--bd);padding:6px 8px;font:12px/1.4 var(--mono);white-space:pre-wrap;word-break:break-all;margin:4px 0}
+
+/* ---------- layout stretto ---------- */
+.nv{display:none;gap:3px;margin-left:8px}
+.dock{container-type:inline-size}
+@container (max-width:420px){.frow{grid-template-columns:auto 18px 1fr auto}.frow .act{display:none}}
+.tw .row{flex-wrap:wrap}
+.modal{min-width:min(360px,92vw)}
+@media (max-width:1000px){
+  .nv{display:flex}
+  .menubar>div.dummy{display:none}
+  .se{display:none;position:absolute;left:0;top:30px;bottom:23px;z-index:50;box-shadow:6px 0 18px #000a;width:230px}
+  .vs-body.se-open .se{display:flex}
+  .vs-body.v-doc .dock{display:none}
+  .vs-body.v-dock .center{display:none}
+  .dock{width:100%;border-left:0}
+  .vs-title .sol-name{display:none}
+}
+@media (max-width:700px){.demo-top .tag{display:none}.demo-top h1{font-size:13px}}
+
+/* ---------- prossimamente ---------- */
+.soon-wrap{height:100%;overflow:auto;padding:22px 26px 60px;background:var(--bg0)}
+.soon-wrap h2{margin:0 0 4px}
+.soon-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;margin-top:16px}
+.card{position:relative;background:var(--bg2);border:1px dashed var(--bd2);padding:14px;border-radius:4px;filter:saturate(.35);opacity:.92}
+.card h3{margin:0 0 6px;font-size:14px;color:#cfcfcf}
+.card p{margin:0 0 10px;color:var(--fg2);font-size:12.5px}
+.card .tag{position:absolute;top:10px;right:10px}
+.card ul{margin:0 0 10px;padding-left:18px;color:var(--fg2);font-size:12px}
+.blame{font:12px/1.5 var(--mono);width:100%;border-collapse:collapse}
+.blame td{padding:0 6px;white-space:pre}
+.blame td:nth-child(1){color:var(--fg3)}.blame td:nth-child(2){color:var(--acc2)}.blame td:nth-child(3){color:var(--ok)}
+.blame tr:hover{background:var(--bg3)}
+.three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.three pre{margin:0;background:var(--bg1);border:1px solid var(--bd);padding:6px;font:11.5px/1.45 var(--mono);height:190px;overflow:auto}
+.three h5{margin:0 0 3px;font-size:11.5px;color:var(--fg2)}
+.sugg{position:absolute;background:var(--bg3);border:1px solid var(--bd2);box-shadow:0 6px 16px #000a;z-index:5;min-width:280px}
+.sugg button{display:block;width:100%;background:transparent;border:0;text-align:left;padding:4px 8px}
+.sugg button:hover,.sugg button.on{background:var(--acc-bg)}
+</style>
+</head>
+<body class="panel-closed">
+<header class="demo-top">
+  <h1>SVN<span>Assist</span> &middot; demo interattiva</h1>
+  <nav class="tabs" role="tablist" aria-label="Sezioni della demo">
+    <button role="tab" id="tabbtn-sim" aria-selected="true" data-act="tab" data-arg="sim">Simulazione</button>
+    <button role="tab" id="tabbtn-soon" aria-selected="false" data-act="tab" data-arg="soon">Prossimamente</button>
+  </nav>
+  <span class="tag info" title="Tutto quello che vedi e' simulato in memoria nel browser">Simulazione: nessuna connessione reale</span>
+  <span class="sp"></span>
+  <button class="btn" data-act="tourStart">Primo utilizzo (tour)</button>
+  <button class="btn" id="btnPanel" data-act="togglePanel" aria-pressed="false">Pannello simulazione</button>
+  <button class="btn" data-act="reset">Reset demo</button>
+</header>
+<main id="page">
+  <section class="view" id="view-sim">
+    <div class="sim">
+      <div class="vs" id="vs">
+        <div class="vs-title">
+          <div class="vs-logo" aria-hidden="true">VS</div>
+          <div class="menubar" id="menubar" role="menubar"></div>
+          <div class="nv"><button class="btn sm" data-act="nvSe">Esplora</button><button class="btn sm" data-act="nvView" data-arg="doc">Editor / Log</button><button class="btn sm" data-act="nvView" data-arg="dock">SVN Changes</button></div>
+          <div class="sp"></div>
+          <span class="sol-name" id="solName"></span>
+        </div>
+        <div class="vs-body v-dock" id="vsBody">
+          <aside class="se" aria-label="Esplora soluzioni">
+            <div class="pane-h"><span>Esplora soluzioni</span><span class="muted small" id="seNote"></span></div>
+            <div class="se-tree" id="seTree"></div>
+          </aside>
+          <div class="center">
+            <div class="doc-tabs" id="docTabs" role="tablist"></div>
+            <div class="doc-body" id="docBody"></div>
+          </div>
+          <aside class="dock" id="dock" aria-label="Finestre strumenti"></aside>
+        </div>
+        <div class="vs-status" id="vsStatus"></div>
+      </div>
+      <aside class="sim-panel" id="simPanel" aria-label="Pannello simulazione"></aside>
+    </div>
+  </section>
+  <section class="view" id="view-soon" hidden></section>
+</main>
+<div id="overlay" role="presentation"></div>
+<div id="toasts" aria-live="polite"></div>
+<div id="ctxhost"></div>
+<div id="tour" hidden role="dialog" aria-label="Tour primo utilizzo"></div>
+<script>
+'use strict';
+/* =====================================================================
+   SVNAssist - demo interattiva. Tutto e' simulato in memoria.
+   Organizzazione:  utilita' -> dati di esempio -> diff -> stato (S)
+   -> livello "svn" simulato -> AI -> view model -> render -> azioni -> tour
+   ===================================================================== */
+
+// ---------- utilita' ----------
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const pad = n => String(n).padStart(2, '0');
+const fmtDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const WC = 'C:\\dev\\Acme.Shop';
+const USER = 'andre';
+const GH_MODELS = 'https://models.github.ai/inference/chat/completions';
+const base = p => p.split('\\').pop();
+const parentDir = p => { const i = p.lastIndexOf('\\'); return i < 0 ? '.' : p.slice(0, i); };
+const fwd = p => p.replace(/\\/g, '/');
+
+// ---------- contenuti dei file di esempio ----------
+const T = {};
+T.orderBase = `using System;
+using System.Linq;
+
+namespace Acme.Shop.Core.Services
+{
+    public class OrderService
+    {
+        private readonly IInventoryService _inventory;
+
+        public OrderService(IInventoryService inventory)
+        {
+            _inventory = inventory;
+        }
+
+        public decimal CalculateTotal(Order order)
+        {
+            return order.Lines.Sum(l => l.Price * l.Quantity);
+        }
+    }
+}`;
+T.orderMod = `using System;
+using System.Linq;
+using Acme.Shop.Core.Models;
+
+namespace Acme.Shop.Core.Services
+{
+    public class OrderService
+    {
+        private readonly IInventoryService _inventory;
+
+        public OrderService(IInventoryService inventory)
+        {
+            _inventory = inventory;
+        }
+
+        public decimal CalculateTotal(Order order)
+        {
+            var subtotal = order.Lines.Sum(l => l.Price * l.Quantity);
+            if (order.Coupon == null)
+                return subtotal;
+
+            // il coupon non puo' mai portare il totale sotto zero
+            return Math.Max(0, order.Coupon.Apply(subtotal));
+        }
+    }
+}`;
+T.cartBase = `using Microsoft.AspNetCore.Mvc;
+
+namespace Acme.Shop.Web.Controllers
+{
+    public class CartController : Controller
+    {
+        private readonly OrderService _orders;
+
+        public CartController(OrderService orders) => _orders = orders;
+
+        public IActionResult Index()
+        {
+            var order = _orders.GetCurrent(User);
+            return View(order);
+        }
+    }
+}`;
+T.cartMod = `using Microsoft.AspNetCore.Mvc;
+
+namespace Acme.Shop.Web.Controllers
+{
+    public class CartController : Controller
+    {
+        private readonly OrderService _orders;
+
+        public CartController(OrderService orders) => _orders = orders;
+
+        public IActionResult Index()
+        {
+            var order = _orders.GetCurrent(User);
+            return View(order);
+        }
+
+        [HttpPost]
+        public IActionResult ApplyCoupon(string code)
+        {
+            var ok = _orders.TryApplyCoupon(User, code);
+            TempData["Coupon"] = ok ? "Coupon applicato" : "Coupon non valido";
+            return RedirectToAction(nameof(Index));
+        }
+    }
+}`;
+T.checkoutBase = `using Microsoft.AspNetCore.Mvc;
+
+namespace Acme.Shop.Web.Controllers
+{
+    public class CheckoutController : Controller
+    {
+        private readonly PaymentGateway _gateway;
+
+        public CheckoutController(PaymentGateway gateway) => _gateway = gateway;
+
+        [HttpPost]
+        public IActionResult Pay(PaymentRequest request)
+        {
+            var result = _gateway.Charge(request);
+            return result.Success ? RedirectToAction("Done") : View("Error");
+        }
+    }
+}`;
+T.checkoutConf = `using Microsoft.AspNetCore.Mvc;
+
+namespace Acme.Shop.Web.Controllers
+{
+    public class CheckoutController : Controller
+    {
+        private readonly PaymentGateway _gateway;
+
+        public CheckoutController(PaymentGateway gateway) => _gateway = gateway;
+
+        [HttpPost]
+        public IActionResult Pay(PaymentRequest request)
+        {
+<<<<<<< .mine
+            var result = _gateway.Charge(request, retries: 3);
+            _log.Info($"Pagamento {request.OrderId}: {result.Success}");
+=======
+            var result = _gateway.ChargeAsync(request).GetAwaiter().GetResult();
+>>>>>>> .r125
+            return result.Success ? RedirectToAction("Done") : View("Error");
+        }
+    }
+}`;
+T.checkoutMerged = `using Microsoft.AspNetCore.Mvc;
+
+namespace Acme.Shop.Web.Controllers
+{
+    public class CheckoutController : Controller
+    {
+        private readonly PaymentGateway _gateway;
+
+        public CheckoutController(PaymentGateway gateway) => _gateway = gateway;
+
+        [HttpPost]
+        public IActionResult Pay(PaymentRequest request)
+        {
+            var result = _gateway.ChargeAsync(request, retries: 3).GetAwaiter().GetResult();
+            _log.Info($"Pagamento {request.OrderId}: {result.Success}");
+            return result.Success ? RedirectToAction("Done") : View("Error");
+        }
+    }
+}`;
+T.checkoutUpstream = T.checkoutBase.replace('var result = _gateway.Charge(request);', 'var result = _gateway.ChargeAsync(request).GetAwaiter().GetResult();');
+T.payBase = `namespace Acme.Shop.Core.Services
+{
+    public class PaymentGateway
+    {
+        public PaymentResult Charge(PaymentRequest request)
+        {
+            // vecchia integrazione sincrona
+            return LegacyClient.Send(request.Amount, request.CardToken);
+        }
+    }
+}`;
+T.payNew = `using System.Net.Http;
+using System.Threading.Tasks;
+
+namespace Acme.Shop.Core.Services
+{
+    public class PaymentGateway
+    {
+        private readonly HttpClient _http;
+
+        public PaymentGateway(HttpClient http) => _http = http;
+
+        public async Task<PaymentResult> ChargeAsync(PaymentRequest request, int retries = 3)
+        {
+            for (var i = 0; i < retries; i++)
+            {
+                var res = await _http.PostAsJsonAsync("/v2/charges", request);
+                if (res.IsSuccessStatusCode)
+                    return await res.Content.ReadFromJsonAsync<PaymentResult>();
+            }
+            return PaymentResult.Failed;
+        }
+    }
+}`;
+T.legacyBase = `namespace Acme.Shop.Core.Services
+{
+    [Obsolete("Usare OrderService.CalculateTotal")]
+    public static class LegacyPriceCalculator
+    {
+        public static decimal Total(decimal[] prices)
+        {
+            decimal t = 0;
+            foreach (var p in prices) t += p;
+            return t;
+        }
+    }
+}`;
+T.couponNew = `namespace Acme.Shop.Core.Models
+{
+    public class Coupon
+    {
+        public string Code { get; set; }
+        public decimal Percent { get; set; }
+        public DateTime ExpiresOn { get; set; }
+
+        public decimal Apply(decimal subtotal)
+        {
+            if (DateTime.UtcNow > ExpiresOn)
+                return subtotal;
+            return subtotal - subtotal * Percent / 100m;
+        }
+    }
+}`;
+T.cshtmlBase = `@model Acme.Shop.Core.Models.Order
+
+<h2>Il tuo carrello</h2>
+<table class="table">
+@foreach (var l in Model.Lines)
+{
+  <tr><td>@l.Name</td><td>@l.Quantity</td><td>@l.Price</td></tr>
+}
+</table>`;
+T.invBase = `namespace Acme.Shop.Core.Services
+{
+    public interface IInventoryService
+    {
+        int Available(string sku);
+        void Reserve(string sku, int qty);
+    }
+
+    public class InventoryService : IInventoryService
+    {
+        private readonly IStockRepository _repo;
+        public InventoryService(IStockRepository repo) => _repo = repo;
+
+        public int Available(string sku) => _repo.GetQty(sku);
+        public void Reserve(string sku, int qty) => _repo.Decrease(sku, qty);
+    }
+}`;
+T.progBase = `var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddControllersWithViews();
+builder.Services.AddScoped<OrderService>();
+builder.Services.AddScoped<IInventoryService, InventoryService>();
+
+var app = builder.Build();
+app.UseStaticFiles();
+app.MapDefaultControllerRoute();
+app.Run();`;
+T.orderModel = `namespace Acme.Shop.Core.Models
+{
+    public class Order
+    {
+        public int Id { get; set; }
+        public List<OrderLine> Lines { get; set; } = new();
+        public Coupon Coupon { get; set; }
+    }
+}`;
+T.notes = `TODO (appunti locali)
+- chiedere a Marco il formato dei coupon
+- verificare scadenze in UTC
+- aggiungere test per Coupon.Apply`;
+T.export = `param([string]$Out = ".\\orders.csv")
+Get-Content .\\data\\orders.json | ConvertFrom-Json | Export-Csv $Out -NoTypeInformation
+Write-Host "Esportato in $Out"`;
+T.sln = `Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Acme.Shop.Core", "Core\\Acme.Shop.Core.csproj", "{1}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Acme.Shop.Web", "Web\\Acme.Shop.Web.csproj", "{2}"
+EndProject`;
+
+// ---------- diff unificato (LCS sulle righe) ----------
+function lcsOps(a, b) {
+  const n = a.length, m = b.length;
+  const dp = Array.from({ length: n + 1 }, () => new Int32Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--)
+    dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+  const ops = []; let i = 0, j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) { ops.push({ t: ' ', s: a[i] }); i++; j++; }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) { ops.push({ t: '-', s: a[i++] }); }
+    else { ops.push({ t: '+', s: b[j++] }); }
+  }
+  while (i < n) ops.push({ t: '-', s: a[i++] });
+  while (j < m) ops.push({ t: '+', s: b[j++] });
+  return ops;
+}
+function unifiedHunks(a, b, ctx = 3) {
+  const ops = lcsOps(a, b), ch = [];
+  ops.forEach((o, i) => { if (o.t !== ' ') ch.push(i); });
+  if (!ch.length) return '';
+  const groups = []; let s = ch[0], e = ch[0];
+  for (let k = 1; k < ch.length; k++) { if (ch[k] - e <= 2 * ctx + 1) e = ch[k]; else { groups.push([s, e]); s = e = ch[k]; } }
+  groups.push([s, e]);
+  const out = [];
+  for (const [gs, ge] of groups) {
+    const from = Math.max(0, gs - ctx), to = Math.min(ops.length - 1, ge + ctx);
+    let os = 0, ns = 0;
+    for (let i = 0; i < from; i++) { if (ops[i].t !== '+') os++; if (ops[i].t !== '-') ns++; }
+    let oc = 0, nc = 0; const lines = [];
+    for (let i = from; i <= to; i++) { const o = ops[i]; if (o.t !== '+') oc++; if (o.t !== '-') nc++; lines.push(o.t + o.s); }
+    out.push(`@@ -${oc === 0 ? os : os + 1},${oc} +${nc === 0 ? ns : ns + 1},${nc} @@`, ...lines);
+  }
+  return out.join('\n');
+}
+const lines = t => (t == null || t === '' ? [] : t.split('\n'));
+function mkDiff(path, a, b, revOld, revNew) {
+  const hunks = unifiedHunks(lines(a), lines(b));
+  if (!hunks) return '';
+  const p = fwd(path);
+  const o = a == null ? '(nonexistent)' : `(revision ${revOld})`;
+  const n = b == null ? '(nonexistent)' : (revNew ? `(revision ${revNew})` : '(working copy)');
+  return `Index: ${p}\n${'='.repeat(67)}\n--- ${p}\t${o}\n+++ ${p}\t${n}\n${hunks}\n`;
+}
+
+// ---------- stato dell'applicazione ----------
+let S;
+function F(path, st, base_, text, it, en) { return { path, st, base: base_, text, it, en }; }
+
+function freshFiles() {
+  return [
+    F('Acme.Shop.sln', 'N', T.sln, T.sln),
+    F('Core\\Models\\Coupon.cs', 'A', null, T.couponNew, 'la classe Coupon', 'the Coupon class'),
+    F('Core\\Models\\Order.cs', 'N', T.orderModel, T.orderModel),
+    F('Core\\Services\\InventoryService.cs', 'N', T.invBase, T.invBase),
+    F('Core\\Services\\LegacyPriceCalculator.cs', 'D', T.legacyBase, null, 'il vecchio calcolatore prezzi', 'the legacy price calculator'),
+    F('Core\\Services\\OrderService.cs', 'M', T.orderBase, T.orderMod, 'il calcolo del totale con coupon', 'order total with coupon support'),
+    F('Core\\Services\\PaymentGateway.cs', 'R', T.payBase, T.payNew, 'il gateway di pagamento (ora asincrono)', 'the payment gateway (now async)'),
+    F('Web\\Controllers\\CartController.cs', 'M', T.cartBase, T.cartMod, "l'azione ApplyCoupon nel carrello", 'the ApplyCoupon cart action'),
+    F('Web\\Controllers\\CheckoutController.cs', 'C', T.checkoutBase, T.checkoutConf, 'il checkout (conflitto con la r125)', 'checkout (conflict with r125)'),
+    F('Web\\Program.cs', 'N', T.progBase, T.progBase),
+    F('Web\\Views\\Cart\\Index.cshtml', '!', T.cshtmlBase, null, 'la vista del carrello', 'the cart view'),
+    F('docs\\notes.txt', '?', null, T.notes, 'gli appunti su coupon e scadenze', 'notes about coupons and expiry'),
+    F('tools\\export-orders.ps1', '?', null, T.export, 'lo script di esportazione ordini', 'the order export script'),
+    Object.assign(F('Web\\obj', '?', null, null), { dir: true }),
+  ];
+}
+
+function seedLog() {
+  const d = (days, h, m) => { const x = new Date(); x.setDate(x.getDate() - days); x.setHours(h, m, 0, 0); return x; };
+  const H = (p, a, b, r) => mkDiff(p, a, b, r - 1, r);
+  return [
+    { rev: 124, author: 'lbianchi', date: d(1, 17, 42), msg: 'Corregge arrotondamento IVA nel riepilogo ordine', paths: [{ a: 'M', p: '/trunk/Core/Services/OrderService.cs' }],
+      diff: H('Core\\Services\\OrderService.cs', 'return Math.Round(total, 1);', 'return Math.Round(total, 2, MidpointRounding.AwayFromZero);', 124) },
+    { rev: 123, author: 'mrossi', date: d(2, 11, 5), msg: 'Aggiunge log delle richieste di pagamento', paths: [{ a: 'M', p: '/trunk/Core/Services/PaymentGateway.cs' }, { a: 'A', p: '/trunk/Core/Logging/PaymentLog.cs' }],
+      diff: H('Core\\Services\\PaymentGateway.cs', 'public PaymentResult Charge(PaymentRequest r)\n{\n    return LegacyClient.Send(r.Amount, r.CardToken);\n}', 'public PaymentResult Charge(PaymentRequest r)\n{\n    PaymentLog.Write(r);\n    return LegacyClient.Send(r.Amount, r.CardToken);\n}', 123) + '\n' + H('Core\\Logging\\PaymentLog.cs', null, 'public static class PaymentLog\n{\n    public static void Write(PaymentRequest r) => File.AppendAllText("pay.log", r.OrderId + "\\n");\n}', 123) },
+    { rev: 122, author: 'andre', date: d(4, 9, 30), msg: 'Refactoring InventoryService: usa IStockRepository', paths: [{ a: 'M', p: '/trunk/Core/Services/InventoryService.cs' }],
+      diff: H('Core\\Services\\InventoryService.cs', 'private readonly SqlConnection _db;\npublic InventoryService(SqlConnection db) => _db = db;', 'private readonly IStockRepository _repo;\npublic InventoryService(IStockRepository repo) => _repo = repo;', 122) },
+    { rev: 121, author: 'gverdi', date: d(6, 15, 12), msg: 'Aggiorna dipendenze NuGet e versione .NET', paths: [{ a: 'M', p: '/trunk/Core/Acme.Shop.Core.csproj' }, { a: 'M', p: '/trunk/Web/Acme.Shop.Web.csproj' }],
+      diff: H('Core\\Acme.Shop.Core.csproj', '<TargetFramework>net6.0</TargetFramework>', '<TargetFramework>net8.0</TargetFramework>', 121) },
+    { rev: 120, author: 'mrossi', date: d(9, 10, 1), msg: 'Aggiunge pagina carrello', paths: [{ a: 'A', p: '/trunk/Web/Views/Cart/Index.cshtml' }, { a: 'M', p: '/trunk/Web/Controllers/CartController.cs' }],
+      diff: H('Web\\Views\\Cart\\Index.cshtml', null, T.cshtmlBase, 120) },
+    { rev: 119, author: 'andre', date: d(12, 16, 55), msg: 'Rimuove codice morto dal checkout', paths: [{ a: 'M', p: '/trunk/Web/Controllers/CheckoutController.cs' }],
+      diff: H('Web\\Controllers\\CheckoutController.cs', 'var tmp = new List<string>();\nreturn View();', 'return View();', 119) },
+    { rev: 118, author: 'lbianchi', date: d(15, 8, 20), msg: 'Import iniziale della solution Acme.Shop', paths: [{ a: 'A', p: '/trunk/Acme.Shop.sln' }],
+      diff: H('Acme.Shop.sln', null, T.sln, 118) },
+  ];
+}
+
+function freshEnv() {
+  return { svn: true, ghInstalled: true, winget: true, tortoise: false, gh: true, copilotRuntime: false, claudeInstalled: true, claudeLogin: true, anthropicKey: false, failFirst: false, bigDiff: false };
+}
+function freshSettings() {
+  return { aiprovider: 'auto', claudemodel: 'claude-opus-5-5', anthropicapikey: '', copilotmodel: '', aiendpoint: GH_MODELS, aiapikey: '', aimodel: 'gpt-4o-mini', defaultlanguage: 'auto', workingcopypath: '' };
+}
+function freshVM() {
+  return { view: 'tree', collapsed: {}, cur: null, wcPath: '', showInput: true, statusMsg: 'Caricamento in corso...', err: false, aiMsg: '', branch: '', files: [], header: 'Changes', diffVisible: false, diffTitle: '', diffContent: '', commitMsg: '', aiBusy: false, trace: [], dl: null, loading: false };
+}
+function freshLVM() {
+  return { path: '', max: 50, msg: 'Inserisci il percorso della working copy e premi Carica Log.', entries: [], sel: null, diff: '', busy: false };
+}
+function freshState(mode) {
+  const free = mode !== 'first';
+  const s = {
+    mode,
+    vsInstalled: free, restarting: false,
+    solution: free ? { name: 'Acme.Shop', dir: WC, inWc: true } : null,
+    env: freshEnv(), settings: freshSettings(),
+    sess: { svnPrompted: false, aiPrompted: false },   // flag "una volta per sessione" (si azzerano con "Riavvia VS")
+    files: freshFiles(), ign: { '.': ['*.suo', '.vs'], 'Web': ['bin'] }, ignBase: { '.': ['*.suo', '.vs'], 'Web': ['bin'] },
+    log: seedLog(), headRev: 124, wcRev: 124, branch: 'trunk',
+    scn: 0, simStep: 0, cmd: [],
+    ui: { menu: null, sub: false, open: [], active: null, statusOpen: false, logOpen: false, buf: {}, selFile: null, panelOpen: false, view: 'dock', seOpen: false, prereq: false },
+    vm: freshVM(), lvm: freshLVM(),
+    watch: { pending: false, last: 0, fire: 0, note: '' },
+    f: { svnPromptDone: false, svnPromptChoice: null, wcLoaded: false, aiNone: false, aiPromptShown: false, tourCommits: 0, optionsSaved: false },
+    tour: { on: false, step: 0, done: false },
+    toasts: [],
+  };
+  if (!free) {  // primo utilizzo: macchina "vergine"
+    Object.assign(s.env, { svn: false, ghInstalled: false, gh: false, claudeInstalled: false, claudeLogin: false, anthropicKey: false, copilotRuntime: false, tortoise: false });
+  }
+  return s;
+}
+
+// ---------- livello "svn" simulato ----------
+function logCmd(c) { S.cmd.push(c); if (S.cmd.length > 80) S.cmd.shift(); }
+async function svn(cmd, ms = 450) {
+  logCmd('svn ' + cmd);
+  await sleep(ms);
+  if (!S.env.svn) throw new Error('Impossibile trovare svn.exe: il sistema non riesce a trovare il file specificato.');
+}
+function isVersioned(f) { return f.st !== '?'; }
+function propDirs() { return Object.keys(S.ign).filter(d => (S.ign[d] || []).join('|') !== (S.ignBase[d] || []).join('|')); }
+function statusList() {
+  const list = S.files.filter(f => f.st !== 'N').map(f => ({ path: f.path, st: f.st, dir: !!f.dir, prop: false }));
+  propDirs().forEach(d => { if (!list.some(x => x.path === d)) list.push({ path: d, st: 'M', dir: true, prop: true }); });
+  return list.sort((a, b) => (a.path === '.' ? -1 : b.path === '.' ? 1 : a.path.toLowerCase().localeCompare(b.path.toLowerCase())));
+}
+const fileBy = p => S.files.find(f => f.path === p);
+function propDiff(d) {
+  const a = S.ignBase[d] || [], b = S.ign[d] || [];
+  const p = fwd(d);
+  return `Index: ${p}\n${'='.repeat(67)}\n--- ${p}\t(revision ${S.wcRev})\n+++ ${p}\t(working copy)\n\nProperty changes on: ${p}\n${'_'.repeat(67)}\nModified: svn:ignore\n## -${a.length === 0 ? 0 : 1},${a.length} +${b.length === 0 ? 0 : 1},${b.length} ##\n` + lcsOps(a, b).map(o => o.t + o.s).join('\n') + '\n';
+}
+function fileDiffText(path) {
+  const f = fileBy(path);
+  if (!f) return S.ign[path] !== undefined && propDirs().includes(path) ? propDiff(path) : '';
+  if (f.dir) return propDirs().includes(path) ? propDiff(path) : '';
+  switch (f.st) {
+    case 'M': case 'R': case 'C': return mkDiff(f.path, f.base, f.text, S.wcRev);
+    case 'A': return mkDiff(f.path, null, f.text, S.wcRev);
+    case 'D': return mkDiff(f.path, f.base, null, S.wcRev);
+    default: return '';
+  }
+}
+function wcDiffText() {   // svn diff dell'INTERA working copy (solo file versionati)
+  let out = S.files.filter(f => ['M', 'A', 'D', 'C', 'R'].includes(f.st) && !f.dir).map(f => fileDiffText(f.path)).join('\n');
+  propDirs().forEach(d => { out += '\n' + propDiff(d); });
+  return out.trim();
+}
+function svnAdd(path) {
+  const f = fileBy(path); if (!f || f.st !== '?') throw new Error('svn: E200009: Could not add \'' + path + '\'');
+  f.st = 'A'; logCmd('A         ' + fwd(path));
+}
+function svnDelete(path) {
+  const f = fileBy(path);
+  if (!f) { throw new Error(`svn: E165001: Impossibile eliminare '${fwd(path)}': la cartella ha modifiche locali (usare --force)`); }
+  if (f.dir && f.st !== '?') throw new Error(`svn: E165001: Impossibile eliminare la cartella '${fwd(path)}' (usare --force)`);
+  if (f.st === 'A') { S.files = S.files.filter(x => x !== f); }
+  else { f.st = 'D'; f.text = null; }
+  logCmd('D         ' + fwd(path));
+}
+function svnRevert(path) {
+  const f = fileBy(path);
+  if (!f) { if (propDirs().includes(path)) { S.ign[path] = (S.ignBase[path] || []).slice(); logCmd("Reverted '" + fwd(path) + "'"); return; } return; }
+  if (f.st === 'A') { f.st = '?'; }                       // un file Added torna unversioned (il file resta su disco)
+  else { f.st = 'N'; f.text = f.base; if (f.dir) f.dir = true; }
+  logCmd("Reverted '" + fwd(path) + "'");
+}
+function svnResolve(path) {
+  const f = fileBy(path);
+  f.text = f.merged || f.text.replace(/<<<<<<<[^\n]*\n|=======\n|>>>>>>>[^\n]*\n?/g, '');
+  f.st = 'M'; delete f.merged; logCmd("Resolved conflicted state of '" + fwd(path) + "'");
+}
+function svnIgnore(path) {
+  const d = parentDir(path), name = base(path);
+  if (!S.ign[d]) { S.ign[d] = []; S.ignBase[d] = []; }
+  if (!S.ign[d].includes(name)) S.ign[d].push(name);
+  S.files = S.files.filter(x => x.path !== path && !x.path.startsWith(path + '\\'));
+  logCmd(`property 'svn:ignore' set on '${fwd(d)}'`);
+}
+function svnCommit(paths, message) {
+  const errs = [];
+  const sel = paths.map(p => ({ p, f: fileBy(p) }));
+  for (const { p, f } of sel) {
+    if (f && f.st === '?') errs.push(`svn: E200009: Could not commit: '${fwd(p)}' is not under version control`);
+    else if (f && f.st === 'C') errs.push(`svn: E155015: Aborting commit: '${fwd(p)}' remains in conflict`);
+    else if (f && f.st === '!') errs.push(`svn: E155010: The node '${fwd(p)}' was not found.`);
+  }
+  if (errs.length) throw new Error(errs[0]);
+  const rev = S.headRev + 1, changedPaths = [], diffs = [], pr = '/' + S.branch;
+  for (const { p, f } of sel) {
+    if (!f) { if (propDirs().includes(p)) { diffs.push(propDiff(p)); changedPaths.push({ a: 'M', p: pr + (p === '.' ? '' : '/' + fwd(p)) }); S.ignBase[p] = (S.ign[p] || []).slice(); } continue; }
+    const d = fileDiffText(p); if (d) diffs.push(d.replace(/\(revision \d+\)\n\+\+\+/, `(revision ${rev - 1})\n+++`).replace(/\(working copy\)/, `(revision ${rev})`));
+    changedPaths.push({ a: f.st === 'R' ? 'R' : f.st, p: pr + '/' + fwd(p) });
+    if (f.st === 'D') S.files = S.files.filter(x => x !== f);
+    else { f.st = 'N'; f.base = f.text; }
+  }
+  S.headRev = rev; S.wcRev = rev;
+  S.log.unshift({ rev, author: USER, date: new Date(), msg: message, paths: changedPaths, diff: diffs.join('\n') });
+  logCmd(`Committed revision ${rev}.`);
+  return rev;
+}
+
+// ---------- update: modifiche in arrivo da un collega ----------
+function inc(rev, author, msg, paths, diff) { return { rev, author, date: new Date(), msg, paths, diff }; }
+function svnUpdate() {
+  const out = []; const r = S.headRev + 1;
+  const iv = fileBy('Core\\Services\\InventoryService.cs');
+  const cart = fileBy('Web\\Controllers\\CartController.cs');
+  const order = fileBy('Core\\Models\\Order.cs');
+  const ck = fileBy('Web\\Controllers\\CheckoutController.cs');
+  const k = S.scn;
+  if (k === 0) {
+    const nt = iv.base.replace('public int Available(string sku) => _repo.GetQty(sku);', 'public int Available(string sku) => Math.Max(0, _repo.GetQty(sku));');
+    const diff = mkDiff(iv.path, iv.base, nt, r - 1, r);
+    iv.base = nt; if (iv.st === 'N') iv.text = nt;
+    S.log.unshift(inc(r, 'mrossi', 'InventoryService: la giacenza non puo\' essere negativa', [{ a: 'M', p: '/' + S.branch + '/Core/Services/InventoryService.cs' }], diff));
+    out.push('U    Core/Services/InventoryService.cs'); S.headRev = r;
+  } else if (k === 1) {
+    const nt = cart.base.replace('return View(order);', 'return View(order ?? new Order());');
+    const diff = mkDiff(cart.path, cart.base, nt, r - 1, r);
+    const oldBase = cart.base; cart.base = nt;
+    S.log.unshift(inc(r, 'lbianchi', 'Carrello: gestisce ordine nullo', [{ a: 'M', p: '/' + S.branch + '/Web/Controllers/CartController.cs' }], diff));
+    S.headRev = r;
+    if (cart.st === 'M') {
+      cart.merged = cart.text.replace('return View(order);', 'return View(order ?? new Order());');
+      cart.text = cart.text.replace('            return View(order);', '<<<<<<< .mine\n            return View(order);\n=======\n            return View(order ?? new Order());\n>>>>>>> .r' + r);
+      cart.st = 'C'; out.push('C    Web/Controllers/CartController.cs');
+    } else { cart.text = nt; out.push('U    Web/Controllers/CartController.cs'); }
+    void oldBase;
+  } else if (k === 2) {
+    const nt = T.orderModel.replace('public int Id { get; set; }', 'public int Id { get; set; }\n        public string CustomerEmail { get; set; }');
+    const diff = mkDiff(order.path, order.base, nt, r - 1, r);
+    order.base = nt; order.text = nt;
+    const cu = F('Core\\Models\\Customer.cs', 'N', 'namespace Acme.Shop.Core.Models\n{\n    public class Customer { public string Email { get; set; } }\n}', 'namespace Acme.Shop.Core.Models\n{\n    public class Customer { public string Email { get; set; } }\n}');
+    S.files.push(cu);
+    S.log.unshift(inc(r, 'gverdi', 'Aggiunge Customer e CustomerEmail sull\'ordine', [{ a: 'A', p: '/' + S.branch + '/Core/Models/Customer.cs' }, { a: 'M', p: '/' + S.branch + '/Core/Models/Order.cs' }], diff + '\n' + mkDiff(cu.path, null, cu.text, r)));
+    out.push('A    Core/Models/Customer.cs', 'U    Core/Models/Order.cs'); S.headRev = r;
+  } else {
+    void ck;
+    S.headRev = r;
+    S.log.unshift(inc(r, 'mrossi', 'Aggiorna README e commenti', [{ a: 'M', p: '/' + S.branch + '/Acme.Shop.sln' }], mkDiff('Acme.Shop.sln', T.sln, T.sln + '\n# VisualStudioVersion = 17', r - 1, r)));
+    out.push('U    Acme.Shop.sln');
+  }
+  S.scn++; S.wcRev = S.headRev;
+  out.push(`Updated to revision ${S.headRev}.`);
+  out.forEach(l => logCmd(l));
+  return out;
+}
+
+// ---------- modali (stile message box di VS) ----------
+const overlay = () => $('#overlay');
+const mstack = [];
+function modal(o) {
+  return new Promise(resolve => {
+    const el = document.createElement('div');
+    el.className = 'modal' + (o.wide ? ' wide' : '');
+    el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true');
+    const btns = (o.buttons || [{ label: 'OK', value: true, primary: true }]);
+    el.innerHTML = `${o.banner ? `<div class="banner">${o.banner}</div>` : ''}
+      <div class="m-title"><span>${esc(o.title || 'SVNAssist')}</span><button class="btn ghost sm" data-m="x" aria-label="Chiudi">&#10005;</button></div>
+      <div class="m-body ${o.icon ? 'msg' : ''}">${o.icon ? `<div class="m-ico">${o.icon}</div>` : ''}<div style="flex:1;min-width:0">${o.body || ''}</div></div>
+      <div class="m-foot">${o.footLeft ? `<span class="l">${o.footLeft}</span>` : ''}${btns.map((b, i) => `<button class="btn ${b.primary ? 'primary' : ''}" data-m="${i}" ${b.disabled ? 'disabled' : ''}>${esc(b.label)}</button>`).join('')}</div>`;
+    const entry = { el, close: null };
+    const close = v => {
+      const i = mstack.indexOf(entry); if (i >= 0) mstack.splice(i, 1);
+      el.remove(); syncModals(); resolve(v);
+    };
+    entry.close = close;
+    entry.cancel = () => close(o.cancel !== undefined ? o.cancel : (btns.length === 1 ? btns[0].value : false));
+    el.addEventListener('click', e => {
+      const b = e.target.closest('[data-m]'); if (!b) return;
+      if (b.dataset.m === 'x') return entry.cancel();
+      const btn = btns[+b.dataset.m];
+      if (btn.onClick) { const r = btn.onClick(el, close); if (r === false) return; }
+      close(btn.value);
+    });
+    overlay().appendChild(el); mstack.push(entry); syncModals();
+    if (o.onOpen) o.onOpen(el, close);
+    const f = el.querySelector('.btn.primary') || el.querySelector('input,textarea,select,button[data-m]');
+    if (f) f.focus();
+  });
+}
+function syncModals() {
+  const ov = overlay();
+  ov.classList.toggle('on', mstack.length > 0);
+  mstack.forEach((m, i) => m.el.style.display = i === mstack.length - 1 ? '' : 'none');
+}
+const prompt = (text, kind = 'ok', title) => modal({
+  title: title || 'SVNAssist', icon: kind === 'okcancel' ? '&#10067;' : '&#8505;&#65039;', body: `<p>${esc(text)}</p>`,
+  buttons: kind === 'okcancel' ? [{ label: 'OK', value: true, primary: true }, { label: 'Annulla', value: false }] : [{ label: 'OK', value: true, primary: true }],
+  cancel: kind === 'okcancel' ? false : true,
+});
+function toast(msg, ms = 3200) {
+  const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; $('#toasts').appendChild(t);
+  setTimeout(() => t.remove(), ms);
+}
+
+// ---------- prima verifica svn.exe (SvnSetupAssistant) ----------
+async function ensureSvn() {
+  if (S.env.svn) return true;
+  if (S.sess.svnPrompted) return false;
+  S.sess.svnPrompted = true;
+  const ok = await prompt('SVNAssist non ha trovato il client a riga di comando di Subversion (svn.exe) sul sistema.\n\nÈ necessario per tutte le operazioni SVN. Vuoi installarlo ora?', 'okcancel');
+  S.f.svnPromptDone = true; S.f.svnPromptChoice = ok ? 'ok' : 'cancel';
+  if (!ok) { render(); return false; }
+  if (S.env.winget) {
+    const lines = ['> winget install --id Slik.Subversion -e --accept-package-agreements --accept-source-agreements', 'Trovato Subversion [Slik.Subversion] Versione 1.14.2', 'Download in corso: https://sliksvn.com/pub/Slik-Subversion-1.14.2-x64.msi', '  ██████████████████████████████  5.8 MB / 5.8 MB', 'Hash del programma di installazione verificato', 'Avvio dell\'installazione del pacchetto...', 'Installazione completata'];
+    let box;
+    const done = modal({ title: 'winget', wide: false, body: '<pre id="wg" style="margin:0;background:#0c0c0c;border:1px solid var(--bd);padding:8px;min-height:150px;font:11.5px/1.5 var(--mono);white-space:pre-wrap"></pre>', buttons: [{ label: 'Chiudi', value: true, primary: true, disabled: true }], onOpen: el => { box = el; } });
+    await sleep(100);
+    const pre = box.querySelector('#wg');
+    for (const l of lines) { pre.textContent += l + '\n'; await sleep(650); }
+    S.env.svn = true; logCmd('[winget] svn.exe installato');
+    box.querySelector('[data-m="0"]').disabled = false; box.querySelector('[data-m="0"]').focus();
+    await done;
+  } else {
+    toast('winget non disponibile: apertura di https://sliksvn.com/download/ nel browser', 4500);
+  }
+  await prompt('Una volta completata l\'installazione di SVN, riavvia Visual Studio (o riapri il pannello SVN) per usare SVNAssist.');
+  render();
+  return false;
+}
+
+// ---------- catena provider AI (AiServiceFactory) ----------
+const isGhModels = e => { try { const u = new URL(e); return u.protocol === 'https:' && u.hostname.toLowerCase() === 'models.github.ai'; } catch (e2) { return false; } };
+function resolveChain() {
+  const st = S.settings, p = (st.aiprovider || '').trim().toLowerCase();
+  const use = n => p === n || p === 'auto' || p === '';
+  const all = [], c = [];
+  // Copilot
+  if (p === 'copilot' || (use('copilot') && S.env.copilotRuntime)) {
+    if (S.env.gh || p === 'copilot') { c.push({ k: 'copilot', name: 'Copilot' }); all.push({ k: 'copilot', name: 'Copilot', ok: true }); }
+  } else if (use('copilot')) all.push({ k: 'copilot', name: 'Copilot', ok: false, why: 'runtime non scaricato (in auto non parte il download)' });
+  if (use('claudecode')) { if (S.env.claudeInstalled) { c.push({ k: 'claudecode', name: 'Claude Code' }); all.push({ k: 'claudecode', name: 'Claude Code', ok: true }); } else all.push({ k: 'claudecode', name: 'Claude Code', ok: false, why: 'claude.exe non trovato' }); }
+  if (use('claude')) { if (st.anthropicapikey.trim() || S.env.anthropicKey) { c.push({ k: 'claude', name: 'Claude API' }); all.push({ k: 'claude', name: 'Claude API', ok: true }); } else all.push({ k: 'claude', name: 'Claude API', ok: false, why: 'nessuna API key' }); }
+  if (use('openai')) {
+    let key = st.aiapikey.trim(), viaGh = false;
+    if (!key && isGhModels(st.aiendpoint) && S.env.gh) { key = 'gh'; viaGh = true; }
+    if (key) { c.push({ k: 'openai', name: 'OpenAI-compatibile', viaGh }); all.push({ k: 'openai', name: 'OpenAI-compatibile', ok: true }); }
+    else all.push({ k: 'openai', name: 'OpenAI-compatibile', ok: false, why: 'nessuna key' + (!isGhModels(st.aiendpoint) ? ' (token GitHub NON inviato a un endpoint non GitHub)' : '') });
+  }
+  return { chain: c, all, auto: p === 'auto' || p === '' };
+}
+async function downloadCopilot(setDl) {
+  setDl({ pct: 0, label: 'Download di SHA256SUMS.txt dalla release GitHub...' }); await sleep(600);
+  for (let i = 0; i <= 25; i++) { const pct = i * 4; setDl({ pct, label: `Download github-copilot-<versione>-win32-x64.tgz: ${pct} / 100 MB` }); await sleep(110); }
+  setDl({ pct: 100, label: 'Verifica SHA-256 del file scaricato...' }); await sleep(900);
+  setDl({ pct: 100, label: 'Hash corretto. Estrazione in %LOCALAPPDATA%\\SVNAssist\\copilot-runtime...' }); await sleep(900);
+  setDl({ pct: 100, label: 'Pulizia parti inutilizzate (~250 MB su disco)...' }); await sleep(500);
+  S.env.copilotRuntime = true; logCmd('[copilot] runtime installato');
+  setDl(null);
+}
+
+// ---------- generazione messaggi (simulata, derivata dalle modifiche vere) ----------
+function langOf(l) { l = (l || 'auto').toLowerCase(); return l === 'english' ? 'en' : 'it'; }
+const VERB = { it: { A: 'Aggiunge', M: 'Aggiorna', D: 'Rimuove', R: 'Riscrive', C: 'Risolve il conflitto in' }, en: { A: 'Add', M: 'Update', D: 'Remove', R: 'Rewrite', C: 'Resolve conflict in' } };
+function changedForAi() {
+  const fs = S.files.filter(f => ['A', 'M', 'D', 'R', 'C'].includes(f.st) && !f.dir);
+  const pr = { A: 0, R: 1, M: 2, C: 3, D: 4 };
+  return fs.sort((a, b) => pr[a.st] - pr[b.st]);
+}
+function descOf(f, l) { return (l === 'en' ? f.en : f.it) || base(f.path); }
+function genMessage(lang) {
+  const l = langOf(lang), fs = changedForAi();
+  if (!fs.length) return l === 'en' ? 'Update configuration' : 'Aggiorna la configurazione';
+  const v = VERB[l], and = l === 'en' ? ' and ' : ' e ';
+  const cl = f => `${v[f.st]} ${descOf(f, l)}`;
+  let title = cl(fs[0]);
+  if (fs[1]) { const t2 = title + and + cl(fs[1]).replace(/^(\S+)/, m => m.toLowerCase()); if (t2.length <= 72) title = t2; }
+  const body = fs.slice(0, 6).map(f => `- ${v[f.st]} ${base(f.path)}: ${descOf(f, l)}`).join('\n');
+  return title + '\n\n' + body;
+}
+function improveMessage(draft, lang) {
+  const l = langOf(lang); let ls = draft.trim().split('\n');
+  let t = ls[0].trim().replace(/[.\s]+$/, '');
+  const map = l === 'en' ? [[/^fix(ed)?\b/i, 'Fix'], [/^add(ed)?\b/i, 'Add'], [/^updat(ed|e)\b/i, 'Update']] : [[/^fix(ed)?\b/i, 'Corregge'], [/^(added|aggiunto|aggiunta)\b/i, 'Aggiunge'], [/^(updated|aggiornato|aggiornata)\b/i, 'Aggiorna']];
+  for (const [re, r] of map) if (re.test(t)) { t = t.replace(re, r); break; }
+  t = t.charAt(0).toUpperCase() + t.slice(1);
+  let extra = '';
+  if (t.length > 72) { const cut = t.lastIndexOf(' ', 69); extra = t.slice(cut + 1); t = t.slice(0, cut) + '...'; }
+  let body = ls.slice(1).map(x => x.trim()).filter(Boolean).map(x => x.startsWith('-') ? x : '- ' + x);
+  if (extra) body.unshift('- ...' + extra);
+  if (!body.length) { const v = VERB[l]; body = changedForAi().slice(0, 4).map(f => `- ${v[f.st]} ${base(f.path)}`); }
+  return t + (body.length ? '\n\n' + body.join('\n') : '');
+}
+
+// ---------- esecuzione AI condivisa (tool window + dialog) ----------
+async function aiCore(kind, ui) {
+  const r = resolveChain();
+  if (!r.chain.length) {
+    ui.status(ui.noProv); ui.trace([]); S.f.aiNone = true;
+    if (!S.sess.aiPrompted) {
+      S.sess.aiPrompted = true; S.f.aiPromptShown = true;
+      const ok = await prompt("Nessun provider AI trovato per generare i commit. Basta UNA di queste opzioni:\n\n• GitHub Copilot o GitHub CLI: esegui 'gh auth login'\n• Claude: installa Claude Code e fai login, oppure inserisci una Anthropic API Key\n• Gratis: crea un token GitHub e incollalo in Tools > Options > SVNAssist > AI API Key\n\nVuoi aprire la pagina per creare il token GitHub gratuito?", 'okcancel');
+      if (ok) toast('Apertura nel browser: https://github.com/settings/tokens/new?description=SVNAssist&scopes=', 4500);
+    }
+    render(); return;
+  }
+  if (!S.vm.wcPath) { ui.status('Nessuna working copy configurata.'); return; }
+  if (kind === 'improve' && !ui.draft().trim()) { ui.status(ui.noDraft); return; }
+  ui.busy(true);
+  const trace = r.auto ? r.all.map(a => ({ name: a.name, k: a.k, state: a.ok ? 'wait' : 'skip', detail: a.ok ? '' : a.why })) : r.chain.map(a => ({ name: a.name, k: a.k, state: 'wait', detail: '' }));
+  ui.trace(trace);
+  try {
+    ui.status(kind === 'improve' ? ui.improving : ui.generating);
+    let diff;
+    try { await svn('diff', 500); diff = wcDiffText(); } catch (e) { throw e; }
+    if (!diff.trim() && !S.env.bigDiff) { ui.status(ui.noDiff); ui.trace([]); return; }
+    const size = S.env.bigDiff ? 54000 : diff.length;
+    if (size > 28000 - 1000) {
+      const n = Math.ceil(size / 12000);
+      for (let i = 1; i <= n; i++) { ui.status(`Diff grande (${Math.round(size / 1000)} KB): riassunto blocco ${i}/${n}...`); await sleep(450); }
+    }
+    const errors = []; let result = null, first = true;
+    for (const c of r.chain) {
+      const t = trace.find(x => x.k === c.k); t.state = 'run'; ui.trace(trace);
+      try {
+        if (S.env.failFirst && first) { await sleep(800); throw new Error(c.k === 'claude' ? 'Anthropic API 529: overloaded_error' : 'AI API error 429 TooManyRequests: rate limit exceeded'); }
+        if (c.k === 'copilot') {
+          if (!S.env.copilotRuntime) await downloadCopilot(d => ui.dl(d));
+          if (!S.env.gh) throw new Error("Sessione Copilot non autenticata: esegui 'gh auth login'");
+        } else if (c.k === 'claudecode') {
+          await sleep(500);
+          if (!S.env.claudeLogin) throw new Error('Claude Code fallito (exit code 1): Not logged in - Please run /login');
+        }
+        await sleep(1000);
+        result = kind === 'improve' ? improveMessage(ui.draft(), ui.lang()) : genMessage(ui.lang());
+        t.state = 'ok'; ui.trace(trace); break;
+      } catch (e) { t.state = 'fail'; t.detail = e.message; errors.push(`${c.name === 'Copilot' ? 'GitHub Copilot' : c.name}: ${e.message}`); ui.trace(trace); }
+      first = false;
+    }
+    if (result == null) throw new Error(r.chain.length > 1 ? 'Nessun provider AI ha risposto.\n' + errors.join('\n') : errors[0].replace(/^[^:]+: /, ''));
+    ui.set(result);
+    ui.status(kind === 'improve' ? ui.improved : ui.generated);
+  } catch (e) { ui.status(ui.err + e.message); }
+  finally { ui.busy(false); render(); ui.after && ui.after(); }
+}
+const vmAiUi = () => ({
+  noProv: 'Nessun provider AI disponibile (Copilot, Claude o token GitHub).', noDraft: 'Scrivi prima una bozza del messaggio da migliorare.', noDiff: 'Nessun diff disponibile.',
+  generating: 'Generazione in corso...', improving: 'Miglioramento in corso...', generated: 'Messaggio generato con AI.', improved: 'Messaggio migliorato.', err: 'Errore AI: ',
+  status: t => { S.vm.aiMsg = t; render(); }, busy: b => { S.vm.aiBusy = b; render(); }, draft: () => S.vm.commitMsg, set: t => { S.vm.commitMsg = t; },
+  lang: () => S.settings.defaultlanguage, trace: t => { S.vm.trace = t.map(x => ({ ...x })); render(); }, dl: d => { S.vm.dl = d; render(); },
+});
+
+// ---------- view model: SVN Changes ----------
+function mkItem(e) {
+  const st = e.st, names = { M: 'Modified', A: 'Added', D: 'Deleted', C: 'Conflicted', '?': 'Unversioned', '!': 'Missing', R: 'Replaced', N: 'Normal' };
+  return { path: e.path, st, action: names[st] || 'Unknown', sel: st !== '?', dir: e.dir, prop: e.prop, canAdd: st === '?', canDel: st !== '?', canRev: ['M', 'A', 'D', 'C', '!', 'R'].includes(st), canRes: st === 'C', canIgn: st === '?' };
+}
+async function vmRefresh() {
+  const vm = S.vm;
+  if (!vm.wcPath.trim() && S.settings.workingcopypath.trim()) vm.wcPath = S.settings.workingcopypath.trim();
+  if (!vm.wcPath.trim()) { vm.showInput = true; vm.statusMsg = 'Inserisci il percorso della working copy.'; vm.err = false; render(); return; }
+  vm.showInput = false; vm.statusMsg = 'Caricamento...'; vm.err = false; vm.loading = true; render();
+  try {
+    await svn('info --show-item relative-url', 200);
+    await svn('status --xml', 350);
+    if (vm.wcPath.trim().replace(/\\$/, '').toLowerCase() !== WC.toLowerCase()) throw new Error(`svn: E155007: '${vm.wcPath}' is not a working copy`);
+    vm.branch = S.branch;
+    vm.files = statusList().map(mkItem);
+    vm.header = `Changes (${vm.files.length})`;
+    vm.statusMsg = vm.files.length === 0 ? 'Nessuna modifica.' : `${vm.files.length} file modificati`;
+    S.f.wcLoaded = true;
+  } catch (e) { vm.statusMsg = 'Errore: ' + e.message; vm.showInput = true; vm.err = true; }
+  vm.loading = false; render();
+}
+async function autoDetect() {
+  const vm = S.vm, sol = S.solution, root = sol && sol.inWc ? WC : null;
+  if (!root) {
+    vm.wcPath = ''; vm.branch = ''; vm.showInput = true; vm.files = []; vm.header = 'Changes (0)'; vm.diffVisible = false; vm.diffTitle = ''; vm.diffContent = '';
+    vm.statusMsg = sol ? 'La solution corrente non è una working copy SVN.' : 'Inserisci il percorso della working copy e premi Refresh.'; vm.err = false; render(); return;
+  }
+  if (vm.wcPath.toLowerCase() === root.toLowerCase() && vm.files.length > 0) return;
+  vm.wcPath = root; vm.showInput = false; vm.statusMsg = 'Working copy SVN rilevata automaticamente, aggiornamento...'; render();
+  await sleep(600); await vmRefresh();
+}
+async function openStatus() {
+  S.ui.statusOpen = true; S.ui.view = 'dock'; S.ui.seOpen = false; S.ui.menu = null; render();
+  await ensureSvn();
+  await autoDetect();
+}
+async function vmCommit() {
+  const vm = S.vm, sel = vm.files.filter(f => f.sel);
+  if (!sel.length) { vm.statusMsg = 'Seleziona almeno un file per il commit.'; vm.err = false; return render(); }
+  if (!vm.commitMsg.trim()) { vm.statusMsg = 'Scrivi un messaggio di commit.'; vm.err = false; return render(); }
+  try {
+    vm.statusMsg = 'Commit in corso...'; vm.err = false; render();
+    await svn(`commit -m "${vm.commitMsg.trim().split('\n')[0]}" (${sel.length} file)`, 900);
+    const rev = svnCommit(sel.map(f => f.path), vm.commitMsg.trim());
+    vm.statusMsg = `Commit completato: ${sel.length} file.`; vm.commitMsg = ''; vm.aiMsg = ''; vm.trace = [];
+    if (S.tour.on) S.f.tourCommits++;
+    toast(`Creata la revisione r${rev} (visibile in Log / History)`);
+    render(); await vmRefresh(); vm.statusMsg = `Commit completato: ${sel.length} file.` + (vm.files.length ? '' : ' Nessuna modifica.'); render();
+  } catch (e) { vm.statusMsg = 'Errore commit: ' + e.message; vm.err = true; render(); }
+}
+async function vmUpdate() {
+  const vm = S.vm;
+  if (!vm.wcPath.trim()) { vm.statusMsg = 'Nessuna working copy configurata.'; return render(); }
+  try {
+    vm.statusMsg = 'Update in corso...'; vm.err = false; render();
+    await svn('update', 900);
+    const out = svnUpdate();
+    vm.statusMsg = 'Update completato.'; render();
+    toast('svn update (output demo): ' + out.join(' | '), 5500);
+    await vmRefresh(); vm.statusMsg = 'Update completato.' + (vm.files.some(f => f.st === 'C') ? ' Attenzione: conflitti.' : ''); render();
+  } catch (e) { vm.statusMsg = 'Errore update: ' + e.message; vm.err = true; render(); }
+}
+async function vmShowDiff(path) {
+  const vm = S.vm, it = vm.files.find(f => f.path === path); if (!it) return;
+  try {
+    if (S.env.tortoise) { await sleep(250); vm.diffVisible = false; vm.statusMsg = `Diff aperto in TortoiseSVN: ${it.path}`; toast('Diff aperto in TortoiseSVN: ' + it.path); logCmd('TortoiseProc.exe /command:diff /path:"' + WC + '\\' + it.path + '"'); return render(); }
+    vm.diffTitle = `Diff: ${it.path}`; vm.diffContent = 'Caricamento diff...'; vm.diffVisible = true; render();
+    await svn(`diff "${fwd(it.path)}"`, 400);
+    const d = fileDiffText(path);
+    vm.diffContent = d.trim() ? d : '(Nessuna differenza testuale — il file potrebbe essere binario o non versionato)';
+    vm.statusMsg = `Diff inline caricato: ${it.path}`; vm.err = false; render();
+  } catch (e) { vm.diffContent = 'Errore: ' + e.message; vm.diffVisible = true; render(); }
+}
+async function vmOp(kind, path) {
+  const vm = S.vm, it = vm.files.find(f => f.path === path); if (!it) return;
+  const M = {
+    add: { ok: it.canAdd, no: 'Nessun file idoneo per SVN Add.', run: 'Aggiunta a SVN in corso...', fn: svnAdd, done: 'Aggiunti a SVN: 1 elementi.', err: 'Errore add: ' },
+    del: { ok: it.canDel, no: 'Nessun file idoneo per SVN Delete.', run: 'Rimozione da SVN in corso...', fn: svnDelete, done: 'Elementi schedulati per delete: 1.', err: 'Errore delete: ' },
+    rev: { ok: it.canRev, no: 'Nessun file idoneo per SVN Revert.', run: 'Revert in corso...', fn: svnRevert, done: 'Revert completato su 1 elementi.', err: 'Errore revert: ' },
+    res: { ok: it.canRes, no: 'Il file selezionato non è in conflitto.', run: 'Risoluzione conflitto in corso...', fn: svnResolve, done: `Conflitto risolto: ${it.path}`, err: 'Errore resolve: ' },
+    ign: { ok: it.canIgn, no: 'Add to Ignore List è disponibile solo per elementi unversioned.', run: 'Aggiornamento ignore list in corso...', fn: svnIgnore, done: `Aggiunto alla ignore list: ${it.path}`, err: 'Errore ignore list: ' },
+  }[kind];
+  if (!M.ok) { vm.statusMsg = M.no; return render(); }
+  if (kind === 'rev') {
+    const go = await modal({ title: 'SVN Revert', icon: '&#9888;&#65039;', body: `<p>Annullare le modifiche locali a <b>${esc(it.path)}</b>?\nL'operazione non può essere annullata.</p><p><span class="tag">Novità in arrivo</span> <span class="small muted">la vera estensione oggi esegue il revert senza chiedere conferma.</span></p>`, buttons: [{ label: 'Sì, annulla le modifiche', value: true, primary: true }, { label: 'No', value: false }], cancel: false });
+    if (!go) return;
+  }
+  try {
+    vm.statusMsg = M.run; vm.err = false; render();
+    await svn(kind === 'ign' ? 'propset svn:ignore' : kind, 500);
+    M.fn(path);
+    vm.statusMsg = M.done; render();
+    const msg = vm.statusMsg; await vmRefresh(); vm.statusMsg = msg; render();
+  } catch (e) { vm.statusMsg = M.err + e.message; vm.err = true; render(); }
+}
+
+// ---------- view model: Log / History ----------
+async function lvmLoad() {
+  const l = S.lvm;
+  if (!l.path.trim()) { l.msg = '⚠️ Inserisci il percorso della working copy.'; return render(); }
+  try {
+    l.msg = '⏳ Caricamento log...'; l.diff = ''; l.sel = null; render();
+    await svn(`log --xml -l ${l.max}`, 700);
+    if (l.path.trim().replace(/\\$/, '').toLowerCase() !== WC.toLowerCase()) throw new Error(`svn: E155007: '${l.path}' is not a working copy`);
+    l.entries = S.log.slice(0, Math.max(1, +l.max || 50)); l.msg = l.entries.length ? `📋 ${l.entries.length} revisioni caricate.` : 'ℹ️ Nessuna revisione trovata.';
+  } catch (e) { l.msg = '❌ Errore: ' + e.message; }
+  render();
+}
+async function lvmSelect(rev) {
+  const l = S.lvm; l.sel = rev; l.diff = '⏳ Caricamento diff...'; l.msg = `⏳ Caricamento diff per revisione ${rev}...`; render();
+  try { await svn(`diff -c ${rev}`, 450); const e = S.log.find(x => x.rev === rev); l.diff = e && e.diff.trim() ? e.diff : '(nessuna differenza testuale per questa revisione)'; l.msg = `📄 Diff revisione ${rev} caricato.`; }
+  catch (e) { l.diff = '❌ Errore nel caricamento del diff: ' + e.message; l.msg = '❌ Errore diff: ' + e.message; }
+  render();
+}
+
+// ---------- file watcher (FileSystemWatcher + polling 1 s, debounce 800 ms) ----------
+function fsEvent(path, what) {
+  S.watch.pending = true; S.watch.last = Date.now(); S.watch.fire = Date.now(); S.watch.note = `${what}: ${path}`; render();
+}
+setInterval(async () => {
+  const w = S.watch;
+  if (w.pending && Date.now() - w.last >= 800 && S.ui.statusOpen && S.vm.wcPath && !S.vm.loading) { w.pending = false; logCmd('[watcher] modifica rilevata, refresh automatico'); await vmRefresh(); }
+  if (w.fire && Date.now() - w.fire > 1800) { w.fire = 0; render(); }
+}, 400);
+function saveFile(path) {
+  const f = fileBy(path), buf = S.ui.buf[path]; if (!f || buf == null) return;
+  if (f.text === buf) return toast('Nessuna differenza da salvare');
+  f.text = buf;
+  if (f.st === 'N' && f.text !== f.base) f.st = 'M'; else if (f.st === 'M' && f.text === f.base) f.st = 'N';
+  toast('File salvato su disco: ' + path);
+  fsEvent(path, 'FileSystemWatcher: modificato');
+}
+async function simulateChange() {
+  const k = S.simStep++ % 3;
+  if (k === 0) {
+    const f = S.files.find(x => x.st === 'N' && x.path.endsWith('.cs')) || S.files.find(x => x.st === 'M' && x.path.endsWith('.cs'));
+    f.text = (f.text || '') + `\n// modifica simulata ${pad(new Date().getMinutes())}:${pad(new Date().getSeconds())}`;
+    if (f.st === 'N') f.st = 'M'; S.ui.buf[f.path] = undefined; fsEvent(f.path, 'modificato');
+  } else if (k === 1) {
+    const n = 'tools\\debug-' + (S.simStep) + '.log';
+    S.files.push(F(n, '?', null, 'log temporaneo'));
+    fsEvent(n, 'creato');
+  } else {
+    const f = S.files.find(x => x.st === 'N' && x.path !== 'Acme.Shop.sln' && !x.path.endsWith('.cs')) || S.files.find(x => x.st === 'N' && x.path !== 'Acme.Shop.sln');
+    if (f) { f.st = '!'; f.text = null; fsEvent(f.path, 'eliminato da disco'); } else toast('Nessun file da eliminare');
+  }
+}
+
+// =====================================================================
+//  RENDER
+// =====================================================================
+function saveFocus() {
+  const a = document.activeElement; if (!a || a === document.body) return null;
+  return { id: a.id, act: a.dataset && a.dataset.act, arg: a.dataset && a.dataset.arg, model: a.dataset && a.dataset.model, s: a.selectionStart, e: a.selectionEnd };
+}
+function restoreFocus(f) {
+  if (!f) return; let el = null;
+  if (f.id) el = document.getElementById(f.id);
+  if (!el && f.act) el = $$(`[data-act="${f.act}"]`).find(x => x.dataset.arg === f.arg);
+  if (el && el !== document.activeElement && !el.disabled) { el.focus(); try { if (f.s != null) el.setSelectionRange(f.s, f.e); } catch (e) { } }
+}
+function render() {
+  if (mstack.length && mstack.some(m => m.el.querySelector('input:focus,textarea:focus,select:focus'))) { /* modali non vengono ricostruite */ }
+  const f = saveFocus();
+  document.body.classList.toggle('panel-closed', !S.ui.panelOpen);
+  $('#btnPanel').setAttribute('aria-pressed', S.ui.panelOpen);
+  $('#vsBody').className = 'vs-body v-' + S.ui.view + (S.ui.seOpen ? ' se-open' : '');
+  renderMenu(); renderSE(); renderDoc(); renderDock(); renderStatusBar(); renderSim(); renderTour(); renderSplash(); applyTarget();
+  restoreFocus(f);
+  $$('input[data-indet]').forEach(e => { e.indeterminate = true; });
+}
+function renderSplash() {
+  let sp = $('#splash');
+  if (S.restarting) {
+    if (!sp) { sp = document.createElement('div'); sp.id = 'splash'; sp.style.cssText = 'position:absolute;inset:0;background:#2b1a40;z-index:80;display:grid;place-items:center;color:#fff;text-align:center'; sp.innerHTML = '<div><div style="font-size:26px;font-weight:300">Visual Studio</div><p><span class="spin"></span>Riavvio in corso...</p></div>'; $('#vs').style.position = 'relative'; $('#vs').appendChild(sp); }
+  } else if (sp) sp.remove();
+}
+const MENUS = [['file', 'File'], ['edit', 'Modifica'], ['view', 'Visualizza'], ['proj', 'Progetto'], ['build', 'Compila'], ['dbg', 'Debug'], ['test', 'Test'], ['tools', 'Strumenti'], ['ext', 'Estensioni'], ['win', 'Finestra'], ['help', '?']];
+function renderMenu() {
+  const m = S.ui.menu;
+  $('#menubar').innerHTML = MENUS.map(([id, label]) => {
+    let dd = '';
+    if (m === id) {
+      if (id === 'file') dd = `<div class="dd" role="menu"><button data-act="openSolDlg" ${S.solution ? 'disabled' : ''}>Apri progetto/soluzione...<kbd>Ctrl+Maiusc+O</kbd></button><button data-act="closeSol" ${S.solution ? '' : 'disabled'}>Chiudi soluzione</button></div>`;
+      if (id === 'tools') dd = `<div class="dd" role="menu"><button data-act="optionsOpen">Opzioni...</button></div>`;
+      if (id === 'ext') dd = `<div class="dd" role="menu"><button data-act="vsixOpen">Gestisci estensioni...</button><hr>` +
+        (S.vsInstalled ? `<div class="sub"><button data-act="subToggle" aria-haspopup="true" aria-expanded="${S.ui.sub}">SVNAssist <span>&#9656;</span></button>${S.ui.sub ? `<div class="dd" role="menu">
+          <button data-act="cmd" data-arg="status">SVN Changes</button><button data-act="cmd" data-arg="commit">Commit...</button><hr>
+          <button data-act="cmd" data-arg="update">Update</button><button data-act="cmd" data-arg="log">Log / History</button></div>` : ''}</div>`
+          : `<button disabled>SVNAssist (non installato)</button>`) + '</div>';
+    }
+    return `<div class="${['file', 'tools', 'ext'].includes(id) ? '' : 'dummy'}"><button data-act="menu" data-arg="${id}" aria-haspopup="true" aria-expanded="${m === id}">${label}</button>${dd}</div>`;
+  }).join('');
+  $('#solName').textContent = S.solution ? `${S.solution.name} · ${S.solution.dir}` : 'Nessuna soluzione';
+}
+function renderSE() {
+  const el = $('#seTree');
+  if (!S.solution) { el.innerHTML = `<div class="se-empty">Nessuna soluzione aperta.<br><br><button class="btn primary" data-act="openSolDlg">Apri una soluzione...</button></div>`; $('#seNote').textContent = ''; return; }
+  const vis = S.files.filter(f => f.text !== null || f.dir).sort((a, b) => a.path.toLowerCase().localeCompare(b.path.toLowerCase()));
+  const tree = {};
+  vis.forEach(f => { const seg = f.path.split('\\'); let n = tree; seg.forEach((s, i) => { if (i === seg.length - 1 && !f.dir) n[s] = f; else n = (n[s] = n[s] && !n[s].path ? n[s] : {}); }); });
+  const draw = (n, depth) => Object.keys(n).sort((a, b) => ((n[a].path ? 1 : 0) - (n[b].path ? 1 : 0)) || a.localeCompare(b)).map(k => {
+    const v = n[k], pad_ = 6 + depth * 14;
+    if (v.path) return `<button class="node ${S.ui.selFile === v.path ? 'sel' : ''}" style="padding-left:${pad_ + 14}px" data-act="openFile" data-arg="${esc(v.path)}" data-sefile="${esc(v.path)}"><span class="ic ${k.endsWith('.cs') ? 'cs' : 'cfg'}">${k.endsWith('.cs') ? 'C#' : '&#9679;'}</span>${esc(k)}</button>`;
+    return `<div class="node" style="padding-left:${pad_}px"><span class="ic fld">&#9662;</span><span class="fld">&#128193;</span> ${esc(k)}</div>` + draw(v, depth + 1);
+  }).join('');
+  el.innerHTML = `<div class="node" style="padding-left:6px"><span class="ic">&#9662;</span><b>Soluzione '${esc(S.solution.name)}'</b></div>` + draw(tree, 1);
+  $('#seNote').textContent = 'senza icone SVN';
+}
+function renderDoc() {
+  const open = S.ui.open.filter(p => { const f = fileBy(p); return f && f.text !== null; });
+  S.ui.open = open;
+  const tabs = open.map(p => `<button role="tab" aria-selected="${S.ui.active === p}" data-act="activate" data-arg="${esc(p)}">${esc(base(p))} <span data-act="closeTab" data-arg="${esc(p)}" title="Chiudi" style="margin-left:6px;color:var(--fg3)">&#10005;</span></button>`).join('')
+    + (S.ui.logOpen ? `<button role="tab" aria-selected="${S.ui.active === '__log'}" data-act="activate" data-arg="__log">SVN Log <span data-act="closeTab" data-arg="__log" style="margin-left:6px;color:var(--fg3)">&#10005;</span></button>` : '');
+  $('#docTabs').innerHTML = tabs;
+  const body = $('#docBody');
+  if (S.ui.active === '__log' && S.ui.logOpen) { body.innerHTML = logHTML(); return; }
+  const f = open.includes(S.ui.active) ? fileBy(S.ui.active) : null;
+  if (!f) {
+    body.innerHTML = `<div class="welcome"><h2>Visual Studio</h2><p>${S.solution ? 'Apri un file da Esplora soluzioni per modificarlo: salvandolo, il FileSystemWatcher di SVNAssist aggiorna da solo il pannello SVN Changes.' : 'Apri una soluzione dal menu File per iniziare.'}</p>${S.vsInstalled ? '<p class="small">Menu <b>Estensioni &gt; SVNAssist</b>: SVN Changes, Commit..., Update, Log / History.</p>' : '<p class="small">L\'estensione SVNAssist non è ancora installata.</p>'}</div>`;
+    return;
+  }
+  const txt = S.ui.buf[f.path] != null ? S.ui.buf[f.path] : f.text;
+  const n = txt.split('\n').length;
+  body.innerHTML = `<div class="editor"><div class="gutter" id="gut">${Array.from({ length: n }, (_, i) => i + 1).join('\n')}</div><textarea id="edtext" spellcheck="false" aria-label="Editor ${esc(f.path)}">${esc(txt)}</textarea></div>
+   <div class="ed-bar"><button class="btn sm" data-act="saveFile" data-arg="${esc(f.path)}">Salva (Ctrl+S)</button><span>${esc(f.path)} · stato SVN: <b style="color:var(--st-${f.st === '?' ? 'U' : f.st === '!' ? 'X' : f.st === 'N' ? 'U' : f.st})">${f.st === 'N' ? 'invariato' : f.st}</b></span></div>`;
+}
+function logHTML() {
+  const l = S.lvm;
+  return `<div class="logwin">
+   <div class="row"><label for="logPath">Percorso:</label><input type="text" id="logPath" data-model="lvm.path" value="${esc(l.path)}" placeholder="${esc(WC)}"><label for="logMax">Max:</label><input type="number" id="logMax" data-model="lvm.max" value="${l.max}" style="width:70px"></div>
+   <div class="row"><button class="btn" data-act="logLoad" ${l.busy ? 'disabled' : ''}>📜 Carica Log</button><button class="btn ghost sm" data-act="logUseWc" title="Scorciatoia della demo: la vera finestra non rileva la working copy">Usa ${esc(WC)} <span class="tag info">demo</span></button></div>
+   <div class="loglist" role="listbox" aria-label="Revisioni">${l.entries.length ? l.entries.map(e => `<button class="logrow ${l.sel === e.rev ? 'sel' : ''}" data-act="logSel" data-arg="${e.rev}"><b>${e.rev}</b><span>${esc(e.author)}</span><span class="muted">${fmtDate(e.date)}</span><span class="m" title="${esc(e.msg)}">${esc(e.msg)}</span></button>`).join('') : '<div class="empty-list">Nessuna revisione caricata.</div>'}</div>
+   <div><b>Diff revisione selezionata:</b>${l.sel ? ` <span class="muted small">${esc((S.log.find(e => e.rev === l.sel) || { paths: [] }).paths.map(p => p.a + ' ' + p.p).join('  ·  '))}</span>` : ''}</div>
+   <pre class="diffpre" style="flex:1.2">${diffHTML(l.diff)}</pre>
+   <div class="tw-status">${esc(l.msg)}</div></div>`;
+}
+function diffHTML(t) {
+  return (t || '').split('\n').map(l => `<div class="${l.startsWith('@@') ? 'hunk' : l.startsWith('+++') || l.startsWith('---') || l.startsWith('Index:') || l.startsWith('===') ? 'meta' : l.startsWith('+') ? 'add' : l.startsWith('-') ? 'del' : ''}">${esc(l) || ' '}</div>`).join('');
+}
+function traceHTML(v) {
+  let h = '';
+  if (v.dl) h += `<div class="dl"><b>GitHub Copilot: primo utilizzo</b> <span class="muted">(runtime ~100 MB, scaricato una volta sola)</span><div class="pbar"><i style="width:${v.dl.pct}%"></i></div>${esc(v.dl.label)}</div>`;
+  if (v.trace.length) {
+    h += `<div class="trace"><span class="muted">Catena provider <span class="tag info">dettaglio demo</span>:</span>` + v.trace.map((t, i) => {
+      const cls = t.state === 'ok' ? 'ok' : t.state === 'fail' ? 'fail' : t.state === 'skip' ? 'skip' : t.state === 'run' ? 'run' : '';
+      const txt = t.state === 'ok' ? `${t.name}: OK` : t.state === 'fail' ? `${t.name}: errore` : t.state === 'skip' ? `${t.name}: saltato (${t.detail})` : t.state === 'run' ? `<span class="spin"></span>${t.name}...` : t.name;
+      return (i ? '<span class="muted">&rarr;</span>' : '') + `<span class="chip ${cls}" title="${esc(t.detail || '')}">${txt}</span>`;
+    }).join('') + '</div>';
+    const f = v.trace.filter(t => t.state === 'fail'); if (f.length) h += `<div class="small" style="color:var(--err)">${f.map(t => esc(t.name + ': ' + t.detail)).join('<br>')}</div>`;
+  }
+  return h;
+}
+function statusHTML() {
+  const v = S.vm, rows = treeHTML();
+  const sp = '<span class="spin"></span>';
+  return `<div class="tw">
+   ${v.showInput ? `<div class="row"><b>Working Copy:</b><input type="text" id="wcPath" data-model="vm.wcPath" value="${esc(v.wcPath)}" placeholder="${esc(WC)}" aria-label="Working copy"></div>` : ''}
+   <div class="row"><button class="btn sm" data-act="refresh" title="Aggiorna lista file (svn status)">Refresh</button><span class="branch">${esc(v.branch)}</span><button class="btn sm" data-act="update" title="Aggiorna working copy (svn update)">Update</button></div>
+   <hr>
+   ${S.ui.prereq ? prereqHTML() : ''}
+   <textarea id="commitMsg" data-model="vm.commitMsg" aria-label="Messaggio di commit" placeholder="Messaggio di commit">${esc(v.commitMsg)}</textarea>
+   <div class="row"><button class="btn primary" data-act="commit" style="font-weight:600">Commit</button><span style="flex:1"></span>
+     <button class="btn sm" data-act="genAi" title="Genera messaggio di commit analizzando il diff con AI" ${v.aiBusy ? 'disabled' : ''}>${v.aiBusy ? sp : ''}Generate AI</button>
+     <button class="btn sm" data-act="improveAi" title="Migliora il messaggio di commit esistente con AI" ${v.aiBusy ? 'disabled' : ''}>Improve</button></div>
+   ${v.aiMsg ? `<div class="ai-status">${v.aiBusy ? sp : ''}${esc(v.aiMsg).replace(/\n/g, '<br>')}</div>` : ''}${traceHTML(v)}
+   <hr>
+   <div class="list-h"><b>${esc(v.header)}</b><span class="tag" title="Sezioni e cartelle stile Git Changes: non ancora nella vera estensione">Novità in arrivo: albero</span></div>
+   ${treeToolbarHTML()}
+   <div class="flist" role="list">${rows || `<div class="empty-list">${v.loading ? sp + 'Caricamento...' : 'Nessun file modificato.'}</div>`}</div>
+   ${v.diffVisible ? `<div class="diffbox"><div class="list-h" style="margin:2px 0"><b>${esc(v.diffTitle)}</b><button class="btn sm" data-act="closeDiff">Close</button></div><pre class="diffpre">${diffHTML(v.diffContent)}</pre></div>` : ''}
+   <div class="tw-status ${v.err ? 'err' : ''}" role="status">${v.loading ? sp : ''}${esc(v.statusMsg)}</div>
+   <div class="watch" style="flex-wrap:wrap"><span class="dot ${S.watch.fire ? 'fire' : ''}"></span>FileSystemWatcher attivo${S.watch.fire ? ' · ' + esc(S.watch.note) + ' → refresh tra ~0,8 s' : ''} <button class="btn sm" data-act="prereqToggle" style="margin-left:auto" title="Checklist dei prerequisiti (novità in arrivo)">Prerequisiti${prereqMissing() ? ` <b style="color:var(--warn)">(${prereqMissing()} da sistemare)</b>` : ' &#10003;'}</button> <a href="#" data-act="commitDialog" style="color:var(--acc2)" title="Esiste nel codice (CommitDialog) ma non è ancora collegato ai comandi">Dialog Commit (nel codice)</a></div>
+  </div>`;
+}
+function renderDock() {
+  const d = $('#dock');
+  if (!S.ui.statusOpen) { d.innerHTML = `<div class="dock-empty">Nessuna finestra strumenti aperta.<br><br>${S.vsInstalled ? 'Usa <b>Estensioni &gt; SVNAssist &gt; SVN Changes</b>.' : 'Installa prima l\'estensione SVNAssist.'}<br><br>${S.vsInstalled ? '<button class="btn" data-act="cmd" data-arg="status">Apri SVN Changes</button>' : ''}</div>`; return; }
+  d.innerHTML = `<div class="dock-tabs"><button role="tab" aria-selected="true">SVN Changes</button><button class="x" data-act="statusClose" aria-label="Chiudi SVN Changes">&#10005;</button></div><div class="dock-body">${statusHTML()}</div>`;
+}
+function renderStatusBar() {
+  const b = $('#vsStatus'), inWc = S.solution && S.solution.inWc;
+  b.className = 'vs-status';
+  b.innerHTML = `<span>${S.vm.loading || S.vm.aiBusy ? '<span class="spin"></span>Operazione in corso...' : 'Pronto'}</span><span class="sp"></span>${inWc ? `<span>&#9095; ${esc(S.branch)} · r${S.wcRev}</span>` : ''}<span>${S.vsInstalled ? 'SVNAssist attivo' : 'SVNAssist non installato'}</span>`;
+}
+function renderSim() {
+  const e = S.env, chain = resolveChain();
+  const tg = (k, label, hint) => `<label class="tg"><input type="checkbox" data-act="env" data-arg="${k}" ${e[k] ? 'checked' : ''}><span>${label}${hint ? `<span class="hint">${hint}</span>` : ''}</span></label>`;
+  const ghOnly = S.settings.aiendpoint && !isGhModels(S.settings.aiendpoint) ? `Il token GitHub NON viene inviato a ${(() => { try { return new URL(S.settings.aiendpoint).host; } catch (x) { return 'questo endpoint'; } })()}` : 'Il token GitHub va solo a Copilot e a models.github.ai';
+  $('#simPanel').innerHTML = `
+   <h3>Ambiente simulato</h3>
+   ${tg('svn', 'SVN installato (svn.exe)', 'se no: al primo uso compare il prompt di installazione')}
+   ${tg('winget', 'winget disponibile', 'se no: si apre la pagina di download')}
+   ${tg('tortoise', 'TortoiseSVN installato', 'Show Diff apre TortoiseSVN invece del diff inline')}
+   ${tg('ghInstalled', 'GitHub CLI installato (gh)')}
+   ${tg('gh', 'GitHub CLI loggato (gh auth login)', 'token GitHub rilevato in automatico')}
+   ${tg('copilotRuntime', 'Runtime Copilot già scaricato', 'in auto Copilot parte solo se già scaricato')}
+   ${tg('claudeInstalled', 'Claude Code installato (claude.exe)')}
+   ${tg('claudeLogin', 'Claude Code loggato')}
+   ${tg('anthropicKey', 'Variabile ANTHROPIC_API_KEY impostata')}
+   ${tg('failFirst', 'Simula errore del primo provider', 'mostra il fallback sul successivo')}
+   ${tg('bigDiff', 'Simula diff molto grande', 'riassunto a blocchi da 12.000 caratteri')}
+   <div class="note">&#128274; ${esc(ghOnly)}. Ogni credenziale va solo al proprio servizio.</div>
+   <h3>Provider risolti (AiServiceFactory)</h3>
+   <div class="chain">${chain.chain.length ? chain.chain.map(c => `<span class="chip ok">${esc(c.name)}</span>`).join(' &rarr; ') : '<span class="chip fail">nessun provider disponibile</span>'}<br><span class="small">AI Provider = <b>${esc(S.settings.aiprovider || '(vuoto)')}</b> · lingua = <b>${esc(S.settings.defaultlanguage)}</b></span></div>
+   <h3>Azioni</h3>
+   <button class="btn" data-act="simChange">Simula modifica di un file</button>
+   <button class="btn" data-act="restart">Riavvia Visual Studio</button>
+   <button class="btn" data-act="reset">Reset demo</button>
+   <label class="tg" style="margin-top:6px">Branch della working copy:&nbsp;<select data-act="branchSel" style="width:auto"><option ${S.branch === 'trunk' ? 'selected' : ''}>trunk</option><option ${S.branch === 'branches/feature-coupon' ? 'selected' : ''}>branches/feature-coupon</option></select></label>
+   <div class="note">&#9432; "Riavvia VS" azzera i flag "una volta per sessione" (prompt svn.exe e prompt AI) senza cambiare i dati.<br>&#9432; Generate AI analizza il diff dell'<b>intera</b> working copy, non solo i file spuntati (come la vera estensione).</div>
+   <h3>Comandi svn (log demo)</h3>
+   <div class="cmdlog" id="cmdlog">${S.cmd.map(l => `<div>${l.startsWith('svn ') ? '<span class="c">$</span> ' : ''}${esc(l)}</div>`).join('')}</div>`;
+  const cl = $('#cmdlog'); if (cl) cl.scrollTop = cl.scrollHeight;
+}
+
+// ---------- tour ----------
+const STEPS = [
+  { t: 'Installa il VSIX', p: 'SVNAssist si distribuisce come file .vsix. Un doppio clic apre il VSIX Installer; poi Visual Studio va riavviato.', doLabel: 'Doppio clic sul .vsix', done: () => S.vsInstalled, doIt: () => vsixFlow() },
+  { t: 'Apri una solution', p: 'Menu File > Apri progetto/soluzione. Scegli Acme.Shop (dentro una working copy SVN).', hint: 'Prova anche l\'altra solution: fuori da una working copy il pannello lo segnala.', doLabel: 'Apri Acme.Shop', done: () => !!S.solution, doIt: () => openSolDlg() },
+  { t: 'Primo comando: manca svn.exe', p: 'Apri Estensioni > SVNAssist > SVN Changes. Se svn.exe non c\'è, SVNAssist chiede (una volta per sessione) se installarlo. Prova OK (winget) oppure Annulla.', doLabel: 'Apri SVN Changes', done: () => S.f.svnPromptDone, doIt: () => openStatus(), extra: () => S.f.svnPromptChoice === 'cancel' ? `<div class="hint">Hai scelto Annulla: il pannello resta vuoto e il prompt non ricompare nella sessione. <button class="btn sm" data-act="tourRetrySvn">Riprova con OK</button></div>` : '' },
+  { t: 'Working copy rilevata', p: 'Dopo l\'installazione riapri il pannello (Estensioni > SVNAssist > SVN Changes): SVNAssist trova da solo la working copy risalendo dalla solution fino alla cartella .svn e mostra branch e file modificati.', doLabel: 'Riapri SVN Changes', done: () => S.f.wcLoaded, doIt: () => openStatus() },
+  { t: 'Primo clic su Generate AI', p: 'Senza nessun provider AI configurato compare il prompt di aiuto (una volta per sessione) con le opzioni disponibili.', doLabel: 'Clicca Generate AI', done: () => S.f.aiNone, doIt: () => vmAi('gen') },
+  { t: 'Configura un provider in Tools > Options', p: 'Apri Strumenti > Opzioni > SVNAssist. Esempio: AI Provider = claude e una Anthropic API Key qualsiasi (la demo non la invia da nessuna parte). Oppure imposta "GitHub CLI loggato" nel Pannello simulazione.', doLabel: 'Apri Opzioni', done: () => resolveChain().chain.length > 0 && (S.f.optionsSaved || S.env.gh), doIt: () => optionsDlg() },
+  { t: 'Genera il messaggio e committa', p: 'Premi Generate AI: il messaggio nasce dai file realmente modificati. Poi, con i file giusti spuntati, premi Commit e controlla la nuova revisione in Log / History.', hint: 'Attenzione, come nella realtà: un file Conflicted (C) o Missing (!) selezionato blocca il commit. Usa Resolve Conflict sul conflitto e SVN Delete (o deseleziona) il file mancante.', doLabel: 'Genera con AI', done: () => S.f.tourCommits > 0, doIt: () => vmAi('gen') },
+];
+const TARGETS = [null, '[data-act="menu"][data-arg="file"]', '[data-act="menu"][data-arg="ext"]', '#dock', '[data-act="genAi"]', '[data-act="menu"][data-arg="tools"]', '[data-act="commit"]'];
+function applyTarget() {
+  $$('.tour-target').forEach(e => e.classList.remove('tour-target'));
+  if (!S.tour.on || S.tour.finished || S.tour.min) return;
+  const sel = TARGETS[S.tour.step]; if (!sel) return;
+  const el = $(sel); if (el && el.offsetParent !== null) el.classList.add('tour-target');
+}
+function renderTour() {
+  const t = $('#tour'), T_ = S.tour;
+  if (!T_.on) { t.hidden = true; return; }
+  t.hidden = false;
+  if (T_.finished) { t.innerHTML = `<div class="tcard"><div class="tl"><div class="th2"><b>Tour completato</b></div><h4>Hai completato il primo utilizzo</h4><p>Ora esplora liberamente: Update (con possibili conflitti), Add to Ignore List, Log / History, i Prerequisiti, il Pannello simulazione e la scheda Prossimamente.</p></div><div class="tr"><button class="btn primary" data-act="tourSkip">Chiudi il tour</button></div></div>`; return; }
+  const s = STEPS[T_.step], done = s.done();
+  if (T_.min) { t.innerHTML = `<div class="tcard"><div class="tl"><div class="th2"><b>Passo ${T_.step + 1} di ${STEPS.length}</b> <span>${esc(s.t)}</span></div></div><div class="tr"><button class="btn sm" data-act="tourMin">Espandi</button><button class="btn sm ghost" data-act="tourSkip">Salta tour</button></div></div>`; return; }
+  const prq = [2, 5].includes(T_.step) ? `<div class="hint">Mancano dei prerequisiti? <button class="btn sm" data-act="prereqOpen">Apri Prerequisiti</button> <span class="tag">Novità in arrivo</span></div>` : '';
+  t.innerHTML = `<div class="tcard"><div class="tl"><div class="th2"><b>Passo ${T_.step + 1} di ${STEPS.length}</b><span class="dots">${STEPS.map((_, i) => `<i class="${i < T_.step ? 'on' : i === T_.step ? 'cur' : ''}"></i>`).join('')}</span></div>
+   <h4>${esc(s.t)}</h4><p>${esc(s.p)}</p>${TARGETS[T_.step] ? '<div class="ptr">&#9650; L\'elemento da usare è evidenziato in giallo nell\'interfaccia.</div>' : ''}${s.hint ? `<div class="hint">${esc(s.hint)}</div>` : ''}${s.extra ? s.extra() : ''}${prq}${done ? '<p class="done">&#10003; Passo completato</p>' : ''}</div>
+   <div class="tr"><button class="btn" data-act="tourPrev" ${T_.step === 0 ? 'disabled' : ''}>Indietro</button>${done ? '' : `<button class="btn" data-act="tourDo">${esc(s.doLabel)}</button>`}
+   <button class="btn primary" data-act="tourNext" ${done ? '' : 'disabled'}>${T_.step === STEPS.length - 1 ? 'Fine' : 'Avanti'}</button><button class="btn ghost" data-act="tourMin">Riduci</button><button class="btn ghost" data-act="tourSkip">Salta tour</button></div></div>`;
+}
+
+// =====================================================================
+//  PREREQUISITI (checklist guidata) - NOVITA' IN ARRIVO nella vera estensione
+// =====================================================================
+function termInstall(title, lines, apply) {
+  let box;
+  const done = modal({ title, body: '<pre id="tm" style="margin:0;background:#0c0c0c;border:1px solid var(--bd);padding:8px;min-height:140px;font:11.5px/1.5 var(--mono);white-space:pre-wrap"></pre>', buttons: [{ label: 'Chiudi', value: true, primary: true, disabled: true }], onOpen: el => { box = el; } });
+  return (async () => {
+    await sleep(80); const pre = box.querySelector('#tm');
+    for (const l of lines) { pre.textContent += l + '\n'; await sleep(550); }
+    apply(); logCmd('[prerequisiti] ' + title);
+    const b = box.querySelector('[data-m="0"]'); b.disabled = false; b.focus();
+    await done; render();
+  })();
+}
+const PREREQ = [
+  { id: 'svn', g: 'Subversion', title: 'svn.exe (client Subversion)', req: 'obbligatorio', ok: () => S.env.svn, winget: true,
+    detail: ok => ok ? 'trovato' : 'non trovato: serve per tutte le operazioni SVN',
+    cmds: ['winget install --id Slik.Subversion -e'], alt: 'In alternativa installa TortoiseSVN (https://tortoisesvn.net) e, nell\'installer, abilita "command line client tools". Poi riavvia Visual Studio o riapri il pannello.',
+    lines: ['> winget install --id Slik.Subversion -e', 'Trovato Subversion [Slik.Subversion] Versione 1.14.2', 'Download in corso...', '  ██████████████████████████████  5.8 MB / 5.8 MB', 'Hash del programma di installazione verificato', 'Installazione completata'], apply: () => { S.env.svn = true; } },
+  { id: 'tortoise', g: 'Subversion', title: 'TortoiseSVN', req: 'opzionale', ok: () => S.env.tortoise, winget: true,
+    detail: ok => ok ? 'trovato: Show Diff apre la finestra diff nativa' : 'senza: Show Diff mostra il diff inline',
+    cmds: ['winget install --id TortoiseSVN.TortoiseSVN -e'], lines: ['> winget install --id TortoiseSVN.TortoiseSVN -e', 'Trovato TortoiseSVN [TortoiseSVN.TortoiseSVN]', 'Download in corso...', 'Installazione completata'], apply: () => { S.env.tortoise = true; } },
+  { id: 'ghcli', g: 'Provider AI (ne basta uno)', title: 'GitHub CLI (gh)', req: 'per Copilot / GitHub Models', ok: () => S.env.ghInstalled, winget: true,
+    detail: ok => ok ? 'installato' : 'non installato',
+    cmds: ['winget install --id GitHub.cli -e'], lines: ['> winget install --id GitHub.cli -e', 'Trovato GitHub CLI [GitHub.cli]', 'Download in corso...', 'Installazione completata'], apply: () => { S.env.ghInstalled = true; } },
+  { id: 'ghlogin', g: 'Provider AI (ne basta uno)', title: 'GitHub CLI: login', req: 'per Copilot / GitHub Models', ok: () => S.env.gh, needs: () => S.env.ghInstalled, needsMsg: 'Installa prima GitHub CLI',
+    detail: ok => ok ? 'token GitHub rilevato (gh auth token)' : 'nessun login: esegui gh auth login',
+    cmds: ['gh auth login'], alt: 'Scegli GitHub.com, HTTPS e il login da browser. Il token resta sul tuo PC e SVNAssist lo usa solo per Copilot e GitHub Models.',
+    lines: ['> gh auth login', '? Where do you use GitHub? GitHub.com', '? Authenticate Git with your GitHub credentials? Yes', '! First copy your one-time code: ABCD-1234', 'Autenticazione nel browser completata', '✓ Logged in as ' + USER], apply: () => { S.env.gh = true; } },
+  { id: 'claudecode', g: 'Provider AI (ne basta uno)', title: 'Claude Code: installazione', req: 'per il provider claudecode', ok: () => S.env.claudeInstalled,
+    detail: ok => ok ? 'claude.exe trovato' : 'claude.exe non trovato',
+    cmds: ['irm https://claude.ai/install.ps1 | iex'], alt: 'Alternativa con npm: npm install -g @anthropic-ai/claude-code',
+    lines: ['> irm https://claude.ai/install.ps1 | iex', 'Download di Claude Code...', 'Installazione in %USERPROFILE%\\.local\\bin', 'claude.exe installato'], apply: () => { S.env.claudeInstalled = true; } },
+  { id: 'claudelogin', g: 'Provider AI (ne basta uno)', title: 'Claude Code: login', req: 'per il provider claudecode', ok: () => S.env.claudeLogin, needs: () => S.env.claudeInstalled, needsMsg: 'Installa prima Claude Code',
+    detail: ok => ok ? 'login effettuato' : 'non loggato',
+    cmds: ['claude', '/login'], alt: 'Esegui "claude" in un terminale, scrivi /login e completa l\'accesso dal browser con il tuo abbonamento Claude.',
+    lines: ['> claude', 'Welcome to Claude Code', '> /login', 'Apertura del browser per l\'autenticazione...', '✓ Login effettuato'], apply: () => { S.env.claudeLogin = true; } },
+  { id: 'akey', g: 'Provider AI (ne basta uno)', title: 'Anthropic API Key', req: 'per il provider claude', ok: () => S.env.anthropicKey || !!S.settings.anthropicapikey.trim(), installLabel: 'Imposta chiave',
+    detail: ok => ok ? 'chiave disponibile' : 'nessuna chiave',
+    cmds: ['setx ANTHROPIC_API_KEY "sk-ant-..."'], alt: 'Oppure incolla la chiave in Tools > Options > SVNAssist > Anthropic API Key.',
+    lines: ['> setx ANTHROPIC_API_KEY "sk-ant-••••••••"', 'Operazione completata. La variabile sarà letta al prossimo avvio di VS.'], apply: () => { S.env.anthropicKey = true; } },
+  { id: 'copilot', g: 'Provider AI (ne basta uno)', title: 'Runtime GitHub Copilot (~100 MB)', req: 'per il provider copilot', ok: () => S.env.copilotRuntime, installLabel: 'Scarica ora', custom: true,
+    detail: ok => ok ? 'scaricato' : 'si scarica da solo al primo uso con provider = copilot',
+    cmds: ['(automatico) AI Provider = copilot'], alt: 'Download una tantum dalla release ufficiale GitHub, verificato con SHA-256, in %LOCALAPPDATA%\\SVNAssist\\copilot-runtime (~200 MB su disco). Richiede anche gh auth login.' },
+];
+const prereqMissing = () => (S.env.svn ? 0 : 1) + (resolveChain().chain.length ? 0 : 1);
+function prereqHTML() {
+  const groups = []; PREREQ.forEach(p => { let g = groups.find(x => x.n === p.g); if (!g) groups.push(g = { n: p.g, items: [] }); g.items.push(p); });
+  const ai = resolveChain().chain;
+  return `<div class="prq"><div class="list-h"><b>Prerequisiti</b><span><span class="tag">Novità in arrivo</span> <button class="btn sm" data-act="prereqToggle">Chiudi</button></span></div>
+   ${groups.map(g => `<h5>${esc(g.n)}</h5>` + g.items.map(p => { const ok = p.ok(); return `<div class="prow"><span class="pi ${ok ? 'ok' : 'ko'}" aria-label="${ok ? 'presente' : 'mancante'}">${ok ? '✓' : '✗'}</span><div class="pn"><b>${esc(p.title)}</b> <span class="muted small">(${esc(p.req)})</span><div class="muted small">${esc(p.detail(ok))}</div><div class="pb" style="margin-top:3px"><button class="btn sm" data-act="prereqInstall" data-arg="${p.id}" ${ok ? 'disabled' : ''}>${esc(p.installLabel || 'Installa')}</button><button class="btn sm" data-act="prereqHow" data-arg="${p.id}">Come fare</button></div></div></div>`; }).join('')).join('')}
+   <div class="small" style="margin-top:6px">${ai.length ? `&#10003; AI pronta: ${esc(ai.map(c => c.name).join(' → '))}` : '&#10007; Nessun provider AI pronto: configurane almeno uno.'}</div></div>`;
+}
+async function prereqInstall(id) {
+  const p = PREREQ.find(x => x.id === id);
+  if (p.needs && !p.needs()) return toast(p.needsMsg);
+  if (p.winget && !S.env.winget) return toast('winget non disponibile: usa "Come fare" per l\'installazione manuale', 4500);
+  if (p.id === 'copilot') {
+    let box; const done = modal({ title: 'Runtime GitHub Copilot', body: '<div class="dl"><div class="pbar"><i id="cb"></i></div><div id="ct">Avvio...</div></div>', buttons: [{ label: 'Chiudi', value: true, primary: true, disabled: true }], onOpen: el => { box = el; } });
+    await sleep(80);
+    await downloadCopilot(d => { if (d) { box.querySelector('#cb').style.width = d.pct + '%'; box.querySelector('#ct').textContent = d.label; } });
+    box.querySelector('#ct').textContent = 'Runtime installato.'; const b = box.querySelector('[data-m="0"]'); b.disabled = false; b.focus(); await done; render(); return;
+  }
+  await termInstall(p.title, p.lines, p.apply);
+}
+function prereqHow(id) {
+  const p = PREREQ.find(x => x.id === id);
+  modal({ title: 'Come fare: ' + p.title, cancel: true, body: `<p>${esc(p.req)}</p>${p.cmds.map(c => `<pre class="cmd">${esc(c)}</pre>`).join('')}${p.alt ? `<p class="small muted">${esc(p.alt)}</p>` : ''}<p class="small"><span class="tag">Novità in arrivo</span> la checklist dei prerequisiti non è ancora nella vera estensione.</p>`,
+    buttons: [{ label: 'Copia comandi', value: false, onClick: () => { try { navigator.clipboard.writeText(p.cmds.join('\n')); toast('Comandi copiati'); } catch (e) { toast('Copia non disponibile: seleziona il testo'); } return false; } }, { label: 'Chiudi', value: true, primary: true }] });
+}
+function prereqOpen() { S.ui.statusOpen = true; S.ui.prereq = true; S.ui.view = 'dock'; render(); const d = $('.prq'); if (d) d.scrollIntoView({ block: 'nearest' }); }
+
+// =====================================================================
+//  ELENCO FILE STILE "GIT CHANGES" (sezioni + cartelle) - NOVITA' IN ARRIVO
+//  Implementato come lista APPIATTITA di righe (depth + expanded), non come
+//  TreeView annidato: e' cosi' che andra' fatto in Remote UI.
+// =====================================================================
+const SEC_NAMES = { conf: 'Conflitti', chg: 'Modifiche', unv: 'Non versionati' };
+const secOf = f => f.st === 'C' ? 'conf' : f.st === '?' ? 'unv' : 'chg';
+const secItems = sec => S.vm.files.filter(f => secOf(f) === sec);
+const under = (items, key) => key ? items.filter(f => f.path === key || f.path.startsWith(key + '\\')) : items;
+const byName = (a, b) => a.name.localeCompare(b.name, 'it', { sensitivity: 'base' });
+function buildTree(items) {
+  const root = { name: '', key: '', dirs: new Map(), files: [] };
+  for (const it of items) {
+    const segs = it.path.split('\\'); let n = root, k = '';
+    for (const s of segs.slice(0, -1)) { k = k ? k + '\\' + s : s; if (!n.dirs.has(s)) n.dirs.set(s, { name: s, key: k, dirs: new Map(), files: [] }); n = n.dirs.get(s); }
+    n.files.push(it);
+  }
+  return root;
+}
+function compact(d) { let label = d.name, cur = d; while (cur.files.length === 0 && cur.dirs.size === 1) { cur = [...cur.dirs.values()][0]; label += '\\' + cur.name; } return { cur, label }; }
+function flattenTree(node, depth, sec, out) {
+  [...node.dirs.values()].sort(byName).forEach(d => {
+    const { cur, label } = compact(d), ck = 's:' + sec + ':' + cur.key, exp = !S.vm.collapsed[ck];
+    out.push({ t: 'folder', sec, key: cur.key, ck, label, depth, exp, count: under(secItems(sec), cur.key).length });
+    if (exp) flattenTree(cur, depth + 1, sec, out);
+  });
+  node.files.slice().sort((a, b) => base(a.path).localeCompare(base(b.path), 'it', { sensitivity: 'base' })).forEach(it => out.push({ t: 'file', item: it, depth }));
+}
+function folderKeys(node, sec, keys) { [...node.dirs.values()].forEach(d => { const { cur } = compact(d); keys.push('s:' + sec + ':' + cur.key); folderKeys(cur, sec, keys); }); }
+function allFolderKeys() { const k = []; ['conf', 'chg', 'unv'].forEach(s => folderKeys(buildTree(secItems(s)), s, k)); return k; }
+function selState(items) { const n = items.filter(f => f.sel).length; return n === 0 ? 0 : n === items.length ? 2 : 1; }
+function chk(act, arg, items, label) { const s = selState(items); return `<input type="checkbox" data-act="${act}" data-arg="${esc(arg)}" ${s === 2 ? 'checked' : ''} ${s === 1 ? 'data-indet="1"' : ''} aria-label="${esc(label)}">`; }
+function treeHTML() {
+  const v = S.vm; let h = '';
+  ['conf', 'chg', 'unv'].forEach(sec => {
+    const items = secItems(sec); if (!items.length) return;
+    const open = !v.collapsed['sec:' + sec];
+    h += `<div class="grow srow" data-ctxsec="${sec}"><button class="chev" data-act="toggleSec" data-arg="${sec}" aria-expanded="${open}" aria-label="${open ? 'Comprimi' : 'Espandi'} ${SEC_NAMES[sec]}">${open ? '&#9662;' : '&#9656;'}</button>${chk('toggleGroup', sec + '|', items, 'Seleziona tutto: ' + SEC_NAMES[sec])}<span>${SEC_NAMES[sec]} <span class="muted">(${items.length})</span></span></div>`;
+    if (!open) return;
+    const rows = [];
+    if (v.view === 'tree') flattenTree(buildTree(items), 0, sec, rows);
+    else items.slice().sort((a, b) => a.path.localeCompare(b.path, 'it', { sensitivity: 'base' })).forEach(it => rows.push({ t: 'file', item: it, depth: 0, list: true }));
+    rows.forEach(r => {
+      const ind = `padding-left:${8 + (r.depth + 1) * 16 - 16 + (r.t === 'file' && v.view === 'tree' ? 16 : 0)}px`;
+      if (r.t === 'folder') {
+        const its = under(secItems(sec), r.key), arg = sec + '|' + r.key;
+        h += `<div class="grow" style="${ind}" data-ctxfolder="${esc(arg)}"><button class="chev" data-act="toggleFolder" data-arg="${esc(r.ck)}" aria-expanded="${r.exp}" aria-label="${r.exp ? 'Comprimi' : 'Espandi'} ${esc(r.label)}">${r.exp ? '&#9662;' : '&#9656;'}</button>${chk('toggleGroup', arg, its, 'Seleziona cartella ' + r.label)}<span aria-hidden="true">&#128193;</span><button class="nm" data-act="toggleFolder" data-arg="${esc(r.ck)}" title="${esc(r.key)}">${esc(r.label)}</button><span class="muted small">${r.count}</span></div>`;
+      } else {
+        const f = r.item, p = esc(f.path), col = `var(--st-${f.st === '?' ? 'U' : f.st === '!' ? 'X' : f.st})`;
+        const nm = base(f.path) + (f.prop ? ' (svn:ignore)' : ''), fld = parentDir(f.path) === '.' ? '' : parentDir(f.path);
+        h += `<div class="grow ${v.cur === f.path ? 'cur' : ''}" style="${ind}" data-ctxitem="${p}"><input type="checkbox" data-act="toggleFile" data-arg="${p}" ${f.sel ? 'checked' : ''} aria-label="Seleziona ${p}"><span class="st" style="color:${col};font:700 12px var(--mono);width:14px;text-align:center" title="${esc(f.action)}">${f.st}</span>${f.dir ? '<span aria-hidden="true">&#128193;</span>' : ''}<button class="nm" style="${r.list ? 'font-weight:700' : ''}" data-act="selRow" data-arg="${p}" title="${esc(WC + '\\' + f.path)} (doppio clic = diff)">${esc(nm)}</button>${r.list ? `<span class="dirp">${esc(fld)}</span>` : '<span class="fill"></span>'}<button class="btn sm" data-act="showDiff" data-arg="${p}">Diff</button></div>`;
+      }
+    });
+  });
+  return h;
+}
+function treeToolbarHTML() {
+  const t = S.vm.view === 'tree';
+  return `<div class="row"><button class="btn sm" data-act="selAll" title="Seleziona tutti i file">Select All</button><button class="btn sm" data-act="selNone" title="Deseleziona tutti i file">Deselect All</button>${t ? `<button class="btn sm" data-act="expandAll">Espandi tutto</button><button class="btn sm" data-act="collapseAll">Comprimi tutto</button>` : ''}<span style="flex:1"></span><button class="btn sm" data-act="setView" data-arg="tree" aria-pressed="${t}">Albero</button><button class="btn sm" data-act="setView" data-arg="list" aria-pressed="${!t}">Lista</button></div>`;
+}
+
+// ---------- operazioni su cartelle / sezioni ----------
+const parseArg = a => { const i = a.indexOf('|'); return [a.slice(0, i), a.slice(i + 1)]; };
+async function folderOp(kind, arg) {
+  const vm = S.vm, [sec, key] = parseArg(arg), items = under(secItems(sec), key), where = key || SEC_NAMES[sec];
+  const done = async msg => { vm.statusMsg = msg; vm.err = false; render(); await vmRefresh(); vm.statusMsg = msg; render(); };
+  try {
+    if (kind === 'add') {
+      const t = items.filter(f => f.st === '?'); if (!t.length) { vm.statusMsg = 'Nessun file idoneo per SVN Add.'; return render(); }
+      vm.statusMsg = 'Aggiunta a SVN in corso...'; render(); await svn(`add --force "${fwd(key || '.')}"`, 500);
+      t.forEach(f => svnAdd(f.path)); await done(`Aggiunti a SVN: ${t.length} elementi.`);
+    } else if (kind === 'rev') {
+      const t = items.filter(f => f.canRev); if (!t.length) { vm.statusMsg = 'Nessun file idoneo per SVN Revert.'; return render(); }
+      const go = await modal({ title: key ? 'SVN Revert cartella' : 'Revert tutto', icon: '&#9888;&#65039;', cancel: false, body: `<p>Annullare le modifiche locali di ${t.length} elementi in <b>${esc(where)}</b>?\nL'operazione non può essere annullata.</p><div class="flist" style="max-height:150px;min-height:0;margin:6px 0">${t.slice(0, 15).map(f => `<div style="padding:1px 6px;font-family:var(--mono);font-size:12px"><span style="color:var(--st-${f.st === '!' ? 'X' : f.st})">${f.st}</span> ${esc(f.path)}</div>`).join('')}${t.length > 15 ? `<div class="muted small" style="padding:2px 6px">... altri ${t.length - 15}</div>` : ''}</div><p><span class="tag">Novità in arrivo</span> <span class="small muted">azione di cartella/sezione non ancora nella vera estensione.</span></p>`, buttons: [{ label: 'Sì, annulla le modifiche', value: true, primary: true }, { label: 'No', value: false }] });
+      if (!go) return;
+      vm.statusMsg = 'Revert in corso...'; render(); await svn('revert -R', 500); t.forEach(f => svnRevert(f.path)); await done(`Revert completato su ${t.length} elementi.`);
+    } else if (kind === 'ign') {
+      if (!key || !items.length || items.some(f => f.st !== '?')) { vm.statusMsg = 'Add to Ignore List è disponibile solo per elementi unversioned.'; return render(); }
+      vm.statusMsg = 'Aggiornamento ignore list in corso...'; render(); await svn('propset svn:ignore', 400); svnIgnore(key); await done(`Aggiunto alla ignore list: ${key}`);
+    } else if (kind === 'diff') {
+      const t = items.filter(f => !f.dir && ['M', 'A', 'D', 'R', 'C'].includes(f.st));
+      if (S.env.tortoise && t.length) { vm.statusMsg = `Diff aperto in TortoiseSVN: ${where}`; toast('Diff aperto in TortoiseSVN: ' + where); return render(); }
+      vm.diffTitle = `Diff cartella: ${where}`; vm.diffContent = 'Caricamento diff...'; vm.diffVisible = true; render(); await svn('diff "' + fwd(key || '.') + '"', 400);
+      const d = t.map(f => fileDiffText(f.path)).join('\n').trim(); vm.diffContent = d || '(Nessuna differenza testuale — il file potrebbe essere binario o non versionato)'; vm.statusMsg = `Diff inline caricato: ${where}`; render();
+    }
+  } catch (e) { vm.statusMsg = 'Errore: ' + e.message; vm.err = true; render(); }
+}
+function setGroup(arg, on) { const [sec, key] = parseArg(arg); under(secItems(sec), key).forEach(f => f.sel = on); }
+
+// =====================================================================
+//  DIALOGHI E FLUSSI
+// =====================================================================
+async function vsixFlow() {
+  if (S.vsInstalled) return toast('SVNAssist è già installato');
+  const go = await modal({
+    title: 'VSIX Installer', body: `<div class="vsix"><div class="row"><div class="logo">SVN</div><div><b>SVNAssist</b><div class="muted">Estensione per Visual Studio 2026 · Subversion + commit message con AI</div></div></div>
+      <p class="small muted" style="margin-top:12px">Prodotti di destinazione: Visual Studio Community / Professional / Enterprise 2026. Dopo l'installazione sarà necessario riavviare Visual Studio.</p></div>`,
+    buttons: [{ label: 'Installa', value: true, primary: true }, { label: 'Annulla', value: false }], cancel: false,
+  });
+  if (!go) return;
+  let box; const p = modal({ title: 'VSIX Installer', body: '<div class="vsix"><p id="vx">Installazione in corso...</p><div class="pbar"><i id="vb" style="width:0"></i></div></div>', buttons: [{ label: 'Chiudi', value: true, primary: true, disabled: true }], onOpen: el => box = el });
+  await sleep(80);
+  for (let i = 1; i <= 10; i++) { box.querySelector('#vb').style.width = i * 10 + '%'; await sleep(160); }
+  box.querySelector('#vx').textContent = 'Installazione completata. Riavvia Visual Studio per usare SVNAssist.';
+  const b = box.querySelector('[data-m="0"]'); b.textContent = 'Riavvia Visual Studio'; b.disabled = false; b.focus();
+  await p;
+  S.vsInstalled = true; restartVS();
+}
+async function restartVS() {
+  S.restarting = true; render(); await sleep(1400); S.restarting = false;
+  S.sess.svnPrompted = false; S.sess.aiPrompted = false;
+  S.ui.statusOpen = false; S.ui.menu = null; S.vm = freshVM(); S.lvm = freshLVM(); S.watch.pending = false;
+  render();
+}
+async function openSolDlg() {
+  S.ui.menu = null;
+  if (S.solution) return toast('Una soluzione è già aperta');
+  const r = await modal({
+    title: 'Apri progetto/soluzione', body: `<p class="muted small">Scegli una soluzione:</p>
+      <label class="tg"><input type="radio" name="sol" value="a" checked><span><b>Acme.Shop.sln</b> <span class="tag ok">working copy SVN</span><span class="hint">${esc(WC)}</span></span></label>
+      <label class="tg"><input type="radio" name="sol" value="b"><span><b>Appunti.sln</b> <span class="tag">non versionata</span><span class="hint">C:\\temp\\Appunti</span></span></label>`,
+    buttons: [{ label: 'Apri', value: 'ok', primary: true, onClick: (el, close) => { close(el.querySelector('input:checked').value); return false; } }, { label: 'Annulla', value: null }], cancel: null,
+  });
+  if (!r) return;
+  S.solution = r === 'a' ? { name: 'Acme.Shop', dir: WC, inWc: true } : { name: 'Appunti', dir: 'C:\\temp\\Appunti', inWc: false };
+  render();
+  if (S.ui.statusOpen) { toast('Cambio solution rilevato (polling ogni 5 s)'); await sleep(1200); await autoDetect(); }
+}
+async function closeSol() { S.ui.menu = null; S.solution = null; render(); if (S.ui.statusOpen) { await sleep(800); await autoDetect(); } }
+
+const SETDEF = [
+  ['aiprovider', 'AI Provider (auto / copilot / claudecode / claude / openai) - copilot scarica ~100 MB al primo uso'],
+  ['claudemodel', 'Claude Model (Claude Code e Claude API, es. claude-opus-5-5, claude-haiku-5-5)'],
+  ['anthropicapikey', 'Anthropic API Key (provider Claude API; vuota = ANTHROPIC_API_KEY)'],
+  ['copilotmodel', 'GitHub Copilot Model (vuoto = predefinito di Copilot)'],
+  ['aiendpoint', 'AI Endpoint URL (provider openai; default: GitHub Models)'],
+  ['aiapikey', 'AI API Key (provider openai: GitHub PAT per GitHub Models, oppure API key OpenAI)'],
+  ['aimodel', 'AI Model (provider openai, es. gpt-4o-mini)'],
+  ['defaultlanguage', 'Default Language (auto / italiano / english)'],
+  ['workingcopypath', 'Working Copy Path'],
+];
+const PROV_HINT = { auto: 'Ordine: Copilot (se runtime già scaricato) → Claude Code → Claude API → OpenAI-compatibile. Se uno fallisce si passa al successivo.', copilot: "Serve 'gh auth login'. Al primo uso scarica il runtime (~100 MB, verifica SHA-256).", claudecode: 'Serve Claude Code installato e con login (esegue "claude -p").', claude: 'Serve una Anthropic API Key (qui sotto) oppure la variabile ANTHROPIC_API_KEY.', openai: "Serve una AI API Key; per GitHub Models basta il token di 'gh auth login'." };
+async function optionsDlg() {
+  S.ui.menu = null;
+  const st = S.settings;
+  const rows = SETDEF.map(([k, label]) => `<div class="opt-row"><label for="opt-${k}">${esc(label)}</label><input type="text" id="opt-${k}" value="${esc(st[k])}" autocomplete="off" ${k === 'aiprovider' ? 'list="provlist"' : ''}><div class="h" id="h-${k}"></div></div>`).join('');
+  const r = await modal({
+    title: 'Opzioni', wide: true, cancel: false,
+    body: `<datalist id="provlist"><option>auto</option><option>copilot</option><option>claudecode</option><option>claude</option><option>openai</option></datalist>
+      <div class="opt-grid"><div class="opt-tree"><div>&#9656; Ambiente</div><div>&#9656; Progetti e soluzioni</div><div>&#9656; Editor di testo</div><div class="on">&#9662; SVNAssist</div></div><div class="opt-form">${rows}<div class="note" id="tokbadge"></div><div class="small muted">Le chiavi inserite qui sono solo di prova: la demo non le invia a nessun servizio.</div></div></div>`,
+    buttons: [{ label: 'OK', value: true, primary: true, onClick: el => { SETDEF.forEach(([k]) => { st[k] = el.querySelector('#opt-' + k).value; }); S.f.optionsSaved = true; } }, { label: 'Annulla', value: false }],
+    onOpen: el => {
+      const upd = () => {
+        const p = el.querySelector('#opt-aiprovider').value.trim().toLowerCase(), h = el.querySelector('#h-aiprovider');
+        const ok = p === '' || PROV_HINT[p]; h.className = 'h' + (ok ? '' : ' bad'); h.textContent = ok ? PROV_HINT[p || 'auto'] : 'Valore non riconosciuto: con questo valore nessun provider viene usato.';
+        const ep = el.querySelector('#opt-aiendpoint').value, key = el.querySelector('#opt-aiapikey').value.trim();
+        el.querySelector('#h-defaultlanguage').textContent = 'auto = lingua del codice (qui: italiano) · italiano · english';
+        el.querySelector('#tokbadge').innerHTML = isGhModels(ep) ? '&#128274; Endpoint GitHub Models: se la AI API Key è vuota viene usato il token GitHub rilevato (gh / GITHUB_TOKEN).' : `&#128274; Endpoint non GitHub: il token GitHub rilevato NON viene mai inviato qui${key ? '' : ' (senza AI API Key il provider openai non è disponibile)'}.`;
+      };
+      el.addEventListener('input', upd); upd();
+    },
+  });
+  if (r) { toast('Impostazioni salvate'); render(); }
+}
+async function commitDialog() {
+  const vm = S.vm, sel = vm.files.filter(f => f.sel);
+  if (!vm.wcPath) return toast('Apri prima SVN Changes');
+  const r = await modal({
+    title: 'Commit', cancel: false, body: `<b>File da committare:</b><div class="flist" style="max-height:120px;min-height:40px;margin:4px 0 8px">${sel.map(f => `<div style="padding:2px 6px">${esc(f.path)}</div>`).join('') || '<div class="empty-list">Nessun file selezionato</div>'}</div>
+     <div class="row" style="display:flex;gap:8px;align-items:center;margin-bottom:4px"><span>Lingua AI:</span><select id="dl-lang" style="width:110px"><option>Auto</option><option>Italiano</option><option>English</option></select>
+     <button class="btn" id="dl-gen">🤖 Genera con AI</button><button class="btn" id="dl-imp">✨ Migliora bozza</button></div>
+     <div id="dl-ai" style="font-style:italic;min-height:18px;margin-bottom:4px"></div><div id="dl-tr"></div><b>Messaggio di commit:</b><textarea id="dl-msg" style="min-height:100px;margin-top:4px">${esc(vm.commitMsg)}</textarea>
+     <p class="small muted" style="font-style:italic">Scrivi il messaggio e clicca OK per committare, oppure Cancel per annullare. <span class="tag soon">non ancora collegato ai comandi</span></p>`,
+    buttons: [{ label: 'OK', value: true, primary: true, onClick: el => { if (!el.querySelector('#dl-msg').value.trim()) { el.querySelector('#dl-ai').textContent = '⚠️ Scrivi un messaggio di commit.'; return false; } vm.commitMsg = el.querySelector('#dl-msg').value; } }, { label: 'Cancel', value: false }],
+    onOpen: el => {
+      el.querySelector('#dl-lang').value = { italiano: 'Italiano', english: 'English' }[S.settings.defaultlanguage.toLowerCase()] || 'Auto';
+      const mk = () => ({
+        noProv: '⚠️ AI non configurata — imposta endpoint e API key nelle opzioni.', noDraft: '⚠️ Scrivi prima una bozza del messaggio da migliorare.', noDiff: '⚠️ Nessun diff disponibile — non ci sono modifiche da analizzare.',
+        generating: '🤖 Generazione in corso...', improving: '✨ Miglioramento in corso...', generated: '✅ Messaggio generato con AI.', improved: '✅ Messaggio migliorato con AI.', err: '❌ Errore AI: ',
+        status: t => { el.querySelector('#dl-ai').textContent = t; }, busy: b => { el.querySelectorAll('#dl-gen,#dl-imp').forEach(x => x.disabled = b); },
+        draft: () => el.querySelector('#dl-msg').value, set: t => { el.querySelector('#dl-msg').value = t; }, lang: () => el.querySelector('#dl-lang').value,
+        trace: t => { const tmp = { trace: t, dl: null }; el.querySelector('#dl-tr').innerHTML = traceHTML(tmp); }, dl: d => { el.querySelector('#dl-tr').innerHTML = traceHTML({ trace: [], dl: d }); },
+      });
+      el.querySelector('#dl-gen').onclick = () => aiCore('gen', mk());
+      el.querySelector('#dl-imp').onclick = () => aiCore('improve', mk());
+    },
+  });
+  if (r) await vmCommit();
+}
+async function vmAi(kind) { if (S.vm.aiBusy) return; await aiCore(kind === 'improve' ? 'improve' : 'gen', vmAiUi()); }
+
+// mini wizard riusabile dalle anteprime "Prossimamente"
+function wizard(title, steps) {
+  let i = 0, elRef;
+  const draw = () => {
+    const s = steps[i]; elRef.querySelector('.m-body > div').innerHTML = s.body;
+    const nb = elRef.querySelector('[data-m="1"]'); nb.textContent = s.next || (i === steps.length - 1 ? 'Fine' : 'Avanti'); nb.disabled = false;
+    if (s.onEnter) s.onEnter(elRef, nb);
+  };
+  return modal({
+    title: title + ' (anteprima)', wide: true, banner: 'ANTEPRIMA — funzione NON ancora presente nell\'estensione', cancel: false, body: '',
+    buttons: [{ label: 'Annulla', value: false }, { label: 'Avanti', value: true, primary: true, onClick: (el, close) => { if (i < steps.length - 1) { i++; draw(); return false; } } }],
+    onOpen: el => { elRef = el; draw(); },
+  });
+}
+const SOON = {
+  switch: () => wizard('Switch branch', [
+    { body: `<p>Scegli il branch a cui passare (<code>svn switch</code>). Branch attuale: <b>${esc(S.branch)}</b></p>${['trunk', 'branches/feature-coupon', 'branches/release-2.1', 'tags/v2.0'].map((b, k) => `<label class="tg"><input type="radio" name="br" value="${b}" ${k === 1 ? 'checked' : ''}><span>^/${b}</span></label>`).join('')}`, next: 'Switch' },
+    { body: '<p id="swo" style="font-family:var(--mono);font-size:12px;white-space:pre-wrap"></p>', next: 'Fine', onEnter: async (el, nb) => { nb.disabled = true; const b = 'branches/…'; const o = el.querySelector('#swo'); for (const l of ['$ svn switch ^/' + b, 'U    Core/Services/OrderService.cs', 'U    Web/Controllers/CartController.cs', 'Updated to revision 126.']) { o.textContent += l + '\n'; await sleep(450); } nb.disabled = false; } },
+  ]),
+  merge: () => wizard('Merge con risoluzione conflitti', [
+    { body: '<p>Esegui il merge di <b>branches/feature-coupon</b> in <b>trunk</b> (<code>svn merge</code>).</p><label class="tg"><input type="checkbox" checked><span>Esegui prima un dry-run</span></label>', next: 'Avvia merge' },
+    { body: '<p id="mo" style="font-family:var(--mono);font-size:12px;white-space:pre-wrap"></p>', onEnter: async (el, nb) => { nb.disabled = true; const o = el.querySelector('#mo'); for (const l of ['--- Merging r126 through r131 into \'.\':', 'U    Core/Models/Coupon.cs', 'U    Core/Services/OrderService.cs', 'C    Web/Controllers/CheckoutController.cs', 'Summary of conflicts: Text conflicts: 1']) { o.textContent += l + '\n'; await sleep(420); } nb.disabled = false; nb.textContent = 'Risolvi il conflitto'; } },
+    { body: `<p>Conflitto in <b>Web/Controllers/CheckoutController.cs</b>: scegli come risolvere.</p><div class="three"><div><h5>Mia (trunk)</h5><pre id="c1">var result = _gateway.Charge(request, retries: 3);\n_log.Info(...);</pre></div><div><h5>Loro (feature-coupon)</h5><pre id="c2">var result = _gateway.ChargeAsync(request)\n   .GetAwaiter().GetResult();</pre></div><div><h5>Risultato</h5><pre id="c3" contenteditable="true">var result = _gateway.ChargeAsync(request, retries: 3)\n   .GetAwaiter().GetResult();\n_log.Info(...);</pre></div></div><p style="margin-top:8px"><button class="btn sm" data-r="1">Usa mia</button> <button class="btn sm" data-r="2">Usa loro</button> <button class="btn sm" data-r="3">Unisci entrambe</button></p>`, next: 'Segna come risolto',
+      onEnter: el => el.querySelectorAll('[data-r]').forEach(b => b.onclick = () => { el.querySelector('#c3').textContent = el.querySelector('#c' + (b.dataset.r === '3' ? '3' : b.dataset.r)).textContent; toast('Anteprima: risultato aggiornato'); }) },
+    { body: '<p><b>Merge completato.</b> 1 conflitto risolto. Le modifiche sono nella working copy e compaiono in SVN Changes: ora puoi fare Commit.</p>' },
+  ]),
+  branchtag: () => wizard('Crea Branch / Tag', [
+    { body: `<div class="opt-row"><label>Tipo</label><select id="bt"><option>Branch</option><option>Tag</option></select></div><div class="opt-row"><label>Nome</label><input type="text" id="bn" value="feature-wishlist"></div><div class="opt-row"><label>Messaggio</label><input type="text" value="Crea il branch per la wishlist"></div><div class="note" id="bc"></div>`, next: 'Crea',
+      onEnter: el => { const u = () => el.querySelector('#bc').textContent = `svn copy ^/${S.branch} ^/${el.querySelector('#bt').value === 'Tag' ? 'tags' : 'branches'}/${el.querySelector('#bn').value} -m "..."`; el.addEventListener('input', u); u(); } },
+    { body: '<p><b>Creato.</b> Vuoi passare subito al nuovo branch (switch)?</p><label class="tg"><input type="checkbox" checked><span>Switch automatico</span></label>' },
+  ]),
+  cleanup: () => wizard('Cleanup', [
+    { body: '<p>Pulisci la working copy (<code>svn cleanup</code>):</p>' + ['Rimuovi i lock', 'Rimuovi file non versionati', 'Rimuovi file ignorati', 'Ripristina i file mancanti'].map((x, i) => `<label class="tg"><input type="checkbox" ${i === 0 ? 'checked' : ''}><span>${x}</span></label>`).join(''), next: 'Esegui' },
+    { body: '<p id="co" style="font-family:var(--mono);font-size:12px;white-space:pre-wrap"></p>', onEnter: async el => { const o = el.querySelector('#co'); for (const l of ['$ svn cleanup', 'Rimossi 2 lock', 'Working copy pulita.']) { o.textContent += l + '\n'; await sleep(400); } } },
+  ]),
+  blame: () => {
+    const ls = T.orderMod.split('\n'), bs = T.orderBase.split('\n'), au = ['lbianchi', 'mrossi', 'andre', 'gverdi'], msg = ['Import iniziale', 'Aggiunge log pagamenti', 'Refactoring InventoryService', 'Corregge IVA'];
+    const rows = ls.map((l, i) => { const inb = bs.includes(l); const k = i % 4; return `<tr title="${inb ? 'r' + (118 + k * 2) + ' · ' + msg[k] : 'modifica locale non ancora committata'}"><td>${i + 1}</td><td>${inb ? 'r' + (118 + k * 2) : '—'}</td><td>${inb ? au[k] : USER + ' (locale)'}</td><td>${esc(l)}</td></tr>`; }).join('');
+    return modal({ title: 'Blame: Core/Services/OrderService.cs (anteprima)', wide: true, banner: 'ANTEPRIMA — funzione NON ancora presente nell\'estensione', body: `<div style="overflow:auto;max-height:55vh"><table class="blame">${rows}</table></div><p class="small muted">Passa il mouse su una riga per vedere il messaggio della revisione.</p>` });
+  },
+  se: () => modal({ title: 'Esplora soluzioni (anteprima)', wide: true, banner: 'ANTEPRIMA — il menu SVN nel tasto destro di Esplora soluzioni NON esiste ancora', body: `<p class="muted small">Fai clic destro su un file:</p><div class="flist" style="height:150px" id="semini"><div class="frow" style="grid-template-columns:1fr" data-minictx="1">&#128196; OrderService.cs</div><div class="frow" style="grid-template-columns:1fr" data-minictx="1">&#128196; CartController.cs</div><div class="frow" style="grid-template-columns:1fr" data-minictx="1">&#128196; Coupon.cs</div></div>` }),
+  auto: () => modal({ title: 'Autocompletamento messaggio (anteprima)', wide: true, banner: 'ANTEPRIMA — funzione NON ancora presente nell\'estensione', body: `<p class="small muted">Scrivi <code>#</code> per i ticket, oppure inizia con "Fix", "Agg"… Tab o clic per accettare.</p><div style="position:relative"><textarea id="ac" style="min-height:110px" placeholder="Messaggio di commit"></textarea><div class="sugg" id="acs" hidden></div></div>`,
+    onOpen: el => {
+      const ta = el.querySelector('#ac'), box = el.querySelector('#acs');
+      const issues = ['#1423 Coupon scaduti applicati per errore', '#1431 Checkout lento con carrello grande', '#1440 Aggiungere wishlist'];
+      const recent = S.log.slice(0, 4).map(l => l.msg);
+      const files = ['OrderService', 'CartController', 'CheckoutController', 'PaymentGateway'];
+      let cur = [];
+      const upd = () => {
+        const v = ta.value, w = (v.split(/\s/).pop() || ''), lastLine = v.split('\n').pop();
+        cur = [];
+        if (w.startsWith('#')) cur = issues.filter(x => x.startsWith(w)).map(x => ({ label: x, rep: w, ins: x.split(' ')[0] + ' ' }));
+        else if (w.length >= 2) cur = files.filter(x => x.toLowerCase().startsWith(w.toLowerCase())).map(x => ({ label: x + ' (file modificato)', rep: w, ins: x }));
+        if (!cur.length && lastLine.length >= 3 && !v.includes('\n')) cur = recent.filter(x => x.toLowerCase().startsWith(lastLine.toLowerCase())).map(x => ({ label: x + '  (da cronologia)', rep: lastLine, ins: x }));
+        box.hidden = !cur.length; box.style.top = '100%'; box.innerHTML = cur.map((c, i) => `<button class="${i === 0 ? 'on' : ''}" data-i="${i}">${esc(c.label)}</button>`).join('');
+      };
+      const acc = i => { const c = cur[i]; if (!c) return; ta.value = ta.value.slice(0, ta.value.length - c.rep.length) + c.ins; box.hidden = true; ta.focus(); };
+      ta.addEventListener('input', upd);
+      ta.addEventListener('keydown', e => { if (e.key === 'Tab' && !box.hidden) { e.preventDefault(); e.stopPropagation(); acc(0); } });
+      box.addEventListener('click', e => { const b = e.target.closest('button'); if (b) acc(+b.dataset.i); });
+    } }),
+};
+const SOON_CARDS = [
+  ['switch', 'Switch branch', 'Passa da trunk a un branch o a un tag direttamente dall\'IDE (svn switch), con aggiornamento della working copy.', ['Elenco branch/tag del repository', 'Avviso se ci sono modifiche locali']],
+  ['merge', 'Merge con risoluzione dei conflitti', 'Merge tra branch con riepilogo e un risolutore dei conflitti a tre pannelli (mia / loro / risultato).', ['Dry-run prima del merge', 'Risoluzione guidata di ogni conflitto']],
+  ['branchtag', 'Creazione di Branch e Tag', 'Crea branch e tag (svn copy) con un modulo, con switch automatico opzionale.', ['Anteprima del comando', 'Messaggio di commit predefinito']],
+  ['blame', 'Blame / Annotate', 'Chi ha scritto ogni riga e in quale revisione, con il messaggio al passaggio del mouse.', ['Vista affiancata all\'editor']],
+  ['cleanup', 'Cleanup', 'Pulizia della working copy: lock, file non versionati e ignorati, file mancanti.', ['Opzioni selezionabili', 'Output del comando']],
+  ['se', 'Menu SVN in Esplora soluzioni', 'Tasto destro su file e cartelle: Update, Commit, Diff, Revert, Blame, Log senza aprire il pannello.', ['Icone di stato sui file']],
+  ['auto', 'Autocompletamento nel messaggio di commit', 'Suggerimenti mentre scrivi: ticket, nomi dei file modificati, messaggi recenti.', ['Tab per accettare']],
+];
+function renderSoon() {
+  $('#view-soon').innerHTML = `<div class="soon-wrap"><h2>Prossimamente <span class="tag soon">NON ancora implementato</span></h2><p class="muted">Queste funzioni <b>non esistono ancora</b> nell'estensione: sono anteprime cliccabili per discutere cosa costruire dopo. Nulla qui modifica la working copy simulata.</p>
+   <div class="soon-grid">${SOON_CARDS.map(([id, t, d, l]) => `<div class="card"><span class="tag soon">Non ancora nell'estensione</span><h3>${esc(t)}</h3><p>${esc(d)}</p><ul>${l.map(x => `<li>${esc(x)}</li>`).join('')}</ul><button class="btn" data-act="soon" data-arg="${id}">Apri anteprima</button></div>`).join('')}</div></div>`;
+}
+
+// =====================================================================
+//  AZIONI (event delegation)
+// =====================================================================
+function ctxMenu(x, y, items) {
+  const h = $('#ctxhost');
+  h.innerHTML = `<div class="ctx" role="menu" style="left:${Math.min(x, innerWidth - 210)}px;top:${Math.min(y, innerHeight - items.length * 28)}px;z-index:400">${items.map(i => i === '-' ? '<hr>' : `<button role="menuitem" ${i.off ? 'disabled' : ''} data-act="${i.act}" data-arg="${esc(i.arg || '')}" data-arg2="${esc(i.arg2 || '')}">${esc(i.label)}</button>`).join('')}</div>`;
+  const f = h.querySelector('button:not(:disabled)'); if (f) f.focus();
+}
+const closeCtx = () => { $('#ctxhost').innerHTML = ''; };
+function runCmd(c) {
+  S.ui.menu = null; S.ui.sub = false;
+  if (c === 'status' || c === 'commit') return openStatus();
+  if (c === 'log') { S.ui.logOpen = true; S.ui.active = '__log'; S.ui.view = 'doc'; S.ui.seOpen = false; return render(); }
+  if (c === 'update') return menuUpdate();
+}
+async function menuUpdate() {
+  render();
+  if (!await ensureSvn()) return;
+  if (!S.solution) return prompt('Nessuna solution aperta. Apri una solution in una working copy SVN.');
+  try {
+    if (!S.solution.inWc) throw new Error(`svn: E155007: '${S.solution.dir}' is not a working copy`);
+    await svn('update', 900); const out = svnUpdate(); toast('svn update (output demo): ' + out.join(' | '), 5000);
+    await prompt(`Update completato per:\n${S.solution.dir}`);
+    if (S.ui.statusOpen) await vmRefresh();
+  } catch (e) { await prompt(`Errore durante l'update:\n${e.message}`); }
+  render();
+}
+const ACT = {
+  tab: a => { $$('.tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.arg === a)); $('#view-sim').hidden = a !== 'sim'; $('#view-soon').hidden = a !== 'soon'; try { localStorage.setItem('svnassist-demo-tab', a); } catch (e) { } if (a === 'soon') renderSoon(); },
+  togglePanel: () => { S.ui.panelOpen = !S.ui.panelOpen; render(); },
+  reset: () => { startMode('free', true); },
+  tourStart: () => startMode('first'),
+  tourNext: () => { const T_ = S.tour; if (T_.step >= STEPS.length - 1) T_.finished = true; else T_.step++; render(); },
+  tourPrev: () => { if (S.tour.step > 0) S.tour.step--; render(); },
+  tourSkip: () => { S.tour.on = false; render(); },
+  tourDo: () => STEPS[S.tour.step].doIt(),
+  tourRetrySvn: () => { S.env.svn = false; S.sess.svnPrompted = false; S.f.svnPromptDone = false; S.f.svnPromptChoice = null; S.ui.statusOpen = false; S.vm = freshVM(); render(); toast('Riapri SVN Changes e scegli OK'); },
+  menu: a => { S.ui.menu = S.ui.menu === a ? null : a; S.ui.sub = false; if (!['file', 'tools', 'ext'].includes(a)) { S.ui.menu = null; toast('Menu non simulato: qui contano solo File, Strumenti ed Estensioni'); } render(); },
+  subToggle: () => { S.ui.sub = !S.ui.sub; render(); },
+  cmd: a => runCmd(a),
+  vsixOpen: () => { S.ui.menu = null; render(); vsixFlow(); },
+  openSolDlg: () => openSolDlg(), closeSol: () => closeSol(), optionsOpen: () => optionsDlg(),
+  openFile: a => { if (!S.ui.open.includes(a)) S.ui.open.push(a); S.ui.active = a; S.ui.selFile = a; S.ui.view = 'doc'; S.ui.seOpen = false; render(); },
+  nvSe: () => { S.ui.seOpen = !S.ui.seOpen; render(); }, nvView: a => { S.ui.view = a; S.ui.seOpen = false; render(); },
+  prereqToggle: () => { S.ui.prereq = !S.ui.prereq; render(); }, prereqOpen: () => prereqOpen(), prereqInstall: a => prereqInstall(a), prereqHow: a => prereqHow(a),
+  tourMin: () => { S.tour.min = !S.tour.min; render(); },
+  activate: a => { S.ui.active = a; render(); },
+  closeTab: a => { S.ui.open = S.ui.open.filter(x => x !== a); if (a === '__log') S.ui.logOpen = false; if (S.ui.active === a) S.ui.active = S.ui.open[0] || (S.ui.logOpen ? '__log' : null); render(); },
+  saveFile: a => saveFile(a),
+  statusClose: () => { S.ui.statusOpen = false; render(); },
+  refresh: () => vmRefresh(), update: () => vmUpdate(), commit: () => vmCommit(),
+  genAi: () => vmAi('gen'), improveAi: () => vmAi('improve'),
+  selAll: () => { S.vm.files.forEach(f => f.sel = true); render(); }, selNone: () => { S.vm.files.forEach(f => f.sel = false); render(); },
+  toggleFile: (a, el) => { const f = S.vm.files.find(x => x.path === a); if (f) f.sel = el.checked; render(); },
+  toggleGroup: (a, el) => { setGroup(a, el.checked); render(); },
+  toggleSec: a => { S.vm.collapsed['sec:' + a] = !S.vm.collapsed['sec:' + a]; render(); },
+  toggleFolder: a => { S.vm.collapsed[a] = !S.vm.collapsed[a]; render(); },
+  expandAll: () => { S.vm.collapsed = {}; render(); },
+  collapseAll: () => { allFolderKeys().forEach(k => S.vm.collapsed[k] = true); render(); },
+  setView: a => { S.vm.view = a; render(); },
+  selRow: (a, el) => { S.vm.cur = a; $$('.grow.cur').forEach(x => x.classList.remove('cur')); const r = el.closest('.grow'); if (r) r.classList.add('cur'); },
+  folderOp: (a, el) => { if (el.dataset.arg2 !== undefined && el.dataset.arg2 !== '') { closeCtx(); folderOp(a, el.dataset.arg2); } },
+  showDiff: a => vmShowDiff(a), closeDiff: () => { S.vm.diffVisible = false; S.vm.diffContent = ''; S.vm.diffTitle = ''; render(); },
+  commitDialog: () => commitDialog(),
+  ctxop: (a, el) => { closeCtx(); vmOp(a, el.dataset.arg2); },
+  logLoad: () => lvmLoad(), logSel: a => lvmSelect(+a),
+  logUseWc: () => { S.lvm.path = WC; render(); },
+  env: (a, el) => { S.env[a] = el.checked; if (a === 'gh' && el.checked) S.env.ghInstalled = true; if (a === 'ghInstalled' && !el.checked) S.env.gh = false; render(); },
+  simChange: () => simulateChange(),
+  restart: () => restartVS(),
+  branchSel: (a, el) => { S.branch = el.value; if (S.vm.wcPath) vmRefresh(); render(); },
+  soon: a => SOON[a](),
+  sectx: (a, el) => { closeCtx(); toast('Anteprima: "' + el.textContent + '" — non ancora implementato'); },
+};
+document.addEventListener('click', e => {
+  const inCtx = e.target.closest('.ctx'); if (!inCtx) closeCtx();
+  if (!e.target.closest('.menubar') && S.ui.menu) { S.ui.menu = null; S.ui.sub = false; render(); }
+  const el = e.target.closest('[data-act]'); if (!el || el.tagName === 'SELECT') return;
+  if (el.tagName === 'A') e.preventDefault();
+  const fn = ACT[el.dataset.act]; if (fn) { if (el.dataset.act === 'closeTab') e.stopPropagation(); fn(el.dataset.arg, el, e); }
+});
+document.addEventListener('change', e => { const el = e.target; if (el.tagName === 'SELECT' && el.dataset.act) ACT[el.dataset.act](el.dataset.arg, el, e); });
+document.addEventListener('input', e => {
+  const el = e.target;
+  if (el.id === 'edtext') { const f = S.ui.active; S.ui.buf[f] = el.value; const g = $('#gut'); if (g) g.textContent = Array.from({ length: el.value.split('\n').length }, (_, i) => i + 1).join('\n'); return; }
+  const m = el.dataset && el.dataset.model; if (!m) return;
+  const [o, k] = m.split('.'); S[o][k] = el.type === 'number' ? (+el.value || 0) : el.value;
+});
+document.addEventListener('dblclick', e => { const r = e.target.closest('[data-ctxitem]'); if (r && !e.target.closest('input,.btn')) vmShowDiff(r.dataset.ctxitem); });
+document.addEventListener('contextmenu', e => {
+  const fo = e.target.closest('[data-ctxfolder]');
+  if (fo) {
+    e.preventDefault(); const arg = fo.dataset.ctxfolder, [sec, key] = parseArg(arg), its = under(secItems(sec), key);
+    return ctxMenu(e.clientX, e.clientY, [{ label: 'SVN Add (contenuto non versionato)', act: 'folderOp', arg: 'add', arg2: arg, off: !its.some(f => f.st === '?') }, { label: 'SVN Revert cartella', act: 'folderOp', arg: 'rev', arg2: arg, off: !its.some(f => f.canRev) }, { label: 'Aggiungi a ignore list', act: 'folderOp', arg: 'ign', arg2: arg, off: !(its.length && its.every(f => f.st === '?')) }, { label: 'Diff cartella', act: 'folderOp', arg: 'diff', arg2: arg, off: !its.some(f => !f.dir && ['M', 'A', 'D', 'R', 'C'].includes(f.st)) }, '-', { label: 'Comprimi tutto', act: 'collapseAll' }, { label: 'Espandi tutto', act: 'expandAll' }]);
+  }
+  const sc = e.target.closest('[data-ctxsec]');
+  if (sc) {
+    e.preventDefault(); const sec = sc.dataset.ctxsec, arg = sec + '|';
+    return ctxMenu(e.clientX, e.clientY, sec === 'unv' ? [{ label: 'Aggiungi tutti', act: 'folderOp', arg: 'add', arg2: arg }] : sec === 'chg' ? [{ label: 'Revert tutto', act: 'folderOp', arg: 'rev', arg2: arg }] : [{ label: 'Nessuna azione per i conflitti', act: 'sectx', off: true }]);
+  }
+  const row = e.target.closest('[data-ctxitem]');
+  if (row) {
+    e.preventDefault(); const it = S.vm.files.find(f => f.path === row.dataset.ctxitem); if (!it) return; const p = it.path;
+    return ctxMenu(e.clientX, e.clientY, [{ label: 'SVN Add', act: 'ctxop', arg: 'add', arg2: p, off: !it.canAdd }, { label: 'Add to Ignore List', act: 'ctxop', arg: 'ign', arg2: p, off: !it.canIgn }, { label: 'SVN Delete', act: 'ctxop', arg: 'del', arg2: p, off: !it.canDel }, { label: 'SVN Revert', act: 'ctxop', arg: 'rev', arg2: p, off: !it.canRev }, '-', { label: 'Resolve Conflict', act: 'ctxop', arg: 'res', arg2: p, off: !it.canRes }, '-', { label: 'Show Diff', act: 'showDiff', arg: p }]);
+  }
+  const se = e.target.closest('[data-sefile]');
+  if (se) { e.preventDefault(); return ctxMenu(e.clientX, e.clientY, [{ label: 'Apri', act: 'openFile', arg: se.dataset.sefile }, '-', { label: 'Taglia', act: 'sectx', off: true }, { label: 'Elimina', act: 'sectx', off: true }, '-', { label: 'SVN ▸ (prossimamente)', act: 'sectx' }]); }
+  const mini = e.target.closest('[data-minictx]');
+  if (mini) { e.preventDefault(); ctxMenu(e.clientX, e.clientY, [{ label: 'Apri', act: 'sectx' }, '-', { label: 'SVN Update', act: 'sectx' }, { label: 'SVN Commit...', act: 'sectx' }, { label: 'SVN Diff', act: 'sectx' }, { label: 'SVN Revert', act: 'sectx' }, { label: 'SVN Blame', act: 'sectx' }, { label: 'SVN Log', act: 'sectx' }]); }
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if ($('#ctxhost').firstChild) return closeCtx();
+    if (mstack.length) { mstack[mstack.length - 1].cancel(); return; }
+    if (S.ui.menu) { S.ui.menu = null; S.ui.sub = false; render(); }
+    return;
+  }
+  if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('nm') && e.target.closest('[data-ctxitem]')) { e.preventDefault(); vmShowDiff(e.target.closest('[data-ctxitem]').dataset.ctxitem); return; }
+  if (e.key === 'Tab' && mstack.length) {
+    const el = mstack[mstack.length - 1].el, f = $$('button:not(:disabled),input,select,textarea,[contenteditable]', el); if (!f.length) return;
+    const i = f.indexOf(document.activeElement);
+    if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus(); } else if (!e.shiftKey && i === f.length - 1) { e.preventDefault(); f[0].focus(); }
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && e.target.id === 'edtext') { e.preventDefault(); saveFile(S.ui.active); }
+});
+
+// ---------- avvio ----------
+function startMode(mode, welcome) {
+  const panelOpen = S && S.ui ? S.ui.panelOpen : innerWidth >= 1500;
+  while (mstack.length) { const m = mstack.pop(); m.el.remove(); } syncModals(); closeCtx();
+  S = freshState(mode); S.ui.panelOpen = panelOpen;
+  if (mode === 'first') S.tour = { on: true, step: 0 };
+  render();
+  if (welcome) showWelcome();
+}
+async function showWelcome() {
+  const r = await modal({
+    title: 'SVNAssist - demo interattiva', cancel: 'free', wide: false, body: `<p><b>Benvenuto.</b> Questa pagina simula Visual Studio con l'estensione SVNAssist: nulla è reale, tutto vive in memoria nel browser.</p>
+    <p>Puoi seguire il <b>tour di primo utilizzo</b> (installazione, svn.exe mancante, configurazione dell'AI, primo commit) oppure esplorare liberamente con tutto già pronto.</p><p class="small muted">Suggerimento: il pulsante "Pannello simulazione" in alto permette di cambiare l'ambiente (svn, TortoiseSVN, provider AI...).</p>`,
+    buttons: [{ label: 'Avvia il tour di primo utilizzo', value: 'first', primary: true }, { label: 'Esplora liberamente', value: 'free' }],
+  });
+  if (r === 'first') startMode('first');
+}
+S = freshState('free');
+startMode('free');
+let savedTab = null;
+try { savedTab = localStorage.getItem('svnassist-demo-tab'); } catch (e) { }
+if (savedTab === 'soon') ACT.tab('soon'); else showWelcome();
+</script>
+</body>
+</html>
