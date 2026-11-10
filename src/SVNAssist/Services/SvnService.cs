@@ -139,11 +139,25 @@ public class SvnService : ISvnService
             }
         }
 
-        // Il commit può durare a lungo (molti file, server lento): niente timeout, l'utente può annullare.
-        var output = await RunSvnWithTargetsAsync(
-            ["commit", "--depth", "empty", "-m", message],
-            pathList.Distinct(StringComparer.OrdinalIgnoreCase).ToList(), workingDirectory: null, ct, applyTimeout: false);
-        return ParseCommittedRevision(output);
+        // Il messaggio passa da un file UTF-8 (-F --encoding utf-8): in riga di comando emoji/frecce/caratteri
+        // fuori dalla codepage ANSI verrebbero persi, e la lunghezza sarebbe limitata.
+        var messageFile = Path.Combine(Path.GetTempPath(), $"svnassist-msg-{Guid.NewGuid():N}.txt");
+        try
+        {
+            await File.WriteAllTextAsync(messageFile, message, new UTF8Encoding(false), ct);
+
+            // Il commit può durare a lungo (molti file, server lento): niente timeout, l'utente può annullare.
+            var output = await RunSvnWithTargetsAsync(
+                ["commit", "--depth", "empty", "-F", messageFile, "--encoding", "utf-8"],
+                pathList.Distinct(StringComparer.OrdinalIgnoreCase).ToList(), workingDirectory: null, ct, applyTimeout: false);
+            return ParseCommittedRevision(output);
+        }
+        finally
+        {
+            try { File.Delete(messageFile); }
+            catch (IOException) { /* best effort */ }
+            catch (UnauthorizedAccessException) { /* idem */ }
+        }
     }
 
     /// <summary>Estrae N da <c>Committed revision N.</c> (output in inglese, vedi <c>LC_ALL=C</c>).</summary>
@@ -181,13 +195,13 @@ public class SvnService : ISvnService
     }
 
     /// <inheritdoc />
-    public async Task RevertAsync(IEnumerable<string> paths, CancellationToken ct)
+    public async Task RevertAsync(IEnumerable<string> paths, CancellationToken ct, bool recursive = true)
     {
         var pathList = paths.ToList();
         if (pathList.Count == 0)
             return;
 
-        await RunSvnWithTargetsAsync(["revert", "--depth", "infinity"], pathList, workingDirectory: null, ct);
+        await RunSvnWithTargetsAsync(["revert", "--depth", recursive ? "infinity" : "empty"], pathList, workingDirectory: null, ct);
     }
 
     /// <inheritdoc />
@@ -229,9 +243,10 @@ public class SvnService : ISvnService
         if (!File.Exists(path) || IsBinaryFile(path))
             return false;
 
-        return File.ReadLines(path).Any(line =>
-            line.StartsWith("<<<<<<< ", StringComparison.Ordinal) ||
-            line.StartsWith(">>>>>>> ", StringComparison.Ordinal));
+        // Bastano i primi caratteri di ogni riga: letture limitate, anche su un file enorme su una riga sola.
+        return ReadLinesBounded(path, maxLineChars: 8).Any(line =>
+            line.Text.StartsWith("<<<<<<< ", StringComparison.Ordinal) ||
+            line.Text.StartsWith(">>>>>>> ", StringComparison.Ordinal));
     }
 
     /// <inheritdoc />
@@ -256,22 +271,31 @@ public class SvnService : ISvnService
         var propget = await RunSvnRawAsync(["propget", "svn:ignore", parentDirectory], workingDirectory: null, ct);
         string existingIgnore;
         if (propget.ExitCode == 0)
-            existingIgnore = propget.StandardOutput.TrimEnd();
+            existingIgnore = propget.StandardOutput.EndsWith("\r\n") ? propget.StandardOutput[..^2]
+                : propget.StandardOutput.EndsWith('\n') ? propget.StandardOutput[..^1]
+                : propget.StandardOutput;
         else if (propget.StandardError.Contains("200017", StringComparison.Ordinal))
             existingIgnore = string.Empty;
         else
             throw new InvalidOperationException(BuildErrorMessage("propget", propget.ExitCode, propget.StandardError));
 
-        var entries = existingIgnore
-            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
-            .Select(v => v.Trim())
-            .Where(v => !string.IsNullOrWhiteSpace(v))
-            .ToList();
+        // Le righe esistenti restano come sono (spazi, righe vuote, pattern altrui): si toglie solo il
+        // newline finale che propget aggiunge.
+        var entries = existingIgnore.Length == 0
+            ? new List<string>()
+            : existingIgnore.Split('\n').Select(v => v.TrimEnd('\r')).ToList();
+        // svn canonicalizza svn:ignore con un LF finale (e propget ne stampa un altro): resta una voce vuota
+        // in coda che non e' una riga dell'utente.
+        if (entries.Count > 0 && entries[^1].Length == 0)
+            entries.RemoveAt(entries.Count - 1);
 
-        if (entries.Any(v => string.Equals(v, targetName, StringComparison.OrdinalIgnoreCase)))
+        // svn:ignore è un elenco di glob: i metacaratteri nel nome ([ ] * ? \) vanno protetti, altrimenti
+        // "a[1].txt" ignorerebbe a1.txt e non se stesso.
+        var pattern = EscapeGlob(targetName);
+        if (entries.Any(v => string.Equals(v, pattern, StringComparison.OrdinalIgnoreCase)))
             return;
 
-        entries.Add(targetName);
+        entries.Add(pattern);
 
         // Il valore multilinea è passato come singolo argomento: ArgumentList lo gestisce
         // correttamente, senza bisogno di escaping manuale delle virgolette/newline.
@@ -279,11 +303,29 @@ public class SvnService : ISvnService
         await RunSvnAsync(["propset", "svn:ignore", newIgnoreValue, parentDirectory], workingDirectory: null, ct);
     }
 
+    /// <summary>Protegge con '\' i metacaratteri dei glob di svn:ignore (<c>\ [ ] * ?</c>).</summary>
+    internal static string EscapeGlob(string name)
+    {
+        var sb = new StringBuilder(name.Length + 4);
+        foreach (var c in name)
+        {
+            if (c is '\\' or '[' or ']' or '*' or '?')
+                sb.Append('\\');
+            sb.Append(c);
+        }
+
+        return sb.ToString();
+    }
+
     /// <inheritdoc />
     public async Task<UpdateResult> UpdateAsync(string workingCopyPath, CancellationToken ct)
     {
         // L'update di una working copy grande può durare a lungo: niente timeout, l'utente può annullare.
-        var output = await RunSvnAsync(["update"], workingCopyPath, ct, applyTimeout: false);
+        // Su un file si aggiorna solo quel file (cwd = la sua cartella); su una cartella, tutta la cartella.
+        var isFile = File.Exists(workingCopyPath);
+        var output = isFile
+            ? await RunSvnAsync(["update", Peg(workingCopyPath)], Path.GetDirectoryName(workingCopyPath), ct, applyTimeout: false)
+            : await RunSvnAsync(["update"], workingCopyPath, ct, applyTimeout: false);
         return ParseUpdateOutput(output);
     }
 
@@ -318,7 +360,7 @@ public class SvnService : ISvnService
         // svn log --xml -l N <target> restituisce le ultime N revisioni in XML.
         // Passiamo targetPath come argomento (supporta sia path locali che URL).
         var xml = await RunSvnAsync(
-            ["log", "--xml", "-l", maxEntries.ToString(), targetPath], workingDirectory: null, ct);
+            ["log", "--xml", "-l", maxEntries.ToString(), SafeTarget(targetPath)], workingDirectory: null, ct);
         return ParseLogXml(xml);
     }
 
@@ -351,7 +393,7 @@ public class SvnService : ISvnService
     public async Task<string> GetDiffAsync(string targetPath, long revision, CancellationToken ct)
     {
         // svn diff -c REVISION mostra le modifiche introdotte da quella revisione (unified diff).
-        return await RunSvnAsync(["diff", "-c", revision.ToString(), targetPath], workingDirectory: null, ct);
+        return await RunSvnAsync(["diff", "-c", revision.ToString(), SafeTarget(targetPath)], workingDirectory: null, ct);
     }
 
     /// <inheritdoc />
@@ -395,7 +437,7 @@ public class SvnService : ISvnService
             // Niente "@" finale qui: "svn diff nome@2x.png@" fallisce (E155010), mentre senza funziona.
             var diffText = new StringBuilder();
             foreach (var chunk in ChunkByCommandLine(
-                         ["diff", "-x", "-U 0 -p", "--no-diff-deleted"], versionedTargets.Select(t => t.Arg).ToList()))
+                         ["diff", "--depth", "empty", "-x", "-U 0 -p", "--no-diff-deleted"], versionedTargets.Select(t => t.Arg).ToList()))
             {
                 var chunkOutput = await RunSvnAsync(chunk, workingDirectory, ct);
                 if (diffText.Length > 0 && diffText[^1] != '\n' && chunkOutput.Length > 0)
@@ -462,12 +504,12 @@ public class SvnService : ISvnService
         // Su file enormi non si conta il totale: basta sapere che c'è dell'altro.
         var countAll = length <= NewFileCountLinesMaxBytes;
 
-        foreach (var line in File.ReadLines(fullPath))
+        foreach (var (text, lineTruncated) in ReadLinesBounded(fullPath, NewFileMaxLineChars))
         {
             if (shown.Count < NewFilePreviewLines)
             {
                 // Righe lunghissime (minificati, base64) sprecherebbero il budget dell'AI.
-                shown.Add(line.Length > NewFileMaxLineChars ? line[..NewFileMaxLineChars] + "..." : line);
+                shown.Add(lineTruncated ? text + "..." : text);
                 continue;
             }
 
@@ -495,6 +537,54 @@ public class SvnService : ISvnService
         return sb.ToString();
     }
 
+    /// <summary>
+    /// Legge le righe di un file di testo tenendo in memoria al più <paramref name="maxLineChars"/> caratteri per riga
+    /// (il resto è scartato): un file enorme su una sola riga non occupa memoria. Riconosce \n, \r\n e \r.
+    /// </summary>
+    internal static IEnumerable<(string Text, bool Truncated)> ReadLinesBounded(string path, int maxLineChars)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+        var buffer = new char[4096];
+        var line = new StringBuilder();
+        var truncated = false;
+        var anyChar = false;
+        var previousWasCr = false;
+        int read;
+        while ((read = reader.Read(buffer, 0, buffer.Length)) > 0)
+        {
+            for (var i = 0; i < read; i++)
+            {
+                var c = buffer[i];
+                if (previousWasCr)
+                {
+                    previousWasCr = false;
+                    if (c == '\n')
+                        continue;
+                }
+
+                if (c is '\r' or '\n')
+                {
+                    yield return (line.ToString(), truncated);
+                    line.Clear();
+                    truncated = false;
+                    anyChar = false;
+                    previousWasCr = c == '\r';
+                    continue;
+                }
+
+                anyChar = true;
+                if (line.Length < maxLineChars)
+                    line.Append(c);
+                else
+                    truncated = true;
+            }
+        }
+
+        if (anyChar)
+            yield return (line.ToString(), truncated);
+    }
+
     /// <summary>Euristica standard: un byte NUL nei primi 8 KB indica un file binario.</summary>
     private static bool IsBinaryFile(string path)
     {
@@ -508,8 +598,10 @@ public class SvnService : ISvnService
     public async Task<string> GetFileDiffAsync(string filePath, CancellationToken ct)
     {
         // svn diff per un singolo file: modifiche locali non committate rispetto a BASE.
-        return await RunSvnAsync(["diff", filePath], workingDirectory: null, ct);
+        return await RunSvnAsync(["diff", SafeTarget(filePath)], workingDirectory: null, ct);
     }
+
+    internal static string BuildTortoiseDiffArguments(string filePath) => $"/command:diff /path:\"{filePath}\"";
 
     /// <inheritdoc />
     public async Task<bool> OpenNativeDiffAsync(string filePath, CancellationToken ct)
@@ -523,14 +615,15 @@ public class SvnService : ISvnService
         if (string.IsNullOrWhiteSpace(tortoiseProcPath))
             return false;
 
+        // Stringa grezza: TortoiseProc vuole /path:"C:\a b\c" (virgolette attorno al solo valore), mentre
+        // ArgumentList produrrebbe "/path:C:\a b\c" con i percorsi che contengono spazi.
         var startInfo = new ProcessStartInfo
         {
             FileName = tortoiseProcPath,
+            Arguments = BuildTortoiseDiffArguments(filePath),
             UseShellExecute = false,
             CreateNoWindow = true,
         };
-        startInfo.ArgumentList.Add("/command:diff");
-        startInfo.ArgumentList.Add($"/path:{filePath}");
 
         return await Task.Run(() =>
         {
@@ -594,6 +687,10 @@ public class SvnService : ISvnService
     /// svn vuole una <c>@</c> finale per dire che non c'è alcuna peg revision.
     /// </summary>
     private static string Peg(string path) => path.Contains('@') ? path + "@" : path;
+
+    /// <summary>Un percorso (o un URL) che inizia con '-' verrebbe letto da svn come opzione: lo si rende relativo ("./").</summary>
+    private static string SafeTarget(string target)
+        => target.StartsWith('-') ? "." + Path.DirectorySeparatorChar + target : target;
 
     private static int CommandLineLength(IEnumerable<string> args) => args.Sum(a => a.Length + 3);
 

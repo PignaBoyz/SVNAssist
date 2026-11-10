@@ -166,6 +166,7 @@ public class StatusViewModelTests
         var f = new Fixture().With(("new.txt", SvnStatusKind.Unversioned), ("gone.txt", SvnStatusKind.Missing));
         await f.Refresh();
         f.Row("new.txt").IsChecked = true;
+        f.Row("gone.txt").IsChecked = true; // i mancanti non sono spuntati di default
         f.Vm.CommitMessage.Text = "msg";
 
         await f.Vm.CommitAsync(null, Ct);
@@ -278,6 +279,141 @@ public class StatusViewModelTests
         Assert.Contains("Errore commit: file più recenti", f.Vm.StatusMessage);
         Assert.Equal(statusCalls + 1, f.Svn.StatusCalls);
         Assert.Equal("msg", f.Vm.CommitMessage.Text); // il messaggio non va perso
+    }
+
+    // ── Revert / Delete su cartelle, concorrenza, doppio click ───────
+
+    [Fact]
+    public async Task Revert_CartellaConSoloProprietaModificate_NonTocca_IFigli()
+    {
+        var f = new Fixture().With((".", SvnStatusKind.Modified), ("a.cs", SvnStatusKind.Modified));
+        f.Vm.IsDirectory = p => p == Wc;
+        await f.Refresh();
+
+        await f.Vm.RevertAsync(f.Row("(cartella radice)"), Ct);
+
+        Assert.Equal([Wc], Assert.Single(f.Svn.Reverted));
+        Assert.Equal([false], f.Svn.RevertRecursive);
+        Assert.Contains("1 elementi", f.Dialogs.Messages[0]);
+    }
+
+    [Fact]
+    public async Task Revert_CartellaAggiunta_RicorsivoEConfermaElencaAncheIFigli()
+    {
+        var f = new Fixture().With((@"n", SvnStatusKind.Added), (@"n\x.cs", SvnStatusKind.Added), (@"n\y.cs", SvnStatusKind.Added));
+        f.Vm.IsDirectory = p => p == Full("n");
+        await f.Refresh();
+
+        await f.Vm.RevertAsync(f.Row("n\\"), Ct);
+
+        Assert.Equal([Full("n")], f.Svn.Reverted[0]);
+        Assert.True(f.Svn.RevertRecursive[0]);
+        Assert.Single(f.Svn.Reverted); // i figli sono coperti dalla chiamata ricorsiva
+        Assert.Contains("3 elementi", f.Dialogs.Messages[0]);
+        Assert.Contains(@"n\x.cs", f.Dialogs.Messages[0]);
+    }
+
+    [Fact]
+    public async Task Delete_SuCartella_NonOfferto_ENonEseguito()
+    {
+        var f = new Fixture().With(("src", SvnStatusKind.Modified));
+        f.Vm.IsDirectory = p => p == Full("src");
+        await f.Refresh();
+
+        Assert.False(f.Row("src\\").CanDelete);
+        await f.Vm.DeleteAsync(f.Row("src\\"), Ct);
+
+        Assert.Empty(f.Svn.Deleted);
+        Assert.Empty(f.Dialogs.Messages);
+    }
+
+    [Fact]
+    public async Task Refresh_ElementiMancanti_NonSonoSpuntatiDiDefault()
+    {
+        var f = new Fixture().With(("gone.cs", SvnStatusKind.Missing), ("m.cs", SvnStatusKind.Modified));
+        await f.Refresh();
+
+        Assert.False(f.Row("gone.cs").CheckedState);
+        Assert.True(f.Row("m.cs").CheckedState);
+    }
+
+    [Fact]
+    public async Task DoppioClick_Commit_EseguitoUnaSolaVolta()
+    {
+        var f = new Fixture().With(("a.cs", SvnStatusKind.Modified));
+        await f.Refresh();
+        f.Vm.CommitMessage.Text = "m";
+        f.Svn.CommitGate = new TaskCompletionSource();
+
+        var first = f.Vm.CommitAsync(null, Ct);
+        await f.Vm.CommitAsync(null, Ct); // secondo click mentre il primo è in corso: ignorato
+        f.Svn.CommitGate.SetResult();
+        await first;
+
+        Assert.Single(f.Svn.Commits);
+    }
+
+    [Fact]
+    public async Task RefreshAutomatico_DuranteUnaOperazione_VieneSaltato()
+    {
+        var f = new Fixture().With(("a.cs", SvnStatusKind.Modified));
+        await f.Refresh();
+        f.Vm.CommitMessage.Text = "m";
+        f.Svn.CommitGate = new TaskCompletionSource();
+        var calls = f.Svn.StatusCalls;
+
+        var commit = f.Vm.CommitAsync(null, Ct);
+        await f.Refresh(); // watcher: non deve lanciare svn status mentre il commit tiene il lock
+        Assert.Equal(calls, f.Svn.StatusCalls);
+
+        f.Svn.CommitGate.SetResult();
+        await commit;
+        Assert.Equal(calls + 1, f.Svn.StatusCalls); // il refresh lo fa il commit alla fine
+    }
+
+    [Fact]
+    public async Task Refresh_ErroreSuWorkingCopyAutoRilevata_NonRiapreLInputManuale()
+    {
+        var f = new Fixture().With(("a.cs", SvnStatusKind.Modified));
+        await f.Vm.ApplyAutoDetectedWorkingCopyAsync(@"C:\rilevata", Ct);
+        f.Svn.StatusError = "E155004 working copy locked";
+
+        await f.Refresh();
+
+        Assert.Contains("Errore", f.Vm.StatusMessage);
+        Assert.False(f.Vm.ShowWorkingCopyInput);
+    }
+
+    [Fact]
+    public async Task RefreshEToggleConcorrenti_NonCorrompononoLoStato()
+    {
+        var items = Enumerable.Range(0, 60).Select(i => ($@"d{i % 6}\f{i}.cs", SvnStatusKind.Modified)).ToArray();
+        var f = new Fixture().With(items);
+        await f.Refresh();
+
+        var errors = new List<Exception>();
+        Task Loop(Func<Task> body) => Task.Run(async () =>
+        {
+            try { for (var i = 0; i < 150; i++) await body(); }
+            catch (Exception ex) { lock (errors) errors.Add(ex); }
+        });
+
+        await Task.WhenAll(
+            Loop(() => f.Vm.RefreshAsync(Ct)),
+            Loop(() => f.Vm.SetAllExpandedAsync(false)),
+            Loop(() => f.Vm.SetAllExpandedAsync(true)),
+            Loop(() => f.Vm.SetAllSelectedAsync(true)),
+            Loop(() => f.Vm.SetTreeViewAsync(true)),
+            Loop(() => f.Vm.SetTreeViewAsync(false)),
+            Loop(() =>
+            {
+                var row = f.Vm.Rows.ToList().FirstOrDefault();
+                if (row is not null)
+                    row.IsChecked = false;
+                return Task.CompletedTask;
+            }));
+
+        Assert.Empty(errors);
     }
 
     [Fact]

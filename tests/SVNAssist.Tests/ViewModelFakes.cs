@@ -44,26 +44,38 @@ internal sealed class FakeSvnService : ISvnService
     public Task<IReadOnlyList<SvnFileStatus>> GetStatusAsync(string workingCopyPath, CancellationToken ct)
     {
         StatusCalls++;
+        if (StatusError is not null)
+            throw new InvalidOperationException(StatusError);
         return Task.FromResult<IReadOnlyList<SvnFileStatus>>(Statuses.ToList());
     }
 
+    public string AiDiff { get; set; } = "@@ diff @@";
     public List<string> CommitWholeFolders { get; } = [];
     public List<bool> DeleteForced { get; } = [];
     public string? CommitError { get; set; }
+    public string? StatusError { get; set; }
+    /// <summary>Se impostato, il commit resta in attesa finché non lo si completa (per provare doppio click e refresh in corso).</summary>
+    public TaskCompletionSource? CommitGate { get; set; }
 
-    public Task<long?> CommitAsync(
+    public async Task<long?> CommitAsync(
         IEnumerable<string> paths, string message, CancellationToken ct, IEnumerable<string>? includeAllUnder = null)
     {
+        if (CommitGate is not null)
+#pragma warning disable VSTHRD003 // il gate è di proprietà del test
+            await CommitGate.Task;
+#pragma warning restore VSTHRD003
+
         if (CommitError is not null)
             throw new InvalidOperationException(CommitError);
         CommitWholeFolders.AddRange(includeAllUnder ?? []);
         Commits.Add((paths.ToList(), message));
-        return Task.FromResult<long?>(42);
+        return 42;
     }
 
     public Task AddAsync(IEnumerable<string> paths, CancellationToken ct) { Added.Add(paths.ToList()); return Task.CompletedTask; }
     public Task DeleteAsync(IEnumerable<string> paths, CancellationToken ct, bool force = false) { Deleted.Add(paths.ToList()); DeleteForced.Add(force); return Task.CompletedTask; }
-    public Task RevertAsync(IEnumerable<string> paths, CancellationToken ct) { Reverted.Add(paths.ToList()); return Task.CompletedTask; }
+    public List<bool> RevertRecursive { get; } = [];
+    public Task RevertAsync(IEnumerable<string> paths, CancellationToken ct, bool recursive = true) { Reverted.Add(paths.ToList()); RevertRecursive.Add(recursive); return Task.CompletedTask; }
     public Task ResolveAsync(string path, SvnConflictChoice accept, CancellationToken ct) { Resolved.Add((path, accept)); return Task.CompletedTask; }
     public Task AddToIgnoreListAsync(string path, CancellationToken ct) { Ignored.Add(path); return Task.CompletedTask; }
     public Task<UpdateResult> UpdateAsync(string workingCopyPath, CancellationToken ct) => Task.FromResult(new UpdateResult(7, []));
@@ -81,7 +93,7 @@ internal sealed class FakeSvnService : ISvnService
     public Task<string> GetDiffForAiAsync(IReadOnlyList<string> paths, string? workingCopyPath, CancellationToken ct)
     {
         AiDiffRequests.Add(paths);
-        return Task.FromResult("@@ diff @@");
+        return Task.FromResult(AiDiff);
     }
 
     public Task<string> GetFileDiffAsync(string filePath, CancellationToken ct)
@@ -129,9 +141,11 @@ internal sealed class FakeAiFactory : IAiServiceFactory
 internal sealed class RecordingAi : IAiService
 {
     public List<string> Languages { get; } = [];
+    public List<string> Diffs { get; } = [];
 
     public Task<string> GenerateCommitMessageAsync(string diff, string language, CancellationToken ct)
     {
+        Diffs.Add(diff);
         Languages.Add(language);
         return Task.FromResult("messaggio generato");
     }

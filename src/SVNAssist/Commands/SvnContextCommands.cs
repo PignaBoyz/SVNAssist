@@ -1,5 +1,6 @@
 using Microsoft.VisualStudio.Extensibility;
 using Microsoft.VisualStudio.Extensibility.Commands;
+using SVNAssist.Models;
 using SVNAssist.Services;
 using SVNAssist.ToolWindows;
 
@@ -21,16 +22,14 @@ internal sealed class SeUpdateCommand : SvnContextCommand
     /// <inheritdoc />
     protected override async Task RunAsync(SvnTarget target, SvnService svn, CancellationToken ct)
     {
-        // UpdateAsync lavora su una cartella: per un file si aggiorna la cartella che lo contiene.
-        var folder = target.WorkingDirectory;
-        var result = await svn.UpdateAsync(folder, ct);
+        // Un file si aggiorna da solo (svn update <file>), una cartella per intero.
+        var result = await svn.UpdateAsync(target.Path, ct);
 
         var summary = result.Revision is { } revision ? $"Aggiornato alla revisione {revision}" : "Update completato";
         if (result.ConflictedPaths.Count > 0)
             summary += $"\n\n{result.ConflictedPaths.Count} elementi in conflitto:\n{SvnTarget.FormatList(result.ConflictedPaths)}";
 
-        var note = target.IsDirectory ? string.Empty : "\n(aggiornata la cartella che contiene il file)";
-        await ShowAsync($"{summary}\n\n{folder}{note}", ct);
+        await ShowAsync($"{summary}\n\n{target.Path}", ct);
     }
 }
 
@@ -109,6 +108,25 @@ internal sealed class SeAddCommand : SvnContextCommand
     /// <inheritdoc />
     protected override async Task RunAsync(SvnTarget target, SvnService svn, CancellationToken ct)
     {
+        // "svn add" su una cartella/progetto/solution è ricorsivo e prenderebbe anche bin/, obj/, .vs/, packages/:
+        // si elencano prima gli elementi non versionati e si chiede conferma (come per il revert).
+        if (target.IsDirectory)
+        {
+            var unversioned = (await svn.GetStatusAsync(target.Path, ct))
+                .Where(c => c.Status == SvnStatusKind.Unversioned).Select(c => c.Path).ToList();
+            if (unversioned.Count == 0)
+            {
+                await ShowAsync($"Nessun elemento non versionato da aggiungere in:\n{target.Path}", ct);
+                return;
+            }
+
+            if (!await ConfirmAsync(
+                    $"Aggiungere a SVN {unversioned.Count} elementi non versionati (con tutto il loro contenuto) in\n" +
+                    $"{target.Path}\n\n{SvnTarget.FormatList(unversioned)}\n\n" +
+                    "Attenzione: cartelle come bin/obj/.vs/packages vanno ignorate, non aggiunte.", ct))
+                return;
+        }
+
         await svn.AddAsync([target.Path], ct);
         await ShowAsync($"Aggiunto a SVN:\n{target.Path}", ct);
     }

@@ -17,6 +17,8 @@
     <PackageReference Include="Microsoft.VisualStudio.Extensibility.Framework" Version="17.14.2098" />
     <!-- Versioni risolte da NuGet (le minime dichiarate dall'Extensibility Framework non esistono più sul feed:
          NU1603). Referenziarle esplicitamente evita il warning senza nasconderlo. -->
+    <!-- Versione patchata di MessagePack (advisory sulla 2.5.19x, dipendenza transitiva dell'Extensibility Framework). -->
+    <PackageReference Include="MessagePack" Version="2.5.307" />
     <PackageReference Include="Microsoft.NET.StringTools" Version="17.13.9" />
     <PackageReference Include="Microsoft.ServiceHub.Framework" Version="4.8.55" />
     <PackageReference Include="Microsoft.ServiceHub.Resources" Version="4.5.2035" />

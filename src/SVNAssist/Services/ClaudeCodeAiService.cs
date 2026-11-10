@@ -42,9 +42,10 @@ internal sealed class ClaudeCodeAiService : AiServiceBase
         if (!string.IsNullOrWhiteSpace(_model))
             args.AddRange(["--model", _model]);
 
-        // Cartella temporanea come directory di lavoro: niente CLAUDE.md o impostazioni di progetto.
+        // Cartella vuota dedicata (non %TEMP%, dove potrebbero esserci un CLAUDE.md o impostazioni di altri progetti).
+        var (fileName, prefix) = BuildLaunch(_claudeExePath);
         var result = await _processRunner.RunAsync(
-            _claudeExePath, args, Path.GetTempPath(), ct, standardInput: userMessage);
+            fileName, [.. prefix, .. args], EnsureEmptyWorkingDirectory(), ct, standardInput: userMessage);
 
         if (result.ExitCode != 0)
             throw new InvalidOperationException(
@@ -57,15 +58,59 @@ internal sealed class ClaudeCodeAiService : AiServiceBase
 
     private static string FirstNonEmpty(string a, string b) => string.IsNullOrWhiteSpace(a) ? b.Trim() : a.Trim();
 
-    /// <summary>Cerca <c>claude.exe</c> nel PATH e nel percorso d'installazione standard.</summary>
-    public static string? FindClaudeExecutable()
-    {
-        var candidates = (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
-            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
-            .Select(dir => Path.Combine(dir, "claude.exe"))
-            .Append(Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin", "claude.exe"));
+    /// <summary>
+    /// Cerca Claude Code: <c>claude.exe</c> nel PATH e in <c>~/.local/bin</c> (installer nativo) oppure l'installazione
+    /// npm (<c>claude.cmd</c>), risolta sul programma vero (vedi <see cref="ResolveNpmShim"/>).
+    /// </summary>
+    public static string? FindClaudeExecutable() => FindClaudeExecutable(
+        SvnLocator.RootedPathDirectories(),
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
 
-        return candidates.FirstOrDefault(File.Exists);
+    internal static string? FindClaudeExecutable(IEnumerable<string> pathDirs, string userProfile)
+    {
+        var dirs = pathDirs.ToList();
+        var exe = dirs.Select(dir => Path.Combine(dir, "claude.exe"))
+            .Append(Path.Combine(userProfile, ".local", "bin", "claude.exe"))
+            .FirstOrDefault(File.Exists);
+        if (exe is not null)
+            return exe;
+
+        return dirs.Select(dir => Path.Combine(dir, "claude.cmd")).Where(File.Exists)
+            .Select(ResolveNpmShim).FirstOrDefault(p => p is not null);
+    }
+
+    /// <summary>
+    /// Lo shim npm <c>claude.cmd</c> non si lancia direttamente: <c>cmd.exe</c> reinterpreta virgolette, <c>&amp;</c>, <c>%</c> e
+    /// a capo del system prompt passato negli argomenti. Si punta quindi al programma che lo shim avvia:
+    /// <c>node_modules\@anthropic-ai\claude-codein\claude.exe</c> (versioni native) o <c>cli.js</c> (da eseguire con node).
+    /// </summary>
+    internal static string? ResolveNpmShim(string cmdPath)
+    {
+        var package = Path.Combine(Path.GetDirectoryName(cmdPath)!, "node_modules", "@anthropic-ai", "claude-code");
+        var native = Path.Combine(package, "bin", "claude.exe");
+        if (File.Exists(native))
+            return native;
+
+        var script = Path.Combine(package, "cli.js");
+        return File.Exists(script) ? script : null;
+    }
+
+    /// <summary><c>%LOCALAPPDATA%\SVNAssist\empty</c>: cartella vuota usata come directory di lavoro di <c>claude -p</c>.</summary>
+    internal static string EnsureEmptyWorkingDirectory()
+    {
+        var dir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SVNAssist", "empty");
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    /// <summary>Eseguibile e argomenti iniziali: un <c>cli.js</c> va lanciato con node (accanto allo shim o nel PATH).</summary>
+    internal static (string FileName, IReadOnlyList<string> Prefix) BuildLaunch(string claudePath)
+    {
+        if (!claudePath.EndsWith(".js", StringComparison.OrdinalIgnoreCase))
+            return (claudePath, []);
+
+        var sibling = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(claudePath)!, "..", "..", "..", "node.exe"));
+        return (File.Exists(sibling) ? sibling : "node", [claudePath]);
     }
 }

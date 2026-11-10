@@ -32,6 +32,14 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
     private readonly SemaphoreSlim _autoDetectLock = new(1, 1);
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
 
+    // Stato condiviso (righe, selezione, espansione): lo toccano il refresh del watcher e i click dell'utente,
+    // su thread diversi. Ogni mutazione/lettura composta passa da questo lock (rientrante).
+    private readonly object _stateLock = new();
+
+    // Un'operazione dell'utente alla volta (commit, update, revert...): il doppio click non la ripete e il refresh
+    // automatico non gira mentre svn tiene il lock della working copy.
+    private int _operationRunning;
+
     // Modello: elementi di svn status, selezione per il commit e stato espanso/compresso.
     private List<ChangeEntry> _entries = [];
     private readonly HashSet<string> _selection = new(StringComparer.OrdinalIgnoreCase);
@@ -67,7 +75,8 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
         CommitMessage = new CommitMessageViewModel(
             settingsService, svnService, aiServiceFactory, aiSetupPrompt,
             selectedPaths: () => SelectedEntries().Select(e => e.FullPath).ToList(),
-            workingCopyPath: () => WorkingCopyPath);
+            workingCopyPath: () => WorkingCopyPath,
+            dialogs: dialogs);
 
         Rows = [];
         RefreshCommand = new AsyncCommand(OnRefreshAsync);
@@ -272,7 +281,8 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
     }
 
     /// <summary>Refresh programmatico (usato dal watcher e all'apertura). Il branch si rilegge solo se serve.</summary>
-    internal Task RefreshAsync(CancellationToken ct) => RefreshAsync(ct, reloadBranch: false);
+    internal Task RefreshAsync(CancellationToken ct)
+        => OperationRunning ? Task.CompletedTask : RefreshAsync(ct, reloadBranch: false);
 
     /// <summary>Applica il risultato dell'auto-detect della working copy dalla solution aperta.</summary>
     internal async Task ApplyAutoDetectedWorkingCopyAsync(string? svnRoot, CancellationToken ct)
@@ -289,8 +299,12 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
                     WorkingCopyPath = string.Empty;
                     BranchName = string.Empty;
                     _branchLoadedFor = null;
-                    _entries = [];
-                    ApplyEntries();
+                    lock (_stateLock)
+                    {
+                        _entries = [];
+                        ApplyEntries();
+                    }
+
                     ShowWorkingCopyInput = true;
                     CloseDiff();
                 }
@@ -320,6 +334,9 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
         }
     }
 
+    /// <summary>Errore imprevisto durante il caricamento iniziale in background: lo mostra invece di lasciare "Caricamento...".</summary>
+    internal void ReportInitializationError(string message) => SetStatus($"Errore durante il caricamento: {message}");
+
     /// <summary>Nessuna solution aperta / query fallita: avvisa solo se non c'è già una working copy.</summary>
     internal void NotifyNoSolution()
     {
@@ -333,7 +350,7 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
     {
         // Refresh esplicito: rilegge anche il branch e torna a mostrare il riepilogo.
         _statusIsAuto = true;
-        return RefreshAsync(ct, reloadBranch: true);
+        return OperationRunning ? Task.CompletedTask : RefreshAsync(ct, reloadBranch: true);
     }
 
     /// <summary>
@@ -373,12 +390,16 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
                 _branchLoadedFor = path;
             }
 
-            _entries = statuses
+            var newEntries = statuses
                 .Where(s => s.Status != SvnStatusKind.Normal)
                 .Select(s => ToEntry(s, path))
                 .ToList();
-            UpdateSelectionAfterRefresh();
-            ApplyEntries();
+            lock (_stateLock)
+            {
+                _entries = newEntries;
+                UpdateSelectionAfterRefresh();
+                ApplyEntries();
+            }
 
             if (statusMessage is not null)
                 SetStatus(statusMessage);
@@ -388,7 +409,9 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
             SetStatus($"Errore: {ex.Message}");
-            ShowWorkingCopyInput = true;
+            // Una working copy rilevata dalla solution non si "perde" per un errore passeggero (es. lock di svn).
+            if (!_autoDetected)
+                ShowWorkingCopyInput = true;
         }
         finally
         {
@@ -411,8 +434,10 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
         var current = new HashSet<string>(_entries.Select(e => e.FullPath), StringComparer.OrdinalIgnoreCase);
         foreach (var entry in _entries.Where(e => !_known.Contains(e.FullPath)))
         {
+            // Missing (!) resta spuntato a mano: un file sparito per un salvataggio transitorio di VS
+            // non deve finire nel commit come cancellazione.
             if (entry.Status is SvnStatusKind.Modified or SvnStatusKind.Added or SvnStatusKind.Deleted
-                or SvnStatusKind.Replaced or SvnStatusKind.Missing)
+                or SvnStatusKind.Replaced)
                 _selection.Add(entry.FullPath);
         }
 
@@ -465,7 +490,11 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
 
     private bool IsSelected(ChangeEntry entry) => _selection.Contains(entry.FullPath);
 
-    private IEnumerable<ChangeEntry> SelectedEntries() => _entries.Where(IsSelected);
+    private List<ChangeEntry> SelectedEntries()
+    {
+        lock (_stateLock)
+            return _entries.Where(IsSelected).ToList();
+    }
 
     private void UpdateCheckStates(ChangeRowViewModel? forced = null)
     {
@@ -479,26 +508,33 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
     /// </summary>
     internal void ToggleRowChecked(ChangeRowViewModel row)
     {
-        var select = ChangesTreeBuilder.GetCheckState(row.Entries, IsSelected) != true;
-        foreach (var entry in row.Entries)
+        lock (_stateLock)
         {
-            if (select)
-                _selection.Add(entry.FullPath);
-            else
-                _selection.Remove(entry.FullPath);
-        }
+            var select = ChangesTreeBuilder.GetCheckState(row.Entries, IsSelected) != true;
+            foreach (var entry in row.Entries)
+            {
+                if (select)
+                    _selection.Add(entry.FullPath);
+                else
+                    _selection.Remove(entry.FullPath);
+            }
 
-        UpdateCheckStates(forced: row);
+            UpdateCheckStates(forced: row);
+        }
     }
 
     internal Task SetAllSelectedAsync(bool selected)
     {
-        if (selected)
-            _selection.UnionWith(_entries.Select(e => e.FullPath));
-        else
-            _selection.Clear();
+        lock (_stateLock)
+        {
+            if (selected)
+                _selection.UnionWith(_entries.Select(e => e.FullPath));
+            else
+                _selection.Clear();
 
-        UpdateCheckStates();
+            UpdateCheckStates();
+        }
+
         return Task.CompletedTask;
     }
 
@@ -506,33 +542,68 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
 
     internal Task ToggleExpandAsync(object? parameter, CancellationToken ct)
     {
-        if (parameter is ChangeRowViewModel { IsFile: false } row && !_collapsed.Remove(row.Key))
-            _collapsed.Add(row.Key);
+        lock (_stateLock)
+        {
+            if (parameter is ChangeRowViewModel { IsFile: false } row && !_collapsed.Remove(row.Key))
+                _collapsed.Add(row.Key);
 
-        ApplyEntries();
+            ApplyEntries();
+        }
+
         return Task.CompletedTask;
     }
 
     internal Task SetAllExpandedAsync(bool expanded)
     {
-        _collapsed.Clear();
-        if (!expanded)
+        lock (_stateLock)
         {
-            foreach (var (section, entries) in ChangeRowFactory.Sections(_entries))
-                foreach (var key in ChangesTreeBuilder.FolderKeys(ChangesTreeBuilder.BuildTree(section, entries)))
-                    _collapsed.Add(key);
+            _collapsed.Clear();
+            if (!expanded)
+            {
+                foreach (var (section, entries) in ChangeRowFactory.Sections(_entries))
+                    foreach (var key in ChangesTreeBuilder.FolderKeys(ChangesTreeBuilder.BuildTree(section, entries)))
+                        _collapsed.Add(key);
+            }
+
+            ApplyEntries();
         }
 
-        ApplyEntries();
         return Task.CompletedTask;
     }
 
     internal Task SetTreeViewAsync(bool tree)
     {
-        IsTreeView = tree;
-        ApplyEntries();
+        lock (_stateLock)
+        {
+            IsTreeView = tree;
+            ApplyEntries();
+        }
+
         return Task.CompletedTask;
     }
+
+    /// <summary>
+    /// Esegue <paramref name="body"/> solo se nessun'altra operazione è in corso (altrimenti ignora la richiesta:
+    /// doppio click). Aspetta un eventuale refresh già avviato, per non sovrapporre status e comando svn.
+    /// </summary>
+    private async Task RunExclusiveAsync(Func<Task> body)
+    {
+        if (Interlocked.CompareExchange(ref _operationRunning, 1, 0) != 0)
+            return;
+
+        try
+        {
+            await _refreshGate.WaitAsync();
+            _refreshGate.Release();
+            await body();
+        }
+        finally
+        {
+            Volatile.Write(ref _operationRunning, 0);
+        }
+    }
+
+    private bool OperationRunning => Volatile.Read(ref _operationRunning) != 0;
 
     // ── Commit e update ──────────────────────────────────────────────
 
@@ -540,7 +611,10 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
     /// Commit dei soli elementi selezionati. Come TortoiseSVN: i non versionati spuntati vengono prima
     /// aggiunti e i mancanti spuntati prima cancellati (svn commit da solo li rifiuterebbe).
     /// </summary>
-    internal async Task CommitAsync(object? parameter, CancellationToken ct)
+    internal Task CommitAsync(object? parameter, CancellationToken ct)
+        => RunExclusiveAsync(() => CommitCoreAsync(parameter, ct));
+
+    private async Task CommitCoreAsync(object? parameter, CancellationToken ct)
     {
         var selected = SelectedEntries().ToList();
         if (selected.Count == 0)
@@ -630,7 +704,10 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
         return found.Values.OrderBy(e => e.FullPath.Length).ToList();
     }
 
-    internal async Task UpdateAsync(object? parameter, CancellationToken ct)
+    internal Task UpdateAsync(object? parameter, CancellationToken ct)
+        => RunExclusiveAsync(() => UpdateCoreAsync(parameter, ct));
+
+    private async Task UpdateCoreAsync(object? parameter, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(WorkingCopyPath))
         {
@@ -656,7 +733,10 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
     // ── Operazioni su file, cartelle e sezioni ───────────────────────
 
     /// <summary>SVN Add. Su una cartella non versionata passa il percorso della cartella (svn add --force è ricorsivo).</summary>
-    internal async Task AddAsync(object? parameter, CancellationToken ct)
+    internal Task AddAsync(object? parameter, CancellationToken ct)
+        => RunExclusiveAsync(() => AddCoreAsync(parameter, ct));
+
+    private async Task AddCoreAsync(object? parameter, CancellationToken ct)
     {
         if (parameter is not ChangeRowViewModel row)
             return;
@@ -677,8 +757,11 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
             await _svnService.AddAsync(paths, ct);
 
             // Chi aggiunge di solito vuole anche committare: gli elementi aggiunti restano spuntati.
-            foreach (var entry in affected)
-                _selection.Add(entry.FullPath);
+            lock (_stateLock)
+            {
+                foreach (var entry in affected)
+                    _selection.Add(entry.FullPath);
+            }
 
             await RefreshAsync(ct, reloadBranch: false, $"Aggiunti a SVN: {affected.Count} elementi.");
         }
@@ -689,11 +772,16 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
     }
 
     /// <summary>SVN Delete di un file, con conferma (e avviso se ha modifiche locali).</summary>
-    internal async Task DeleteAsync(object? parameter, CancellationToken ct)
+    internal Task DeleteAsync(object? parameter, CancellationToken ct)
+        => RunExclusiveAsync(() => DeleteCoreAsync(parameter, ct));
+
+    private async Task DeleteCoreAsync(object? parameter, CancellationToken ct)
     {
         if (parameter is not ChangeRowViewModel { Entry: { } entry } || !ChangeRowCanDelete(entry))
         {
-            SetStatus("Nessun file idoneo per SVN Delete.");
+            SetStatus(parameter is ChangeRowViewModel { Entry.IsDirectory: true }
+                ? "SVN Delete non è disponibile sulle cartelle: usa TortoiseSVN."
+                : "Nessun file idoneo per SVN Delete.");
             return;
         }
 
@@ -721,16 +809,19 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
     }
 
     private static bool ChangeRowCanDelete(ChangeEntry entry)
-        => entry.Status is not (SvnStatusKind.Unversioned or SvnStatusKind.Unknown);
+        => entry.Status is not (SvnStatusKind.Unversioned or SvnStatusKind.Unknown) && !entry.IsDirectory;
 
     /// <summary>SVN Revert su file, cartella o sezione. Chiede conferma elencando cosa verrà annullato.</summary>
-    internal async Task RevertAsync(object? parameter, CancellationToken ct)
+    internal Task RevertAsync(object? parameter, CancellationToken ct)
+        => RunExclusiveAsync(() => RevertCoreAsync(parameter, ct));
+
+    private async Task RevertCoreAsync(object? parameter, CancellationToken ct)
     {
         if (parameter is not ChangeRowViewModel row)
             return;
 
-        // Percorsi espliciti (non la cartella): si annulla esattamente ciò che la lista mostra.
-        var targets = row.Entries.Where(e => ChangeRowFactory.IsRevertable(e.Status)).ToList();
+        // Percorsi espliciti: si annulla esattamente ciò che la conferma elenca (vedi RevertPlan).
+        var targets = RevertPlan(row.Entries.Where(e => ChangeRowFactory.IsRevertable(e.Status)).ToList());
         if (targets.Count == 0)
         {
             SetStatus("Nessun elemento idoneo per SVN Revert.");
@@ -751,13 +842,57 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
         try
         {
             SetStatus("Revert in corso...");
-            await _svnService.RevertAsync(targets.Select(e => e.FullPath).ToList(), ct);
+            // Cartelle aggiunte/sostituite: svn le annulla solo con i figli (E155038), che sono già in elenco.
+            // Tutto il resto, cartelle comprese (es. solo svn:ignore), a --depth empty: niente effetti sul sottoalbero.
+            var recursive = targets.Where(IsNewFolder).Select(e => e.FullPath).ToList();
+            var shallow = targets.Select(e => e.FullPath)
+                .Where(p => !recursive.Any(r => IsUnder(p, r) || string.Equals(p, r, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+            if (recursive.Count > 0)
+                await _svnService.RevertAsync(recursive, ct, recursive: true);
+            if (shallow.Count > 0)
+                await _svnService.RevertAsync(shallow, ct, recursive: false);
             await RefreshAsync(ct, reloadBranch: false, $"Revert completato su {targets.Count} elementi.");
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
             SetStatus($"Errore revert: {ex.Message}");
         }
+    }
+
+    private bool IsNewFolder(ChangeEntry entry)
+        => entry.Status is SvnStatusKind.Added or SvnStatusKind.Replaced
+           && (entry.IsDirectory || _entries.Any(e => IsUnder(e.FullPath, entry.FullPath)));
+
+    private static bool IsUnder(string path, string folder)
+        => path.StartsWith(folder.TrimEnd('\\', '/') + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Elementi che il revert tocca davvero: quelli richiesti più, per le cartelle aggiunte/cancellate/mancanti,
+    /// le loro voci strutturali (aggiunte/cancellate/mancanti) già presenti nello status.
+    /// Una cartella che ha solo modifiche di proprietà resta da sola.
+    /// </summary>
+    private List<ChangeEntry> RevertPlan(List<ChangeEntry> requested)
+    {
+        var plan = new List<ChangeEntry>(requested);
+        var known = new HashSet<string>(requested.Select(e => e.FullPath), StringComparer.OrdinalIgnoreCase);
+        List<ChangeEntry> all;
+        lock (_stateLock)
+            all = _entries;
+
+        foreach (var folder in requested.Where(e =>
+                     e.Status is SvnStatusKind.Added or SvnStatusKind.Replaced or SvnStatusKind.Deleted or SvnStatusKind.Missing))
+        {
+            foreach (var child in all.Where(e => IsUnder(e.FullPath, folder.FullPath)
+                                                  && e.Status is SvnStatusKind.Added or SvnStatusKind.Replaced
+                                                      or SvnStatusKind.Deleted or SvnStatusKind.Missing))
+            {
+                if (known.Add(child.FullPath))
+                    plan.Add(child);
+            }
+        }
+
+        return plan;
     }
 
     private static string ListForConfirmation(IReadOnlyList<ChangeEntry> entries)
@@ -774,7 +909,10 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
     /// Risolve un conflitto. Conflitto di testo: l'utente sceglie Working / Mine-full / Theirs-full / Base.
     /// Conflitto ad albero: non ci sono marcatori, si chiede solo conferma di segnarlo risolto.
     /// </summary>
-    internal async Task ResolveAsync(object? parameter, CancellationToken ct)
+    internal Task ResolveAsync(object? parameter, CancellationToken ct)
+        => RunExclusiveAsync(() => ResolveCoreAsync(parameter, ct));
+
+    private async Task ResolveCoreAsync(object? parameter, CancellationToken ct)
     {
         if (parameter is not ChangeRowViewModel { Entry: { Status: SvnStatusKind.Conflicted } entry })
         {
@@ -815,7 +953,10 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
     /// Aggiunge alla ignore list. Su una cartella (che raggruppa elementi non versionati) ignora
     /// ciascun elemento non versionato contenuto, dopo conferma.
     /// </summary>
-    internal async Task IgnoreAsync(object? parameter, CancellationToken ct)
+    internal Task IgnoreAsync(object? parameter, CancellationToken ct)
+        => RunExclusiveAsync(() => IgnoreCoreAsync(parameter, ct));
+
+    private async Task IgnoreCoreAsync(object? parameter, CancellationToken ct)
     {
         if (parameter is not ChangeRowViewModel row)
             return;

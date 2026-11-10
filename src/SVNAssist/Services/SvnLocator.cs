@@ -29,18 +29,25 @@ public static class SvnLocator
     public static bool IsSvnAvailable => FindSvn() is not null;
 
     /// <summary>
+    /// Cartelle del PATH da considerare: solo percorsi assoluti completi (non relativi, non con sola unità o sola radice). Una voce relativa (es. <c>.</c> o <c>bin</c>) si risolve
+    /// rispetto alla cartella di lavoro corrente e permetterebbe a un repository ostile di far partire un suo svn.exe/gh.exe.
+    /// </summary>
+    public static IReadOnlyList<string> RootedPathDirectories(string? pathVariable = null) =>
+        (pathVariable ?? Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
+            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
+            .Select(d => d.Trim().Trim('"'))
+            .Where(d => d.Length > 0 && Path.IsPathFullyQualified(d))
+            .ToList();
+
+    /// <summary>
     /// Cerca un eseguibile nel PATH di sistema e nelle posizioni di installazione note.
     /// </summary>
     /// <param name="exeName">Nome del file eseguibile (es. <c>svn.exe</c>).</param>
     /// <returns>Il percorso completo, oppure <c>null</c> se non trovato.</returns>
     public static string? FindExecutable(string exeName)
     {
-        var pathDirs = Environment.GetEnvironmentVariable("PATH")?.Split(Path.PathSeparator) ?? [];
-        foreach (var dir in pathDirs)
+        foreach (var dir in RootedPathDirectories())
         {
-            if (string.IsNullOrWhiteSpace(dir))
-                continue;
-
             var candidate = Path.Combine(dir, exeName);
             if (File.Exists(candidate))
                 return candidate;

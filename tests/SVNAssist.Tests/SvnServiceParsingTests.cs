@@ -359,7 +359,7 @@ public class SvnServiceParsingTests : IDisposable
 
         var diffCall = runner.Calls.Single(c => c[0] == "diff");
         Assert.Equal(
-            ["diff", "--non-interactive", "-x", "-U 0 -p", "--no-diff-deleted", @"src\A.cs"], diffCall);
+            ["diff", "--non-interactive", "--depth", "empty", "-x", "-U 0 -p", "--no-diff-deleted", @"src\A.cs"], diffCall);
         Assert.Contains("Index: src\\A.cs", diff);
         Assert.Contains("+ciao", diff);
     }

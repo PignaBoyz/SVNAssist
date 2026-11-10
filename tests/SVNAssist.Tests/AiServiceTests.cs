@@ -101,6 +101,7 @@ public class AiServiceTests
         // Assert — con "auto" il prompt non deve contenere "Lingua:"
         Assert.NotNull(capturedBody);
         Assert.DoesNotContain("Lingua:", capturedBody);
+        Assert.Contains("lingua prevalente", capturedBody);
     }
 
     [Fact]

@@ -45,3 +45,33 @@ public interface IProcessRunner
         string? standardInput = null,
         IReadOnlyDictionary<string, string>? environment = null);
 }
+
+internal static class ProcessRunnerExtensions
+{
+    /// <summary>
+    /// Come <see cref="IProcessRunner.RunAsync"/> ma con un tempo massimo: scaduto il processo viene terminato e si lancia
+    /// <see cref="TimeoutException"/> (distinta dall'annullamento dell'utente, che resta <see cref="OperationCanceledException"/>).
+    /// </summary>
+    internal static async Task<ProcessResult> RunWithTimeoutAsync(
+        this IProcessRunner runner,
+        string fileName,
+        IReadOnlyList<string> arguments,
+        string? workingDirectory,
+        TimeSpan timeout,
+        string description,
+        CancellationToken ct,
+        string? standardInput = null,
+        IReadOnlyDictionary<string, string>? environment = null)
+    {
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(timeout);
+        try
+        {
+            return await runner.RunAsync(fileName, arguments, workingDirectory, timeoutCts.Token, standardInput, environment);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested && timeoutCts.IsCancellationRequested)
+        {
+            throw new TimeoutException($"{description} non ha risposto entro {timeout.TotalSeconds:0} secondi ed è stato interrotto.");
+        }
+    }
+}

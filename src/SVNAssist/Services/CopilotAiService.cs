@@ -40,6 +40,40 @@ internal sealed class CopilotAiService : AiServiceBase
     /// <inheritdoc />
     protected override async Task<string> CompleteAsync(string systemPrompt, string userMessage, CancellationToken ct)
     {
+        try
+        {
+            return await CompleteCoreAsync(systemPrompt, userMessage, ct);
+        }
+        catch (Exception) when (!ct.IsCancellationRequested)
+        {
+            // Runtime morto o sessione rotta: si butta il client condiviso, la prossima chiamata lo riavvia.
+            await DropSharedClientAsync();
+            throw;
+        }
+    }
+
+    private static async Task DropSharedClientAsync()
+    {
+        await ClientLock.WaitAsync();
+        try
+        {
+            var client = _sharedClient;
+            _sharedClient = null;
+            _sharedClientToken = null;
+            if (client is not null)
+            {
+                try { await client.DisposeAsync(); }
+                catch (Exception) { /* il runtime potrebbe essere già morto */ }
+            }
+        }
+        finally
+        {
+            ClientLock.Release();
+        }
+    }
+
+    private async Task<string> CompleteCoreAsync(string systemPrompt, string userMessage, CancellationToken ct)
+    {
         var client = await GetClientAsync(ct);
 
         await using var session = await client.CreateSessionAsync(new SessionConfig

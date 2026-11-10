@@ -1,3 +1,4 @@
+using System.IO;
 using System.Runtime.Serialization;
 using Microsoft.VisualStudio.Extensibility.UI;
 using SVNAssist.Services;
@@ -24,10 +25,16 @@ internal sealed class CommitMessageViewModel : NotifyPropertyChangedObject
     private readonly ISvnAssistSettings _settings;
     private readonly Func<IReadOnlyList<string>> _selectedPaths;
     private readonly Func<string> _workingCopyPath;
+    private readonly IDialogService? _dialogs;
+
+    // Trasparenza: prima del primo invio al provider AI (e per ogni file sospetto nuovo) l'utente conferma.
+    private bool _disclosureAccepted;
+    private readonly HashSet<string> _confirmedSensitive = new(StringComparer.OrdinalIgnoreCase);
 
     private string _text = string.Empty;
     private string _aiStatus = string.Empty;
     private bool _isBusy;
+    private int _aiRunning;
     private string _selectedLanguage = Auto;
     private bool _languageChosenByUser;
     private bool _languageLoaded;
@@ -38,8 +45,10 @@ internal sealed class CommitMessageViewModel : NotifyPropertyChangedObject
         IAiServiceFactory aiServiceFactory,
         IAiSetupPrompt aiSetupPrompt,
         Func<IReadOnlyList<string>> selectedPaths,
-        Func<string> workingCopyPath)
+        Func<string> workingCopyPath,
+        IDialogService? dialogs = null)
     {
+        _dialogs = dialogs;
         _settings = settings;
         _svnService = svnService;
         _aiServiceFactory = aiServiceFactory;
@@ -149,6 +158,28 @@ internal sealed class CommitMessageViewModel : NotifyPropertyChangedObject
     /// <summary>Flusso comune a Genera e Migliora: provider, file selezionati, diff minimo, chiamata AI.</summary>
     private async Task RunAiAsync(bool improve, CancellationToken ct)
     {
+        // Un solo flusso AI alla volta: il doppio click non avvia due richieste né due guide di configurazione.
+        if (Interlocked.CompareExchange(ref _aiRunning, 1, 0) != 0)
+            return;
+
+        try
+        {
+            IsBusy = true;
+            await RunAiCoreAsync(improve, ct);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            AiStatus = $"Errore AI: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+            Volatile.Write(ref _aiRunning, 0);
+        }
+    }
+
+    private async Task RunAiCoreAsync(bool improve, CancellationToken ct)
+    {
         var ai = await _aiServiceFactory.CreateAsync(ct);
         if (ai is null)
         {
@@ -180,40 +211,81 @@ internal sealed class CommitMessageViewModel : NotifyPropertyChangedObject
             return;
         }
 
-        try
+        var chain = DescribeChain(ai);
+        if (!await ConfirmDisclosureAsync(paths, chain, ct))
         {
-            IsBusy = true;
-            AiStatus = improve ? "Miglioramento in corso..." : "Generazione in corso...";
-
-            var diff = await _svnService.GetDiffForAiAsync(paths, workingCopy, ct);
-            if (!improve && string.IsNullOrWhiteSpace(diff))
-            {
-                AiStatus = "Nessun diff disponibile.";
-                return;
-            }
-
-            await InitializeAsync(ct);
-            var language = LanguageForAi;
-            Text = improve
-                ? await ai.ImproveCommitMessageAsync(Text, diff, language, ct)
-                : await ai.GenerateCommitMessageAsync(diff, language, ct);
-
-            var provider = DescribeProvider(ai);
-            var done = improve ? "Messaggio migliorato" : "Messaggio generato con AI";
-            AiStatus = provider is null ? $"{done}." : $"{done} ({provider}).";
+            AiStatus = "Operazione annullata: nessun dato è stato inviato.";
+            return;
         }
-        catch (Exception ex) when (!ct.IsCancellationRequested)
+
+        AiStatus = (improve ? "Miglioramento" : "Generazione") + (chain is null ? " in corso..." : $" con {chain}...");
+
+        var diff = await _svnService.GetDiffForAiAsync(paths, workingCopy, ct);
+        if (!improve && string.IsNullOrWhiteSpace(diff))
         {
-            AiStatus = $"Errore AI: {ex.Message}";
+            AiStatus = "Nessun diff disponibile.";
+            return;
         }
-        finally
-        {
-            IsBusy = false;
-        }
+
+        // Tetto ai dati inviati: un file enorme spuntato per errore non deve diventare centinaia di KB e decine di richieste.
+        var limited = DiffLimiter.Limit(diff);
+        diff = limited.Diff;
+
+        await InitializeAsync(ct);
+        var language = LanguageForAi;
+        Text = improve
+            ? await ai.ImproveCommitMessageAsync(Text, diff, language, ct)
+            : await ai.GenerateCommitMessageAsync(diff, language, ct);
+
+        var provider = DescribeProvider(ai);
+        var done = improve ? "Messaggio migliorato" : "Messaggio generato con AI";
+        AiStatus = provider is null ? $"{done}." : $"{done} ({provider}).";
+        if (limited.WasTruncated)
+            AiStatus += $" Attenzione: diff molto grande, inviata solo una parte (max {DiffLimiter.MaxTotalChars / 1000} KB, {DiffLimiter.MaxFileChars / 1000} KB per file).";
     }
 
+    /// <summary>
+    /// Conferma (una volta per sessione, e di nuovo per ogni file dal nome sospetto non ancora confermato) di inviare
+    /// il diff dei soli file selezionati ai provider elencati. Senza dialogo (test) non chiede nulla.
+    /// </summary>
+    private async Task<bool> ConfirmDisclosureAsync(IReadOnlyList<string> paths, string? chain, CancellationToken ct)
+    {
+        if (_dialogs is null)
+            return true;
+
+        var sensitive = SensitiveFiles.Find(paths).Where(p => !_confirmedSensitive.Contains(p)).ToList();
+        if (_disclosureAccepted && sensitive.Count == 0)
+            return true;
+
+        var message = $"Per usare l'AI, il diff dei soli file selezionati ({paths.Count} elementi) verrà inviato a un servizio esterno: " +
+                      $"{chain ?? "provider AI configurato"}.";
+        if (chain is not null && chain.Contains("→"))
+            message += " I provider vengono provati nell'ordine indicato: se il primo fallisce, il diff passa al successivo.";
+        message += " Nessun altro file viene inviato. Questa conferma compare una volta per sessione.";
+        if (sensitive.Count > 0)
+            message += "\n\nATTENZIONE: questi file sembrano contenere segreti (chiavi, certificati, configurazioni):\n" +
+                       string.Join("\n", sensitive.Take(8).Select(p => $"• {Path.GetFileName(p)}")) +
+                       (sensitive.Count > 8 ? $"\n… e altri {sensitive.Count - 8}" : string.Empty) +
+                       "\nDeselezionali se non vuoi che il loro contenuto lasci il computer.";
+        message += "\n\nProcedere?";
+
+        if (!await _dialogs.ConfirmAsync(message, ct))
+            return false;
+
+        _disclosureAccepted = true;
+        _confirmedSensitive.UnionWith(sensitive);
+        return true;
+    }
+
+    /// <summary>Elenco dei provider che possono ricevere il diff, in ordine ("A → B").</summary>
+    internal static string? DescribeChain(IAiService service) => service switch
+    {
+        FallbackAiService fallback => string.Join(" → ", fallback.ProviderNames),
+        _ => DescribeProvider(service),
+    };
+
     /// <summary>Nome del provider che ha risposto, se ricavabile a costo zero.</summary>
-    private static string? DescribeProvider(IAiService service) => service switch
+    internal static string? DescribeProvider(IAiService service) => service switch
     {
         FallbackAiService fallback => fallback.LastUsedProvider,
         CopilotAiService => "GitHub Copilot",

@@ -125,7 +125,8 @@ internal static class ChangeRowFactory
                 ToolTip = $"{entry.FullPath}\n{StatusPresentation.DisplayName(status, entry.IsTreeConflict)}",
                 CanAdd = status == SvnStatusKind.Unversioned,
                 CanIgnore = status == SvnStatusKind.Unversioned,
-                CanDelete = status is not (SvnStatusKind.Unversioned or SvnStatusKind.Unknown),
+                // Niente Delete sulle cartelle in 0.1.0: con --force cancellerebbe tutto il sottoalbero dal disco.
+                CanDelete = status is not (SvnStatusKind.Unversioned or SvnStatusKind.Unknown) && !entry.IsDirectory,
                 CanRevert = IsRevertable(status),
                 CanResolve = status == SvnStatusKind.Conflicted,
                 CanDiff = status != SvnStatusKind.Unversioned,

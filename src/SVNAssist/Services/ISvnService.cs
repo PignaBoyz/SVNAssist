@@ -60,7 +60,12 @@ public interface ISvnService
     /// </summary>
     /// <param name="paths">Percorsi completi su cui annullare le modifiche.</param>
     /// <param name="ct">Token per annullare l'operazione.</param>
-    Task RevertAsync(IEnumerable<string> paths, CancellationToken ct);
+    /// <param name="recursive">
+    /// <c>true</c> (<c>--depth infinity</c>) annulla anche tutto il sottoalbero; <c>false</c> (<c>--depth empty</c>)
+    /// solo gli elementi elencati (una cartella con modifiche alle sole proprietà non tocca i figli).
+    /// Una cartella aggiunta si può annullare solo ricorsivamente (svn E155038).
+    /// </param>
+    Task RevertAsync(IEnumerable<string> paths, CancellationToken ct, bool recursive = true);
 
     /// <summary>
     /// Marca un conflitto come risolto (<c>svn resolve --accept</c>).
@@ -83,7 +88,7 @@ public interface ISvnService
     /// <summary>
     /// Aggiorna la working copy all'ultima revisione dal repository.
     /// </summary>
-    /// <param name="workingCopyPath">Percorso root della working copy SVN.</param>
+    /// <param name="workingCopyPath">Percorso root della working copy SVN, o di una cartella/un file da aggiornare da soli.</param>
     /// <param name="ct">Token per annullare l'operazione.</param>
     /// <returns>Revisione raggiunta ed eventuali file in conflitto.</returns>
     Task<UpdateResult> UpdateAsync(string workingCopyPath, CancellationToken ct);

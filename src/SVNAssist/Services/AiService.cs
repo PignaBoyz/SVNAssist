@@ -45,7 +45,35 @@ public class AiService : AiServiceBase
 
     /// <inheritdoc />
     protected override Task<string> CompleteAsync(string systemPrompt, string userMessage, CancellationToken ct)
-        => CallChatCompletionsAsync(systemPrompt, userMessage, ct, allowRetryOnLimit: true);
+    {
+        EnsureSafeEndpoint(_endpoint, _apiKey);
+        return CallChatCompletionsAsync(systemPrompt, userMessage, ct, allowRetryOnLimit: true);
+    }
+
+    /// <summary>
+    /// Una chiave inviata in chiaro (<c>http://</c>) a un host remoto sarebbe leggibile da chiunque sul percorso:
+    /// si rifiuta, salvo endpoint locali (loopback, es. Ollama) dove non esce dalla macchina.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Chiave configurata con un endpoint http non loopback.</exception>
+    internal static void EnsureSafeEndpoint(string endpoint, string apiKey)
+    {
+        if (string.IsNullOrWhiteSpace(apiKey))
+            return;
+
+        if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri))
+            throw new InvalidOperationException($"L'endpoint AI \"{endpoint}\" non è un URL valido.");
+
+        if (uri.Scheme == Uri.UriSchemeHttps)
+            return;
+
+        var isLoopback = uri.IsLoopback
+                         || string.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase)
+                         || uri.Host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase);
+        if (uri.Scheme != Uri.UriSchemeHttp || !isLoopback)
+            throw new InvalidOperationException(
+                $"Rifiuto di inviare la chiave API a {uri.Host} con una connessione non cifrata ({uri.Scheme}://). " +
+                "Usa un endpoint https:// (le sole eccezioni sono gli endpoint locali come http://localhost).");
+    }
 
     /// <remarks>
     /// Formato OpenAI: <c>{ model, max_tokens, messages: [system, user] }</c>.

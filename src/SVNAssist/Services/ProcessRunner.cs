@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO;
 
 namespace SVNAssist.Services;
 
@@ -14,6 +15,17 @@ namespace SVNAssist.Services;
 /// </remarks>
 public sealed class ProcessRunner : IProcessRunner
 {
+    /// <summary>Tetto predefinito dell'output catturato (caratteri) per ciascuno di stdout e stderr.</summary>
+    public const int DefaultMaxOutputChars = 16 * 1024 * 1024;
+
+    private readonly int _maxOutputChars;
+
+    /// <param name="maxOutputChars">
+    /// Oltre questo numero di caratteri su stdout o stderr il processo viene terminato e l'esecuzione fallisce
+    /// ("output troppo grande"): un diff o un log enorme non deve riempire la memoria di VS.
+    /// </param>
+    public ProcessRunner(int maxOutputChars = DefaultMaxOutputChars) => _maxOutputChars = maxOutputChars;
+
     /// <inheritdoc />
     public async Task<ProcessResult> RunAsync(
         string fileName,
@@ -61,8 +73,14 @@ public sealed class ProcessRunner : IProcessRunner
             catch (InvalidOperationException) { /* già terminato */ }
         });
 
-        var outputTask = process.StandardOutput.ReadToEndAsync(ct);
-        var errorTask = process.StandardError.ReadToEndAsync(ct);
+        var outputTask = ReadCappedAsync(process.StandardOutput, fileName, KillTree, ct);
+        var errorTask = ReadCappedAsync(process.StandardError, fileName, KillTree, ct);
+
+        void KillTree()
+        {
+            try { process.Kill(entireProcessTree: true); }
+            catch (InvalidOperationException) { /* già terminato */ }
+        }
 
         if (standardInput is not null)
         {
@@ -77,5 +95,27 @@ public sealed class ProcessRunner : IProcessRunner
         var error = await errorTask;
 
         return new ProcessResult(process.ExitCode, output, error);
+    }
+
+    /// <summary>Legge fino a <see cref="_maxOutputChars"/> caratteri; oltre, termina il processo e solleva l'errore.</summary>
+    private async Task<string> ReadCappedAsync(StreamReader reader, string fileName, Action kill, CancellationToken ct)
+    {
+        var builder = new System.Text.StringBuilder();
+        var buffer = new char[8192];
+        int read;
+        while ((read = await reader.ReadAsync(buffer.AsMemory(), ct)) > 0)
+        {
+            if (builder.Length + read > _maxOutputChars)
+            {
+                kill();
+                throw new InvalidOperationException(
+                    $"L'output di {Path.GetFileName(fileName)} è troppo grande (oltre {_maxOutputChars / (1024 * 1024)} MB): operazione interrotta. " +
+                    "Restringi la selezione (meno file) e riprova.");
+            }
+
+            builder.Append(buffer, 0, read);
+        }
+
+        return builder.ToString();
     }
 }

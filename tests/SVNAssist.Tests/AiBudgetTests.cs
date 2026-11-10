@@ -18,8 +18,13 @@ public class AiBudgetTests
         }
     }
 
+    // Più file da ~15 KB: ciascuno sotto il tetto per file di DiffLimiter, così il diff arriva intero alla logica di budget.
     private static string BigDiff(int lines)
-        => "Index: a.cs\n" + string.Join("\n", Enumerable.Range(0, lines).Select(i => $"+riga numero {i:D5} del diff"));
+        => string.Join(
+            "\n",
+            Enumerable.Range(0, (lines + 499) / 500).Select(f =>
+                $"Index: f{f}.cs\n" + string.Join(
+                    "\n", Enumerable.Range(f * 500, Math.Min(500, lines - f * 500)).Select(i => $"+riga numero {i:D5} del diff"))));
 
     [Fact]
     public async Task BudgetDefault_DiffGrande_VieneRiassuntoABlocchi()

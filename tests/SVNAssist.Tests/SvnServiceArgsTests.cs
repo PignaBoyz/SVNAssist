@@ -48,9 +48,19 @@ public class SvnServiceArgsTests
     public async Task CommitAsync_MessaggioConSpaziEVirgolette_PassatoComeSingoloArgomento()
     {
         // Arrange
-        var runner = new FakeProcessRunner();
+        string? messageFile = null;
+        string? messageContent = null;
+        var runner = new FakeProcessRunner
+        {
+            Responder = args =>
+            {
+                messageFile = args[args.ToList().IndexOf("-F") + 1];
+                messageContent = File.ReadAllText(messageFile);
+                return new ProcessResult(0, string.Empty, string.Empty);
+            },
+        };
         var sut = CreateSut(runner);
-        var message = "fix: corretto \"bug\" con spazi";
+        var message = "fix: corretto \"bug\" con spazi, emoji \U0001F680 e frecce \u2192";
 
         // Act
         await sut.CommitAsync([@"C:\wc\a.cs", @"C:\wc\file con spazi.cs"], message, CancellationToken.None);
@@ -58,8 +68,11 @@ public class SvnServiceArgsTests
         // Assert — niente escaping manuale: il messaggio è un unico argomento intatto
         Assert.Equal(FakeSvnPath, runner.LastFileName);
         Assert.Equal(
-            ["commit", "--non-interactive", "--depth", "empty", "-m", message, @"C:\wc\a.cs", @"C:\wc\file con spazi.cs"],
+            ["commit", "--non-interactive", "--depth", "empty", "-F", messageFile!, "--encoding", "utf-8",
+             @"C:\wc\a.cs", @"C:\wc\file con spazi.cs"],
             runner.LastArguments);
+        Assert.Equal(message, messageContent); // il messaggio arriva intatto, via file
+        Assert.False(File.Exists(messageFile)); // e il file temporaneo viene cancellato
     }
 
     [Fact]
@@ -233,9 +246,15 @@ public class SvnServiceArgsTests
         Assert.All(targetsLines, lines => Assert.Equal(paths, lines));
         Assert.All(targetsFiles, f => Assert.False(File.Exists(f), "il file temporaneo va cancellato"));
         // Le opzioni restano prima di --targets e i percorsi non compaiono più in riga di comando.
-        Assert.Equal(
-            ["commit", "--non-interactive", "--depth", "empty", "-m", "msg", "--targets", targetsFiles[3]],
-            runner.LastArguments);
+        Assert.Equal("--targets", runner.LastArguments[^2]);
+        Assert.Equal(targetsFiles[3], runner.LastArguments[^1]);
+        Assert.DoesNotContain(paths[0], runner.LastArguments);
+    }
+
+    [Fact]
+    public void BuildTortoiseDiffArguments_PercorsoConSpazi_VirgoletteAttornoAlSoloValore()
+    {
+        Assert.Equal("/command:diff /path:\"C:\\a b\\c.cs\"", SvnService.BuildTortoiseDiffArguments(@"C:\a b\c.cs"));
     }
 
     [Fact]

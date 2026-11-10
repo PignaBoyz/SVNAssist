@@ -339,6 +339,85 @@ public class SvnServiceTests : IDisposable
         Assert.Empty(await _sut.GetStatusAsync(_wcDir, CancellationToken.None));
     }
 
+    [Fact]
+    public async Task CommitAsync_MessaggioConEmojiEFrecce_ArrivaIntattoNelLog()
+    {
+        await CreateRepoAndCheckoutAsync();
+        var file = Path.Combine(_wcDir, "a.txt");
+        await File.WriteAllTextAsync(file, "x\n");
+        await _sut.AddAsync([file], CancellationToken.None);
+        var message = "fix: da A \u2192 B \U0001F680 perch\u00e9 \u00e8 cos\u00ec\nseconda riga";
+
+        await _sut.CommitAsync([file], message, CancellationToken.None);
+
+        await RunAsync(_svnExe, "update", _wcDir);
+        var log = await _sut.GetLogAsync(_wcDir, 1, CancellationToken.None);
+        Assert.Equal(message, log[0].Message.Replace("\r\n", "\n").TrimEnd());
+    }
+
+    [Fact]
+    public async Task UpdateAsync_SuUnFile_AggiornaSoloQuelFile()
+    {
+        await CreateRepoAndCheckoutAsync();
+        var a = Path.Combine(_wcDir, "a.txt");
+        var b = Path.Combine(_wcDir, "b.txt");
+        await File.WriteAllTextAsync(a, "a\n");
+        await File.WriteAllTextAsync(b, "b\n");
+        await RunAsync(_svnExe, $"add \"{a}\" \"{b}\"", _wcDir);
+        await RunAsync(_svnExe, "commit -m init", _wcDir);
+
+        // Un secondo checkout committa una modifica a entrambi i file.
+        var other = Path.Combine(_testDir, "wc2");
+        await RunAsync(_svnExe, $"checkout \"file:///{_repoDir.Replace('\\', '/')}\" \"{other}\"", _testDir);
+        await File.WriteAllTextAsync(Path.Combine(other, "a.txt"), "a2\n");
+        await File.WriteAllTextAsync(Path.Combine(other, "b.txt"), "b2\n");
+        await RunAsync(_svnExe, "commit -m due", other);
+
+        var result = await _sut.UpdateAsync(a, CancellationToken.None);
+
+        Assert.Equal(2, result.Revision);
+        Assert.Equal("a2", (await File.ReadAllTextAsync(a)).Trim());
+        Assert.Equal("b", (await File.ReadAllTextAsync(b)).Trim()); // l'altro file non si tocca
+    }
+
+    [Fact]
+    public async Task AddToIgnoreList_NomeConParentesiQuadre_IgnoraSoloQuelFile_ELeRigheEsistentiRestanoIntatte()
+    {
+        await CreateRepoAndCheckoutAsync();
+        // svn:ignore esistente con una riga con spazi e una riga vuota: non vanno toccate.
+        await RunAsync(_svnExe, "propset svn:ignore \"*.log\n  con spazi\n\nultima\" .", _wcDir);
+        await File.WriteAllTextAsync(Path.Combine(_wcDir, "a[1].txt"), "x\n");
+        await File.WriteAllTextAsync(Path.Combine(_wcDir, "a1.txt"), "y\n");
+
+        await _sut.AddToIgnoreListAsync(Path.Combine(_wcDir, "a[1].txt"), CancellationToken.None);
+
+        var value = await ReadPropertyAsync("svn:ignore", _wcDir);
+        Assert.Equal("*.log\n  con spazi\n\nultima\na\\[1\\].txt", value.Replace("\r\n", "\n"));
+        var status = await _sut.GetStatusAsync(_wcDir, CancellationToken.None);
+        Assert.DoesNotContain(status, s => s.Path.Contains("a[1].txt")); // ignorato
+        Assert.Contains(status, s => s.Path.Contains("a1.txt")); // l'altro file no
+    }
+
+    private async Task<string> ReadPropertyAsync(string name, string path)
+    {
+        using var process = new System.Diagnostics.Process();
+        process.StartInfo = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = _svnExe,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            StandardOutputEncoding = System.Text.Encoding.UTF8,
+        };
+        process.StartInfo.ArgumentList.Add("propget");
+        process.StartInfo.ArgumentList.Add(name);
+        process.StartInfo.ArgumentList.Add(path);
+        process.Start();
+        var output = await process.StandardOutput.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        return output.TrimEnd('\r', '\n');
+    }
+
     // ─── Riga di comando lunga e nomi particolari ─────────────────────
 
     [Fact]

@@ -67,14 +67,31 @@ public abstract class AiServiceBase : IAiService
         return await AskAsync(systemPrompt, BuildImproveUserMessage(draft, diffContext), ct);
     }
 
+    /// <summary>Tempo massimo per una singola richiesta al provider AI.</summary>
+    internal virtual TimeSpan CallTimeout => TimeSpan.FromMinutes(3);
+
     private async Task<string> AskAsync(string systemPrompt, string userMessage, CancellationToken ct)
     {
-        var answer = await CompleteAsync(systemPrompt, TrimToMaxChars(userMessage, MaxUserMessageChars), ct);
-        return answer.Trim();
+        // Timeout collegato all'annullamento dell'utente ma distinguibile: un provider appeso non blocca per sempre.
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(CallTimeout);
+        try
+        {
+            var answer = await CompleteAsync(systemPrompt, TrimToMaxChars(userMessage, MaxUserMessageChars), timeoutCts.Token);
+            return answer.Trim();
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested && timeoutCts.IsCancellationRequested)
+        {
+            throw new TimeoutException(
+                $"Il provider AI non ha risposto entro {CallTimeout.TotalMinutes:0.#} minuti: richiesta interrotta.");
+        }
     }
 
     private async Task<string> GetDiffContextAsync(string diff, string language, CancellationToken ct)
     {
+        // Rete di sicurezza: anche chi chiama senza averlo già fatto non può mandare più di DiffLimiter.MaxTotalChars.
+        diff = DiffLimiter.Limit(diff).Diff;
+
         var maxFileListChars = Math.Min(MaxFileListChars, Math.Max(0, MaxUserMessageChars - MinDiffContextChars));
         var fileListContext = BuildFileListContext(diff, maxFileListChars);
         var diffBudgetChars = MaxUserMessageChars - fileListContext.Length;
@@ -237,10 +254,12 @@ public abstract class AiServiceBase : IAiService
 
     /// <summary>
     /// Istruzione sulla lingua da aggiungere al prompt.
-    /// Con <c>"auto"</c> non si specifica nulla: il modello sceglie la lingua del diff.
+    /// Con <c>"auto"</c> si chiede la lingua prevalente nel diff (i prompt sono in italiano: senza istruzione il modello risponderebbe quasi sempre in italiano).
     /// </summary>
     private static string GetLanguageInstruction(string language) =>
-        string.Equals(language, "auto", StringComparison.OrdinalIgnoreCase) ? string.Empty : $" Lingua: {language}.";
+        string.Equals(language, "auto", StringComparison.OrdinalIgnoreCase)
+            ? " Scrivi il messaggio nella lingua prevalente dei commenti e dei messaggi esistenti nel diff; se non è chiaro, usa l'inglese."
+            : $" Lingua: {language}.";
 
     /// <summary>Tronca il testo a <paramref name="maxChars"/> caratteri aggiungendo un marcatore.</summary>
     protected static string TrimToMaxChars(string text, int maxChars)

@@ -84,7 +84,8 @@ internal sealed class PrerequisiteProbes
         {
             try
             {
-                var result = await processRunner.RunAsync(gh, ["auth", "status"], null, ct);
+                var result = await processRunner.RunWithTimeoutAsync(
+                    gh, ["auth", "status"], null, GitHubTokenResolver.GhTimeout, "gh auth status", ct);
                 return result.ExitCode == 0;
             }
             catch (Exception) when (!ct.IsCancellationRequested)

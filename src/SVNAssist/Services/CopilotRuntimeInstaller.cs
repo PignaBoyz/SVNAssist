@@ -58,15 +58,22 @@ internal static class CopilotRuntimeInstaller
             if (IsInstalled)
                 return RuntimePath;
 
-            var expectedHash = ParseChecksum(await http.GetStringAsync($"{ReleaseUrl}/SHA256SUMS.txt", ct), AssetName);
+            // Doppio controllo: l'hash scaricato dal release (SHA256SUMS.txt) deve coincidere con quello fissato nel
+            // sorgente per questa versione/piattaforma, così un release manomesso non basta a far eseguire un altro binario.
+            var expectedHash = ResolveExpectedHash(
+                AssetName, await http.GetStringAsync($"{ReleaseUrl}/SHA256SUMS.txt", ct));
 
             Directory.CreateDirectory(stagingRoot);
             var archivePath = Path.Combine(stagingRoot, "copilot.tgz");
             using (var response = await http.GetAsync($"{ReleaseUrl}/{AssetName}", HttpCompletionOption.ResponseHeadersRead, ct))
             {
                 response.EnsureSuccessStatusCode();
+                if (response.Content.Headers.ContentLength > MaxDownloadBytes)
+                    throw new InvalidOperationException("Il runtime Copilot da scaricare è più grande del previsto: download annullato.");
+
                 await using var file = File.Create(archivePath);
-                await response.Content.CopyToAsync(file, ct);
+                await using var body = await response.Content.ReadAsStreamAsync(ct);
+                await CopyCappedAsync(body, file, MaxDownloadBytes, ct);
             }
 
             // Mai eseguire un binario scaricato senza averne verificato l'integrità.
@@ -109,6 +116,50 @@ internal static class CopilotRuntimeInstaller
     }
 
     /// <summary>Estrae l'hash dell'asset da un file <c>SHA256SUMS.txt</c> ("hash  nome-file").</summary>
+    /// <summary>Dimensione massima accettata per il download (l'archivio attuale è ~100 MB).</summary>
+    internal const long MaxDownloadBytes = 300L * 1024 * 1024;
+
+    /// <summary>
+    /// SHA-256 attesi degli archivi, fissati nel sorgente (da <c>SHA256SUMS.txt</c> del release v1.0.109 di github/copilot-cli).
+    /// Aggiornarli insieme alla versione di <c>GitHub.Copilot.SDK</c> (che determina <see cref="RuntimeVersion"/>).
+    /// </summary>
+    internal static readonly IReadOnlyDictionary<string, string> PinnedHashes = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["github-copilot-1.0.109-win32-x64.tgz"] = "5ba9bfc3104d8e37462e9a5214a3cc88e6e2201b972981b6bdf447ee2f8f49bc",
+        ["github-copilot-1.0.109-win32-arm64.tgz"] = "04b2821e5541f1bc6fca29365385921d3ea72c61f05210ebcb004a207a18aa48",
+    };
+
+    /// <summary>
+    /// Hash da richiedere all'archivio: quello del release, e se per questa versione c'è un pin nel sorgente deve coincidere.
+    /// Se la versione cambia e non c'è ancora un pin si ripiega sul solo checksum del release (meno forte: va aggiunto il pin).
+    /// </summary>
+    internal static string ResolveExpectedHash(string assetName, string sums)
+    {
+        var releaseHash = ParseChecksum(sums, assetName);
+        if (PinnedHashes.TryGetValue(assetName, out var pinned)
+            && !string.Equals(pinned, releaseHash, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException(
+                "Il checksum pubblicato per il runtime Copilot non coincide con quello atteso da SVNAssist: download rifiutato.");
+
+        return pinned ?? releaseHash;
+    }
+
+    /// <summary>Copia <paramref name="source"/> in <paramref name="destination"/> fermandosi con un errore oltre <paramref name="maxBytes"/>.</summary>
+    internal static async Task CopyCappedAsync(Stream source, Stream destination, long maxBytes, CancellationToken ct)
+    {
+        var buffer = new byte[81920];
+        long total = 0;
+        int read;
+        while ((read = await source.ReadAsync(buffer.AsMemory(), ct)) > 0)
+        {
+            total += read;
+            if (total > maxBytes)
+                throw new InvalidOperationException("Il download del runtime Copilot supera il limite consentito: annullato.");
+
+            await destination.WriteAsync(buffer.AsMemory(0, read), ct);
+        }
+    }
+
     internal static string ParseChecksum(string sums, string assetName)
     {
         var matches = sums.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)

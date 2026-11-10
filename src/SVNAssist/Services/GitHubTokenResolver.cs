@@ -56,6 +56,9 @@ internal sealed class GitHubTokenResolver : IGitHubTokenResolver
         return token;
     }
 
+    /// <summary>Tempo massimo per <c>gh auth token</c>/<c>gh auth status</c>: se gh si appende (rete, prompt) non si blocca la UI.</summary>
+    internal static readonly TimeSpan GhTimeout = TimeSpan.FromSeconds(10);
+
     private async Task<string?> TryFromGhCliAsync(CancellationToken ct)
     {
         var gh = _ghLocator();
@@ -64,16 +67,17 @@ internal sealed class GitHubTokenResolver : IGitHubTokenResolver
 
         try
         {
-            var result = await _processRunner.RunAsync(gh, ["auth", "token"], workingDirectory: null, ct);
+            var result = await _processRunner.RunWithTimeoutAsync(
+                gh, ["auth", "token"], null, GhTimeout, "gh auth token", ct);
             if (result.ExitCode != 0)
                 return null;
 
             var token = result.StandardOutput.Trim();
             return string.IsNullOrWhiteSpace(token) ? null : token;
         }
-        catch
+        catch (Exception) when (!ct.IsCancellationRequested)
         {
-            // gh non avviabile / non loggato: passiamo alla sorgente successiva.
+            // gh non avviabile / non loggato / appeso oltre il timeout: passiamo alla sorgente successiva.
             return null;
         }
     }
@@ -93,12 +97,8 @@ internal sealed class GitHubTokenResolver : IGitHubTokenResolver
     /// <summary>Cerca <c>gh.exe</c> nel PATH e nella posizione di installazione standard.</summary>
     private static string? FindGhExecutable()
     {
-        var pathDirs = Environment.GetEnvironmentVariable("PATH")?.Split(Path.PathSeparator) ?? [];
-        foreach (var dir in pathDirs)
+        foreach (var dir in SvnLocator.RootedPathDirectories())
         {
-            if (string.IsNullOrWhiteSpace(dir))
-                continue;
-
             var candidate = Path.Combine(dir, "gh.exe");
             if (File.Exists(candidate))
                 return candidate;

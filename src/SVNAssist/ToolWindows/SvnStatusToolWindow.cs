@@ -33,6 +33,7 @@ internal class SvnStatusToolWindow : ToolWindow
     private CancellationTokenSource? _watcherCts;
     private Task? _solutionTask;
     private Task? _refreshTask;
+    private readonly object _watcherLock = new();
     private FileSystemWatcher? _workingCopyWatcher;
     private string _watchedRoot = string.Empty;
 
@@ -77,14 +78,32 @@ internal class SvnStatusToolWindow : ToolWindow
     /// Controlla i prerequisiti (la checklist si apre da sola se manca svn), rileva la working copy
     /// dalla solution aperta e avvia i watcher.
     /// </summary>
-    public override async Task<IRemoteUserControl> GetContentAsync(CancellationToken cancellationToken)
+    public override Task<IRemoteUserControl> GetContentAsync(CancellationToken cancellationToken)
     {
-        await _dataContext.InitializeAsync(cancellationToken);
-        await RefreshAutoDetectFromSolutionAsync(cancellationToken);
-        ConfigureWorkingCopyWatcher(_dataContext.WorkingCopyPath);
+        // La finestra si mostra subito ("Caricamento in corso..."): sonda dei prerequisiti e primo svn status
+        // (lenti su working copy grandi o rete lenta) girano in background e aggiornano il data context.
         StartBackgroundLoops();
+        _ = InitializeInBackgroundAsync(_watcherCts!.Token);
 
-        return new SvnStatusToolWindowControl(_dataContext);
+        return Task.FromResult<IRemoteUserControl>(new SvnStatusToolWindowControl(_dataContext));
+    }
+
+    private async Task InitializeInBackgroundAsync(CancellationToken ct)
+    {
+        try
+        {
+            await _dataContext.InitializeAsync(ct);
+            await RefreshAutoDetectFromSolutionAsync(ct);
+            ConfigureWorkingCopyWatcher(_dataContext.WorkingCopyPath);
+        }
+        catch (OperationCanceledException)
+        {
+            // finestra chiusa durante il caricamento
+        }
+        catch (Exception ex)
+        {
+            _dataContext.ReportInitializationError(ex.Message);
+        }
     }
 
     /// <summary>Rileva la root SVN dalla directory della solution aperta (risale cercando <c>.svn</c>).</summary>
@@ -145,19 +164,32 @@ internal class SvnStatusToolWindow : ToolWindow
 
     private void ConfigureWorkingCopyWatcher(string? workingCopyPath)
     {
-        var normalized = string.IsNullOrWhiteSpace(workingCopyPath)
-            ? string.Empty
-            : Path.GetFullPath(workingCopyPath);
+        string normalized;
+        try
+        {
+            normalized = string.IsNullOrWhiteSpace(workingCopyPath) ? string.Empty : Path.GetFullPath(workingCopyPath);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            normalized = string.Empty; // percorso digitato a metà o non valido
+        }
 
-        if (string.Equals(_watchedRoot, normalized, StringComparison.OrdinalIgnoreCase))
-            return;
+        // Il watcher ricorsivo parte solo su una working copy vera (esiste e ha una root .svn): un percorso digitato
+        // a metà, o una cartella enorme qualsiasi, non deve sorvegliare un intero disco.
+        if (normalized.Length > 0 && (!Directory.Exists(normalized) || SvnService.FindSvnRoot(normalized) is null))
+            normalized = string.Empty;
 
-        _workingCopyWatcher?.Dispose();
-        _workingCopyWatcher = null;
-        _watchedRoot = normalized;
+        lock (_watcherLock)
+        {
+            if (string.Equals(_watchedRoot, normalized, StringComparison.OrdinalIgnoreCase))
+                return;
 
-        if (string.IsNullOrWhiteSpace(normalized) || !Directory.Exists(normalized))
-            return;
+            _workingCopyWatcher?.Dispose();
+            _workingCopyWatcher = null;
+            _watchedRoot = normalized;
+
+            if (normalized.Length == 0)
+                return;
 
         var watcher = new FileSystemWatcher(normalized)
         {
@@ -173,8 +205,11 @@ internal class SvnStatusToolWindow : ToolWindow
         watcher.Created += OnWorkingCopyFsChanged;
         watcher.Deleted += OnWorkingCopyFsChanged;
         watcher.Renamed += OnWorkingCopyFsChanged;
+        // Overflow del buffer (molti file cambiati insieme): gli eventi persi si recuperano con un refresh completo.
+        watcher.Error += (_, _) => _debouncer.Request();
         watcher.EnableRaisingEvents = true;
         _workingCopyWatcher = watcher;
+        }
     }
 
     private void OnWorkingCopyFsChanged(object sender, FileSystemEventArgs e)

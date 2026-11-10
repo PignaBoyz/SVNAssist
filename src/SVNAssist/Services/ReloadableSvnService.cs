@@ -46,7 +46,7 @@ internal sealed class ReloadableSvnService : ISvnService
     public Task<long?> CommitAsync(IEnumerable<string> paths, string message, CancellationToken ct, IEnumerable<string>? includeAllUnder = null) => Current.CommitAsync(paths, message, ct, includeAllUnder);
     public Task AddAsync(IEnumerable<string> paths, CancellationToken ct) => Current.AddAsync(paths, ct);
     public Task DeleteAsync(IEnumerable<string> paths, CancellationToken ct, bool force = false) => Current.DeleteAsync(paths, ct, force);
-    public Task RevertAsync(IEnumerable<string> paths, CancellationToken ct) => Current.RevertAsync(paths, ct);
+    public Task RevertAsync(IEnumerable<string> paths, CancellationToken ct, bool recursive = true) => Current.RevertAsync(paths, ct, recursive);
     public Task ResolveAsync(string path, SvnConflictChoice accept, CancellationToken ct) => Current.ResolveAsync(path, accept, ct);
     public Task AddToIgnoreListAsync(string path, CancellationToken ct) => Current.AddToIgnoreListAsync(path, ct);
     public Task<UpdateResult> UpdateAsync(string workingCopyPath, CancellationToken ct) => Current.UpdateAsync(workingCopyPath, ct);
