@@ -26,7 +26,7 @@ public class AiProvidersTests
 
         public Task<ProcessResult> RunAsync(
             string fileName, IReadOnlyList<string> arguments, string? workingDirectory, CancellationToken ct,
-            string? standardInput = null)
+            string? standardInput = null, IReadOnlyDictionary<string, string>? environment = null)
         {
             Arguments = arguments;
             StandardInput = standardInput;

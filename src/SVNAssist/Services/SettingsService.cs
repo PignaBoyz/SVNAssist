@@ -62,11 +62,11 @@ internal static class SettingDefinitions
     /// </summary>
     /// <remarks>
     /// L'API key viene salvata come stringa nelle impostazioni di VS.
-    /// In un progetto di produzione andrebbe cifrata con Windows Credential Manager
-    /// (pacchetto NuGet <c>CredentialManagement</c> per .NET Framework, oppure
-    /// <c>System.Security.Cryptography.ProtectedData</c> / DPAPI per .NET 8).
-    /// Per questo progetto didattico la salviamo nel settings store di VS,
-    /// che è protetto dal profilo utente del sistema operativo.
+    /// DPAPI/Credential Manager non sono applicabili: l'utente scrive la chiave in chiaro nella pagina
+    /// Strumenti > Opzioni, gestita da VS (<c>Setting.String</c> non ha hook di cifratura né tipo "password"),
+    /// quindi non c'è un punto in cui intercettarla prima del salvataggio. Mitigazioni: la chiave non
+    /// viene mai loggata né inclusa nei messaggi d'errore, e le alternative senza chiave
+    /// (variabili d'ambiente, <c>gh auth</c>, login di Claude Code) sono preferite.
     /// </remarks>
     [VisualStudioContribution]
     internal static Setting.String AiApiKey { get; } = new(

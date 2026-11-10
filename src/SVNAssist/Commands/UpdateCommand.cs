@@ -49,11 +49,26 @@ internal class UpdateCommand : Command
                 return;
             }
 
-            var svnService = new SvnService();
-            await svnService.UpdateAsync(solutionDir, cancellationToken);
+            // La solution può stare in una sottocartella: svn update va eseguito sulla root della working copy.
+            var workingCopyRoot = SvnService.FindSvnRoot(solutionDir);
+            if (workingCopyRoot is null)
+            {
+                await this.Extensibility.Shell().ShowPromptAsync(
+                    $"La solution non si trova in una working copy SVN:\n{solutionDir}",
+                    PromptOptions.OK,
+                    cancellationToken);
+                return;
+            }
+
+            var svnService = new SvnService(SvnLocator.FindSvn() ?? "svn.exe", new ProcessRunner());
+            var result = await svnService.UpdateAsync(workingCopyRoot, cancellationToken);
+
+            var summary = result.Revision is { } revision ? $"Aggiornato alla revisione {revision}" : "Update completato";
+            if (result.ConflictedPaths.Count > 0)
+                summary += $" ({result.ConflictedPaths.Count} file in conflitto)";
 
             await this.Extensibility.Shell().ShowPromptAsync(
-                $"Update completato per:\n{solutionDir}",
+                $"{summary}:\n{workingCopyRoot}",
                 PromptOptions.OK,
                 cancellationToken);
         }

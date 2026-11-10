@@ -140,6 +140,81 @@ public class SvnServiceTests : IDisposable
         Assert.Null(exception);
     }
 
+    [Fact]
+    public async Task CommitAsync_RestituisceLaRevisioneCreata()
+    {
+        await CreateRepoAndCheckoutAsync();
+        var filePath = Path.Combine(_wcDir, "rev.txt");
+        await File.WriteAllTextAsync(filePath, "x");
+        await RunAsync(_svnExe, $"add \"{filePath}\"", _wcDir);
+
+        var revision = await _sut.CommitAsync([filePath], "primo", CancellationToken.None);
+
+        Assert.Equal(1, revision);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ConConflitto_RiportaRevisioneEFileInConflitto()
+    {
+        // Due working copy: la seconda committa, la prima modifica la stessa riga e poi aggiorna.
+        await CreateRepoAndCheckoutAsync();
+        var file = Path.Combine(_wcDir, "c.txt");
+        await File.WriteAllTextAsync(file, "uno\n");
+        await RunAsync(_svnExe, $"add \"{file}\"", _wcDir);
+        await RunAsync(_svnExe, "commit -m base", _wcDir);
+
+        var wc2 = Path.Combine(_testDir, "wc2");
+        await RunAsync(_svnExe, $"checkout \"file:///{_repoDir.Replace('\\', '/')}\" \"{wc2}\"", _testDir);
+        await File.WriteAllTextAsync(Path.Combine(wc2, "c.txt"), "loro\n");
+        await RunAsync(_svnExe, "commit -m loro", wc2);
+
+        await File.WriteAllTextAsync(file, "mio\n");
+
+        var result = await _sut.UpdateAsync(_wcDir, CancellationToken.None);
+
+        Assert.Equal(2, result.Revision);
+        Assert.Single(result.ConflictedPaths);
+        Assert.EndsWith("c.txt", result.ConflictedPaths[0]);
+
+        // Con i marcatori ancora nel file, "working" viene rifiutato; "theirs-full" risolve.
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.ResolveAsync(file, SvnConflictChoice.Working, CancellationToken.None));
+        await _sut.ResolveAsync(file, SvnConflictChoice.TheirsFull, CancellationToken.None);
+        Assert.Equal("loro", (await File.ReadAllTextAsync(file)).Trim());
+        Assert.Empty(await _sut.GetStatusAsync(_wcDir, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task GetDiffForAiAsync_SoloFileSelezionati_SenzaContestoEConFileNuovi()
+    {
+        await CreateRepoAndCheckoutAsync();
+        var mod = Path.Combine(_wcDir, "mod.txt");
+        var other = Path.Combine(_wcDir, "other.txt");
+        var del = Path.Combine(_wcDir, "del.txt");
+        await File.WriteAllTextAsync(mod, "a\nb\nc\nd\ne\nf\n");
+        await File.WriteAllTextAsync(other, "uno\n");
+        await File.WriteAllTextAsync(del, "contenuto da cancellare\n");
+        await RunAsync(_svnExe, $"add \"{mod}\" \"{other}\" \"{del}\"", _wcDir);
+        await RunAsync(_svnExe, "commit -m init", _wcDir);
+
+        await File.WriteAllTextAsync(mod, "a\nb\nc\nCAMBIATA\ne\nf\n");
+        await File.WriteAllTextAsync(other, "non selezionato\n");
+        await RunAsync(_svnExe, $"delete \"{del}\"", _wcDir);
+        var nuovo = Path.Combine(_wcDir, "nuovo.txt");
+        await File.WriteAllTextAsync(nuovo, "prima\nseconda\n");
+
+        var diff = await _sut.GetDiffForAiAsync([mod, del, nuovo], _wcDir, CancellationToken.None);
+
+        Assert.Contains("+CAMBIATA", diff);
+        Assert.DoesNotContain("\n e\n", diff.Replace("\r", string.Empty)); // niente righe di contesto
+        Assert.DoesNotContain("non selezionato", diff);
+        Assert.DoesNotContain("contenuto da cancellare", diff);
+        Assert.Contains("del.txt", diff);
+        Assert.Contains("--- nuovo.txt\t(nonexistent)", diff);
+        Assert.Contains("+seconda", diff);
+        Assert.DoesNotContain(_wcDir, diff); // percorsi relativi alla working copy
+    }
+
     // ─── Helper methods ───────────────────────────────────────────────
 
     /// <summary>

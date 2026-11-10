@@ -33,10 +33,15 @@ public interface IProcessRunner
     /// <param name="workingDirectory">Directory di lavoro (null = corrente).</param>
     /// <param name="ct">Token per annullare l'operazione (il processo viene terminato).</param>
     /// <param name="standardInput">Testo da scrivere su stdin (null = nessun input).</param>
+    /// <param name="environment">
+    /// Variabili d'ambiente da aggiungere/sovrascrivere per il solo processo figlio
+    /// (null = ambiente ereditato invariato). Usato per forzare l'output di svn in inglese.
+    /// </param>
     Task<ProcessResult> RunAsync(
         string fileName,
         IReadOnlyList<string> arguments,
         string? workingDirectory,
         CancellationToken ct,
-        string? standardInput = null);
+        string? standardInput = null,
+        IReadOnlyDictionary<string, string>? environment = null);
 }

@@ -17,7 +17,7 @@ public class GitHubTokenResolverTests
 
         public Task<ProcessResult> RunAsync(
             string fileName, IReadOnlyList<string> arguments, string? workingDirectory, CancellationToken ct,
-            string? standardInput = null)
+            string? standardInput = null, IReadOnlyDictionary<string, string>? environment = null)
         {
             if (Throws)
                 throw new InvalidOperationException("gh non avviabile");
@@ -81,7 +81,7 @@ public class GitHubTokenResolverTests
     {
         public Task<ProcessResult> RunAsync(
             string fileName, IReadOnlyList<string> arguments, string? workingDirectory, CancellationToken ct,
-            string? standardInput = null)
+            string? standardInput = null, IReadOnlyDictionary<string, string>? environment = null)
         {
             capture(arguments);
             return Task.FromResult(new ProcessResult(0, "ghp_x", string.Empty));

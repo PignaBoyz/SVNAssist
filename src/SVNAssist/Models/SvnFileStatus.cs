@@ -6,7 +6,11 @@ namespace SVNAssist.Models;
 /// </summary>
 /// <param name="Path">Percorso del file relativo alla root della working copy.</param>
 /// <param name="Status">Tipo di modifica rilevata da SVN (Modified, Added, ecc.).</param>
-public sealed record SvnFileStatus(string Path, SvnStatusKind Status);
+/// <param name="IsTreeConflict">
+/// <c>true</c> se il conflitto è "ad albero" (rinomina/cancellazione in conflitto): non ha
+/// marcatori nel file e non si risolve con <c>--accept working</c> come un conflitto di testo.
+/// </param>
+public sealed record SvnFileStatus(string Path, SvnStatusKind Status, bool IsTreeConflict = false);
 
 /// <summary>
 /// Enumerazione degli stati possibili di un file in SVN.
@@ -37,6 +41,18 @@ public enum SvnStatusKind
 
     /// <summary>File sostituito (delete + add nella stessa operazione).</summary>
     Replaced,
+
+    /// <summary>File ignorato (svn:ignore / global-ignores). Non compare tra le modifiche.</summary>
+    Ignored,
+
+    /// <summary>Cartella creata da una definizione <c>svn:externals</c>. Non compare tra le modifiche.</summary>
+    External,
+
+    /// <summary>Un elemento di tipo diverso (es. file al posto di una cartella) occupa il percorso versionato.</summary>
+    Obstructed,
+
+    /// <summary>Cartella con contenuto incompleto (checkout/update interrotto): serve Cleanup/Update.</summary>
+    Incomplete,
 
     /// <summary>Stato non riconosciuto — fallback di sicurezza.</summary>
     Unknown

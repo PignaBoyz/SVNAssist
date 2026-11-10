@@ -35,6 +35,9 @@ internal sealed class CopilotAiService : AiServiceBase
     }
 
     /// <inheritdoc />
+    protected override int MaxUserMessageChars => LargeContextUserMessageChars;
+
+    /// <inheritdoc />
     protected override async Task<string> CompleteAsync(string systemPrompt, string userMessage, CancellationToken ct)
     {
         var client = await GetClientAsync(ct);

@@ -25,6 +25,9 @@ internal sealed class ClaudeCodeAiService : AiServiceBase
     }
 
     /// <inheritdoc />
+    protected override int MaxUserMessageChars => LargeContextUserMessageChars;
+
+    /// <inheritdoc />
     protected override async Task<string> CompleteAsync(string systemPrompt, string userMessage, CancellationToken ct)
     {
         List<string> args =

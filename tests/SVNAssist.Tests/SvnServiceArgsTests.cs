@@ -29,7 +29,7 @@ public class SvnServiceArgsTests
 
         public Task<ProcessResult> RunAsync(
             string fileName, IReadOnlyList<string> arguments, string? workingDirectory, CancellationToken ct,
-            string? standardInput = null)
+            string? standardInput = null, IReadOnlyDictionary<string, string>? environment = null)
         {
             CallCount++;
             LastFileName = fileName;
@@ -58,7 +58,7 @@ public class SvnServiceArgsTests
         // Assert — niente escaping manuale: il messaggio è un unico argomento intatto
         Assert.Equal(FakeSvnPath, runner.LastFileName);
         Assert.Equal(
-            ["commit", "-m", message, @"C:\wc\a.cs", @"C:\wc\file con spazi.cs"],
+            ["commit", "--non-interactive", "-m", message, @"C:\wc\a.cs", @"C:\wc\file con spazi.cs"],
             runner.LastArguments);
     }
 
@@ -81,7 +81,7 @@ public class SvnServiceArgsTests
 
         await sut.AddAsync([@"C:\wc\nuovo.txt"], CancellationToken.None);
 
-        Assert.Equal(["add", "--force", @"C:\wc\nuovo.txt"], runner.LastArguments);
+        Assert.Equal(["add", "--non-interactive", "--force", @"C:\wc\nuovo.txt"], runner.LastArguments);
     }
 
     [Fact]
@@ -92,7 +92,7 @@ public class SvnServiceArgsTests
 
         await sut.RevertAsync([@"C:\wc\a.cs"], CancellationToken.None);
 
-        Assert.Equal(["revert", "--depth", "infinity", @"C:\wc\a.cs"], runner.LastArguments);
+        Assert.Equal(["revert", "--non-interactive", "--depth", "infinity", @"C:\wc\a.cs"], runner.LastArguments);
     }
 
     [Fact]
@@ -103,7 +103,7 @@ public class SvnServiceArgsTests
 
         await sut.UpdateAsync(@"C:\wc", CancellationToken.None);
 
-        Assert.Equal(["update"], runner.LastArguments);
+        Assert.Equal(["update", "--non-interactive"], runner.LastArguments);
         Assert.Equal(@"C:\wc", runner.LastWorkingDirectory);
     }
 
@@ -130,7 +130,7 @@ public class SvnServiceArgsTests
         var result = await sut.GetStatusAsync(@"C:\wc", CancellationToken.None);
 
         // Assert
-        Assert.Equal(["status", "--xml"], runner.LastArguments);
+        Assert.Equal(["status", "--non-interactive", "--xml"], runner.LastArguments);
         Assert.Equal(3, result.Count);
         Assert.Equal(SvnStatusKind.Modified, result[0].Status);
         Assert.Equal(SvnStatusKind.Added, result[1].Status);
@@ -149,7 +149,7 @@ public class SvnServiceArgsTests
 
         await sut.GetLogAsync("file:///repo", 25, CancellationToken.None);
 
-        Assert.Equal(["log", "--xml", "-l", "25", "file:///repo"], runner.LastArguments);
+        Assert.Equal(["log", "--non-interactive", "--xml", "-l", "25", "file:///repo"], runner.LastArguments);
     }
 
     [Fact]
@@ -179,7 +179,7 @@ public class SvnServiceArgsTests
 
         await sut.AddToIgnoreListAsync(@"C:\wc\bin", CancellationToken.None);
 
-        Assert.Equal(["propset", "svn:ignore", "bin", @"C:\wc"], runner.LastArguments);
+        Assert.Equal(["propset", "--non-interactive", "svn:ignore", "bin", @"C:\wc"], runner.LastArguments);
     }
 
     [Fact]

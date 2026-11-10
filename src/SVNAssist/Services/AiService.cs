@@ -87,12 +87,16 @@ public class AiService : AiServiceBase
                 return await CallChatCompletionsAsync(systemPrompt, reducedMessage, ct, allowRetryOnLimit: false);
             }
 
+            // Il corpo d'errore del server può citare la chiave (es. "invalid key: sk-..."): la si oscura.
             throw new HttpRequestException(
-                $"AI API error {(int)response.StatusCode} {response.StatusCode}: {responseJson}");
+                $"AI API error {(int)response.StatusCode} {response.StatusCode}: {RedactSecret(responseJson)}");
         }
 
         return ParseCompletionResponse(responseJson);
     }
+
+    private string RedactSecret(string text)
+        => string.IsNullOrWhiteSpace(_apiKey) ? text : text.Replace(_apiKey, "***", StringComparison.Ordinal);
 
     /// <summary>Estrae <c>choices[0].message.content</c> dalla risposta JSON.</summary>
     private static string ParseCompletionResponse(string responseJson)

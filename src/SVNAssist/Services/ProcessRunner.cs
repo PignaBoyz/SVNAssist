@@ -20,7 +20,8 @@ public sealed class ProcessRunner : IProcessRunner
         IReadOnlyList<string> arguments,
         string? workingDirectory,
         CancellationToken ct,
-        string? standardInput = null)
+        string? standardInput = null,
+        IReadOnlyDictionary<string, string>? environment = null)
     {
         using var process = new Process();
         process.StartInfo = new ProcessStartInfo
@@ -43,6 +44,12 @@ public sealed class ProcessRunner : IProcessRunner
         // niente più concatenazione manuale di stringhe con quoting fragile.
         foreach (var arg in arguments)
             process.StartInfo.ArgumentList.Add(arg);
+
+        if (environment is not null)
+        {
+            foreach (var (name, value) in environment)
+                process.StartInfo.Environment[name] = value;
+        }
 
         process.Start();
 

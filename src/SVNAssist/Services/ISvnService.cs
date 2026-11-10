@@ -23,7 +23,11 @@ public interface ISvnService
     /// <param name="paths">Percorsi dei file da committare.</param>
     /// <param name="message">Messaggio di commit.</param>
     /// <param name="ct">Token per annullare l'operazione.</param>
-    Task CommitAsync(IEnumerable<string> paths, string message, CancellationToken ct);
+    /// <returns>Il numero della nuova revisione (<c>null</c> se non c'era nulla da committare).</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Se il commit fallisce (es. file non aggiornato: il messaggio suggerisce di fare Update).
+    /// </exception>
+    Task<long?> CommitAsync(IEnumerable<string> paths, string message, CancellationToken ct);
 
     /// <summary>
     /// Aggiunge file/cartelle al versionamento SVN (<c>svn add</c>).
@@ -47,11 +51,15 @@ public interface ISvnService
     Task RevertAsync(IEnumerable<string> paths, CancellationToken ct);
 
     /// <summary>
-    /// Marca un conflitto come risolto mantenendo il contenuto locale.
+    /// Marca un conflitto come risolto (<c>svn resolve --accept</c>).
     /// </summary>
     /// <param name="path">Percorso completo del file in conflitto.</param>
+    /// <param name="accept">Quale versione tenere.</param>
     /// <param name="ct">Token per annullare l'operazione.</param>
-    Task ResolveAsync(string path, CancellationToken ct);
+    /// <exception cref="InvalidOperationException">
+    /// Con <see cref="SvnConflictChoice.Working"/> se il file contiene ancora i marcatori di conflitto.
+    /// </exception>
+    Task ResolveAsync(string path, SvnConflictChoice accept, CancellationToken ct);
 
     /// <summary>
     /// Aggiunge il nome file/cartella alla proprietà <c>svn:ignore</c> della directory padre.
@@ -65,7 +73,8 @@ public interface ISvnService
     /// </summary>
     /// <param name="workingCopyPath">Percorso root della working copy SVN.</param>
     /// <param name="ct">Token per annullare l'operazione.</param>
-    Task UpdateAsync(string workingCopyPath, CancellationToken ct);
+    /// <returns>Revisione raggiunta ed eventuali file in conflitto.</returns>
+    Task<UpdateResult> UpdateAsync(string workingCopyPath, CancellationToken ct);
 
     /// <summary>
     /// Restituisce le ultime N voci del log SVN per il percorso dato.
@@ -84,12 +93,14 @@ public interface ISvnService
     Task<string> GetDiffAsync(string targetPath, long revision, CancellationToken ct);
 
     /// <summary>
-    /// Restituisce il diff delle modifiche non committate nella working copy.
-    /// Usato dall'AI per analizzare le modifiche e generare il commit message.
+    /// Restituisce il diff <b>minimo</b> dei soli file indicati, pensato per l'AI (commit message):
+    /// niente righe di contesto, intestazione di funzione nelle hunk, file cancellati senza contenuto,
+    /// file nuovi non versionati come diff sintetico (anteprima limitata), binari omessi.
     /// </summary>
-    /// <param name="workingCopyPath">Percorso root della working copy SVN.</param>
+    /// <param name="paths">Percorsi completi dei file selezionati.</param>
+    /// <param name="workingCopyPath">Root della working copy: se indicata i percorsi nel diff sono relativi ad essa.</param>
     /// <param name="ct">Token per annullare l'operazione.</param>
-    Task<string> GetWorkingCopyDiffAsync(string workingCopyPath, CancellationToken ct);
+    Task<string> GetDiffForAiAsync(IReadOnlyList<string> paths, string? workingCopyPath, CancellationToken ct);
 
     /// <summary>
     /// Restituisce il diff delle modifiche locali non committate per un singolo file.

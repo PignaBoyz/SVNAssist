@@ -390,9 +390,11 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
             // Costruisci i path completi per SvnService
             var fullPaths = selectedFiles.Select(ToFullPath).Distinct(StringComparer.OrdinalIgnoreCase);
 
-            await _svnService.CommitAsync(fullPaths, CommitMessage.Trim(), ct);
+            var revision = await _svnService.CommitAsync(fullPaths, CommitMessage.Trim(), ct);
 
-            StatusMessage = $"Commit completato: {selectedFiles.Count} file.";
+            StatusMessage = revision is { } rev
+                ? $"Commit completato: revisione {rev} ({selectedFiles.Count} file)."
+                : $"Commit completato: {selectedFiles.Count} file.";
             CommitMessage = string.Empty;
             AiStatusMessage = string.Empty;
 
@@ -419,8 +421,11 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
         try
         {
             StatusMessage = "Update in corso...";
-            await _svnService.UpdateAsync(WorkingCopyPath, ct);
-            StatusMessage = "Update completato.";
+            var update = await _svnService.UpdateAsync(WorkingCopyPath, ct);
+            var updated = update.Revision is { } updatedRev ? $"Aggiornato alla revisione {updatedRev}" : "Update completato";
+            StatusMessage = update.ConflictedPaths.Count > 0
+                ? $"{updated}: {update.ConflictedPaths.Count} file in conflitto."
+                : $"{updated}.";
 
             // Refresh dopo l'update
             await OnRefreshAsync(null, ct);
@@ -451,12 +456,20 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
             return;
         }
 
+        // L'AI descrive solo i file selezionati (gli stessi che finiranno nel commit).
+        var selectedPaths = GetSelectedFullPaths();
+        if (selectedPaths.Count == 0)
+        {
+            AiStatusMessage = "Seleziona almeno un file per generare il messaggio.";
+            return;
+        }
+
         try
         {
             IsAiBusy = true;
             AiStatusMessage = "Generazione in corso...";
 
-            var diff = await _svnService.GetWorkingCopyDiffAsync(WorkingCopyPath, ct);
+            var diff = await _svnService.GetDiffForAiAsync(selectedPaths, WorkingCopyPath, ct);
 
             if (string.IsNullOrWhiteSpace(diff))
             {
@@ -479,6 +492,13 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
         }
     }
 
+    /// <summary>Percorsi completi dei file selezionati (senza duplicati).</summary>
+    private List<string> GetSelectedFullPaths() => Files
+        .Where(f => f.IsSelected)
+        .Select(ToFullPath)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToList();
+
     /// <summary>
     /// Handler per "Migliora con AI" — migliora il messaggio di commit esistente.
     /// </summary>
@@ -499,12 +519,19 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
             return;
         }
 
+        var selectedPaths = GetSelectedFullPaths();
+        if (selectedPaths.Count == 0)
+        {
+            AiStatusMessage = "Seleziona almeno un file per migliorare il messaggio.";
+            return;
+        }
+
         try
         {
             IsAiBusy = true;
             AiStatusMessage = "Miglioramento in corso...";
 
-            var diff = await _svnService.GetWorkingCopyDiffAsync(WorkingCopyPath, ct);
+            var diff = await _svnService.GetDiffForAiAsync(selectedPaths, WorkingCopyPath, ct);
             var language = await _settingsService.GetDefaultLanguageAsync(ct);
             CommitMessage = await aiService.ImproveCommitMessageAsync(CommitMessage, diff, language, ct);
 
@@ -689,7 +716,7 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
         try
         {
             StatusMessage = "Risoluzione conflitto in corso...";
-            await _svnService.ResolveAsync(ToFullPath(fileItem), ct);
+            await _svnService.ResolveAsync(ToFullPath(fileItem), Models.SvnConflictChoice.Working, ct);
             StatusMessage = $"Conflitto risolto: {fileItem.Path}";
             await OnRefreshAsync(null, ct);
         }

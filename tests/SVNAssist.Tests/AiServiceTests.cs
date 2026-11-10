@@ -250,6 +250,22 @@ public class AiServiceTests
     }
 
     [Fact]
+    public async Task GenerateCommitMessageAsync_ErroreCheCitaLaChiave_LaChiaveNonFinisceNellEccezione()
+    {
+        var mockHttp = new MockHttpMessageHandler();
+        mockHttp
+            .When(TestEndpoint)
+            .Respond(HttpStatusCode.Unauthorized, "application/json", $"{{\"error\":\"invalid key {TestApiKey}\"}}");
+        var sut = new AiService(mockHttp.ToHttpClient(), TestEndpoint, TestModel, TestApiKey);
+
+        var ex = await Assert.ThrowsAsync<HttpRequestException>(
+            () => sut.GenerateCommitMessageAsync("diff", "auto", CancellationToken.None));
+
+        Assert.DoesNotContain(TestApiKey, ex.Message);
+        Assert.Contains("401", ex.Message);
+    }
+
+    [Fact]
     public async Task GenerateCommitMessageAsync_RispostaSenzaChoices_LanciaInvalidOperation()
     {
         // Arrange

@@ -429,3 +429,6 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Pacchetti di test da distribuire a mano
+dist/

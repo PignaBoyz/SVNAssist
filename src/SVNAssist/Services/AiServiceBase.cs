@@ -25,11 +25,15 @@ public abstract class AiServiceBase : IAiService
     private const int MaxFileListChars = 6000;
     private const int MinDiffContextChars = 2000;
 
+    /// <summary>Budget del messaggio utente per i provider con contesto ampio (~25k token).</summary>
+    protected const int LargeContextUserMessageChars = 100_000;
+
     /// <summary>
-    /// Limite del messaggio utente. Tarato sul limite più stretto (GitHub Models, ~8000 token
-    /// per richiesta) così lo stesso prompt funziona con tutti i provider.
+    /// Limite del messaggio utente in caratteri. Il default è tarato sul limite più stretto
+    /// (GitHub Models, ~8000 token per richiesta); i provider con contesto ampio lo alzano.
+    /// Un diff che sta nel budget viene inviato intero, altrimenti viene riassunto a blocchi.
     /// </summary>
-    protected const int MaxUserMessageChars = MaxUserTokens * ApproxCharsPerToken;
+    protected virtual int MaxUserMessageChars => MaxUserTokens * ApproxCharsPerToken;
 
     /// <summary>
     /// Invia una singola richiesta al modello e restituisce il testo della risposta.
@@ -221,7 +225,7 @@ public abstract class AiServiceBase : IAiService
         }
     }
 
-    private static string BuildImproveUserMessage(string draft, string diffContext)
+    private string BuildImproveUserMessage(string draft, string diffContext)
     {
         var prefix = $"Messaggio originale: {draft}\n\nDiff di riferimento:\n";
         var remaining = MaxUserMessageChars - prefix.Length;
