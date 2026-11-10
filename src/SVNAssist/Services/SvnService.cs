@@ -124,7 +124,8 @@ public class SvnService : ISvnService
         // Il messaggio e i path sono argomenti singoli: niente escaping manuale.
         var args = new List<string> { "commit", "-m", message };
         args.AddRange(pathList);
-        var output = await RunSvnAsync(args, workingDirectory: null, ct);
+        // Il commit può durare a lungo (molti file, server lento): niente timeout, l'utente può annullare.
+        var output = await RunSvnAsync(args, workingDirectory: null, ct, applyTimeout: false);
         return ParseCommittedRevision(output);
     }
 
@@ -266,7 +267,8 @@ public class SvnService : ISvnService
     /// <inheritdoc />
     public async Task<UpdateResult> UpdateAsync(string workingCopyPath, CancellationToken ct)
     {
-        var output = await RunSvnAsync(["update"], workingCopyPath, ct);
+        // L'update di una working copy grande può durare a lungo: niente timeout, l'utente può annullare.
+        var output = await RunSvnAsync(["update"], workingCopyPath, ct, applyTimeout: false);
         return ParseUpdateOutput(output);
     }
 
@@ -558,9 +560,10 @@ public class SvnService : ISvnService
     /// <param name="ct">Token di cancellazione.</param>
     /// <returns>L'output standard del comando.</returns>
     /// <exception cref="InvalidOperationException">Se il comando termina con errore o va in timeout.</exception>
-    private async Task<string> RunSvnAsync(IReadOnlyList<string> arguments, string? workingDirectory, CancellationToken ct)
+    private async Task<string> RunSvnAsync(
+        IReadOnlyList<string> arguments, string? workingDirectory, CancellationToken ct, bool applyTimeout = true)
     {
-        var result = await RunSvnRawAsync(arguments, workingDirectory, ct);
+        var result = await RunSvnRawAsync(arguments, workingDirectory, ct, applyTimeout);
 
         if (result.ExitCode != 0)
         {
@@ -576,13 +579,19 @@ public class SvnService : ISvnService
     /// o certificati su un processo senza console, che resterebbe appeso), forza l'output in inglese e
     /// applica il timeout. L'annullamento dell'utente (<paramref name="ct"/>) resta distinto dal timeout.
     /// </summary>
-    private async Task<ProcessResult> RunSvnRawAsync(IReadOnlyList<string> arguments, string? workingDirectory, CancellationToken ct)
+    /// <param name="applyTimeout">
+    /// <c>false</c> per le operazioni lunghe avviate dall'utente (update, commit, in futuro switch/merge/checkout):
+    /// non hanno un limite fisso, si fermano solo con l'annullamento dell'utente.
+    /// </param>
+    private async Task<ProcessResult> RunSvnRawAsync(
+        IReadOnlyList<string> arguments, string? workingDirectory, CancellationToken ct, bool applyTimeout = true)
     {
         // L'opzione va subito dopo il sottocomando: gli argomenti seguenti (path, messaggi) restano intatti.
         List<string> full = [arguments[0], "--non-interactive", .. arguments.Skip(1)];
 
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeoutCts.CancelAfter(_timeout);
+        if (applyTimeout)
+            timeoutCts.CancelAfter(_timeout);
 
         try
         {

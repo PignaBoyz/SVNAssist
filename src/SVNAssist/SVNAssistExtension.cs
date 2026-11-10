@@ -25,7 +25,7 @@ internal class SVNAssistExtension : Extension
         Metadata = new(
             id: "SVNAssist",
             version: ExtensionAssemblyVersion,
-            publisherName: "SVNAssist",
+            publisherName: "Andrea Pinelli",
             displayName: "SVNAssist",
             description: "Integrazione SVN per Visual Studio con generazione automatica commit message tramite AI"),
     };

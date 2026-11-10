@@ -80,10 +80,17 @@ internal static class SettingDefinitions
     /// oppure uno fisso: <c>copilot</c>, <c>claudecode</c>, <c>claude</c>, <c>openai</c>.
     /// </summary>
     [VisualStudioContribution]
-    internal static Setting.String AiProvider { get; } = new(
+    internal static Setting.Enum AiProvider { get; } = new(
         "aiprovider",
         "%SVNAssist.Settings.AiProvider%",
         SvnAssistCategory,
+        [
+            new EnumSettingEntry("auto", "%SVNAssist.Settings.AiProvider.Auto%"),
+            new EnumSettingEntry("copilot", "%SVNAssist.Settings.AiProvider.Copilot%"),
+            new EnumSettingEntry("claudecode", "%SVNAssist.Settings.AiProvider.ClaudeCode%"),
+            new EnumSettingEntry("claude", "%SVNAssist.Settings.AiProvider.Claude%"),
+            new EnumSettingEntry("openai", "%SVNAssist.Settings.AiProvider.OpenAi%"),
+        ],
         defaultValue: "auto");
 
     /// <summary>Modello Claude (usato da Claude Code e Claude API).</summary>
@@ -125,10 +132,15 @@ internal static class SettingDefinitions
     /// <c>auto</c>, <c>italiano</c> o <c>english</c>.
     /// </summary>
     [VisualStudioContribution]
-    internal static Setting.String DefaultLanguage { get; } = new(
+    internal static Setting.Enum DefaultLanguage { get; } = new(
         "defaultlanguage",
         "%SVNAssist.Settings.DefaultLanguage%",
         SvnAssistCategory,
+        [
+            new EnumSettingEntry("auto", "%SVNAssist.Settings.DefaultLanguage.Auto%"),
+            new EnumSettingEntry("italiano", "%SVNAssist.Settings.DefaultLanguage.Italiano%"),
+            new EnumSettingEntry("english", "%SVNAssist.Settings.DefaultLanguage.English%"),
+        ],
         defaultValue: "auto");
 
     /// <summary>

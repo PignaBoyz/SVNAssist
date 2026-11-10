@@ -180,7 +180,7 @@ public class SvnServiceParsingTests : IDisposable
         var sut = new SvnService(FakeSvnPath, runner, TimeSpan.FromMilliseconds(100));
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => sut.UpdateAsync(@"C:\wc", CancellationToken.None));
+            () => sut.GetStatusAsync(@"C:\wc", CancellationToken.None));
 
         Assert.Contains("non ha risposto", ex.Message);
     }
