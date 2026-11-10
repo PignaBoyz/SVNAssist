@@ -140,6 +140,7 @@ body.panel-closed .sim-panel{display:none}
 .grow .btn{flex:none}
 .srow{background:var(--bg3);font-weight:600;border-bottom:1px solid var(--bd);position:sticky;top:0;z-index:1}
 .btn[aria-pressed=true]{background:var(--acc-bg);border-color:var(--acc2)}
+.langsel{width:auto;padding:1px 4px;font-size:11px}
 .empty-list{padding:16px;text-align:center;color:var(--fg2)}
 .diffbox{display:flex;flex-direction:column;height:210px;flex:none}
 .diffpre{flex:1;margin:0;overflow:auto;background:var(--bg1);border:1px solid var(--bd);font:11.5px/1.45 var(--mono);padding:4px 0;white-space:pre}
@@ -270,7 +271,7 @@ pre.cmd{background:#0c0c0c;border:1px solid var(--bd);padding:6px 8px;font:12px/
 </head>
 <body class="panel-closed">
 <header class="demo-top">
-  <h1>SVN<span>Assist</span> &middot; demo interattiva</h1>
+  <h1>SVN<span>Assist</span> &middot; demo interattiva</h1><span class="tag soon" title="Versione">0.1.0</span>
   <nav class="tabs" role="tablist" aria-label="Sezioni della demo">
     <button role="tab" id="tabbtn-sim" aria-selected="true" data-act="tab" data-arg="sim">Simulazione</button>
     <button role="tab" id="tabbtn-soon" aria-selected="false" data-act="tab" data-arg="soon">Prossimamente</button>
@@ -641,8 +642,8 @@ function unifiedHunks(a, b, ctx = 3) {
   return out.join('\n');
 }
 const lines = t => (t == null || t === '' ? [] : t.split('\n'));
-function mkDiff(path, a, b, revOld, revNew) {
-  const hunks = unifiedHunks(lines(a), lines(b));
+function mkDiff(path, a, b, revOld, revNew, ctx = 3) {
+  const hunks = unifiedHunks(lines(a), lines(b), ctx);
   if (!hunks) return '';
   const p = fwd(path);
   const o = a == null ? '(nonexistent)' : `(revision ${revOld})`;
@@ -701,7 +702,7 @@ function freshSettings() {
   return { aiprovider: 'auto', claudemodel: 'claude-opus-5-5', anthropicapikey: '', copilotmodel: '', aiendpoint: GH_MODELS, aiapikey: '', aimodel: 'gpt-4o-mini', defaultlanguage: 'auto', workingcopypath: '' };
 }
 function freshVM() {
-  return { view: 'tree', collapsed: {}, cur: null, wcPath: '', showInput: true, statusMsg: 'Caricamento in corso...', err: false, aiMsg: '', branch: '', files: [], header: 'Changes', diffVisible: false, diffTitle: '', diffContent: '', commitMsg: '', aiBusy: false, trace: [], dl: null, loading: false };
+  return { lang: null, view: 'tree', collapsed: {}, cur: null, wcPath: '', showInput: true, statusMsg: 'Caricamento in corso...', err: false, aiMsg: '', branch: '', files: [], header: 'Changes', diffVisible: false, diffTitle: '', diffContent: '', commitMsg: '', aiBusy: false, trace: [], dl: null, loading: false };
 }
 function freshLVM() {
   return { path: '', max: 50, msg: 'Inserisci il percorso della working copy e premi Carica Log.', entries: [], sel: null, diff: '', busy: false };
@@ -722,7 +723,7 @@ function freshState(mode) {
     watch: { pending: false, last: 0, fire: 0, note: '' },
     f: { svnPromptDone: false, svnPromptChoice: null, wcLoaded: false, aiNone: false, aiPromptShown: false, tourCommits: 0, optionsSaved: false },
     tour: { on: false, step: 0, done: false },
-    toasts: [],
+    toasts: [], pending: {},
   };
   if (!free) {  // primo utilizzo: macchina "vergine"
     Object.assign(s.env, { svn: false, ghInstalled: false, gh: false, claudeInstalled: false, claudeLogin: false, anthropicKey: false, copilotRuntime: false, tortoise: false });
@@ -750,14 +751,14 @@ function propDiff(d) {
   const p = fwd(d);
   return `Index: ${p}\n${'='.repeat(67)}\n--- ${p}\t(revision ${S.wcRev})\n+++ ${p}\t(working copy)\n\nProperty changes on: ${p}\n${'_'.repeat(67)}\nModified: svn:ignore\n## -${a.length === 0 ? 0 : 1},${a.length} +${b.length === 0 ? 0 : 1},${b.length} ##\n` + lcsOps(a, b).map(o => o.t + o.s).join('\n') + '\n';
 }
-function fileDiffText(path) {
+function fileDiffText(path, ctx = 3) {
   const f = fileBy(path);
   if (!f) return S.ign[path] !== undefined && propDirs().includes(path) ? propDiff(path) : '';
   if (f.dir) return propDirs().includes(path) ? propDiff(path) : '';
   switch (f.st) {
-    case 'M': case 'R': case 'C': return mkDiff(f.path, f.base, f.text, S.wcRev);
-    case 'A': return mkDiff(f.path, null, f.text, S.wcRev);
-    case 'D': return mkDiff(f.path, f.base, null, S.wcRev);
+    case 'M': case 'R': case 'C': return mkDiff(f.path, f.base, f.text, S.wcRev, null, ctx);
+    case 'A': return mkDiff(f.path, null, f.text, S.wcRev, null, ctx);
+    case 'D': return mkDiff(f.path, f.base, null, S.wcRev, null, ctx);
     default: return '';
   }
 }
@@ -785,10 +786,22 @@ function svnRevert(path) {
   else { f.st = 'N'; f.text = f.base; if (f.dir) f.dir = true; }
   logCmd("Reverted '" + fwd(path) + "'");
 }
-function svnResolve(path) {
+function pickSide(t, side) {
+  const out = []; let st = 0;
+  for (const l of t.split('\n')) {
+    if (l.startsWith('<<<<<<<')) { st = 1; continue; }
+    if (l.startsWith('=======') && st === 1) { st = 2; continue; }
+    if (l.startsWith('>>>>>>>') && st === 2) { st = 0; continue; }
+    if (st === 0 || st === side) out.push(l);
+  }
+  return out.join('\n');
+}
+function svnResolve(path, mode = 'working') {
   const f = fileBy(path);
-  f.text = f.merged || f.text.replace(/<<<<<<<[^\n]*\n|=======\n|>>>>>>>[^\n]*\n?/g, '');
-  f.st = 'M'; delete f.merged; logCmd("Resolved conflicted state of '" + fwd(path) + "'");
+  if (mode === 'working' && /^<<<<<<< /m.test(f.text || '')) throw new Error("il file contiene ancora i marcatori di conflitto (<<<<<<<, =======, >>>>>>>): modificalo nell'editor e salva, poi riprova (svn resolve --accept working)");
+  if (mode === 'mine-full') f.text = pickSide(f.text, 1); else if (mode === 'theirs-full') f.text = pickSide(f.text, 2); else if (mode === 'base') f.text = f.base;
+  f.st = f.text === f.base ? 'N' : 'M'; delete f.merged; S.ui.buf[path] = undefined;
+  logCmd(`svn resolve --accept ${mode} "${fwd(path)}"`); logCmd("Resolved conflicted state of '" + fwd(path) + "'");
 }
 function svnIgnore(path) {
   const d = parentDir(path), name = base(path);
@@ -866,7 +879,7 @@ function svnUpdate() {
   out.forEach(l => logCmd(l));
   return out;
 }
-
+﻿
 // ---------- modali (stile message box di VS) ----------
 const overlay = () => $('#overlay');
 const mstack = [];
@@ -975,7 +988,8 @@ async function downloadCopilot(setDl) {
 function langOf(l) { l = (l || 'auto').toLowerCase(); return l === 'english' ? 'en' : 'it'; }
 const VERB = { it: { A: 'Aggiunge', M: 'Aggiorna', D: 'Rimuove', R: 'Riscrive', C: 'Risolve il conflitto in' }, en: { A: 'Add', M: 'Update', D: 'Remove', R: 'Rewrite', C: 'Resolve conflict in' } };
 function changedForAi() {
-  const fs = S.files.filter(f => ['A', 'M', 'D', 'R', 'C'].includes(f.st) && !f.dir);
+  const sel = new Set(S.vm.files.filter(x => x.sel).map(x => x.path));
+  const fs = S.files.filter(f => ['A', 'M', 'D', 'R', 'C'].includes(f.st) && !f.dir && sel.has(f.path));
   const pr = { A: 0, R: 1, M: 2, C: 3, D: 4 };
   return fs.sort((a, b) => pr[a.st] - pr[b.st]);
 }
@@ -1017,6 +1031,8 @@ async function aiCore(kind, ui) {
     render(); return;
   }
   if (!S.vm.wcPath) { ui.status('Nessuna working copy configurata.'); return; }
+  const selPaths = S.vm.files.filter(f => f.sel && !f.dir && ['M', 'A', 'D', 'R', 'C'].includes(f.st)).map(f => f.path);
+  if (!selPaths.length) { ui.status('Seleziona almeno un file da analizzare'); return; }
   if (kind === 'improve' && !ui.draft().trim()) { ui.status(ui.noDraft); return; }
   ui.busy(true);
   const trace = r.auto ? r.all.map(a => ({ name: a.name, k: a.k, state: a.ok ? 'wait' : 'skip', detail: a.ok ? '' : a.why })) : r.chain.map(a => ({ name: a.name, k: a.k, state: 'wait', detail: '' }));
@@ -1024,7 +1040,7 @@ async function aiCore(kind, ui) {
   try {
     ui.status(kind === 'improve' ? ui.improving : ui.generating);
     let diff;
-    try { await svn('diff', 500); diff = wcDiffText(); } catch (e) { throw e; }
+    await svn('diff -x "-U 0 -p" --no-diff-deleted ' + selPaths.map(p => '"' + fwd(p) + '"').join(' '), 500); diff = selPaths.map(p => fileDiffText(p, 0)).filter(Boolean).join('\n').trim();
     if (!diff.trim() && !S.env.bigDiff) { ui.status(ui.noDiff); ui.trace([]); return; }
     const size = S.env.bigDiff ? 54000 : diff.length;
     if (size > 28000 - 1000) {
@@ -1059,7 +1075,7 @@ const vmAiUi = () => ({
   noProv: 'Nessun provider AI disponibile (Copilot, Claude o token GitHub).', noDraft: 'Scrivi prima una bozza del messaggio da migliorare.', noDiff: 'Nessun diff disponibile.',
   generating: 'Generazione in corso...', improving: 'Miglioramento in corso...', generated: 'Messaggio generato con AI.', improved: 'Messaggio migliorato.', err: 'Errore AI: ',
   status: t => { S.vm.aiMsg = t; render(); }, busy: b => { S.vm.aiBusy = b; render(); }, draft: () => S.vm.commitMsg, set: t => { S.vm.commitMsg = t; },
-  lang: () => S.settings.defaultlanguage, trace: t => { S.vm.trace = t.map(x => ({ ...x })); render(); }, dl: d => { S.vm.dl = d; render(); },
+  lang: () => S.vm.lang || S.settings.defaultlanguage, trace: t => { S.vm.trace = t.map(x => ({ ...x })); render(); }, dl: d => { S.vm.dl = d; render(); },
 });
 
 // ---------- view model: SVN Changes ----------
@@ -1107,12 +1123,13 @@ async function vmCommit() {
     vm.statusMsg = 'Commit in corso...'; vm.err = false; render();
     await svn(`commit -m "${vm.commitMsg.trim().split('\n')[0]}" (${sel.length} file)`, 900);
     const rev = svnCommit(sel.map(f => f.path), vm.commitMsg.trim());
-    vm.statusMsg = `Commit completato: ${sel.length} file.`; vm.commitMsg = ''; vm.aiMsg = ''; vm.trace = [];
+    vm.statusMsg = `Commit completato: revisione ${rev} (${sel.length} file).`; vm.commitMsg = ''; vm.aiMsg = ''; vm.trace = [];
     if (S.tour.on) S.f.tourCommits++;
     toast(`Creata la revisione r${rev} (visibile in Log / History)`);
-    render(); await vmRefresh(); vm.statusMsg = `Commit completato: ${sel.length} file.` + (vm.files.length ? '' : ' Nessuna modifica.'); render();
+    render(); await vmRefresh(); vm.statusMsg = `Commit completato: revisione ${rev} (${sel.length} file).`; render();
   } catch (e) { vm.statusMsg = 'Errore commit: ' + e.message; vm.err = true; render(); }
 }
+function updMsg() { const n = S.files.filter(f => f.st === 'C').length; return `Aggiornato alla revisione ${S.headRev}` + (n ? `: ${n} file in conflitto` : ''); }
 async function vmUpdate() {
   const vm = S.vm;
   if (!vm.wcPath.trim()) { vm.statusMsg = 'Nessuna working copy configurata.'; return render(); }
@@ -1120,9 +1137,9 @@ async function vmUpdate() {
     vm.statusMsg = 'Update in corso...'; vm.err = false; render();
     await svn('update', 900);
     const out = svnUpdate();
-    vm.statusMsg = 'Update completato.'; render();
+    vm.statusMsg = updMsg(); render();
     toast('svn update (output demo): ' + out.join(' | '), 5500);
-    await vmRefresh(); vm.statusMsg = 'Update completato.' + (vm.files.some(f => f.st === 'C') ? ' Attenzione: conflitti.' : ''); render();
+    await vmRefresh(); vm.statusMsg = updMsg(); render();
   } catch (e) { vm.statusMsg = 'Errore update: ' + e.message; vm.err = true; render(); }
 }
 async function vmShowDiff(path) {
@@ -1146,6 +1163,16 @@ async function vmOp(kind, path) {
     ign: { ok: it.canIgn, no: 'Add to Ignore List è disponibile solo per elementi unversioned.', run: 'Aggiornamento ignore list in corso...', fn: svnIgnore, done: `Aggiunto alla ignore list: ${it.path}`, err: 'Errore ignore list: ' },
   }[kind];
   if (!M.ok) { vm.statusMsg = M.no; return render(); }
+  if (kind === 'del') {
+    const f0 = fileBy(path), warn = f0 && ['M', 'A', 'C', 'R'].includes(f0.st);
+    const go = await modal({ title: 'SVN Delete', icon: '&#9888;&#65039;', cancel: false, body: `<p>Eliminare <b>${esc(it.path)}</b> da SVN?</p>${warn ? '<p style="color:var(--warn)">&#9888; Il file ha modifiche locali: andranno perse.</p>' : ''}<p><span class="tag">Novità in arrivo</span> <span class="small muted">conferma non ancora nella vera estensione.</span></p>`, buttons: [{ label: 'Sì, elimina', value: true, primary: true }, { label: 'No', value: false }] });
+    if (!go) return;
+  }
+  let resMode = 'working';
+  if (kind === 'res') {
+    const r = await modal({ title: 'Resolve Conflict', cancel: null, body: `<p>Come vuoi risolvere il conflitto in <b>${esc(it.path)}</b>?</p>${[['working', 'Ho risolto a mano (working)'], ['mine-full', 'Tieni la mia versione (mine-full)'], ['theirs-full', 'Prendi la loro (theirs-full)'], ['base', 'Versione base (base)']].map(([v, t], i) => `<label class="tg"><input type="radio" name="rs" value="${v}" ${i === 0 ? 'checked' : ''}><span>${t}</span></label>`).join('')}<p class="small muted">Per "working" modifica il file nell'editor (togli i marcatori &lt;&lt;&lt;&lt;&lt;&lt;&lt;) e salva.</p><p><span class="tag">Novità in arrivo</span></p>`, buttons: [{ label: 'Risolvi', value: 'ok', primary: true, onClick: (el, close) => { close(el.querySelector('input:checked').value); return false; } }, { label: 'Annulla', value: null }] });
+    if (!r) return; resMode = r;
+  }
   if (kind === 'rev') {
     const go = await modal({ title: 'SVN Revert', icon: '&#9888;&#65039;', body: `<p>Annullare le modifiche locali a <b>${esc(it.path)}</b>?\nL'operazione non può essere annullata.</p><p><span class="tag">Novità in arrivo</span> <span class="small muted">la vera estensione oggi esegue il revert senza chiedere conferma.</span></p>`, buttons: [{ label: 'Sì, annulla le modifiche', value: true, primary: true }, { label: 'No', value: false }], cancel: false });
     if (!go) return;
@@ -1153,7 +1180,7 @@ async function vmOp(kind, path) {
   try {
     vm.statusMsg = M.run; vm.err = false; render();
     await svn(kind === 'ign' ? 'propset svn:ignore' : kind, 500);
-    M.fn(path);
+    if (kind === 'res') svnResolve(path, resMode); else M.fn(path);
     vm.statusMsg = M.done; render();
     const msg = vm.statusMsg; await vmRefresh(); vm.statusMsg = msg; render();
   } catch (e) { vm.statusMsg = M.err + e.message; vm.err = true; render(); }
@@ -1264,13 +1291,13 @@ function renderSE() {
   const vis = S.files.filter(f => f.text !== null || f.dir).sort((a, b) => a.path.toLowerCase().localeCompare(b.path.toLowerCase()));
   const tree = {};
   vis.forEach(f => { const seg = f.path.split('\\'); let n = tree; seg.forEach((s, i) => { if (i === seg.length - 1 && !f.dir) n[s] = f; else n = (n[s] = n[s] && !n[s].path ? n[s] : {}); }); });
-  const draw = (n, depth) => Object.keys(n).sort((a, b) => ((n[a].path ? 1 : 0) - (n[b].path ? 1 : 0)) || a.localeCompare(b)).map(k => {
+  const draw = (n, depth, pre) => Object.keys(n).sort((a, b) => ((n[a].path ? 1 : 0) - (n[b].path ? 1 : 0)) || a.localeCompare(b)).map(k => {
     const v = n[k], pad_ = 6 + depth * 14;
-    if (v.path) return `<button class="node ${S.ui.selFile === v.path ? 'sel' : ''}" style="padding-left:${pad_ + 14}px" data-act="openFile" data-arg="${esc(v.path)}" data-sefile="${esc(v.path)}"><span class="ic ${k.endsWith('.cs') ? 'cs' : 'cfg'}">${k.endsWith('.cs') ? 'C#' : '&#9679;'}</span>${esc(k)}</button>`;
-    return `<div class="node" style="padding-left:${pad_}px"><span class="ic fld">&#9662;</span><span class="fld">&#128193;</span> ${esc(k)}</div>` + draw(v, depth + 1);
+    if (v.path) return `<button class="node ${S.ui.selFile === v.path ? 'sel' : ''}" style="padding-left:${pad_ + 14}px" data-act="openFile" data-arg="${esc(v.path)}" data-sectx="file|${esc(v.path)}"><span class="ic ${k.endsWith('.cs') ? 'cs' : 'cfg'}">${k.endsWith('.cs') ? 'C#' : '&#9679;'}</span>${esc(k)}</button>`;
+    const fp = pre ? pre + '\\' + k : k; return `<div class="node" style="padding-left:${pad_}px" data-sectx="${depth === 1 && ['Core', 'Web'].includes(k) ? 'project' : 'folder'}|${esc(fp)}"><span class="ic fld">&#9662;</span><span class="fld">&#128193;</span> ${esc(k)}</div>` + draw(v, depth + 1, fp);
   }).join('');
-  el.innerHTML = `<div class="node" style="padding-left:6px"><span class="ic">&#9662;</span><b>Soluzione '${esc(S.solution.name)}'</b></div>` + draw(tree, 1);
-  $('#seNote').textContent = 'senza icone SVN';
+  el.innerHTML = `<div class="node" data-sectx="solution|" style="padding-left:6px"><span class="ic">&#9662;</span><b>Soluzione '${esc(S.solution.name)}'</b></div>` + draw(tree, 1, '');
+  $('#seNote').innerHTML = '<span class="tag" title="Tasto destro: sottomenu SVN">Novità in arrivo: tasto destro SVN</span>';
 }
 function renderDoc() {
   const open = S.ui.open.filter(p => { const f = fileBy(p); return f && f.text !== null; });
@@ -1326,6 +1353,7 @@ function statusHTML() {
    ${S.ui.prereq ? prereqHTML() : ''}
    <textarea id="commitMsg" data-model="vm.commitMsg" aria-label="Messaggio di commit" placeholder="Messaggio di commit">${esc(v.commitMsg)}</textarea>
    <div class="row"><button class="btn primary" data-act="commit" style="font-weight:600">Commit</button><span style="flex:1"></span>
+     <select class="langsel" data-act="langSel" aria-label="Lingua del messaggio" title="Lingua del messaggio (Novità in arrivo). Auto = lingua del codice">${[['italiano', 'Italiano'], ['english', 'English'], ['auto', 'Auto']].map(([v, t]) => `<option value="${v}" ${v === String(S.vm.lang || S.settings.defaultlanguage).toLowerCase() ? 'selected' : ''}>${t}</option>`).join('')}</select><span class="tag">Novità in arrivo</span>
      <button class="btn sm" data-act="genAi" title="Genera messaggio di commit analizzando il diff con AI" ${v.aiBusy ? 'disabled' : ''}>${v.aiBusy ? sp : ''}Generate AI</button>
      <button class="btn sm" data-act="improveAi" title="Migliora il messaggio di commit esistente con AI" ${v.aiBusy ? 'disabled' : ''}>Improve</button></div>
    ${v.aiMsg ? `<div class="ai-status">${v.aiBusy ? sp : ''}${esc(v.aiMsg).replace(/\n/g, '<br>')}</div>` : ''}${traceHTML(v)}
@@ -1346,7 +1374,7 @@ function renderDock() {
 function renderStatusBar() {
   const b = $('#vsStatus'), inWc = S.solution && S.solution.inWc;
   b.className = 'vs-status';
-  b.innerHTML = `<span>${S.vm.loading || S.vm.aiBusy ? '<span class="spin"></span>Operazione in corso...' : 'Pronto'}</span><span class="sp"></span>${inWc ? `<span>&#9095; ${esc(S.branch)} · r${S.wcRev}</span>` : ''}<span>${S.vsInstalled ? 'SVNAssist attivo' : 'SVNAssist non installato'}</span>`;
+  b.innerHTML = `<span>${S.vm.loading || S.vm.aiBusy ? '<span class="spin"></span>Operazione in corso...' : 'Pronto'}</span><span class="sp"></span>${inWc ? `<span>&#9095; ${esc(S.branch)} · r${S.wcRev}</span>` : ''}<span>${S.vsInstalled ? 'SVNAssist 0.1.0' : 'SVNAssist non installato'}</span>`;
 }
 function renderSim() {
   const e = S.env, chain = resolveChain();
@@ -1373,7 +1401,7 @@ function renderSim() {
    <button class="btn" data-act="restart">Riavvia Visual Studio</button>
    <button class="btn" data-act="reset">Reset demo</button>
    <label class="tg" style="margin-top:6px">Branch della working copy:&nbsp;<select data-act="branchSel" style="width:auto"><option ${S.branch === 'trunk' ? 'selected' : ''}>trunk</option><option ${S.branch === 'branches/feature-coupon' ? 'selected' : ''}>branches/feature-coupon</option></select></label>
-   <div class="note">&#9432; "Riavvia VS" azzera i flag "una volta per sessione" (prompt svn.exe e prompt AI) senza cambiare i dati.<br>&#9432; Generate AI analizza il diff dell'<b>intera</b> working copy, non solo i file spuntati (come la vera estensione).</div>
+   <div class="note">&#9432; "Riavvia VS" azzera i flag "una volta per sessione" (prompt svn.exe e prompt AI) senza cambiare i dati.<br>&#9432; Generate/Improve inviano all'AI solo le modifiche (<code>svn diff -U 0</code>) dei file <b>spuntati</b> <span class="tag">Novità in arrivo</span>.</div>
    <h3>Comandi svn (log demo)</h3>
    <div class="cmdlog" id="cmdlog">${S.cmd.map(l => `<div>${l.startsWith('svn ') ? '<span class="c">$</span> ' : ''}${esc(l)}</div>`).join('')}</div>`;
   const cl = $('#cmdlog'); if (cl) cl.scrollTop = cl.scrollHeight;
@@ -1386,7 +1414,7 @@ const STEPS = [
   { t: 'Primo comando: manca svn.exe', p: 'Apri Estensioni > SVNAssist > SVN Changes. Se svn.exe non c\'è, SVNAssist chiede (una volta per sessione) se installarlo. Prova OK (winget) oppure Annulla.', doLabel: 'Apri SVN Changes', done: () => S.f.svnPromptDone, doIt: () => openStatus(), extra: () => S.f.svnPromptChoice === 'cancel' ? `<div class="hint">Hai scelto Annulla: il pannello resta vuoto e il prompt non ricompare nella sessione. <button class="btn sm" data-act="tourRetrySvn">Riprova con OK</button></div>` : '' },
   { t: 'Working copy rilevata', p: 'Dopo l\'installazione riapri il pannello (Estensioni > SVNAssist > SVN Changes): SVNAssist trova da solo la working copy risalendo dalla solution fino alla cartella .svn e mostra branch e file modificati.', doLabel: 'Riapri SVN Changes', done: () => S.f.wcLoaded, doIt: () => openStatus() },
   { t: 'Primo clic su Generate AI', p: 'Senza nessun provider AI configurato compare il prompt di aiuto (una volta per sessione) con le opzioni disponibili.', doLabel: 'Clicca Generate AI', done: () => S.f.aiNone, doIt: () => vmAi('gen') },
-  { t: 'Configura un provider in Tools > Options', p: 'Apri Strumenti > Opzioni > SVNAssist. Esempio: AI Provider = claude e una Anthropic API Key qualsiasi (la demo non la invia da nessuna parte). Oppure imposta "GitHub CLI loggato" nel Pannello simulazione.', doLabel: 'Apri Opzioni', done: () => resolveChain().chain.length > 0 && (S.f.optionsSaved || S.env.gh), doIt: () => optionsDlg() },
+  { t: 'Configura un provider in Tools > Options', p: 'Apri Strumenti > Opzioni > SVNAssist. Esempio: AI Provider = claude e una Anthropic API Key qualsiasi (la demo non la invia da nessuna parte). Oppure imposta "GitHub CLI loggato" nel Pannello simulazione.', doLabel: 'Apri Opzioni', done: () => resolveChain().chain.length > 0, doIt: () => optionsDlg() },
   { t: 'Genera il messaggio e committa', p: 'Premi Generate AI: il messaggio nasce dai file realmente modificati. Poi, con i file giusti spuntati, premi Commit e controlla la nuova revisione in Log / History.', hint: 'Attenzione, come nella realtà: un file Conflicted (C) o Missing (!) selezionato blocca il commit. Usa Resolve Conflict sul conflitto e SVN Delete (o deseleziona) il file mancante.', doLabel: 'Genera con AI', done: () => S.f.tourCommits > 0, doIt: () => vmAi('gen') },
 ];
 const TARGETS = [null, '[data-act="menu"][data-arg="file"]', '[data-act="menu"][data-arg="ext"]', '#dock', '[data-act="genAi"]', '[data-act="menu"][data-arg="tools"]', '[data-act="commit"]'];
@@ -1424,48 +1452,96 @@ function termInstall(title, lines, apply) {
     await done; render();
   })();
 }
+const WG = ' --accept-package-agreements --accept-source-agreements';
 const PREREQ = [
   { id: 'svn', g: 'Subversion', title: 'svn.exe (client Subversion)', req: 'obbligatorio', ok: () => S.env.svn, winget: true,
     detail: ok => ok ? 'trovato' : 'non trovato: serve per tutte le operazioni SVN',
-    cmds: ['winget install --id Slik.Subversion -e'], alt: 'In alternativa installa TortoiseSVN (https://tortoisesvn.net) e, nell\'installer, abilita "command line client tools". Poi riavvia Visual Studio o riapri il pannello.',
-    lines: ['> winget install --id Slik.Subversion -e', 'Trovato Subversion [Slik.Subversion] Versione 1.14.2', 'Download in corso...', '  ██████████████████████████████  5.8 MB / 5.8 MB', 'Hash del programma di installazione verificato', 'Installazione completata'], apply: () => { S.env.svn = true; } },
+    btn: 'Installa con winget', shell: 'cmd', cmd: 'winget install --id Slik.Subversion -e' + WG,
+    explain: 'Si apre una finestra con winget. Al termine premi Ricontrolla, poi riavvia VS o riapri il pannello.',
+    alt: 'In alternativa installa TortoiseSVN (https://tortoisesvn.net) abilitando "command line client tools" nell\'installer.',
+    lines: ['Trovato Subversion [Slik.Subversion] Versione 1.14.2', 'Download in corso...', '  ██████████████████████████████  5.8 MB / 5.8 MB', 'Hash del programma di installazione verificato', 'Installazione completata'], apply: () => { S.env.svn = true; } },
   { id: 'tortoise', g: 'Subversion', title: 'TortoiseSVN', req: 'opzionale', ok: () => S.env.tortoise, winget: true,
     detail: ok => ok ? 'trovato: Show Diff apre la finestra diff nativa' : 'senza: Show Diff mostra il diff inline',
-    cmds: ['winget install --id TortoiseSVN.TortoiseSVN -e'], lines: ['> winget install --id TortoiseSVN.TortoiseSVN -e', 'Trovato TortoiseSVN [TortoiseSVN.TortoiseSVN]', 'Download in corso...', 'Installazione completata'], apply: () => { S.env.tortoise = true; } },
+    btn: 'Installa con winget', shell: 'cmd', cmd: 'winget install --id TortoiseSVN.TortoiseSVN -e' + WG, explain: 'Si apre una finestra con winget; poi premi Ricontrolla.',
+    lines: ['Trovato TortoiseSVN [TortoiseSVN.TortoiseSVN]', 'Download in corso...', 'Installazione completata'], apply: () => { S.env.tortoise = true; } },
   { id: 'ghcli', g: 'Provider AI (ne basta uno)', title: 'GitHub CLI (gh)', req: 'per Copilot / GitHub Models', ok: () => S.env.ghInstalled, winget: true,
     detail: ok => ok ? 'installato' : 'non installato',
-    cmds: ['winget install --id GitHub.cli -e'], lines: ['> winget install --id GitHub.cli -e', 'Trovato GitHub CLI [GitHub.cli]', 'Download in corso...', 'Installazione completata'], apply: () => { S.env.ghInstalled = true; } },
-  { id: 'ghlogin', g: 'Provider AI (ne basta uno)', title: 'GitHub CLI: login', req: 'per Copilot / GitHub Models', ok: () => S.env.gh, needs: () => S.env.ghInstalled, needsMsg: 'Installa prima GitHub CLI',
-    detail: ok => ok ? 'token GitHub rilevato (gh auth token)' : 'nessun login: esegui gh auth login',
-    cmds: ['gh auth login'], alt: 'Scegli GitHub.com, HTTPS e il login da browser. Il token resta sul tuo PC e SVNAssist lo usa solo per Copilot e GitHub Models.',
-    lines: ['> gh auth login', '? Where do you use GitHub? GitHub.com', '? Authenticate Git with your GitHub credentials? Yes', '! First copy your one-time code: ABCD-1234', 'Autenticazione nel browser completata', '✓ Logged in as ' + USER], apply: () => { S.env.gh = true; } },
-  { id: 'claudecode', g: 'Provider AI (ne basta uno)', title: 'Claude Code: installazione', req: 'per il provider claudecode', ok: () => S.env.claudeInstalled,
+    btn: 'Installa GitHub CLI', shell: 'cmd', cmd: 'winget install --id GitHub.cli -e' + WG, explain: 'Si apre una finestra con winget. Se gh non viene trovato dopo l\'installazione, riavvia Visual Studio.',
+    lines: ['Trovato GitHub CLI [GitHub.cli] Versione 2.60.0', 'Download in corso...', 'Installazione completata'], apply: () => { S.env.ghInstalled = true; } },
+  { id: 'ghlogin', g: 'Provider AI (ne basta uno)', title: 'GitHub CLI: accesso', req: 'per Copilot / GitHub Models', ok: () => S.env.gh, show: () => S.env.ghInstalled, needsMsg: 'Installa prima GitHub CLI',
+    detail: ok => ok ? 'token GitHub rilevato (gh auth token)' : (S.env.ghInstalled ? 'gh installato ma non loggato' : 'installa prima GitHub CLI'),
+    btn: 'Accedi a GitHub', shell: 'cmd', cmd: 'gh auth login --hostname github.com --git-protocol https --web', explain: 'Si apre una finestra: conferma il codice nel browser, poi premi Ricontrolla.',
+    lines: ['! First copy your one-time code: 1A2B-3C4D', '- Press Enter to open github.com in your browser...'],
+    inter: [{ label: 'Premi Invio (apre il browser)', lines: ['Apertura di https://github.com/login/device ...', 'Conferma il codice 1A2B-3C4D nel browser'] }, { label: 'Ho confermato nel browser', lines: ['✓ Authentication complete.', '- gh config set -h github.com git_protocol https', '✓ Configured git protocol', '✓ Logged in as ' + USER] }],
+    apply: () => { S.env.gh = true; } },
+  { id: 'claudecode', g: 'Provider AI (ne basta uno)', title: 'Claude Code', req: 'per il provider claudecode', ok: () => S.env.claudeInstalled,
     detail: ok => ok ? 'claude.exe trovato' : 'claude.exe non trovato',
-    cmds: ['irm https://claude.ai/install.ps1 | iex'], alt: 'Alternativa con npm: npm install -g @anthropic-ai/claude-code',
-    lines: ['> irm https://claude.ai/install.ps1 | iex', 'Download di Claude Code...', 'Installazione in %USERPROFILE%\\.local\\bin', 'claude.exe installato'], apply: () => { S.env.claudeInstalled = true; } },
-  { id: 'claudelogin', g: 'Provider AI (ne basta uno)', title: 'Claude Code: login', req: 'per il provider claudecode', ok: () => S.env.claudeLogin, needs: () => S.env.claudeInstalled, needsMsg: 'Installa prima Claude Code',
-    detail: ok => ok ? 'login effettuato' : 'non loggato',
-    cmds: ['claude', '/login'], alt: 'Esegui "claude" in un terminale, scrivi /login e completa l\'accesso dal browser con il tuo abbonamento Claude.',
-    lines: ['> claude', 'Welcome to Claude Code', '> /login', 'Apertura del browser per l\'autenticazione...', '✓ Login effettuato'], apply: () => { S.env.claudeLogin = true; } },
+    btn: 'Installa Claude Code', shell: 'ps', cmd: 'irm https://claude.ai/install.ps1 | iex', explain: 'Si apre PowerShell con lo script ufficiale di installazione; poi premi Ricontrolla.',
+    alt: 'Alternativa con npm: npm install -g @anthropic-ai/claude-code',
+    lines: ['Download di Claude Code...', 'Installazione in %USERPROFILE%\\.local\\bin', 'claude.exe installato'], apply: () => { S.env.claudeInstalled = true; } },
+  { id: 'claudelogin', g: 'Provider AI (ne basta uno)', title: 'Claude Code: accesso', req: 'per il provider claudecode', ok: () => S.env.claudeLogin, show: () => S.env.claudeInstalled, needsMsg: 'Installa prima Claude Code',
+    detail: ok => ok ? 'login effettuato' : (S.env.claudeInstalled ? 'non loggato' : 'installa prima Claude Code'),
+    btn: 'Accedi a Claude Code', shell: 'cmd', cmd: 'claude', explain: 'Si apre Claude Code: al primo avvio chiede il login nel browser. Poi premi Ricontrolla.',
+    lines: ['Welcome to Claude Code!', 'Select login method:', '  1. Claude account with subscription', '  2. Anthropic Console account (API usage billing)'],
+    inter: [{ label: 'Scegli 1 e conferma nel browser', lines: ['Apertura del browser per il login...', '✓ Login successful.'] }],
+    apply: () => { S.env.claudeLogin = true; } },
   { id: 'akey', g: 'Provider AI (ne basta uno)', title: 'Anthropic API Key', req: 'per il provider claude', ok: () => S.env.anthropicKey || !!S.settings.anthropicapikey.trim(), installLabel: 'Imposta chiave',
     detail: ok => ok ? 'chiave disponibile' : 'nessuna chiave',
-    cmds: ['setx ANTHROPIC_API_KEY "sk-ant-..."'], alt: 'Oppure incolla la chiave in Tools > Options > SVNAssist > Anthropic API Key.',
-    lines: ['> setx ANTHROPIC_API_KEY "sk-ant-••••••••"', 'Operazione completata. La variabile sarà letta al prossimo avvio di VS.'], apply: () => { S.env.anthropicKey = true; } },
+    cmd: 'setx ANTHROPIC_API_KEY "sk-ant-..."', alt: 'Oppure incolla la chiave in Tools > Options > SVNAssist > Anthropic API Key.',
+    lines: ['> setx ANTHROPIC_API_KEY "sk-ant-••••••••"', 'Operazione completata. La variabile sarà letta al prossimo avvio di VS.'], apply: () => { S.env.anthropicKey = true; }, direct: true },
   { id: 'copilot', g: 'Provider AI (ne basta uno)', title: 'Runtime GitHub Copilot (~100 MB)', req: 'per il provider copilot', ok: () => S.env.copilotRuntime, installLabel: 'Scarica ora', custom: true,
-    detail: ok => ok ? 'scaricato' : 'si scarica da solo al primo uso con provider = copilot',
-    cmds: ['(automatico) AI Provider = copilot'], alt: 'Download una tantum dalla release ufficiale GitHub, verificato con SHA-256, in %LOCALAPPDATA%\\SVNAssist\\copilot-runtime (~200 MB su disco). Richiede anche gh auth login.' },
+    detail: ok => ok ? 'scaricato' : 'si scarica da solo al primo uso con provider = copilot (serve solo gh auth login)',
+    cmd: '(automatico) AI Provider = GitHub Copilot', alt: 'Download una tantum dalla release ufficiale GitHub, verificato con SHA-256, in %LOCALAPPDATA%\\SVNAssist\\copilot-runtime (~200 MB su disco).' },
 ];
 const prereqMissing = () => (S.env.svn ? 0 : 1) + (resolveChain().chain.length ? 0 : 1);
 function prereqHTML() {
   const groups = []; PREREQ.forEach(p => { let g = groups.find(x => x.n === p.g); if (!g) groups.push(g = { n: p.g, items: [] }); g.items.push(p); });
-  const ai = resolveChain().chain;
+  const ai = resolveChain().chain, pend = Object.keys(S.pending).length;
   return `<div class="prq"><div class="list-h"><b>Prerequisiti</b><span><span class="tag">Novità in arrivo</span> <button class="btn sm" data-act="prereqToggle">Chiudi</button></span></div>
-   ${groups.map(g => `<h5>${esc(g.n)}</h5>` + g.items.map(p => { const ok = p.ok(); return `<div class="prow"><span class="pi ${ok ? 'ok' : 'ko'}" aria-label="${ok ? 'presente' : 'mancante'}">${ok ? '✓' : '✗'}</span><div class="pn"><b>${esc(p.title)}</b> <span class="muted small">(${esc(p.req)})</span><div class="muted small">${esc(p.detail(ok))}</div><div class="pb" style="margin-top:3px"><button class="btn sm" data-act="prereqInstall" data-arg="${p.id}" ${ok ? 'disabled' : ''}>${esc(p.installLabel || 'Installa')}</button><button class="btn sm" data-act="prereqHow" data-arg="${p.id}">Come fare</button></div></div></div>`; }).join('')).join('')}
+   <div style="margin:4px 0"><button class="btn sm" data-act="prereqRecheck" data-arg="">Ricontrolla tutto${pend ? ` (${pend} in attesa)` : ''}</button></div>
+   ${groups.map(g => `<h5>${esc(g.n)}</h5>` + g.items.map(p => {
+    const ok = p.ok(), showAct = !ok && !(p.show && !p.show());
+    return `<div class="prow"><span class="pi ${ok ? 'ok' : 'ko'}" aria-label="${ok ? 'presente' : 'mancante'}">${ok ? '✓' : '✗'}</span><div class="pn"><b>${esc(p.title)}</b> <span class="muted small">(${esc(p.req)})</span><div class="muted small">${esc(p.detail(ok))}</div>${!ok && p.explain ? `<div class="small" style="color:#bfe0ff">${esc(p.explain)}</div>` : ''}${S.pending[p.id] ? '<div class="small" style="color:var(--warn)">Console completata: premi Ricontrolla.</div>' : ''}
+     <div class="pb" style="margin-top:3px">${showAct ? `<button class="btn sm primary" data-act="prereqInstall" data-arg="${p.id}">${esc(p.btn || p.installLabel || 'Installa')}</button>` : ''}${!ok && !p.custom && !p.direct ? `<button class="btn sm" data-act="prereqRecheck" data-arg="${p.id}">Ricontrolla</button>` : ''}<button class="btn sm" data-act="prereqHow" data-arg="${p.id}">Come fare</button></div></div></div>`;
+  }).join('')).join('')}
    <div class="small" style="margin-top:6px">${ai.length ? `&#10003; AI pronta: ${esc(ai.map(c => c.name).join(' → '))}` : '&#10007; Nessun provider AI pronto: configurane almeno uno.'}</div></div>`;
+}
+// finestra console simulata: mostra il comando esatto; il risultato si applica solo con "Ricontrolla"
+async function consoleRun(p) {
+  const prompt_ = p.shell === 'ps' ? 'PS C:\\Users\\' + USER + '>' : 'C:\\Users\\' + USER + '>';
+  let box, finished = false;
+  const done = modal({
+    title: (p.shell === 'ps' ? 'Windows PowerShell' : 'Prompt dei comandi') + ' - ' + p.title, wide: false, cancel: true, banner: 'Console simulata - Novità in arrivo',
+    body: `<pre id="cs" style="margin:0;background:#0c0c0c;border:1px solid var(--bd);padding:8px;min-height:170px;font:11.5px/1.5 var(--mono);white-space:pre-wrap;word-break:break-all"></pre><div id="cst" style="margin-top:8px"></div>`,
+    buttons: [{ label: 'Chiudi console', value: true, primary: true, disabled: true }], onOpen: el => { box = el; },
+  });
+  await sleep(80);
+  const pre = box.querySelector('#cs'), live = () => box.isConnected;
+  pre.textContent = prompt_ + ' ' + p.cmd + '\n'; logCmd('[console] ' + p.cmd); await sleep(500);
+  const stream = async ls => { for (const l of ls) { if (!live()) return; pre.textContent += l + '\n'; await sleep(480); } };
+  await stream(p.lines);
+  for (const st of (p.inter || [])) {
+    if (!live()) return;
+    const holder = box.querySelector('#cst'); holder.innerHTML = `<button class="btn primary" id="cstep">${esc(st.label)}</button>`;
+    await new Promise(r => { const b = holder.querySelector('#cstep'); b.focus(); b.onclick = r; });
+    holder.innerHTML = ''; await stream(st.lines);
+  }
+  if (!live()) return;
+  pre.textContent += '\n' + prompt_ + ' _\n'; finished = true;
+  const b = box.querySelector('[data-m="0"]'); b.disabled = false; b.focus();
+  await done;
+  if (finished) { S.pending[p.id] = true; toast('Console completata: ora premi Ricontrolla'); }
+  render();
+}
+function prereqRecheck(id) {
+  const ids = id ? [id] : Object.keys(S.pending); let n = 0;
+  ids.forEach(i => { if (S.pending[i]) { PREREQ.find(x => x.id === i).apply(); delete S.pending[i]; n++; } });
+  toast(n ? 'Ricontrollo completato: ' + n + ' prerequisito/i trovato/i' + (ids.includes('ghcli') ? ' (se gh non viene trovato, riavvia VS)' : '') : 'Ricontrollo: nulla di nuovo da trovare', 4000);
+  render();
 }
 async function prereqInstall(id) {
   const p = PREREQ.find(x => x.id === id);
-  if (p.needs && !p.needs()) return toast(p.needsMsg);
+  if (p.show && !p.show()) return toast(p.needsMsg);
   if (p.winget && !S.env.winget) return toast('winget non disponibile: usa "Come fare" per l\'installazione manuale', 4500);
   if (p.id === 'copilot') {
     let box; const done = modal({ title: 'Runtime GitHub Copilot', body: '<div class="dl"><div class="pbar"><i id="cb"></i></div><div id="ct">Avvio...</div></div>', buttons: [{ label: 'Chiudi', value: true, primary: true, disabled: true }], onOpen: el => { box = el; } });
@@ -1473,12 +1549,13 @@ async function prereqInstall(id) {
     await downloadCopilot(d => { if (d) { box.querySelector('#cb').style.width = d.pct + '%'; box.querySelector('#ct').textContent = d.label; } });
     box.querySelector('#ct').textContent = 'Runtime installato.'; const b = box.querySelector('[data-m="0"]'); b.disabled = false; b.focus(); await done; render(); return;
   }
-  await termInstall(p.title, p.lines, p.apply);
+  if (p.direct) { await termInstall(p.title, p.lines, p.apply); return; }
+  await consoleRun(p);
 }
 function prereqHow(id) {
   const p = PREREQ.find(x => x.id === id);
-  modal({ title: 'Come fare: ' + p.title, cancel: true, body: `<p>${esc(p.req)}</p>${p.cmds.map(c => `<pre class="cmd">${esc(c)}</pre>`).join('')}${p.alt ? `<p class="small muted">${esc(p.alt)}</p>` : ''}<p class="small"><span class="tag">Novità in arrivo</span> la checklist dei prerequisiti non è ancora nella vera estensione.</p>`,
-    buttons: [{ label: 'Copia comandi', value: false, onClick: () => { try { navigator.clipboard.writeText(p.cmds.join('\n')); toast('Comandi copiati'); } catch (e) { toast('Copia non disponibile: seleziona il testo'); } return false; } }, { label: 'Chiudi', value: true, primary: true }] });
+  modal({ title: 'Come fare: ' + p.title, cancel: true, body: `<p>${esc(p.req)}</p><pre class="cmd">${esc(p.cmd)}</pre>${p.explain ? `<p class="small">${esc(p.explain)}</p>` : ''}${p.alt ? `<p class="small muted">${esc(p.alt)}</p>` : ''}<p class="small"><span class="tag">Novità in arrivo</span> la checklist dei prerequisiti non è ancora nella vera estensione.</p>`,
+    buttons: [{ label: 'Copia comando', value: false, onClick: () => { try { navigator.clipboard.writeText(p.cmd); toast('Comando copiato'); } catch (e) { toast('Copia non disponibile: seleziona il testo'); } return false; } }, { label: 'Chiudi', value: true, primary: true }] });
 }
 function prereqOpen() { S.ui.statusOpen = true; S.ui.prereq = true; S.ui.view = 'dock'; render(); const d = $('.prq'); if (d) d.scrollIntoView({ block: 'nearest' }); }
 
@@ -1572,13 +1649,67 @@ async function folderOp(kind, arg) {
 function setGroup(arg, on) { const [sec, key] = parseArg(arg); under(secItems(sec), key).forEach(f => f.sel = on); }
 
 // =====================================================================
+//  MENU "SVN" nel tasto destro di Esplora soluzioni (stile TortoiseSVN) - NOVITA' IN ARRIVO
+// =====================================================================
+const wcUnder = path => S.files.filter(f => !path || f.path === path || f.path.startsWith(path + '\\'));
+const REVERTABLE = ['M', 'A', 'D', 'C', '!', 'R'];
+async function confirmList(title, text, rows, okLabel) {
+  return modal({
+    title, icon: '&#9888;&#65039;', cancel: false,
+    body: `<p>${esc(text)}</p><div class="flist" style="max-height:150px;min-height:0;margin:6px 0">${rows.slice(0, 15).map(r => `<div style="padding:1px 6px;font-family:var(--mono);font-size:12px">${esc(r)}</div>`).join('')}${rows.length > 15 ? `<div class="muted small" style="padding:2px 6px">... altri ${rows.length - 15}</div>` : ''}</div><p><span class="tag">Novità in arrivo</span> <span class="small muted">conferma non ancora nella vera estensione.</span></p>`,
+    buttons: [{ label: okLabel || 'Sì, procedi', value: true, primary: true }, { label: 'No', value: false }],
+  });
+}
+async function seOp(kind, arg) {
+  const i = arg.indexOf('|'), type = arg.slice(0, i), path = arg.slice(i + 1), label = path ? fwd(path) : '(soluzione)';
+  if (!S.solution || !S.solution.inWc) { await prompt('Non è una working copy SVN'); return; }
+  await ensureSvn(); if (!S.env.svn) return;
+  try {
+    if (kind === 'update') {
+      await svn(`update "${label}"`, 900); svnUpdate();
+      const nc = S.files.filter(f => f.st === 'C').length;
+      render(); toast(`Aggiornato alla revisione ${S.headRev}` + (nc ? `: ${nc} file in conflitto` : ''), 4000);
+      await prompt(`Aggiornato alla revisione ${S.headRev}.\n` + (nc ? `${nc} file in conflitto: risolvili da SVN Changes.` : 'Nessun conflitto.'));
+    } else if (kind === 'commit') {
+      await openStatus();
+      S.vm.files.forEach(f => { f.sel = f.st !== '?' && (!path || f.path === path || f.path.startsWith(path + '\\')); });
+      render(); toast('SVN Changes: spuntati i file di ' + label);
+    } else if (kind === 'diff') {
+      const ts = wcUnder(path).filter(f => !f.dir && ['M', 'A', 'D', 'R', 'C'].includes(f.st));
+      if (!ts.length) { await prompt('Nessuna modifica rispetto a BASE.'); return; }
+      if (S.env.tortoise) { toast('Diff aperto in TortoiseSVN: ' + label); logCmd('TortoiseProc.exe /command:diff /path:"' + WC + '\\' + path + '"'); return; }
+      await openStatus(); await svn(`diff "${label}"`, 300);
+      const vm = S.vm; vm.diffTitle = 'Diff con BASE: ' + label; vm.diffContent = ts.map(f => fileDiffText(f.path)).join('\n'); vm.diffVisible = true; vm.statusMsg = `Diff inline caricato: ${label}`; render();
+    } else if (kind === 'log') {
+      S.ui.logOpen = true; S.ui.active = '__log'; S.ui.view = 'doc'; S.ui.seOpen = false; S.lvm.path = WC; render(); await lvmLoad();
+    } else if (kind === 'add') {
+      const t = wcUnder(path).filter(f => f.st === '?');
+      if (!t.length) { await prompt('Nessun elemento non versionato da aggiungere.'); return; }
+      await svn(`add --force "${label}"`, 500); t.forEach(f => svnAdd(f.path)); toast(`Aggiunti a SVN: ${t.length} elementi.`);
+    } else if (kind === 'revert') {
+      const t = wcUnder(path).filter(f => REVERTABLE.includes(f.st)), pd = propDirs().filter(d => !path || d === path || d.startsWith(path + '\\'));
+      const rows = t.map(f => `${f.st} ${f.path}`).concat(pd.map(d => `M ${d} (proprietà svn:ignore)`));
+      if (!rows.length) { await prompt('Nessuna modifica da annullare.'); return; }
+      if (!await confirmList('SVN Revert', `Annullare le modifiche locali di ${rows.length} elementi in ${label}? L'operazione non può essere annullata.`, rows, 'Sì, annulla le modifiche')) return;
+      await svn('revert -R "' + label + '"', 500); t.forEach(f => svnRevert(f.path)); pd.forEach(d => svnRevert(d)); toast(`Revert completato su ${rows.length} elementi.`);
+    } else if (kind === 'ign') {
+      const t = wcUnder(path);
+      if (type === 'solution' || type === 'project' || !t.length || t.some(f => f.st !== '?')) { await prompt('Add to Ignore List è disponibile solo per elementi unversioned.'); return; }
+      await svn('propset svn:ignore', 400); svnIgnore(path); toast('Aggiunto alla ignore list: ' + label);
+    }
+  } catch (e) { await prompt('Errore: ' + e.message); }
+  render(); if (S.ui.statusOpen && S.vm.wcPath && kind !== 'diff') { const m = S.vm.statusMsg; await vmRefresh(); if (kind === 'commit') S.vm.statusMsg = m; render(); }
+}
+
+// =====================================================================
 //  DIALOGHI E FLUSSI
 // =====================================================================
 async function vsixFlow() {
   if (S.vsInstalled) return toast('SVNAssist è già installato');
   const go = await modal({
     title: 'VSIX Installer', body: `<div class="vsix"><div class="row"><div class="logo">SVN</div><div><b>SVNAssist</b><div class="muted">Estensione per Visual Studio 2026 · Subversion + commit message con AI</div></div></div>
-      <p class="small muted" style="margin-top:12px">Prodotti di destinazione: Visual Studio Community / Professional / Enterprise 2026. Dopo l'installazione sarà necessario riavviare Visual Studio.</p></div>`,
+      <table style="margin-top:12px;font-size:12.5px;border-collapse:collapse"><tr><td class="muted" style="padding:2px 14px 2px 0">Editore</td><td>Andrea Pinelli</td></tr><tr><td class="muted" style="padding:2px 14px 2px 0">Versione</td><td>0.1.0</td></tr><tr><td class="muted" style="padding:2px 14px 2px 0">Firma digitale</td><td>nessuna</td></tr></table>
+      <p class="small muted" style="margin-top:12px">Prodotti di destinazione: Visual Studio Community / Professional / Enterprise 2026. Estensione non firmata: Windows può mostrare un avviso. Dopo l'installazione sarà necessario riavviare Visual Studio.</p></div>`,
     buttons: [{ label: 'Installa', value: true, primary: true }, { label: 'Annulla', value: false }], cancel: false,
   });
   if (!go) return;
@@ -1627,11 +1758,15 @@ const PROV_HINT = { auto: 'Ordine: Copilot (se runtime già scaricato) → Claud
 async function optionsDlg() {
   S.ui.menu = null;
   const st = S.settings;
-  const rows = SETDEF.map(([k, label]) => `<div class="opt-row"><label for="opt-${k}">${esc(label)}</label><input type="text" id="opt-${k}" value="${esc(st[k])}" autocomplete="off" ${k === 'aiprovider' ? 'list="provlist"' : ''}><div class="h" id="h-${k}"></div></div>`).join('');
+  const LBL = { aiprovider: 'AI Provider', claudemodel: 'Modello Claude · Solo per Claude Code e Claude API', anthropicapikey: 'Anthropic API Key · Solo per Claude API (vuota = variabile ANTHROPIC_API_KEY)', copilotmodel: 'Modello Copilot (vuoto = predefinito) · Solo per GitHub Copilot', aiendpoint: 'Endpoint URL · Solo per OpenAI-compatibile / GitHub Models', aiapikey: 'API Key / token GitHub · Solo per OpenAI-compatibile', aimodel: 'Modello · Solo per OpenAI-compatibile (es. gpt-4o-mini)', defaultlanguage: 'Default Language', workingcopypath: 'Working Copy Path (vuoto = rilevata dalla solution)' };
+  const PROVS = [['auto', 'Automatico (consigliato)'], ['copilot', 'GitHub Copilot (abbonamento)'], ['claudecode', 'Claude Code (abbonamento Claude)'], ['claude', 'Claude API (API key Anthropic)'], ['openai', 'OpenAI-compatibile / GitHub Models']];
+  const LANGS = [['auto', 'Auto'], ['italiano', 'Italiano'], ['english', 'English']];
+  const opts = (list, cur) => list.map(([v, t]) => `<option value="${v}" ${String(cur).toLowerCase() === v ? 'selected' : ''}>${t}</option>`).join('');
+  const rows = SETDEF.map(([k]) => `<div class="opt-row"><label for="opt-${k}">${esc(LBL[k])}</label>${k === 'aiprovider' ? `<select id="opt-${k}">${opts(PROVS, st[k])}</select>` : k === 'defaultlanguage' ? `<select id="opt-${k}">${opts(LANGS, st[k])}</select>` : `<input type="text" id="opt-${k}" value="${esc(st[k])}" autocomplete="off">`}<div class="h" id="h-${k}"></div>${k === 'aiprovider' ? '<div class="note">Con GitHub Copilot non serve nessun altro campo: basta <code>gh auth login</code> (pulsante «Accedi a GitHub» nei Prerequisiti del pannello SVN Changes).</div>' : ''}</div>`).join('');
   const r = await modal({
     title: 'Opzioni', wide: true, cancel: false,
     body: `<datalist id="provlist"><option>auto</option><option>copilot</option><option>claudecode</option><option>claude</option><option>openai</option></datalist>
-      <div class="opt-grid"><div class="opt-tree"><div>&#9656; Ambiente</div><div>&#9656; Progetti e soluzioni</div><div>&#9656; Editor di testo</div><div class="on">&#9662; SVNAssist</div></div><div class="opt-form">${rows}<div class="note" id="tokbadge"></div><div class="small muted">Le chiavi inserite qui sono solo di prova: la demo non le invia a nessun servizio.</div></div></div>`,
+      <div class="opt-grid"><div class="opt-tree"><div>&#9656; Ambiente</div><div>&#9656; Progetti e soluzioni</div><div>&#9656; Editor di testo</div><div class="on">&#9662; SVNAssist</div></div><div class="opt-form"><div class="small" style="margin-bottom:8px"><span class="tag">Novità in arrivo</span> menu a tendina ed etichette per provider</div>${rows}<div class="note" id="tokbadge"></div><div class="small muted">Le chiavi inserite qui sono solo di prova: la demo non le invia a nessun servizio.</div></div></div>`,
     buttons: [{ label: 'OK', value: true, primary: true, onClick: el => { SETDEF.forEach(([k]) => { st[k] = el.querySelector('#opt-' + k).value; }); S.f.optionsSaved = true; } }, { label: 'Annulla', value: false }],
     onOpen: el => {
       const upd = () => {
@@ -1713,7 +1848,6 @@ const SOON = {
     const rows = ls.map((l, i) => { const inb = bs.includes(l); const k = i % 4; return `<tr title="${inb ? 'r' + (118 + k * 2) + ' · ' + msg[k] : 'modifica locale non ancora committata'}"><td>${i + 1}</td><td>${inb ? 'r' + (118 + k * 2) : '—'}</td><td>${inb ? au[k] : USER + ' (locale)'}</td><td>${esc(l)}</td></tr>`; }).join('');
     return modal({ title: 'Blame: Core/Services/OrderService.cs (anteprima)', wide: true, banner: 'ANTEPRIMA — funzione NON ancora presente nell\'estensione', body: `<div style="overflow:auto;max-height:55vh"><table class="blame">${rows}</table></div><p class="small muted">Passa il mouse su una riga per vedere il messaggio della revisione.</p>` });
   },
-  se: () => modal({ title: 'Esplora soluzioni (anteprima)', wide: true, banner: 'ANTEPRIMA — il menu SVN nel tasto destro di Esplora soluzioni NON esiste ancora', body: `<p class="muted small">Fai clic destro su un file:</p><div class="flist" style="height:150px" id="semini"><div class="frow" style="grid-template-columns:1fr" data-minictx="1">&#128196; OrderService.cs</div><div class="frow" style="grid-template-columns:1fr" data-minictx="1">&#128196; CartController.cs</div><div class="frow" style="grid-template-columns:1fr" data-minictx="1">&#128196; Coupon.cs</div></div>` }),
   auto: () => modal({ title: 'Autocompletamento messaggio (anteprima)', wide: true, banner: 'ANTEPRIMA — funzione NON ancora presente nell\'estensione', body: `<p class="small muted">Scrivi <code>#</code> per i ticket, oppure inizia con "Fix", "Agg"… Tab o clic per accettare.</p><div style="position:relative"><textarea id="ac" style="min-height:110px" placeholder="Messaggio di commit"></textarea><div class="sugg" id="acs" hidden></div></div>`,
     onOpen: el => {
       const ta = el.querySelector('#ac'), box = el.querySelector('#acs');
@@ -1741,7 +1875,6 @@ const SOON_CARDS = [
   ['branchtag', 'Creazione di Branch e Tag', 'Crea branch e tag (svn copy) con un modulo, con switch automatico opzionale.', ['Anteprima del comando', 'Messaggio di commit predefinito']],
   ['blame', 'Blame / Annotate', 'Chi ha scritto ogni riga e in quale revisione, con il messaggio al passaggio del mouse.', ['Vista affiancata all\'editor']],
   ['cleanup', 'Cleanup', 'Pulizia della working copy: lock, file non versionati e ignorati, file mancanti.', ['Opzioni selezionabili', 'Output del comando']],
-  ['se', 'Menu SVN in Esplora soluzioni', 'Tasto destro su file e cartelle: Update, Commit, Diff, Revert, Blame, Log senza aprire il pannello.', ['Icone di stato sui file']],
   ['auto', 'Autocompletamento nel messaggio di commit', 'Suggerimenti mentre scrivi: ticket, nomi dei file modificati, messaggi recenti.', ['Tab per accettare']],
 ];
 function renderSoon() {
@@ -1752,10 +1885,11 @@ function renderSoon() {
 // =====================================================================
 //  AZIONI (event delegation)
 // =====================================================================
-function ctxMenu(x, y, items) {
+function ctxMenu(x, y, items, append) {
   const h = $('#ctxhost');
-  h.innerHTML = `<div class="ctx" role="menu" style="left:${Math.min(x, innerWidth - 210)}px;top:${Math.min(y, innerHeight - items.length * 28)}px;z-index:400">${items.map(i => i === '-' ? '<hr>' : `<button role="menuitem" ${i.off ? 'disabled' : ''} data-act="${i.act}" data-arg="${esc(i.arg || '')}" data-arg2="${esc(i.arg2 || '')}">${esc(i.label)}</button>`).join('')}</div>`;
-  const f = h.querySelector('button:not(:disabled)'); if (f) f.focus();
+  const html = `<div class="ctx${append ? ' subm' : ''}" role="menu" style="left:${Math.max(0, Math.min(x, innerWidth - 210))}px;top:${Math.max(0, Math.min(y, innerHeight - items.length * 28))}px;z-index:400">${items.map(i => i === '-' ? '<hr>' : `<button role="menuitem" ${i.off ? 'disabled' : ''} data-act="${i.act}" data-arg="${esc(i.arg || '')}" data-arg2="${esc(i.arg2 || '')}">${esc(i.label)}</button>`).join('')}</div>`;
+  if (append) { h.querySelectorAll('.subm').forEach(e => e.remove()); h.insertAdjacentHTML('beforeend', html); } else h.innerHTML = html;
+  const f = h.querySelector('.ctx:last-child button:not(:disabled)'); if (f) f.focus();
 }
 const closeCtx = () => { $('#ctxhost').innerHTML = ''; };
 function runCmd(c) {
@@ -1771,7 +1905,7 @@ async function menuUpdate() {
   try {
     if (!S.solution.inWc) throw new Error(`svn: E155007: '${S.solution.dir}' is not a working copy`);
     await svn('update', 900); const out = svnUpdate(); toast('svn update (output demo): ' + out.join(' | '), 5000);
-    await prompt(`Update completato per:\n${S.solution.dir}`);
+    await prompt(`Aggiornato alla revisione ${S.headRev}.\n${S.solution.dir}`);
     if (S.ui.statusOpen) await vmRefresh();
   } catch (e) { await prompt(`Errore durante l'update:\n${e.message}`); }
   render();
@@ -1821,6 +1955,10 @@ const ACT = {
   restart: () => restartVS(),
   branchSel: (a, el) => { S.branch = el.value; if (S.vm.wcPath) vmRefresh(); render(); },
   soon: a => SOON[a](),
+  langSel: (a, el) => { S.vm.lang = el.value; render(); },
+  prereqRecheck: a => prereqRecheck(a),
+  seSub: (a, el) => { const r = el.getBoundingClientRect(); ctxMenu(r.right - 4, r.top, [{ label: 'SVN Update', act: 'seOp', arg: 'update', arg2: a }, { label: 'SVN Commit...', act: 'seOp', arg: 'commit', arg2: a }, { label: 'Diff con BASE', act: 'seOp', arg: 'diff', arg2: a }, { label: 'Mostra log', act: 'seOp', arg: 'log', arg2: a }, '-', { label: 'SVN Add', act: 'seOp', arg: 'add', arg2: a }, { label: 'SVN Revert', act: 'seOp', arg: 'rev'.replace('rev', 'revert'), arg2: a }, { label: 'Aggiungi a ignore list', act: 'seOp', arg: 'ign', arg2: a }], true); },
+  seOp: (a, el) => { closeCtx(); seOp(a, el.dataset.arg2); },
   sectx: (a, el) => { closeCtx(); toast('Anteprima: "' + el.textContent + '" — non ancora implementato'); },
 };
 document.addEventListener('click', e => {
@@ -1854,8 +1992,8 @@ document.addEventListener('contextmenu', e => {
     e.preventDefault(); const it = S.vm.files.find(f => f.path === row.dataset.ctxitem); if (!it) return; const p = it.path;
     return ctxMenu(e.clientX, e.clientY, [{ label: 'SVN Add', act: 'ctxop', arg: 'add', arg2: p, off: !it.canAdd }, { label: 'Add to Ignore List', act: 'ctxop', arg: 'ign', arg2: p, off: !it.canIgn }, { label: 'SVN Delete', act: 'ctxop', arg: 'del', arg2: p, off: !it.canDel }, { label: 'SVN Revert', act: 'ctxop', arg: 'rev', arg2: p, off: !it.canRev }, '-', { label: 'Resolve Conflict', act: 'ctxop', arg: 'res', arg2: p, off: !it.canRes }, '-', { label: 'Show Diff', act: 'showDiff', arg: p }]);
   }
-  const se = e.target.closest('[data-sefile]');
-  if (se) { e.preventDefault(); return ctxMenu(e.clientX, e.clientY, [{ label: 'Apri', act: 'openFile', arg: se.dataset.sefile }, '-', { label: 'Taglia', act: 'sectx', off: true }, { label: 'Elimina', act: 'sectx', off: true }, '-', { label: 'SVN ▸ (prossimamente)', act: 'sectx' }]); }
+  const se = e.target.closest('[data-sectx]');
+  if (se) { e.preventDefault(); const t = se.dataset.sectx; return ctxMenu(e.clientX, e.clientY, [...(t.startsWith('file|') ? [{ label: 'Apri', act: 'openFile', arg: t.slice(5) }, '-'] : []), { label: 'Taglia', act: 'sectx', off: true }, { label: 'Elimina', act: 'sectx', off: true }, '-', { label: 'SVN  ▸', act: 'seSub', arg: t }]); }
   const mini = e.target.closest('[data-minictx]');
   if (mini) { e.preventDefault(); ctxMenu(e.clientX, e.clientY, [{ label: 'Apri', act: 'sectx' }, '-', { label: 'SVN Update', act: 'sectx' }, { label: 'SVN Commit...', act: 'sectx' }, { label: 'SVN Diff', act: 'sectx' }, { label: 'SVN Revert', act: 'sectx' }, { label: 'SVN Blame', act: 'sectx' }, { label: 'SVN Log', act: 'sectx' }]); }
 });
