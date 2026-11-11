@@ -36,6 +36,7 @@ Regole: commit in italiano, push sul branch indicato, niente PR se non richiesto
 - [x] Piano WebView2 → docs/webview2-plan.md (scelta ibrido H; spike passo 0 su Windows è il primo gate)
 - [x] Fase A (2026-11-11, Windows): build Release ok, 285 test verdi, .vsix in src/SVNAssist/bin/Release/net8.0-windows8.0/. CI falliva per test debouncer instabile → corretto. softprops/action-gh-release@v2.2.2 esiste. Feedback utente in docs/feedback/0.1.0/.
 - [x] Fase B (bug AI) e C (audit/tema XAML) mergiate: 318 test verdi. Da provare con F5: tema, popup login, Genera con GitHub Models.
+- [x] D1-3 UI web condivisa: src/SVNAssist.UI.Web + docs/demo/src + tools/build-demo.mjs + docs/ui-protocol.md + tests/ui-web (node --test, anche in CI). Screenshot in docs/demo/screenshots. Ritocco: badge demo dice ancora 0.1.0.
 - [ ] Fase D0 spike WebView2 (branch locale spike/webview2) in corso
 - DECISIONE UTENTE: la 0.2.0 esce SOLO con tutte le feature, UI WebView2 compresa (no release parziale). Note: docs/release-notes/v0.2.0.md (bozza)
 - [ ] UI WebView2 completa, UX, release v0.2.0
