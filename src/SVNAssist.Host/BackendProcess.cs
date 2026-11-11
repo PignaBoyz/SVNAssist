@@ -1,0 +1,211 @@
+using System;
+using System.Diagnostics;
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Threading;
+using System.Threading.Tasks;
+using StreamJsonRpc;
+using SVNAssist.Rpc;
+
+namespace SVNAssist.Host
+{
+    /// <summary>
+    /// Avvia SVNAssist.Backend.exe (cartella backend/ accanto all'assembly), parla StreamJsonRpc su stdio,
+    /// lo lega a un Job Object (muore con VS) e lo riavvia se cade.
+    /// </summary>
+    internal sealed class BackendProcess : IDisposable
+    {
+        private const int MaxRestartsPerMinute = 4;
+
+        private readonly IHost _host;
+        private readonly object _gate = new object();
+        private Process _proc;
+        private JsonRpc _rpc;
+        private IBackend _proxy;
+        private Task _starting;
+        private bool _disposed;
+        private int _restarts;
+        private DateTime _windowStart = DateTime.UtcNow;
+
+        /// <summary>Il backend e' ripartito dopo un crash (la UI mostra un toast e rimanda i "ready").</summary>
+        public event Action Restarted;
+        /// <summary>Il backend non parte / e' caduto troppe volte: testo per l'utente.</summary>
+        public event Action<string> Failed;
+
+        public BackendProcess(IHost host) { _host = host; }
+
+        public bool IsRunning { get { lock (_gate) return _proxy != null; } }
+
+        public static string BackendExe =>
+            Path.Combine(Path.GetDirectoryName(typeof(BackendProcess).Assembly.Location), "backend", "SVNAssist.Backend.exe");
+
+        /// <summary>Ritorna il proxy IBackend, avviando il processo se serve. Lancia se non parte.</summary>
+        public async Task<IBackend> GetAsync()
+        {
+            Task start;
+            lock (_gate)
+            {
+                if (_disposed) throw new ObjectDisposedException(nameof(BackendProcess));
+                if (_proxy != null) return _proxy;
+                start = _starting ?? (_starting = Task.Run(Start));
+            }
+            try { await start.ConfigureAwait(false); }
+            finally { lock (_gate) { if (_starting == start) _starting = null; } }
+            lock (_gate) { return _proxy ?? throw new InvalidOperationException("Backend SVNAssist non avviato."); }
+        }
+
+        private void Start()
+        {
+            var exe = BackendExe;
+            if (!File.Exists(exe))
+                throw new FileNotFoundException("Backend SVNAssist non trovato (" + exe + "). Reinstalla l'estensione.");
+
+            var p = new Process
+            {
+                StartInfo = new ProcessStartInfo(exe)
+                {
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardInput = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    WorkingDirectory = Path.GetDirectoryName(exe),
+                },
+                EnableRaisingEvents = true,
+            };
+            p.ErrorDataReceived += (s, e) => { if (e.Data != null) Log.Write("[backend] " + e.Data); };
+            p.Start();
+            JobObject.Assign(p);
+            p.BeginErrorReadLine();
+
+            var rpc = new JsonRpc(p.StandardInput.BaseStream, p.StandardOutput.BaseStream);
+            rpc.AddLocalRpcTarget<IHost>(_host, null);
+            var proxy = rpc.Attach<IBackend>();
+            rpc.Disconnected += (s, e) => OnGone(p);
+            p.Exited += (s, e) => OnGone(p);
+            rpc.StartListening();
+
+            lock (_gate) { _proc = p; _rpc = rpc; _proxy = proxy; }
+            Log.Write("backend avviato pid " + p.Id);
+        }
+
+        private void OnGone(Process p)
+        {
+            bool restart;
+            lock (_gate)
+            {
+                if (_proc != p) return; // gia' gestito
+                _proc = null; _proxy = null;
+                try { _rpc?.Dispose(); } catch { }
+                _rpc = null;
+                restart = !_disposed;
+            }
+            try { if (!p.HasExited) p.Kill(); } catch { }
+            if (!restart) return;
+            Log.Write("backend terminato, riavvio");
+
+            if ((DateTime.UtcNow - _windowStart).TotalSeconds > 60) { _windowStart = DateTime.UtcNow; _restarts = 0; }
+            if (++_restarts > MaxRestartsPerMinute)
+            {
+                Failed?.Invoke("Il servizio SVNAssist si è chiuso troppe volte. Riavvia Visual Studio o consulta il log.");
+                return;
+            }
+            Task.Run(async () =>
+            {
+                try { await GetAsync().ConfigureAwait(false); Restarted?.Invoke(); }
+                catch (Exception ex) { Failed?.Invoke("Impossibile riavviare il servizio SVNAssist: " + ex.Message); }
+            });
+        }
+
+        public void Dispose()
+        {
+            Process p; JsonRpc r;
+            lock (_gate) { _disposed = true; p = _proc; r = _rpc; _proc = null; _rpc = null; _proxy = null; }
+            try { r?.Dispose(); } catch { }
+            try { if (p != null && !p.HasExited) p.Kill(); } catch { }
+        }
+    }
+
+    internal static class Log
+    {
+        private static readonly object Gate = new object();
+        public static readonly string Path = System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SVNAssist", "host-log.txt");
+
+        public static void Write(string msg)
+        {
+            Debug.WriteLine("[SVNAssist] " + msg);
+            try
+            {
+                lock (Gate)
+                {
+                    Directory.CreateDirectory(System.IO.Path.GetDirectoryName(Path));
+                    if (File.Exists(Path) && new FileInfo(Path).Length > 1_000_000) File.Delete(Path);
+                    File.AppendAllText(Path, DateTime.Now.ToString("HH:mm:ss.fff ") + msg + Environment.NewLine);
+                }
+            }
+            catch { }
+        }
+    }
+
+    /// <summary>Job Object con KILL_ON_JOB_CLOSE: se VS muore (anche male) il backend viene terminato dal sistema.</summary>
+    internal static class JobObject
+    {
+        private static readonly IntPtr Job = Create();
+
+        private static IntPtr Create()
+        {
+            try
+            {
+                var h = CreateJobObject(IntPtr.Zero, null);
+                var info = new JOBOBJECT_EXTENDED_LIMIT_INFORMATION();
+                info.BasicLimitInformation.LimitFlags = 0x2000; // JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+                var len = Marshal.SizeOf(typeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION));
+                var ptr = Marshal.AllocHGlobal(len);
+                try
+                {
+                    Marshal.StructureToPtr(info, ptr, false);
+                    if (!SetInformationJobObject(h, 9, ptr, (uint)len)) return IntPtr.Zero; // JobObjectExtendedLimitInformation
+                }
+                finally { Marshal.FreeHGlobal(ptr); }
+                return h;
+            }
+            catch (Exception ex) { Log.Write("Job Object non creato: " + ex.Message); return IntPtr.Zero; }
+        }
+
+        public static void Assign(Process p)
+        {
+            if (Job == IntPtr.Zero) return;
+            if (!AssignProcessToJobObject(Job, p.Handle)) Log.Write("AssignProcessToJobObject fallita: " + Marshal.GetLastWin32Error());
+        }
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern IntPtr CreateJobObject(IntPtr attrs, string name);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool SetInformationJobObject(IntPtr job, int infoClass, IntPtr info, uint len);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct JOBOBJECT_BASIC_LIMIT_INFORMATION
+        {
+            public long PerProcessUserTimeLimit, PerJobUserTimeLimit;
+            public uint LimitFlags;
+            public UIntPtr MinimumWorkingSetSize, MaximumWorkingSetSize;
+            public uint ActiveProcessLimit;
+            public UIntPtr Affinity;
+            public uint PriorityClass, SchedulingClass;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct IO_COUNTERS { public ulong a, b, c, d, e, f; }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct JOBOBJECT_EXTENDED_LIMIT_INFORMATION
+        {
+            public JOBOBJECT_BASIC_LIMIT_INFORMATION BasicLimitInformation;
+            public IO_COUNTERS IoInfo;
+            public UIntPtr ProcessMemoryLimit, JobMemoryLimit, PeakProcessMemoryUsed, PeakJobMemoryUsed;
+        }
+    }
+}

@@ -1,0 +1,64 @@
+<Project>
+  <!-- csproj SDK-style con import espliciti: l'unico modo trovato per ottenere il .vsix da un progetto SDK-style
+       (vedi docs/webview2-spike.md). La versione (Version/AssemblyVersion/FileVersion) viene da Directory.Build.props. -->
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>12.0</LangVersion>
+    <Nullable>annotations</Nullable>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <VssdkCompatibleExtension>true</VssdkCompatibleExtension>
+    <RootNamespace>SVNAssist.Host</RootNamespace>
+    <AssemblyName>SVNAssist.Host</AssemblyName>
+    <GeneratePkgDefFile>true</GeneratePkgDefFile>
+    <UseCodebase>true</UseCodebase>
+    <CreateVsixContainer>true</CreateVsixContainer>
+    <DeployExtension>false</DeployExtension>
+    <CopyBuildOutputToOutputDirectory>true</CopyBuildOutputToOutputDirectory>
+    <NoWarn>$(NoWarn);MSB3277;NU1701;VSTHRD010;VSTHRD100;VSTHRD200</NoWarn>
+    <!-- Dove sta il publish del backend che finisce nel VSIX (cartella backend/). Cambiare con
+         msbuild /p:BackendPublishDir=C:\percorso\publish  (framework-dependent: dotnet publish src/SVNAssist.Backend -c Release -o <dir>). -->
+    <BackendPublishDir Condition="'$(BackendPublishDir)' == ''">$(MSBuildThisFileDirectory)..\SVNAssist.Backend\bin\publish\</BackendPublishDir>
+    <UiWebDir>$(MSBuildThisFileDirectory)..\SVNAssist.UI.Web\</UiWebDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.14.40265" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="17.14.2120" />
+    <!-- Stessa versione di VS 18.12 (PrivateAssemblies): non si copia nel VSIX, la fornisce VS. -->
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3967.48" ExcludeAssets="runtime;native;build" />
+    <PackageReference Include="StreamJsonRpc" Version="2.22.23" ExcludeAssets="runtime" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Design" />
+    <Reference Include="System.Security" />
+    <Compile Include="..\Shared\RpcContract.cs" Link="RpcContract.cs" />
+    <VSCTCompile Include="SVNAssist.vsct">
+      <ResourceName>Menus.ctmenu</ResourceName>
+    </VSCTCompile>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- UI web: tutto src/SVNAssist.UI.Web tranne contract/ (schemi e fixture, solo per i test). -->
+    <Content Include="$(UiWebDir)**" Exclude="$(UiWebDir)contract\**" Link="ui\%(RecursiveDir)%(Filename)%(Extension)" IncludeInVSIX="true" />
+    <!-- Backend net8 framework-dependent (dotnet publish), sotto backend/ accanto all'assembly. -->
+    <Content Include="$(BackendPublishDir)**" Exclude="$(BackendPublishDir)**\*.pdb" Link="backend\%(RecursiveDir)%(Filename)%(Extension)" IncludeInVSIX="true" Condition="Exists('$(BackendPublishDir)')" />
+  </ItemGroup>
+
+  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+  <Import Project="$(VSToolsPath)\VSSDK\Microsoft.VsSDK.targets" />
+  <!-- Progetto SDK-style: il VSIX non parte da solo come nei vecchi csproj. -->
+  <Target Name="MakeVsix" AfterTargets="Build" DependsOnTargets="CreateVsixContainer" />
+
+  <Target Name="WarnNoBackend" BeforeTargets="Build" Condition="!Exists('$(BackendPublishDir)')">
+    <Warning Text="Backend non trovato in '$(BackendPublishDir)': il VSIX non conterra' backend/. Esegui 'dotnet publish src/SVNAssist.Backend -c Release -o &lt;dir&gt;' e passa /p:BackendPublishDir=&lt;dir&gt;." />
+  </Target>
+
+  <!-- La versione del manifest deve coincidere con Directory.Build.props (unica fonte): se no, la build fallisce. -->
+  <Target Name="CheckManifestVersion" BeforeTargets="Build">
+    <PropertyGroup>
+      <ManifestText>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)source.extension.vsixmanifest'))</ManifestText>
+    </PropertyGroup>
+    <Error Condition="!$(ManifestText.Contains('Version=&quot;$(Version)&quot; Language'))" Text="source.extension.vsixmanifest: Identity Version deve essere $(Version) (Directory.Build.props)." />
+  </Target>
+</Project>

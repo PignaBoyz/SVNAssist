@@ -24,6 +24,13 @@ namespace SVNAssist.Rpc
         /// (il backend non vede i colori di VS; i messaggi <c>theme</c> con le variabili CSS li manda l'host).
         /// </summary>
         Task ThemeChangedAsync(string kind);
+
+        /// <summary>
+        /// Comando del menu contestuale di Solution Explorer sui percorsi selezionati.
+        /// command: update | add | revert | diff | ignore | log | commit. L'host apre prima la finestra
+        /// (Changes per commit, Log per log); l'esito si mostra con IHost.PromptAsync / toast.
+        /// </summary>
+        Task RunPathCommandAsync(string command, string[] paths);
     }
 
     /// <summary>Metodi esposti dall'HOST, chiamati dal backend.</summary>
