@@ -16,8 +16,9 @@ public interface IAiService
     /// Con <c>"auto"</c> il modello sceglie liberamente la lingua.
     /// </param>
     /// <param name="ct">Token per annullare l'operazione.</param>
+    /// <param name="projectInstructions">Regole di commit del progetto/utente (es. copilot-instructions.md), aggiunte al prompt di sistema.</param>
     /// <returns>Il messaggio di commit generato dal modello AI.</returns>
-    Task<string> GenerateCommitMessageAsync(string diff, string language, CancellationToken ct);
+    Task<string> GenerateCommitMessageAsync(string diff, string language, CancellationToken ct, string? projectInstructions = null);
 
     /// <summary>
     /// Migliora un messaggio di commit esistente rendendolo più chiaro e professionale.
@@ -29,5 +30,5 @@ public interface IAiService
     /// </param>
     /// <param name="ct">Token per annullare l'operazione.</param>
     /// <returns>Il messaggio di commit migliorato.</returns>
-    Task<string> ImproveCommitMessageAsync(string draft, string diff, string language, CancellationToken ct);
+    Task<string> ImproveCommitMessageAsync(string draft, string diff, string language, CancellationToken ct, string? projectInstructions = null);
 }

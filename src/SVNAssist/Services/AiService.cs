@@ -77,7 +77,7 @@ public class AiService : AiServiceBase
 
     /// <remarks>
     /// Formato OpenAI: <c>{ model, max_tokens, messages: [system, user] }</c>.
-    /// <c>max_tokens: 200</c> perché i commit message devono essere brevi.
+    /// <c>max_tokens: 500</c>: abbastanza per titolo e corpo, senza lasciar divagare il modello.
     /// </remarks>
     private async Task<string> CallChatCompletionsAsync(
         string systemPrompt,
@@ -88,7 +88,7 @@ public class AiService : AiServiceBase
         var requestBody = new
         {
             model = _model,
-            max_tokens = 200,
+            max_tokens = 500,
             messages = new[]
             {
                 new { role = "system", content = systemPrompt },
@@ -116,8 +116,11 @@ public class AiService : AiServiceBase
             }
 
             // Il corpo d'errore del server può citare la chiave (es. "invalid key: sk-..."): la si oscura.
+            var hint = response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden && AiServiceFactory.IsGitHubModelsEndpoint(_endpoint)
+                ? " Il token GitHub (anche quello di gh) potrebbe non avere il permesso per GitHub Models: crea un token con permesso models:read e incollalo in Tools > Options > SVNAssist > AI API Key."
+                : string.Empty;
             throw new HttpRequestException(
-                $"AI API error {(int)response.StatusCode} {response.StatusCode}: {RedactSecret(responseJson)}");
+                $"AI API error {(int)response.StatusCode} {response.StatusCode}: {RedactSecret(responseJson)}{hint}");
         }
 
         return ParseCompletionResponse(responseJson);

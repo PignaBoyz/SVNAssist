@@ -24,6 +24,8 @@ public abstract class AiServiceBase : IAiService
     private const int MaxCombinedSummaryChars = 8000;
     private const int MaxFileListChars = 6000;
     private const int MinDiffContextChars = 2000;
+    private const int MaxSummaryChunks = 5;
+    private const int MinPerFileChars = 1500;
 
     /// <summary>Budget del messaggio utente per i provider con contesto ampio (~25k token).</summary>
     protected const int LargeContextUserMessageChars = 100_000;
@@ -44,24 +46,27 @@ public abstract class AiServiceBase : IAiService
     protected abstract Task<string> CompleteAsync(string systemPrompt, string userMessage, CancellationToken ct);
 
     /// <inheritdoc />
-    public async Task<string> GenerateCommitMessageAsync(string diff, string language, CancellationToken ct)
+    public async Task<string> GenerateCommitMessageAsync(string diff, string language, CancellationToken ct, string? projectInstructions = null)
     {
         var systemPrompt = "Sei un assistente per sviluppatori. Analizza il seguente diff SVN " +
                            "e genera un messaggio di commit chiaro e conciso. " +
+                           "Elenca nel messaggio anche i file aggiunti (A) o eliminati (D), non solo quelli modificati. " +
                            "Rispondi solo con il messaggio, niente altro." +
-                           GetLanguageInstruction(language);
+                           GetLanguageInstruction(language) +
+                           CommitInstructions.ForPrompt(projectInstructions);
 
         var diffContext = await GetDiffContextAsync(diff, language, ct);
         return await AskAsync(systemPrompt, diffContext, ct);
     }
 
     /// <inheritdoc />
-    public async Task<string> ImproveCommitMessageAsync(string draft, string diff, string language, CancellationToken ct)
+    public async Task<string> ImproveCommitMessageAsync(string draft, string diff, string language, CancellationToken ct, string? projectInstructions = null)
     {
         var systemPrompt = "Sei un assistente per sviluppatori. Migliora questo messaggio di commit " +
                            "rendendolo più chiaro e professionale. " +
                            "Rispondi solo con il messaggio migliorato, niente altro." +
-                           GetLanguageInstruction(language);
+                           GetLanguageInstruction(language) +
+                           CommitInstructions.ForPrompt(projectInstructions);
 
         var diffContext = await GetDiffContextAsync(diff, language, ct);
         return await AskAsync(systemPrompt, BuildImproveUserMessage(draft, diffContext), ct);
@@ -77,8 +82,11 @@ public abstract class AiServiceBase : IAiService
         timeoutCts.CancelAfter(CallTimeout);
         try
         {
-            var answer = await CompleteAsync(systemPrompt, TrimToMaxChars(userMessage, MaxUserMessageChars), timeoutCts.Token);
-            return answer.Trim();
+            var answer = (await CompleteAsync(systemPrompt, TrimToMaxChars(userMessage, MaxUserMessageChars), timeoutCts.Token))?.Trim();
+            // Una risposta vuota non è un successo: senza errore l'utente vedrebbe "generato" ma nessun testo.
+            if (string.IsNullOrEmpty(answer))
+                throw new InvalidOperationException("Il provider AI ha risposto con un messaggio vuoto (modello sovraccarico o filtro di contenuto): riprova.");
+            return answer;
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested && timeoutCts.IsCancellationRequested)
         {
@@ -116,6 +124,7 @@ public abstract class AiServiceBase : IAiService
     private async Task<string> SummarizeLargeDiffAsync(string diff, string language, CancellationToken ct)
     {
         var languageInstruction = GetLanguageInstruction(language);
+        diff = CompactForSummary(diff);
         var chunks = SplitDiffIntoChunks(diff, DiffChunkSizeChars).ToList();
         var summaries = new List<string>(chunks.Count);
 
@@ -136,6 +145,20 @@ public abstract class AiServiceBase : IAiService
             combined = await SummarizeTextAsync(combined, language, ct);
 
         return TrimToMaxChars(combined, MaxCombinedSummaryChars);
+    }
+
+    /// <summary>
+    /// Con molti file il diff darebbe decine di richieste di riassunto in serie (lente, e oltre il limite di richieste al minuto
+    /// di GitHub Models): lo si riduce a poche decine di KB dando a ogni file la stessa quota, così nessun file sparisce.
+    /// </summary>
+    internal static string CompactForSummary(string diff)
+    {
+        const int budget = MaxSummaryChunks * DiffChunkSizeChars;
+        if (diff.Length <= budget)
+            return diff;
+
+        var files = Math.Max(1, ExtractFilePaths(diff).Count);
+        return DiffLimiter.Limit(diff, budget, Math.Max(MinPerFileChars, budget / files)).Diff;
     }
 
     private async Task<string> SummarizeTextAsync(string text, string language, CancellationToken ct)

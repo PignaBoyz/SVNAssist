@@ -417,20 +417,29 @@ public class SvnService : ISvnService
         // Con -v svn elenca anche i versionati "normal": chi non compare (o è '?') è nuovo.
         // svn status non accetta --targets: la lista lunga si spezza in più invocazioni.
         var versioned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var items = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var chunk in ChunkByCommandLine(["status", "--xml", "-v", "--depth", "empty"], targets.Select(t => Peg(t.Arg)).ToList()))
         {
             var statusXml = await RunSvnAsync(chunk, workingDirectory, ct);
             foreach (var entry in XDocument.Parse(statusXml).Descendants("entry"))
             {
-                if (entry.Element("wc-status")?.Attribute("item")?.Value is not ("unversioned" or "ignored" or null))
-                    versioned.Add(NormalizePath(entry.Attribute("path")?.Value ?? string.Empty, workingDirectory));
+                var item = entry.Element("wc-status")?.Attribute("item")?.Value;
+                if (item is not ("unversioned" or "ignored" or null))
+                {
+                    var key = NormalizePath(entry.Attribute("path")?.Value ?? string.Empty, workingDirectory);
+                    versioned.Add(key);
+                    items[key] = item == "normal" ? "M" : StatusLetter(item);
+                }
             }
         }
 
         var versionedTargets = targets.Where(t => versioned.Contains(NormalizePath(t.Arg, workingDirectory))).ToList();
         var newTargets = targets.Except(versionedTargets).ToList();
 
-        var builder = new StringBuilder();
+        // Elenco file con stato in testa: svn diff non stampa nulla per un file aggiunto vuoto, copiato o con soli
+        // cambi di proprieta', e un diff troncato perde i nomi. L'elenco garantisce che l'AI veda TUTTI i file selezionati.
+        var builder = new StringBuilder(BuildStatusList(targets.Select(t =>
+            (t.Arg, items.TryGetValue(NormalizePath(t.Arg, workingDirectory), out var letter) ? letter : "A"))));
         if (versionedTargets.Count > 0)
         {
             // svn diff non accetta --targets (1.14): stessa strategia, spezzare in più invocazioni (concatenate).
@@ -459,6 +468,43 @@ public class SvnService : ISvnService
         }
 
         return builder.ToString();
+    }
+
+    /// <summary>Lettera di stato come in <c>svn status</c> (A, M, D, R, C...).</summary>
+    internal static string StatusLetter(string? item) => item switch
+    {
+        "added" => "A",
+        "deleted" => "D",
+        "replaced" => "R",
+        "conflicted" => "C",
+        "missing" => "!",
+        "incomplete" => "!",
+        _ => "M",
+    };
+
+    private const int MaxStatusListChars = 12_000;
+
+    /// <summary>
+    /// Elenco <c>"A  percorso"</c> dei file selezionati (i non versionati sono nuovi: A), in testa al diff.
+    /// Limitato in dimensione: oltre il tetto si indica quanti file mancano.
+    /// </summary>
+    internal static string BuildStatusList(IEnumerable<(string Path, string Letter)> files)
+    {
+        var sb = new StringBuilder("Elenco file selezionati (stato svn):\n");
+        var shown = 0;
+        var all = files.ToList();
+        foreach (var (path, letter) in all)
+        {
+            var line = $"{letter}  {path.Replace('\\', '/')}\n";
+            if (sb.Length + line.Length > MaxStatusListChars)
+                break;
+            sb.Append(line);
+            shown++;
+        }
+
+        if (shown < all.Count)
+            sb.Append($"... (altri {all.Count - shown} file)\n");
+        return all.Count == 0 ? string.Empty : sb.Append('\n').ToString();
     }
 
     /// <summary>Percorso relativo alla working copy se ci sta dentro, altrimenti quello originale.</summary>

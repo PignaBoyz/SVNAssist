@@ -9,16 +9,15 @@ namespace SVNAssist;
 /// Implementazione di <see cref="IAiSetupPrompt"/> basata sull'API Shell di Visual Studio.
 /// </summary>
 /// <remarks>
-/// Per i commit message SVNAssist usa GitHub Models (gratuito), che richiede un token GitHub.
-/// L'unico prerequisito è quindi un Personal Access Token (PAT) gratuito, da incollare una volta
-/// in Tools &gt; Options. Chi ha GitHub CLI loggato non deve fare nemmeno questo (token rilevato
-/// automaticamente da <see cref="GitHubTokenResolver"/>).
+/// Prima scelta (default): login nel terminale (<c>gh auth login --web</c>, o <c>claude</c> per Claude Code).
+/// Annullando si passa all'alternativa: la pagina per creare il token / la chiave del provider.
+/// Nessun flag "già mostrato": ogni click su "Genera con AI" senza provider pronto rimostra la guida
+/// (un flag impostato prima della risposta e mai azzerato faceva tacere l'estensione dopo il primo popup chiuso).
 /// </remarks>
 internal sealed class AiSetupPrompt : IAiSetupPrompt
 {
     private readonly VisualStudioExtensibility _extensibility;
     private readonly ISvnAssistSettings _settings;
-    private int _alreadyPrompted;
 
     public AiSetupPrompt(VisualStudioExtensibility extensibility, ISvnAssistSettings settings)
     {
@@ -27,28 +26,43 @@ internal sealed class AiSetupPrompt : IAiSetupPrompt
     }
 
     /// <inheritdoc />
-    public async Task ShowMissingTokenHelpAsync(CancellationToken ct)
+    public async Task<bool> ShowMissingTokenHelpAsync(CancellationToken ct)
     {
-        if (Interlocked.Exchange(ref _alreadyPrompted, 1) == 1)
-            return;
-
-        // Testo e pagina dipendono dal provider scelto, non solo dal token GitHub.
         var provider = await _settings.GetAiProviderAsync(ct);
-        var openPage = await _extensibility.Shell().ShowPromptAsync(
-            AiProviderGuide.MissingProviderPrompt(provider),
-            PromptOptions.OKCancel,
-            ct);
 
+        if (AiProviderGuide.LoginCommand(provider) is { } login)
+        {
+            var useTerminal = await _extensibility.Shell().ShowPromptAsync(
+                AiProviderGuide.LoginPrompt(provider), PromptOptions.OKCancel, ct);
+            if (useTerminal && LaunchLogin(login))
+                return true;
+        }
+
+        var openPage = await _extensibility.Shell().ShowPromptAsync(
+            AiProviderGuide.MissingProviderPrompt(provider), PromptOptions.OKCancel, ct);
         if (!openPage)
-            return;
+            return false;
 
         try
         {
             Process.Start(new ProcessStartInfo { FileName = AiProviderGuide.SetupUrl(provider), UseShellExecute = true });
+            return true;
         }
         catch
         {
-            // Best-effort: se non riusciamo ad aprire il browser, non blocchiamo l'estensione.
+            return false;
         }
+    }
+
+    /// <summary>Lancia il login nel terminale; se gh/claude non sono installati lancia prima l'installazione.</summary>
+    private static bool LaunchLogin(ConsoleCommand login)
+    {
+        var claude = ClaudeCodeAiService.FindClaudeExecutable();
+        return login switch
+        {
+            ConsoleCommand.GitHubLogin when SvnLocator.FindExecutable("gh.exe") is null => ConsoleLauncher.Launch(ConsoleCommand.InstallGitHubCli),
+            ConsoleCommand.ClaudeLogin when claude is null => ConsoleLauncher.Launch(ConsoleCommand.InstallClaudeCode),
+            _ => ConsoleLauncher.Launch(login, claude),
+        };
     }
 }

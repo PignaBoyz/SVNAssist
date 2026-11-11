@@ -133,16 +133,37 @@ public class AiServiceFactoryTests
     [Fact]
     public async Task CreateAsync_CopilotEsplicito_RuntimeNonScaricato_UsaCopilot()
     {
-        var factory = new AiServiceFactory(new FakeSettings { Provider = "copilot" }, new FakeTokenResolver(null),
+        var factory = new AiServiceFactory(new FakeSettings { Provider = "copilot" }, new FakeTokenResolver("ghp_x"),
             claudeLocator: () => null, environmentReader: _ => null, copilotRuntimeInstalled: () => false);
 
         Assert.IsType<CopilotAiService>(await factory.CreateAsync(CancellationToken.None));
     }
 
+    [Fact]
+    public async Task CreateAsync_CopilotEsplicito_SenzaToken_NonUtilizzabile()
+    {
+        // Coerente col checklist: senza login GitHub niente Copilot, quindi parte la guida al login.
+        var factory = new AiServiceFactory(new FakeSettings { Provider = "copilot" }, new FakeTokenResolver(null),
+            claudeLocator: () => null, environmentReader: _ => null, copilotRuntimeInstalled: () => false);
+
+        Assert.Null(await factory.CreateAsync(CancellationToken.None));
+    }
+
+    [Theory]
+    [InlineData("claude-haiku-5-5", "claude-haiku-5-5")]
+    [InlineData("claude-opus-4", "claude-sonnet-5-5")]
+    [InlineData("", "claude-sonnet-5-5")]
+    public void ResolveClaudeModel_FuoriListaRicadeSulDefault(string saved, string expected)
+        => Assert.Equal(expected, AiServiceFactory.ResolveClaudeModel(saved));
+
+    [Fact]
+    public void NormalizeCopilotModel_FuoriLista_DiventaDefault()
+        => Assert.Equal(string.Empty, AiServiceFactory.NormalizeCopilotModel("modello-vecchio"));
+
     [Theory]
     [InlineData(GitHubModels, "gpt-4o-mini", "openai/gpt-4o-mini")]
     [InlineData(GitHubModels, "openai/gpt-4o", "openai/gpt-4o")]
-    [InlineData(GitHubModels, "microsoft/Phi-3-medium-128k-instruct", "microsoft/Phi-3-medium-128k-instruct")]
+    [InlineData(GitHubModels, "microsoft/Phi-3-medium-128k-instruct", "openai/gpt-4o-mini")]
     [InlineData("https://api.openai.com/v1/chat/completions", "openai/gpt-4o-mini", "gpt-4o-mini")]
     [InlineData("http://localhost:11434/v1/chat/completions", "llama3", "llama3")]
     [InlineData(GitHubModels, "", "openai/gpt-4o-mini")]

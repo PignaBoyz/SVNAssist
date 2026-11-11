@@ -98,6 +98,21 @@ SVNAssist usa di default **GitHub Models**, un servizio gratuito di GitHub che o
 > - `openai/gpt-4o` — Più potente, per diff complessi
 > - Il modello si sceglie da un elenco curato (GPT-4o mini, GPT-4o, GPT-4.1 mini, GPT-4.1); l'id con prefisso `openai/` è quello richiesto da GitHub Models e viene adattato in automatico per gli altri endpoint
 
+### Regole di commit (copilot-instructions)
+
+Il messaggio generato segue le regole che scrivi in questi file (se esistono), aggiunte al prompt dell'AI:
+
+- **Progetto**: `.github/copilot-instructions.md` nella working copy o in una cartella sopra (vale la più vicina), più i file
+  `.github/instructions/*.instructions.md` con `applyTo: "**"` (o senza `applyTo`).
+- **Utente (tutti i progetti)**: `%USERPROFILE%\.copilot\copilot-instructions.md`.
+
+Scrivi per esempio: *"Messaggi di commit in inglese, prima riga max 72 caratteri, prefisso `[PROJ-123]`"*. Vengono usate solo le parti
+sui messaggi di commit; ogni file è limitato a 4.000 caratteri (8.000 in totale). Quando sono applicate, lo stato sotto il campo
+messaggio lo dice. Il contenuto dei file viene inviato al provider AI insieme al diff.
+
+Se non hai alcun provider pronto, "Genera con AI" propone il login nel terminale (`gh auth login --web`; per Claude Code `claude`),
+oppure, annullando, la pagina per creare un token.
+
 ---
 
 ## 🔄 Cambiare provider AI
