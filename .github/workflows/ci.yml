@@ -28,8 +28,19 @@ jobs:
           $svnDir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           & "$svnDir\svn.exe" --version --quiet
 
-      - name: Build
-        run: dotnet build SVNAssist.sln -c Release
+      - uses: microsoft/setup-msbuild@v2
+
+      - name: Build e publish backend
+        run: |
+          dotnet build tests/SVNAssist.Tests/SVNAssist.Tests.csproj -c Release
+          dotnet publish src/SVNAssist.Backend -c Release -o src/SVNAssist.Backend/bin/publish
+
+      - name: Build VSIX (host in-proc net472)
+        shell: pwsh
+        run: |
+          dotnet restore src/SVNAssist.Host
+          msbuild src/SVNAssist.Host/SVNAssist.Host.csproj -p:Configuration=Release -v:m
+          if (-not (Get-ChildItem src/SVNAssist.Host/bin/Release -Recurse -Filter *.vsix)) { throw 'VSIX non prodotto' }
 
       - name: Test
         run: dotnet test tests/SVNAssist.Tests/SVNAssist.Tests.csproj -c Release --no-build
@@ -41,5 +52,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SVNAssist-vsix
-          path: src/SVNAssist/bin/Release/**/*.vsix
+          path: src/SVNAssist.Host/bin/Release/**/*.vsix
           if-no-files-found: error

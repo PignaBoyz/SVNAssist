@@ -17,6 +17,16 @@ namespace SVNAssist.Rpc
 
         /// <summary>Solution aperta/chiusa: cartella della solution, null se nessuna.</summary>
         Task SolutionChangedAsync(string? solutionDir);
+
+        /// <summary>Tema di VS cambiato (e all'avvio): "light" | "dark" | "blue".</summary>
+        Task ThemeChangedAsync(string kind);
+
+        /// <summary>
+        /// Comando del menu contestuale di Solution Explorer sui percorsi selezionati.
+        /// command: update | add | revert | diff | ignore | log | commit. L'host apre prima la finestra
+        /// (Changes per commit, Log per log); l'esito si mostra con IHost.PromptAsync / toast.
+        /// </summary>
+        Task RunPathCommandAsync(string command, string[] paths);
     }
 
     /// <summary>Metodi esposti dall'HOST, chiamati dal backend.</summary>

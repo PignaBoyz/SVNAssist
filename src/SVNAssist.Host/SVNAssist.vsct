@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CommandTable xmlns="http://schemas.microsoft.com/VisualStudio/2005-10-18/CommandTable" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <Extern href="stdidcmd.h" />
+  <Extern href="vsshlids.h" />
+
+  <Commands package="guidSVNAssistPackage">
+    <Menus>
+      <!-- Extensions > SVNAssist -->
+      <Menu guid="guidSVNAssistCmdSet" id="MenuMain" priority="0x0100" type="Menu">
+        <Parent guid="guidSVNAssistCmdSet" id="GroupExtensions" />
+        <Strings><ButtonText>SVNAssist</ButtonText></Strings>
+      </Menu>
+      <!-- Menu contestuale di Solution Explorer: sottomenu "SVN" -->
+      <Menu guid="guidSVNAssistCmdSet" id="MenuSe" priority="0x0100" type="Menu">
+        <Parent guid="guidSVNAssistCmdSet" id="GroupSeHost" />
+        <Strings><ButtonText>SVN</ButtonText></Strings>
+      </Menu>
+    </Menus>
+
+    <Groups>
+      <!-- IDM_VS_MENU_EXTENSIONS: il menu Extensions di VS 2022/2026 -->
+      <Group guid="guidSVNAssistCmdSet" id="GroupExtensions" priority="0x0600">
+        <Parent guid="guidVSMainMenu" id="Extensions" />
+      </Group>
+      <Group guid="guidSVNAssistCmdSet" id="GroupMainPrimary" priority="0x0000"><Parent guid="guidSVNAssistCmdSet" id="MenuMain" /></Group>
+      <Group guid="guidSVNAssistCmdSet" id="GroupMainSecondary" priority="0x0100"><Parent guid="guidSVNAssistCmdSet" id="MenuMain" /></Group>
+
+      <!-- Gruppo che contiene il sottomenu SE; agganciato (CommandPlacements) ai 4 menu contestuali. -->
+      <Group guid="guidSVNAssistCmdSet" id="GroupSeHost" priority="0x0F00">
+        <Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_ITEMNODE" />
+      </Group>
+      <Group guid="guidSVNAssistCmdSet" id="GroupSeSync" priority="0x0000"><Parent guid="guidSVNAssistCmdSet" id="MenuSe" /></Group>
+      <Group guid="guidSVNAssistCmdSet" id="GroupSeInspect" priority="0x0100"><Parent guid="guidSVNAssistCmdSet" id="MenuSe" /></Group>
+      <Group guid="guidSVNAssistCmdSet" id="GroupSeEdit" priority="0x0200"><Parent guid="guidSVNAssistCmdSet" id="MenuSe" /></Group>
+    </Groups>
+
+    <Buttons>
+      <Button guid="guidSVNAssistCmdSet" id="CmdChanges" priority="0x0000" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainPrimary" /><Strings><CommandName>SVNAssist.Changes</CommandName><ButtonText>SVN Changes</ButtonText></Strings></Button>
+      <Button guid="guidSVNAssistCmdSet" id="CmdCommit" priority="0x0010" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainPrimary" /><Strings><CommandName>SVNAssist.Commit</CommandName><ButtonText>Commit...</ButtonText></Strings></Button>
+      <Button guid="guidSVNAssistCmdSet" id="CmdUpdate" priority="0x0000" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainSecondary" /><Strings><CommandName>SVNAssist.Update</CommandName><ButtonText>Update</ButtonText></Strings></Button>
+      <Button guid="guidSVNAssistCmdSet" id="CmdLog" priority="0x0010" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainSecondary" /><Strings><CommandName>SVNAssist.Log</CommandName><ButtonText>Log / History</ButtonText></Strings></Button>
+
+      <Button guid="guidSVNAssistCmdSet" id="CmdSeUpdate" priority="0x0000" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeSync" /><Strings><CommandName>SVNAssist.SeUpdate</CommandName><ButtonText>SVN Update</ButtonText></Strings></Button>
+      <Button guid="guidSVNAssistCmdSet" id="CmdSeCommit" priority="0x0010" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeSync" /><Strings><CommandName>SVNAssist.SeCommit</CommandName><ButtonText>SVN Commit...</ButtonText></Strings></Button>
+      <Button guid="guidSVNAssistCmdSet" id="CmdSeDiff" priority="0x0000" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeInspect" /><Strings><CommandName>SVNAssist.SeDiff</CommandName><ButtonText>Diff con BASE</ButtonText></Strings></Button>
+      <Button guid="guidSVNAssistCmdSet" id="CmdSeLog" priority="0x0010" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeInspect" /><Strings><CommandName>SVNAssist.SeLog</CommandName><ButtonText>Mostra log</ButtonText></Strings></Button>
+      <Button guid="guidSVNAssistCmdSet" id="CmdSeAdd" priority="0x0000" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeEdit" /><Strings><CommandName>SVNAssist.SeAdd</CommandName><ButtonText>SVN Add</ButtonText></Strings></Button>
+      <Button guid="guidSVNAssistCmdSet" id="CmdSeRevert" priority="0x0010" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeEdit" /><Strings><CommandName>SVNAssist.SeRevert</CommandName><ButtonText>SVN Revert</ButtonText></Strings></Button>
+      <Button guid="guidSVNAssistCmdSet" id="CmdSeIgnore" priority="0x0020" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeEdit" /><Strings><CommandName>SVNAssist.SeIgnore</CommandName><ButtonText>Aggiungi a ignore list</ButtonText></Strings></Button>
+    </Buttons>
+  </Commands>
+
+  <CommandPlacements>
+    <CommandPlacement guid="guidSVNAssistCmdSet" id="GroupSeHost" priority="0x0F00"><Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_FOLDERNODE" /></CommandPlacement>
+    <CommandPlacement guid="guidSVNAssistCmdSet" id="GroupSeHost" priority="0x0F00"><Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_PROJNODE" /></CommandPlacement>
+    <CommandPlacement guid="guidSVNAssistCmdSet" id="GroupSeHost" priority="0x0F00"><Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_SOLNNODE" /></CommandPlacement>
+  </CommandPlacements>
+
+  <Symbols>
+    <GuidSymbol name="guidVSMainMenu" value="{D309F791-903F-11D0-9EFC-00A0C911004F}"><IDSymbol name="Extensions" value="0x0091" /></GuidSymbol>
+    <GuidSymbol name="guidSVNAssistPackage" value="{7a3b2c1d-4e5f-4a60-8b71-9c0d1e2f3a41}" />
+    <GuidSymbol name="guidSVNAssistCmdSet" value="{4d6e8f0a-3c5e-4071-9c9d-2e3f4a5b6c74}">
+      <IDSymbol name="MenuMain" value="0x1000" />
+      <IDSymbol name="MenuSe" value="0x1001" />
+      <IDSymbol name="GroupExtensions" value="0x1100" />
+      <IDSymbol name="GroupMainPrimary" value="0x1101" />
+      <IDSymbol name="GroupMainSecondary" value="0x1102" />
+      <IDSymbol name="GroupSeHost" value="0x1110" />
+      <IDSymbol name="GroupSeSync" value="0x1111" />
+      <IDSymbol name="GroupSeInspect" value="0x1112" />
+      <IDSymbol name="GroupSeEdit" value="0x1113" />
+      <IDSymbol name="CmdChanges" value="0x0100" />
+      <IDSymbol name="CmdCommit" value="0x0101" />
+      <IDSymbol name="CmdUpdate" value="0x0102" />
+      <IDSymbol name="CmdLog" value="0x0103" />
+      <IDSymbol name="CmdSeUpdate" value="0x0110" />
+      <IDSymbol name="CmdSeCommit" value="0x0111" />
+      <IDSymbol name="CmdSeDiff" value="0x0112" />
+      <IDSymbol name="CmdSeLog" value="0x0113" />
+      <IDSymbol name="CmdSeAdd" value="0x0114" />
+      <IDSymbol name="CmdSeRevert" value="0x0115" />
+      <IDSymbol name="CmdSeIgnore" value="0x0116" />
+    </GuidSymbol>
+  </Symbols>
+</CommandTable>
