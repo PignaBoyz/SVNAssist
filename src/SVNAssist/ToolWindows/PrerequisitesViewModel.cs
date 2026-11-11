@@ -306,6 +306,8 @@ internal sealed class PrerequisitesViewModel : NotifyPropertyChangedObject
         AiSummary = snapshot.HasAiProvider
             ? $"AI Provider: {snapshot.ConfiguredProvider}. Utilizzabili: {string.Join(" → ", snapshot.UsableProviders)}"
             : $"AI Provider: {snapshot.ConfiguredProvider}. Nessun provider AI utilizzabile: configurane almeno uno.";
+        if (snapshot.ProviderNote.Length > 0)
+            AiSummary += "\n" + snapshot.ProviderNote;
 
         var svnMissing = snapshot.SvnMissing;
         var recovered = _svnWasMissing == true && !svnMissing;

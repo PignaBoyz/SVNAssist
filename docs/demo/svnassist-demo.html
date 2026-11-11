@@ -705,7 +705,7 @@ function freshEnv() {
   return { svn: true, ghInstalled: true, winget: true, tortoise: false, gh: true, copilotRuntime: false, claudeInstalled: true, claudeLogin: true, anthropicKey: false, failFirst: false, bigDiff: false };
 }
 function freshSettings() {
-  return { aiprovider: 'auto', claudemodel: 'claude-opus-5-5', anthropicapikey: '', copilotmodel: '', aiendpoint: GH_MODELS, aiapikey: '', aimodel: 'gpt-4o-mini', defaultlanguage: 'auto', workingcopypath: '' };
+  return { aiprovider: 'auto', claudemodel: 'claude-sonnet-5-5', anthropicapikey: '', copilotmodel: 'default', aiendpoint: GH_MODELS, aiapikey: '', aimodel: 'openai/gpt-4o-mini', defaultlanguage: 'auto', workingcopypath: '' };
 }
 function freshVM() {
   return { statusAuto: true, autoDetected: false, lang: null, view: 'tree', collapsed: {}, wcPath: '', showInput: true, statusMsg: 'Caricamento in corso...', err: false, aiMsg: '', branch: '', files: [], header: 'Changes', diffVisible: false, diffTitle: '', diffContent: '', commitMsg: '', aiBusy: false, trace: [], dl: null, loading: false };
@@ -1810,12 +1810,12 @@ async function closeSol() { S.ui.menu = null; S.solution = null; render(); if (S
 
 const SETDEF = [
   ['aiprovider', 'AI Provider (auto / copilot / claudecode / claude / openai) - copilot scarica ~100 MB al primo uso'],
-  ['claudemodel', 'Claude Model (Claude Code e Claude API, es. claude-opus-5-5, claude-haiku-5-5)'],
+  ['claudemodel', 'Claude Model (Claude Code e Claude API: claude-sonnet-5-5 consigliato, claude-haiku-5-5, claude-opus-5-5)'],
   ['anthropicapikey', 'Anthropic API Key (provider Claude API; vuota = ANTHROPIC_API_KEY)'],
   ['copilotmodel', 'GitHub Copilot Model (vuoto = predefinito di Copilot)'],
   ['aiendpoint', 'AI Endpoint URL (provider openai; default: GitHub Models)'],
   ['aiapikey', 'AI API Key (provider openai: GitHub PAT per GitHub Models, oppure API key OpenAI)'],
-  ['aimodel', 'AI Model (provider openai, es. gpt-4o-mini)'],
+  ['aimodel', 'AI Model (provider openai, es. openai/gpt-4o-mini)'],
   ['defaultlanguage', 'Default Language (auto / italiano / english)'],
   ['workingcopypath', 'Working Copy Path'],
 ];
@@ -1823,7 +1823,7 @@ const PROV_HINT = { auto: 'Ordine: Copilot (se runtime già scaricato) → Claud
 async function optionsDlg() {
   S.ui.menu = null;
   const st = S.settings;
-  const LBL = { aiprovider: 'Provider AI per i commit message', claudemodel: 'Modello Claude (solo Claude Code e Claude API; es. claude-opus-5-5)', anthropicapikey: 'API key Anthropic (solo Claude API; vuota = variabile ANTHROPIC_API_KEY)', copilotmodel: "Modello Copilot (solo Copilot; vuoto = predefinito). Per Copilot non serve altro: basta 'gh auth login'", aiendpoint: 'URL endpoint (solo OpenAI-compatibile; default GitHub Models)', aiapikey: 'API key o GitHub PAT (solo OpenAI-compatibile)', aimodel: 'Modello (solo OpenAI-compatibile; es. gpt-4o-mini)', defaultlanguage: 'Lingua dei commit message', workingcopypath: 'Working Copy Path' };
+  const LBL = { aiprovider: 'Provider AI per i commit message', claudemodel: 'Modello Claude (solo Claude Code e Claude API)', anthropicapikey: 'API key Anthropic (solo Claude API; vuota = variabile ANTHROPIC_API_KEY)', copilotmodel: "Modello Copilot (solo Copilot). Serve un abbonamento Copilot e 'gh auth login'", aiendpoint: 'URL endpoint (solo OpenAI-compatibile; default GitHub Models)', aiapikey: 'API key o GitHub PAT (solo OpenAI-compatibile)', aimodel: 'Modello (solo OpenAI-compatibile / GitHub Models)', defaultlanguage: 'Lingua dei commit message', workingcopypath: 'Working Copy Path' };
   const PROVS = [['auto', 'Automatico (consigliato)'], ['copilot', 'GitHub Copilot (abbonamento)'], ['claudecode', 'Claude Code (abbonamento Claude)'], ['claude', 'Claude API (API key Anthropic)'], ['openai', 'OpenAI-compatibile / GitHub Models']];
   const LANGS = [['auto', 'Automatica'], ['italiano', 'Italiano'], ['english', 'English']];
   const opts = (list, cur) => list.map(([v, t]) => `<option value="${v}" ${String(cur).toLowerCase() === v ? 'selected' : ''}>${t}</option>`).join('');

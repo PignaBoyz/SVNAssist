@@ -80,7 +80,7 @@ SVNAssist usa di default **GitHub Models**, un servizio gratuito di GitHub che o
 |---|---|
 | **AI Endpoint** | `https://models.github.ai/inference/chat/completions` *(già impostato di default)* |
 | **AI API Key** | Incolla il tuo GitHub PAT (`ghp_...`) |
-| **AI Model** | `gpt-4o-mini` *(default, gratuito e veloce)* |
+| **AI Model** | `openai/gpt-4o-mini` *(default, gratuito e veloce; scelta da elenco)* |
 | **Default Language** | `auto` *(rileva la lingua dal codice)* oppure `italiano` / `english` |
 
 3. Clicca **OK**
@@ -94,9 +94,9 @@ SVNAssist usa di default **GitHub Models**, un servizio gratuito di GitHub che o
 5. Il messaggio apparirà nella TextBox di commit
 
 > **Modelli consigliati per GitHub Models:**
-> - `gpt-4o-mini` — Veloce e gratuito, ottimo per commit message
-> - `gpt-4o` — Più potente, per diff complessi
-> - `Phi-3-medium-128k-instruct` — Open source, buone prestazioni
+> - `openai/gpt-4o-mini` — Veloce e gratuito, ottimo per commit message
+> - `openai/gpt-4o` — Più potente, per diff complessi
+> - Il modello si sceglie da un elenco curato (GPT-4o mini, GPT-4o, GPT-4.1 mini, GPT-4.1); l'id con prefisso `openai/` è quello richiesto da GitHub Models e viene adattato in automatico per gli altri endpoint
 
 ---
 
@@ -112,7 +112,7 @@ L'impostazione **AI Provider** (*Tools → Options → SVNAssist*) sceglie chi g
 | `claude` | **Claude API** (SDK ufficiale Anthropic) | *Anthropic API Key* o variabile `ANTHROPIC_API_KEY` |
 | `openai` | Qualsiasi endpoint compatibile OpenAI (sotto) | *AI API Key*, oppure token GitHub per GitHub Models |
 
-Il modello Claude si sceglie in **Claude Model** (default `claude-opus-5-5`; `claude-haiku-5-5` costa molto meno).
+Il modello Claude si sceglie in **Claude Model** (elenco: Sonnet, default; Haiku, il più economico; Opus, il più potente e costoso). Il **Modello Copilot** è un elenco con il modello predefinito di Copilot come default.
 Ogni credenziale va solo al proprio servizio: il token GitHub rilevato in automatico non viene mai inviato a endpoint di terzi.
 
 > **Nota Copilot:** il runtime Copilot non è incluso nel VSIX. Scegliendo `copilot` viene scaricato **una volta** (~100 MB, ~200 MB su disco) dalla release ufficiale GitHub, verificato con SHA-256, in `%LOCALAPPDATA%\SVNAssist\copilot-runtime`. Con `auto` Copilot viene usato solo se il runtime è già stato scaricato.
@@ -125,7 +125,7 @@ Per il provider `openai` puoi usare qualsiasi endpoint compatibile con il format
 |---|---|
 | AI Endpoint | `https://api.openai.com/v1/chat/completions` |
 | AI API Key | La tua API key OpenAI (`sk-...`) |
-| AI Model | `gpt-4o-mini`, `gpt-4o`, `gpt-4-turbo`, `gpt-3.5-turbo` |
+| AI Model | `GPT-4o mini`, `GPT-4o`, `GPT-4.1 mini`, `GPT-4.1` (l'estensione toglie il prefisso `openai/` per OpenAI) |
 
 ### Azure OpenAI
 
@@ -216,7 +216,7 @@ Tutte le impostazioni sono in **Tools → Options → SVNAssist**:
 |---|---|---|
 | AI Endpoint | `https://models.github.ai/inference/chat/completions` | URL dell'endpoint AI (formato OpenAI Chat Completions) |
 | AI API Key | *(vuoto)* | API key o GitHub PAT per l'autenticazione |
-| AI Model | `gpt-4o-mini` | Nome del modello AI da usare |
+| AI Model | `openai/gpt-4o-mini` | Modello AI (elenco) |
 | Default Language | `auto` | Lingua dei commit message (`auto`, `italiano`, `english`) |
 | Working Copy Path | *(vuoto)* | Percorso della working copy SVN (auto-rilevato se vuoto) |
 

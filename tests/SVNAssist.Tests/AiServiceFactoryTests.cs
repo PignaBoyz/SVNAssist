@@ -15,12 +15,12 @@ public class AiServiceFactoryTests
         public string Endpoint { get; init; } = "https://api.test.com/v1/chat/completions";
         public string ApiKey { get; init; } = string.Empty;
         public string AnthropicKey { get; init; } = string.Empty;
-        public string Model { get; init; } = "gpt-4o-mini";
+        public string Model { get; init; } = "openai/gpt-4o-mini";
         public string Language { get; init; } = "auto";
         public string WorkingCopyPath { get; init; } = string.Empty;
 
         public Task<string> GetAiProviderAsync(CancellationToken ct) => Task.FromResult(Provider);
-        public Task<string> GetClaudeModelAsync(CancellationToken ct) => Task.FromResult("claude-opus-5-5");
+        public Task<string> GetClaudeModelAsync(CancellationToken ct) => Task.FromResult("claude-sonnet-5-5");
         public Task<string> GetAnthropicApiKeyAsync(CancellationToken ct) => Task.FromResult(AnthropicKey);
         public Task<string> GetCopilotModelAsync(CancellationToken ct) => Task.FromResult(string.Empty);
         public Task<string> GetAiEndpointAsync(CancellationToken ct) => Task.FromResult(Endpoint);
@@ -138,4 +138,25 @@ public class AiServiceFactoryTests
 
         Assert.IsType<CopilotAiService>(await factory.CreateAsync(CancellationToken.None));
     }
+
+    [Theory]
+    [InlineData(GitHubModels, "gpt-4o-mini", "openai/gpt-4o-mini")]
+    [InlineData(GitHubModels, "openai/gpt-4o", "openai/gpt-4o")]
+    [InlineData(GitHubModels, "microsoft/Phi-3-medium-128k-instruct", "microsoft/Phi-3-medium-128k-instruct")]
+    [InlineData("https://api.openai.com/v1/chat/completions", "openai/gpt-4o-mini", "gpt-4o-mini")]
+    [InlineData("http://localhost:11434/v1/chat/completions", "llama3", "llama3")]
+    [InlineData(GitHubModels, "", "openai/gpt-4o-mini")]
+    public void NormalizeOpenAiModel_AdattaLIdALEndpoint(string endpoint, string model, string expected)
+        => Assert.Equal(expected, AiServiceFactory.NormalizeOpenAiModel(endpoint, model));
+
+    [Theory]
+    [InlineData("default", "")]
+    [InlineData("", "")]
+    [InlineData("gpt-4.1", "gpt-4.1")]
+    public void NormalizeCopilotModel_DefaultDiventaVuoto(string model, string expected)
+        => Assert.Equal(expected, AiServiceFactory.NormalizeCopilotModel(model));
+
+    [Fact]
+    public void ModelloClaudeDiDefault_ESonnet()
+        => Assert.Equal("claude-sonnet-5-5", SettingDefinitions.DefaultClaudeModel);
 }

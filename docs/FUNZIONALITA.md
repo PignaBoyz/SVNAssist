@@ -41,7 +41,7 @@ Questo file è pensato per essere **modificato da te** e restituito per pianific
 - **Lingua del commit** scelta con un combo nel pannello (Italiano / English / Auto), predefinita dall'impostazione "Default Language".
 - Provider: `auto` (default, prova in ordine Copilot > Claude Code > Claude API > OpenAI-compatibile, con fallback se uno fallisce), `copilot`, `claudecode`, `claude`, `openai` (GitHub Models, OpenAI, Azure, Ollama, Gemini...).
 - Token GitHub rilevato in automatico (`gh auth token`, `GITHUB_TOKEN`, `GH_TOKEN`) e inviato solo a GitHub Models.
-- Limiti: **Copilot scarica un runtime di ~100 MB al primo uso** (SHA-256 verificato, ~200 MB su disco in `%LOCALAPPDATA%\SVNAssist\copilot-runtime`); in `auto` Copilot è usato solo se il runtime è già presente; il modello Claude di default è `claude-opus-5-5` (costoso, vedi domanda in ROADMAP); la risposta AI è corta (`max_tokens=200` sul provider OpenAI-compatibile).
+- Limiti: **Copilot scarica un runtime di ~100 MB al primo uso** (SHA-256 verificato, ~200 MB su disco in `%LOCALAPPDATA%\SVNAssist\copilot-runtime`); in `auto` Copilot è usato solo se il runtime è già presente; il modello Claude di default è `claude-sonnet-5-5` (elenco: Sonnet, Haiku, Opus); la risposta AI è corta (`max_tokens=200` sul provider OpenAI-compatibile).
 
 ### Prerequisiti e installazione
 - **Checklist dei prerequisiti** dentro il pannello: svn (obbligatorio), TortoiseSVN (opzionale), provider AI (ne basta uno), ciascuno con stato e istruzioni.
@@ -120,7 +120,7 @@ Le ore di F-MERGE sono quelle del piano (~50 h totali, ripartite sotto).
 - [ ] **Pre-commit check AI** — avvisa su file di debug, segreti, TODO nel diff · P2 · ~6 h
 - [ ] **Template messaggio / conventional commits** — formati configurabili (es. `feat: ...`, prefisso ticket) · P2 · (stima nuova) ~4 h
 - [ ] **Limiti AI per provider** — soglie token e `max_tokens` per provider (oggi tarati sul più stretto) · P1 · ~3 h
-- [ ] **Modello Claude di default più economico** — es. `claude-haiku-5-5` per i commit message · P1 · (stima nuova) ~0,5 h
+- [x] **Modello Claude di default più economico** — ora Sonnet (`claude-sonnet-5-5`), scelta da elenco
 - [ ] **Cifratura delle API key** — DPAPI/Credential Manager al posto del testo in chiaro · P1 · ~4 h
 
 ### Piattaforma
@@ -151,7 +151,6 @@ Le ore di F-MERGE sono quelle del piano (~50 h totali, ripartite sotto).
 - **Autenticazione di rete**: nessuna UI di login SVN; con `--non-interactive` servono credenziali già in cache (svn/TortoiseSVN), altrimenti il comando fallisce.
 - Layout repository assunto `trunk/branches/tags` per le funzioni future; il nome del branch mostra `unknown` se `svn info` fallisce.
 - Refresh automatico su WC molto grandi può essere pesante (watcher ricorsivo, 2 processi per refresh).
-- Modello Claude di default costoso (`claude-opus-5-5`).
 - Le proprietà multilinea (es. `svn:ignore` con più voci) sono passate come argomento: mai provate a fondo su svn reale.
 - Solo VS 2026 (modello out-of-process 17.14); nessuna versione VS Code.
 

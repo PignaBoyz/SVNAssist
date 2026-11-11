@@ -93,13 +93,29 @@ internal static class SettingDefinitions
         ],
         defaultValue: "auto");
 
-    /// <summary>Modello Claude (usato da Claude Code e Claude API).</summary>
+    /// <summary>Modello Claude di default: Sonnet, il compromesso migliore costo/qualità per i commit message.</summary>
+    internal const string DefaultClaudeModel = "claude-sonnet-5-5";
+
+    /// <summary>Valore "modello predefinito di Copilot" (l'enum non ammette valori vuoti).</summary>
+    internal const string CopilotDefaultModel = "default";
+
+    /// <summary>Modello di default per GitHub Models: l'endpoint richiede l'id con prefisso del publisher.</summary>
+    internal const string DefaultAiModel = "openai/gpt-4o-mini";
+
+    /// <summary>
+    /// Modello Claude (usato da Claude Code e Claude API): lista curata, lo stesso id vale per entrambi.
+    /// </summary>
     [VisualStudioContribution]
-    internal static Setting.String ClaudeModel { get; } = new(
+    internal static Setting.Enum ClaudeModel { get; } = new(
         "claudemodel",
         "%SVNAssist.Settings.ClaudeModel%",
         SvnAssistCategory,
-        defaultValue: "claude-opus-5-5");
+        [
+            new EnumSettingEntry("claude-sonnet-5-5", "%SVNAssist.Settings.ClaudeModel.Sonnet%"),
+            new EnumSettingEntry("claude-haiku-5-5", "%SVNAssist.Settings.ClaudeModel.Haiku%"),
+            new EnumSettingEntry("claude-opus-5-5", "%SVNAssist.Settings.ClaudeModel.Opus%"),
+        ],
+        defaultValue: DefaultClaudeModel);
 
     /// <summary>API key Anthropic per il provider Claude API (vuota = variabile ANTHROPIC_API_KEY).</summary>
     [VisualStudioContribution]
@@ -109,23 +125,36 @@ internal static class SettingDefinitions
         SvnAssistCategory,
         defaultValue: "");
 
-    /// <summary>Modello GitHub Copilot (vuoto = modello predefinito di Copilot).</summary>
+    /// <summary>Modello GitHub Copilot (<c>default</c> = modello predefinito di Copilot).</summary>
     [VisualStudioContribution]
-    internal static Setting.String CopilotModel { get; } = new(
+    internal static Setting.Enum CopilotModel { get; } = new(
         "copilotmodel",
         "%SVNAssist.Settings.CopilotModel%",
         SvnAssistCategory,
-        defaultValue: "");
+        [
+            new EnumSettingEntry("default", "%SVNAssist.Settings.CopilotModel.Default%"),
+            new EnumSettingEntry("gpt-4.1", "%SVNAssist.Settings.CopilotModel.Gpt41%"),
+            new EnumSettingEntry("gpt-5-mini", "%SVNAssist.Settings.CopilotModel.Gpt5Mini%"),
+            new EnumSettingEntry("claude-sonnet-4.5", "%SVNAssist.Settings.CopilotModel.ClaudeSonnet%"),
+        ],
+        defaultValue: CopilotDefaultModel);
 
     /// <summary>
-    /// Nome del modello AI da usare (es. <c>gpt-4o-mini</c>, <c>gpt-4o</c>).
+    /// Modello per il provider OpenAI-compatibile / GitHub Models (id nel formato di GitHub Models,
+    /// <c>publisher/modello</c>: <see cref="AiServiceFactory"/> toglie il prefisso per endpoint diversi da GitHub Models).
     /// </summary>
     [VisualStudioContribution]
-    internal static Setting.String AiModel { get; } = new(
+    internal static Setting.Enum AiModel { get; } = new(
         "aimodel",
         "%SVNAssist.Settings.AiModel%",
         SvnAssistCategory,
-        defaultValue: "gpt-4o-mini");
+        [
+            new EnumSettingEntry("openai/gpt-4o-mini", "%SVNAssist.Settings.AiModel.Gpt4oMini%"),
+            new EnumSettingEntry("openai/gpt-4o", "%SVNAssist.Settings.AiModel.Gpt4o%"),
+            new EnumSettingEntry("openai/gpt-4.1-mini", "%SVNAssist.Settings.AiModel.Gpt41Mini%"),
+            new EnumSettingEntry("openai/gpt-4.1", "%SVNAssist.Settings.AiModel.Gpt41%"),
+        ],
+        defaultValue: DefaultAiModel);
 
     /// <summary>
     /// Lingua predefinita per la generazione dei commit message:
@@ -174,7 +203,7 @@ internal interface ISvnAssistSettings
     /// <summary>API key Anthropic.</summary>
     Task<string> GetAnthropicApiKeyAsync(CancellationToken ct);
 
-    /// <summary>Modello GitHub Copilot (vuoto = default).</summary>
+    /// <summary>Modello GitHub Copilot (<c>default</c> o vuoto = predefinito di Copilot).</summary>
     Task<string> GetCopilotModelAsync(CancellationToken ct);
 
     /// <summary>Endpoint AI (formato OpenAI Chat Completions).</summary>
@@ -235,7 +264,7 @@ internal class SettingsService : ISvnAssistSettings
 
     /// <inheritdoc />
     public async Task<string> GetClaudeModelAsync(CancellationToken ct)
-        => (await _observer.GetSnapshotAsync(ct)).ClaudeModel.ValueOrDefault("claude-opus-5-5");
+        => (await _observer.GetSnapshotAsync(ct)).ClaudeModel.ValueOrDefault(SettingDefinitions.DefaultClaudeModel);
 
     /// <inheritdoc />
     public async Task<string> GetAnthropicApiKeyAsync(CancellationToken ct)
@@ -243,7 +272,7 @@ internal class SettingsService : ISvnAssistSettings
 
     /// <inheritdoc />
     public async Task<string> GetCopilotModelAsync(CancellationToken ct)
-        => (await _observer.GetSnapshotAsync(ct)).CopilotModel.ValueOrDefault("");
+        => (await _observer.GetSnapshotAsync(ct)).CopilotModel.ValueOrDefault(SettingDefinitions.CopilotDefaultModel);
 
     /// <summary>Legge l'API key dalle impostazioni.</summary>
     public async Task<string> GetAiApiKeyAsync(CancellationToken ct)
@@ -256,7 +285,7 @@ internal class SettingsService : ISvnAssistSettings
     public async Task<string> GetAiModelAsync(CancellationToken ct)
     {
         var snapshot = await _observer.GetSnapshotAsync(ct);
-        return snapshot.AiModel.ValueOrDefault("gpt-4o-mini");
+        return snapshot.AiModel.ValueOrDefault(SettingDefinitions.DefaultAiModel);
     }
 
     /// <summary>Legge la lingua predefinita dalle impostazioni.</summary>

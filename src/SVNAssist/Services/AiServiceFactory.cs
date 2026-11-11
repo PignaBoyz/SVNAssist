@@ -76,7 +76,7 @@ internal sealed class AiServiceFactory : IAiServiceFactory
         {
             var token = await _tokenResolver.ResolveAsync(ct);
             if (token is not null || provider == "copilot")
-                candidates.Add(("GitHub Copilot", new CopilotAiService(SharedHttpClient, token, await _settings.GetCopilotModelAsync(ct))));
+                candidates.Add(("GitHub Copilot", new CopilotAiService(SharedHttpClient, token, NormalizeCopilotModel(await _settings.GetCopilotModelAsync(ct)))));
         }
 
         if (Use("claudecode") && _claudeLocator() is { } claudeExe)
@@ -103,7 +103,7 @@ internal sealed class AiServiceFactory : IAiServiceFactory
     private async Task<IAiService?> CreateOpenAiCompatibleAsync(CancellationToken ct)
     {
         var endpoint = await _settings.GetAiEndpointAsync(ct);
-        var model = await _settings.GetAiModelAsync(ct);
+        var model = NormalizeOpenAiModel(endpoint, await _settings.GetAiModelAsync(ct));
 
         // La key esplicita nelle opzioni vince. In mancanza, il token GitHub rilevato in automatico
         // si usa SOLO verso GitHub Models: mandarlo a un altro endpoint esporrebbe il tuo account GitHub.
@@ -112,6 +112,26 @@ internal sealed class AiServiceFactory : IAiServiceFactory
             apiKey = await _tokenResolver.ResolveAsync(ct);
 
         return string.IsNullOrWhiteSpace(apiKey) ? null : new AiService(SharedHttpClient, endpoint, model, apiKey);
+    }
+
+    /// <summary>"default" (o vuoto) significa modello predefinito di Copilot: al servizio si passa la stringa vuota.</summary>
+    internal static string NormalizeCopilotModel(string? model)
+        => string.IsNullOrWhiteSpace(model) || string.Equals(model.Trim(), SettingDefinitions.CopilotDefaultModel, StringComparison.OrdinalIgnoreCase)
+            ? string.Empty
+            : model.Trim();
+
+    /// <summary>
+    /// GitHub Models vuole l'id con publisher (<c>openai/gpt-4o-mini</c>), gli altri endpoint OpenAI-compatibili
+    /// (OpenAI, Azure, Ollama) il nome nudo (<c>gpt-4o-mini</c>). Converte in entrambi i versi, così
+    /// funzionano anche i valori salvati con le versioni precedenti.
+    /// </summary>
+    internal static string NormalizeOpenAiModel(string endpoint, string? model)
+    {
+        var name = string.IsNullOrWhiteSpace(model) ? SettingDefinitions.DefaultAiModel : model.Trim();
+        const string prefix = "openai/";
+        if (IsGitHubModelsEndpoint(endpoint))
+            return name.Contains('/') ? name : prefix + name;
+        return name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ? name[prefix.Length..] : name;
     }
 
     internal static bool IsGitHubModelsEndpoint(string endpoint) =>

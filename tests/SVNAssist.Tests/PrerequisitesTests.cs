@@ -70,6 +70,42 @@ public class PrerequisitesTests
     }
 
     [Fact]
+    public async Task Copilot_SenzaLogin_NonEUtilizzabileNemmenoSeEsplicito()
+    {
+        var probes = new PrerequisiteProbes { CopilotRuntimeInstalled = () => true };
+
+        var snapshot = await Service(new StubSettings { Provider = "copilot" }, probes).CheckAsync(CancellationToken.None);
+
+        Assert.DoesNotContain("GitHub Copilot", snapshot.UsableProviders);
+        Assert.Equal(1, snapshot.ProblemCount - (snapshot.SvnMissing ? 1 : 0));
+    }
+
+    [Fact]
+    public async Task ProviderFisso_MostraSoloIPrerequisitiAiRilevanti()
+    {
+        var claude = await Service(new StubSettings { Provider = "claudecode" }).CheckAsync(CancellationToken.None);
+        var copilot = await Service(new StubSettings { Provider = "copilot" }).CheckAsync(CancellationToken.None);
+        var auto = await Service(new StubSettings()).CheckAsync(CancellationToken.None);
+
+        Assert.DoesNotContain(claude.Items, i => i.Id is PrerequisiteIds.GitHubCli or PrerequisiteIds.AnthropicKey or PrerequisiteIds.CopilotRuntime);
+        Assert.Contains(claude.Items, i => i.Id == PrerequisiteIds.ClaudeCode);
+        Assert.Contains("abbonamento Claude", claude.ProviderNote);
+        Assert.Contains(copilot.Items, i => i.Id == PrerequisiteIds.GitHubLogin);
+        Assert.DoesNotContain(copilot.Items, i => i.Id == PrerequisiteIds.ClaudeCode);
+        Assert.Contains(auto.Items, i => i.Id == PrerequisiteIds.ClaudeCode);
+        Assert.Contains(auto.Items, i => i.Id == PrerequisiteIds.OpenAiKey);
+    }
+
+    [Theory]
+    [InlineData("copilot", "https://github.com/features/copilot")]
+    [InlineData("claudecode", PrerequisitesService.ClaudeCodeDocsUrl)]
+    [InlineData("claude", AiProviderGuide.AnthropicKeysUrl)]
+    [InlineData("openai", AiProviderGuide.GitHubTokenUrl)]
+    [InlineData("auto", AiProviderGuide.GitHubTokenUrl)]
+    public void AiProviderGuide_PaginaDiConfigurazioneDelProviderScelto(string provider, string expected)
+        => Assert.Equal(expected, AiProviderGuide.SetupUrl(provider));
+
+    [Fact]
     public async Task GitHubModels_ConTokenDaGh_RendeUtilizzabileOpenAiCompatibile()
     {
         var probes = new PrerequisiteProbes { ResolveGitHubToken = _ => Task.FromResult<string?>("ghp") };

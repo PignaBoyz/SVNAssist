@@ -16,15 +16,14 @@ namespace SVNAssist;
 /// </remarks>
 internal sealed class AiSetupPrompt : IAiSetupPrompt
 {
-    // Pagina di creazione di un token "classic" senza scope: sufficiente per GitHub Models.
-    private const string TokenPageUrl = "https://github.com/settings/tokens/new?description=SVNAssist&scopes=";
-
     private readonly VisualStudioExtensibility _extensibility;
+    private readonly ISvnAssistSettings _settings;
     private int _alreadyPrompted;
 
-    public AiSetupPrompt(VisualStudioExtensibility extensibility)
+    public AiSetupPrompt(VisualStudioExtensibility extensibility, ISvnAssistSettings settings)
     {
         _extensibility = extensibility;
+        _settings = settings;
     }
 
     /// <inheritdoc />
@@ -33,12 +32,10 @@ internal sealed class AiSetupPrompt : IAiSetupPrompt
         if (Interlocked.Exchange(ref _alreadyPrompted, 1) == 1)
             return;
 
+        // Testo e pagina dipendono dal provider scelto, non solo dal token GitHub.
+        var provider = await _settings.GetAiProviderAsync(ct);
         var openPage = await _extensibility.Shell().ShowPromptAsync(
-            "Nessun provider AI trovato per generare i commit. Basta UNA di queste opzioni:\n\n" +
-            "• GitHub Copilot o GitHub CLI: esegui 'gh auth login'\n" +
-            "• Claude: installa Claude Code e fai login, oppure inserisci una Anthropic API Key\n" +
-            "• Gratis: crea un token GitHub e incollalo in Tools > Options > SVNAssist > AI API Key\n\n" +
-            "Vuoi aprire la pagina per creare il token GitHub gratuito?",
+            AiProviderGuide.MissingProviderPrompt(provider),
             PromptOptions.OKCancel,
             ct);
 
@@ -47,7 +44,7 @@ internal sealed class AiSetupPrompt : IAiSetupPrompt
 
         try
         {
-            Process.Start(new ProcessStartInfo { FileName = TokenPageUrl, UseShellExecute = true });
+            Process.Start(new ProcessStartInfo { FileName = AiProviderGuide.SetupUrl(provider), UseShellExecute = true });
         }
         catch
         {
