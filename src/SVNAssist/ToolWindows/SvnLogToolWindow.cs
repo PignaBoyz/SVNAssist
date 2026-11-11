@@ -20,9 +20,14 @@ internal class SvnLogToolWindow : ToolWindow
 {
     private readonly SvnLogToolWindowData _dataContext;
 
-    public SvnLogToolWindow(VisualStudioExtensibility extensibility)
+    private readonly SettingsService _settingsService;
+
+    public SvnLogToolWindow(
+        VisualStudioExtensibility extensibility,
+        Services.Settings.SvnAssistCategoryObserver settingsObserver)
         : base(extensibility)
     {
+        _settingsService = new SettingsService(settingsObserver);
         Title = "SVN Log";
 
         // svn viene ritrovato anche se installato dopo l'apertura di VS.
@@ -39,6 +44,8 @@ internal class SvnLogToolWindow : ToolWindow
     public override async Task<IRemoteUserControl> GetContentAsync(CancellationToken cancellationToken)
     {
         // Auto-detect come nella finestra Status: se la solution è una working copy, il log parte da solo.
+        // Il setting "Working Copy Path", se valorizzato, vince sull'auto-detect (come nella finestra Changes).
+        var configured = (await _settingsService.GetWorkingCopyPathAsync(cancellationToken)).Trim();
         try
         {
             var result = await Extensibility.Workspaces().QuerySolutionAsync(
@@ -47,6 +54,8 @@ internal class SvnLogToolWindow : ToolWindow
 
             var solutionDir = result.FirstOrDefault()?.Directory;
             var svnRoot = !string.IsNullOrWhiteSpace(solutionDir) ? SvnService.FindSvnRoot(solutionDir) : null;
+            if (configured.Length > 0)
+                svnRoot = configured;
             await _dataContext.ApplyAutoDetectedWorkingCopyAsync(svnRoot, cancellationToken);
         }
         catch (OperationCanceledException)
@@ -55,7 +64,9 @@ internal class SvnLogToolWindow : ToolWindow
         }
         catch
         {
-            // Nessuna solution aperta: si può indicare il percorso a mano.
+            // Nessuna solution aperta: si usa il setting, o si indica il percorso a mano.
+            if (configured.Length > 0)
+                await _dataContext.ApplyAutoDetectedWorkingCopyAsync(configured, cancellationToken);
         }
 
         return new SvnLogToolWindowControl(_dataContext);

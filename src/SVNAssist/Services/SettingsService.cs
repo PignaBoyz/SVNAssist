@@ -174,7 +174,7 @@ internal static class SettingDefinitions
 
     /// <summary>
     /// Percorso della working copy SVN.
-    /// Se vuoto, viene auto-rilevato dalla solution aperta in VS.
+    /// Se impostato ha la precedenza sull'auto-rilevamento; se vuoto, viene auto-rilevato dalla solution aperta in VS.
     /// </summary>
     [VisualStudioContribution]
     internal static Setting.String WorkingCopyPath { get; } = new(

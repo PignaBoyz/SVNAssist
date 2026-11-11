@@ -287,6 +287,11 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
     /// <summary>Applica il risultato dell'auto-detect della working copy dalla solution aperta.</summary>
     internal async Task ApplyAutoDetectedWorkingCopyAsync(string? svnRoot, CancellationToken ct)
     {
+        // Regola: il setting "Working Copy Path", se valorizzato, vince sempre sull'auto-detect.
+        var configured = (await _settingsService.GetWorkingCopyPathAsync(ct)).Trim();
+        if (configured.Length > 0)
+            svnRoot = configured;
+
         await _autoDetectLock.WaitAsync(ct);
         try
         {
@@ -527,8 +532,9 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
     {
         lock (_stateLock)
         {
+            // "Seleziona tutto" = sezione Modifiche (come TortoiseSVN): i non versionati (bin/obj) restano fuori.
             if (selected)
-                _selection.UnionWith(_entries.Select(e => e.FullPath));
+                _selection.UnionWith(_entries.Where(e => e.Section == ChangeSection.Changes).Select(e => e.FullPath));
             else
                 _selection.Clear();
 
@@ -589,7 +595,10 @@ internal class SvnStatusToolWindowData : NotifyPropertyChangedObject
     private async Task RunExclusiveAsync(Func<Task> body)
     {
         if (Interlocked.CompareExchange(ref _operationRunning, 1, 0) != 0)
+        {
+            SetStatus("Operazione in corso...");
             return;
+        }
 
         try
         {

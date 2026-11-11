@@ -66,6 +66,32 @@ public class StatusViewModelTests
     }
 
     [Fact]
+    public async Task SelezionaTutto_SelezionaSoloLaSezioneModifiche()
+    {
+        var f = new Fixture().With(
+            ("a.cs", SvnStatusKind.Modified),
+            (@"bin\x.dll", SvnStatusKind.Unversioned));
+        await f.Refresh();
+        await f.Vm.SetAllSelectedAsync(false);
+
+        await f.Vm.SetAllSelectedAsync(true);
+
+        Assert.True(f.Row("a.cs").CheckedState);
+        Assert.False(f.Row("x.dll").CheckedState);
+    }
+
+    [Fact]
+    public async Task SettingWorkingCopyPath_VinceSullAutoDetect()
+    {
+        var f = new Fixture();
+        f.Settings.WorkingCopy = @"C:\config";
+
+        await f.Vm.ApplyAutoDetectedWorkingCopyAsync(@"C:\detected", Ct);
+
+        Assert.Equal(@"C:\config", f.Vm.WorkingCopyPath);
+    }
+
+    [Fact]
     public async Task Refresh_VistaLista_MostraLaCartellaInGrigio()
     {
         var f = new Fixture().With((@"src\Core\A.cs", SvnStatusKind.Modified));
