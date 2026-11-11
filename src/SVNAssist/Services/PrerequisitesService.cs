@@ -12,6 +12,63 @@ internal static class PrerequisiteIds
     public const string ClaudeCode = "claude-code";
     public const string AnthropicKey = "anthropic-key";
     public const string CopilotRuntime = "copilot-runtime";
+    public const string OpenAiKey = "openai-key";
+}
+
+/// <summary>
+/// Cosa serve a ciascun provider AI (nota su requisiti e costi) e la pagina da aprire per configurarlo.
+/// Condiviso da checklist dei prerequisiti e dal prompt "nessun provider AI".
+/// </summary>
+internal static class AiProviderGuide
+{
+    /// <summary>Pagina di creazione di un token GitHub "classic" senza scope: sufficiente per GitHub Models.</summary>
+    internal const string GitHubTokenUrl = "https://github.com/settings/tokens/new?description=SVNAssist&scopes=";
+    internal const string CopilotUrl = "https://github.com/features/copilot";
+    internal const string AnthropicKeysUrl = "https://console.anthropic.com/settings/keys";
+
+    /// <summary>Normalizza il valore dell'impostazione provider (vuoto = auto).</summary>
+    internal static string Normalize(string? provider)
+    {
+        var p = (provider ?? string.Empty).Trim().ToLowerInvariant();
+        return p.Length == 0 ? "auto" : p;
+    }
+
+    /// <summary>Requisiti, login e costi del provider scelto, in una frase.</summary>
+    internal static string Requirements(string provider) => Normalize(provider) switch
+    {
+        "copilot" => "GitHub Copilot: serve un abbonamento Copilot (le richieste possono consumare \"premium request\"), " +
+                     "GitHub CLI con login (gh auth login) e il runtime Copilot (~100 MB, scaricato al primo uso).",
+        "claudecode" => "Claude Code: serve Claude Code installato e il login (/login) con un abbonamento Claude Pro/Max; " +
+                        "usa la quota del tuo abbonamento.",
+        "claude" => "Claude API: serve una API key Anthropic; l'uso è a pagamento a consumo " +
+                    "(Haiku costa meno di Sonnet, Sonnet meno di Opus).",
+        "openai" => "OpenAI-compatibile: con GitHub Models (default) basta il login GitHub (gh auth login) o un token, gratis entro i limiti; " +
+                    "con altri endpoint serve la loro API key (a pagamento, tranne Ollama in locale).",
+        _ => "Automatico: prova in ordine Copilot, Claude Code, Claude API, OpenAI-compatibile; ne basta uno configurato.",
+    };
+
+    /// <summary>Pagina utile per configurare il provider scelto.</summary>
+    internal static string SetupUrl(string provider) => Normalize(provider) switch
+    {
+        "copilot" => CopilotUrl,
+        "claudecode" => PrerequisitesService.ClaudeCodeDocsUrl,
+        "claude" => AnthropicKeysUrl,
+        _ => GitHubTokenUrl,
+    };
+
+    /// <summary>Domanda mostrata quando nessun provider è utilizzabile, specifica per il provider scelto.</summary>
+    internal static string MissingProviderPrompt(string provider) => Normalize(provider) switch
+    {
+        "copilot" => "GitHub Copilot non è utilizzabile.\n\n" + Requirements("copilot") + "\n\nVuoi aprire la pagina di GitHub Copilot?",
+        "claudecode" => "Claude Code non è utilizzabile.\n\n" + Requirements("claudecode") + "\n\nVuoi aprire la documentazione di Claude Code?",
+        "claude" => "Claude API non è utilizzabile.\n\n" + Requirements("claude") + "\nInserisci la chiave in Tools > Options > SVNAssist > Anthropic API Key.\n\nVuoi aprire la pagina per creare la API key Anthropic?",
+        "openai" => "Il provider OpenAI-compatibile non è utilizzabile.\n\n" + Requirements("openai") + "\nIncolla la chiave in Tools > Options > SVNAssist > AI API Key.\n\nVuoi aprire la pagina per creare il token GitHub gratuito?",
+        _ => "Nessun provider AI trovato per generare i commit. Basta UNA di queste opzioni:\n\n" +
+             "• GitHub Copilot o GitHub CLI: esegui 'gh auth login'\n" +
+             "• Claude: installa Claude Code e fai login, oppure inserisci una Anthropic API Key\n" +
+             "• Gratis: crea un token GitHub e incollalo in Tools > Options > SVNAssist > AI API Key\n\n" +
+             "Vuoi aprire la pagina per creare il token GitHub gratuito?",
+    };
 }
 
 /// <summary>Un prerequisito con il suo stato e le istruzioni per sistemarlo.</summary>
@@ -37,10 +94,12 @@ internal sealed record PrerequisiteItem(
 /// <param name="Items">Prerequisiti nell'ordine di visualizzazione.</param>
 /// <param name="ConfiguredProvider">Valore dell'impostazione "AI Provider" (auto, copilot, ...).</param>
 /// <param name="UsableProviders">Nomi dei provider AI oggi utilizzabili, nell'ordine in cui verrebbero provati.</param>
+/// <param name="ProviderNote">Cosa serve al provider scelto (CLI, login, API key, costi).</param>
 internal sealed record PrerequisitesSnapshot(
     IReadOnlyList<PrerequisiteItem> Items,
     string ConfiguredProvider,
-    IReadOnlyList<string> UsableProviders)
+    IReadOnlyList<string> UsableProviders,
+    string ProviderNote = "")
 {
     /// <summary><c>true</c> se manca <c>svn.exe</c> (prerequisito essenziale).</summary>
     public bool SvnMissing => Items.Any(i => i.Id == PrerequisiteIds.Svn && !i.IsOk);
@@ -132,9 +191,7 @@ internal sealed class PrerequisitesService
     /// <summary>Esegue tutte le verifiche.</summary>
     public async Task<PrerequisitesSnapshot> CheckAsync(CancellationToken ct)
     {
-        var provider = (await _settings.GetAiProviderAsync(ct)).Trim().ToLowerInvariant();
-        if (provider.Length == 0)
-            provider = "auto";
+        var provider = AiProviderGuide.Normalize(await _settings.GetAiProviderAsync(ct));
 
         var svn = _probes.FindSvn();
         var tortoise = _probes.FindTortoise();
@@ -154,13 +211,15 @@ internal sealed class PrerequisitesService
 
         var usable = new List<string>();
         bool Use(string name) => provider == name || provider == "auto";
-        if (provider == "copilot" || (Use("copilot") && copilotInstalled && token is not null))
+        // Copilot serve il login GitHub (token): senza, non è utilizzabile nemmeno se scelto esplicitamente.
+        if (token is not null && (provider == "copilot" || (Use("copilot") && copilotInstalled)))
             usable.Add("GitHub Copilot");
         if (Use("claudecode") && claude is not null)
             usable.Add("Claude Code");
         if (Use("claude") && anthropicKeySource is not null)
             usable.Add("Claude API");
-        if (Use("openai") && (!string.IsNullOrWhiteSpace(apiKey) || (AiServiceFactory.IsGitHubModelsEndpoint(endpoint) && token is not null)))
+        var openAiKeyOk = !string.IsNullOrWhiteSpace(apiKey) || (AiServiceFactory.IsGitHubModelsEndpoint(endpoint) && token is not null);
+        if (Use("openai") && openAiKeyOk)
             usable.Add("OpenAI-compatibile");
 
         var items = new List<PrerequisiteItem>
@@ -208,8 +267,28 @@ internal sealed class PrerequisitesService
                 "Premi \"Scarica ora\" oppure imposta AI Provider = copilot in Tools > Options > SVNAssist.\n" +
                 "Richiede anche il login a GitHub (gh auth login).",
                 copilotInstalled ? null : "Scarica ora (~100 MB)"),
+
+            new(PrerequisiteIds.OpenAiKey, GroupAi, "API key / token (OpenAI-compatibile)", openAiKeyOk,
+                !string.IsNullOrWhiteSpace(apiKey) ? "chiave in Tools > Options"
+                    : openAiKeyOk ? "token GitHub rilevato (GitHub Models)" : "nessuna chiave né token GitHub.",
+                "Con GitHub Models (default) basta il login GitHub (gh auth login) oppure un token da incollare in\n" +
+                "Tools > Options > SVNAssist > AI API Key. Per OpenAI/Azure incolla la loro API key (a pagamento)."),
         };
 
-        return new PrerequisitesSnapshot(items, provider, usable);
+        // Con un provider fisso mostra solo i prerequisiti AI che lo riguardano (in auto, tutti).
+        var relevant = RelevantAiItems(provider);
+        if (relevant is not null)
+            items.RemoveAll(i => i.Group == GroupAi && !relevant.Contains(i.Id));
+
+        return new PrerequisitesSnapshot(items, provider, usable, AiProviderGuide.Requirements(provider));
     }
+
+    private static HashSet<string>? RelevantAiItems(string provider) => provider switch
+    {
+        "copilot" => [PrerequisiteIds.GitHubCli, PrerequisiteIds.GitHubLogin, PrerequisiteIds.CopilotRuntime],
+        "claudecode" => [PrerequisiteIds.ClaudeCode],
+        "claude" => [PrerequisiteIds.AnthropicKey],
+        "openai" => [PrerequisiteIds.GitHubCli, PrerequisiteIds.GitHubLogin, PrerequisiteIds.OpenAiKey],
+        _ => null,
+    };
 }

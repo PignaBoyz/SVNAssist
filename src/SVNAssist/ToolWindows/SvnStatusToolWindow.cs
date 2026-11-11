@@ -55,7 +55,7 @@ internal class SvnStatusToolWindow : ToolWindow
             settingsService, PrerequisiteProbes.CreateDefault(processRunner, tokenResolver)));
 
         _dataContext = new SvnStatusToolWindowData(
-            settingsService, svnService, aiServiceFactory, new AiSetupPrompt(extensibility),
+            settingsService, svnService, aiServiceFactory, new AiSetupPrompt(extensibility, settingsService),
             new VsDialogService(extensibility), prerequisites);
         _dataContext.PropertyChanged += OnDataContextPropertyChanged;
         _debouncer = new RefreshDebouncer(RefreshQuietPeriod, ct =>

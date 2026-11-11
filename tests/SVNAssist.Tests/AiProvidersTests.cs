@@ -66,7 +66,7 @@ public class AiProvidersTests
     public async Task ClaudeCode_PassaIlDiffSuStdinSenzaStrumenti()
     {
         var runner = new CapturingRunner(new ProcessResult(0, "feat: aggiunto login\n", string.Empty));
-        var sut = new ClaudeCodeAiService(runner, @"C:\claude.exe", "claude-opus-5-5");
+        var sut = new ClaudeCodeAiService(runner, @"C:\claude.exe", "claude-sonnet-5-5");
 
         var message = await sut.GenerateCommitMessageAsync("Index: a.cs\n+riga", "italiano", CancellationToken.None);
 
@@ -75,14 +75,14 @@ public class AiProvidersTests
         // "--tools" seguito da "" = nessuno strumento disponibile.
         var toolsIndex = runner.Arguments.ToList().IndexOf("--tools");
         Assert.Equal(string.Empty, runner.Arguments[toolsIndex + 1]);
-        Assert.Contains("claude-opus-5-5", runner.Arguments);
+        Assert.Contains("claude-sonnet-5-5", runner.Arguments);
     }
 
     [Fact]
     public async Task ClaudeCode_ExitCodeDiversoDaZero_LanciaErrore()
     {
         var runner = new CapturingRunner(new ProcessResult(1, string.Empty, "Failed to authenticate"));
-        var sut = new ClaudeCodeAiService(runner, @"C:\claude.exe", "claude-opus-5-5");
+        var sut = new ClaudeCodeAiService(runner, @"C:\claude.exe", "claude-sonnet-5-5");
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => sut.GenerateCommitMessageAsync("diff", "auto", CancellationToken.None));

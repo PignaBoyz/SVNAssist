@@ -17,7 +17,7 @@ internal sealed class AnthropicAiService : AiServiceBase
     private readonly string _model;
 
     /// <param name="apiKey">API key; se vuota l'SDK usa le credenziali di ambiente.</param>
-    /// <param name="model">Modello Claude (default <c>claude-opus-5-5</c>).</param>
+    /// <param name="model">Modello Claude (default <c>claude-sonnet-5-5</c>).</param>
     public AnthropicAiService(string? apiKey, string model)
     {
         _client = string.IsNullOrWhiteSpace(apiKey) ? new AnthropicClient() : new AnthropicClient { ApiKey = apiKey };

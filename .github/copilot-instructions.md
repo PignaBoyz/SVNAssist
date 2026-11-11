@@ -167,7 +167,7 @@ Le impostazioni appaiono automaticamente in **Tools → Options → SVNAssist**.
 |---|---|---|
 | `AiEndpoint` | string | `https://models.github.ai/inference/chat/completions` |
 | `AiApiKey` | string | `""` (inserire GitHub PAT o API key del provider) |
-| `AiModel` | string | `gpt-4o-mini` |
+| `AiModel` | enum | `openai/gpt-4o-mini` |
 | `DefaultLanguage` | string | `auto` |
 | `WorkingCopyPath` | string | `""` (auto-rilevato) |
 
