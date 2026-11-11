@@ -1,9 +1,9 @@
 using SVNAssist.Services;
-using SVNAssist.ToolWindows;
+using SVNAssist.Stores;
 
 namespace SVNAssist.Tests;
 
-/// <summary>Checklist dei prerequisiti, comandi della console e relativo ViewModel.</summary>
+/// <summary>Checklist dei prerequisiti, comandi della console e relativo store.</summary>
 public class PrerequisitesTests
 {
     private static PrerequisitesService Service(StubSettings settings, PrerequisiteProbes? probes = null)
@@ -178,95 +178,116 @@ public class PrerequisitesTests
             ConsoleLauncher.Build(ConsoleCommand.ClaudeLogin, @"C:\Users\me\.local\bin\claude.exe"));
     }
 
-    // ── ViewModel ────────────────────────────────────────────────────
+    [Fact]
+    public void ConsoleLauncher_ShellCommand_SintassiPowerShellSenzaCmdK()
+    {
+        Assert.Equal("gh auth login --hostname github.com --git-protocol https --web", ConsoleLauncher.ShellCommand(ConsoleCommand.GitHubLogin));
+        Assert.Equal("irm https://claude.ai/install.ps1 | iex", ConsoleLauncher.ShellCommand(ConsoleCommand.InstallClaudeCode));
+        Assert.Equal("claude", ConsoleLauncher.ShellCommand(ConsoleCommand.ClaudeLogin));
+        Assert.Equal("& \"C:\\Users\\me\\.local\\bin\\claude.exe\"",
+            ConsoleLauncher.ShellCommand(ConsoleCommand.ClaudeLogin, @"C:\Users\me\.local\bin\claude.exe"));
+    }
 
-    private static (PrerequisitesViewModel Vm, List<ConsoleCommand> Launched, List<string> Urls) CreateVm(PrerequisiteProbes probes)
+    // ── Store ────────────────────────────────────────────────────────
+
+    private static (PrereqStore Store, List<ConsoleCommand> Launched, List<string> Urls) CreateStore(PrerequisiteProbes probes)
     {
         var launched = new List<ConsoleCommand>();
         var urls = new List<string>();
         var actions = new PrerequisiteActions
         {
-            LaunchConsole = (c, _) => { launched.Add(c); return true; },
-            OpenUrl = urls.Add,
+            LaunchConsole = (c, _) => { launched.Add(c); return Task.FromResult(true); },
+            OpenUrl = u => { urls.Add(u); return Task.CompletedTask; },
             DownloadCopilotRuntime = _ => Task.CompletedTask,
         };
-        return (new PrerequisitesViewModel(Service(new StubSettings(), probes), actions), launched, urls);
+        return (new PrereqStore(Service(new StubSettings(), probes), actions), launched, urls);
     }
 
     [Fact]
-    public async Task ViewModel_ApreLaChecklistDaSolaSeManca_Svn()
+    public async Task Store_ApreLaChecklistDaSolaSeManca_Svn()
     {
-        var (vm, _, _) = CreateVm(new PrerequisiteProbes());
+        var (store, _, _) = CreateStore(new PrerequisiteProbes());
 
-        await vm.InitializeAsync(CancellationToken.None);
+        await store.InitializeAsync(CancellationToken.None);
 
-        Assert.True(vm.IsOpen);
-        Assert.Contains("da sistemare", vm.SummaryText);
+        Assert.True(store.IsOpen);
+        Assert.Contains("da sistemare", store.GetSnapshot().Summary);
     }
 
     [Fact]
-    public async Task ViewModel_NonApreLaChecklistSeSvnCe()
+    public async Task Store_NonApreLaChecklistSeSvnCe()
     {
-        var (vm, _, _) = CreateVm(new PrerequisiteProbes { FindSvn = () => "svn", FindClaude = () => "c" });
+        var (store, _, _) = CreateStore(new PrerequisiteProbes { FindSvn = () => "svn", FindClaude = () => "c" });
 
-        await vm.InitializeAsync(CancellationToken.None);
+        await store.InitializeAsync(CancellationToken.None);
 
-        Assert.False(vm.IsOpen);
-        Assert.Equal("Prerequisiti ✓", vm.SummaryText);
+        Assert.False(store.IsOpen);
+        Assert.Equal("Prerequisiti ✓", store.GetSnapshot().Summary);
     }
 
     [Fact]
-    public async Task ViewModel_PulsantePrincipaleDiGitHubLogin_LanciaLaConsole()
+    public async Task Store_PulsantePrincipaleDiGitHubLogin_LanciaIlTerminale()
     {
-        var (vm, launched, _) = CreateVm(new PrerequisiteProbes { FindGitHubCli = () => "gh" });
-        await vm.InitializeAsync(CancellationToken.None);
-        var row = vm.Items.Single(i => i.Id == PrerequisiteIds.GitHubLogin);
+        var (store, launched, _) = CreateStore(new PrerequisiteProbes { FindGitHubCli = () => "gh" });
+        await store.InitializeAsync(CancellationToken.None);
 
-        await vm.RunActionAsync(row, primary: true, CancellationToken.None);
+        await store.RunActionAsync(PrerequisiteIds.GitHubLogin, primary: true, CancellationToken.None);
 
         Assert.Equal([ConsoleCommand.GitHubLogin], launched);
-        Assert.Contains("Ricontrolla", vm.Feedback);
+        Assert.Contains("Ricontrolla", store.Feedback);
     }
 
     [Fact]
-    public async Task ViewModel_SecondaryDiSvn_ApreLaPaginaDiDownload()
+    public async Task Store_SecondaryDiSvn_ApreLaPaginaDiDownload()
     {
-        var (vm, _, urls) = CreateVm(new PrerequisiteProbes());
-        await vm.InitializeAsync(CancellationToken.None);
+        var (store, _, urls) = CreateStore(new PrerequisiteProbes());
+        await store.InitializeAsync(CancellationToken.None);
 
-        await vm.RunActionAsync(vm.Items.Single(i => i.Id == PrerequisiteIds.Svn), primary: false, CancellationToken.None);
+        await store.RunActionAsync(PrerequisiteIds.Svn, primary: false, CancellationToken.None);
 
         Assert.Equal([SvnEnvironment.DownloadUrl], urls);
     }
 
     [Fact]
-    public async Task ViewModel_QuandoSvnDiventaDisponibile_NotificaIlPannello()
+    public async Task Store_IdSconosciuto_Rifiutato()
+    {
+        var (store, launched, urls) = CreateStore(new PrerequisiteProbes());
+        await store.InitializeAsync(CancellationToken.None);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => store.RunActionAsync("../../evil", primary: true, CancellationToken.None));
+
+        Assert.Empty(launched);
+        Assert.Empty(urls);
+    }
+
+    [Fact]
+    public async Task Store_QuandoSvnDiventaDisponibile_NotificaIlPannello()
     {
         var found = false;
         var probes = new PrerequisiteProbes { FindSvn = () => found ? "svn" : null };
-        var (vm, _, _) = CreateVm(probes);
+        var (store, _, _) = CreateStore(probes);
         var notified = 0;
-        vm.SvnBecameAvailable = _ => { notified++; return Task.CompletedTask; };
+        store.SvnBecameAvailable = _ => { notified++; return Task.CompletedTask; };
 
-        await vm.InitializeAsync(CancellationToken.None);
+        await store.InitializeAsync(CancellationToken.None);
         Assert.Equal(0, notified);
 
         found = true;
-        await vm.RefreshAsync(CancellationToken.None);
-        await vm.RefreshAsync(CancellationToken.None);
+        await store.RefreshAsync(CancellationToken.None);
+        await store.RefreshAsync(CancellationToken.None);
 
         Assert.Equal(1, notified);
     }
 
     [Fact]
-    public async Task ViewModel_IntestazioneDiGruppoSoloSullaPrimaRiga()
+    public async Task Store_OgniElementoHaIlProprioGruppo()
     {
-        var (vm, _, _) = CreateVm(new PrerequisiteProbes());
-        await vm.InitializeAsync(CancellationToken.None);
+        var (store, _, _) = CreateStore(new PrerequisiteProbes());
+        await store.InitializeAsync(CancellationToken.None);
 
-        var headers = vm.Items.Where(i => i.HasGroupHeader).Select(i => i.GroupHeader).ToList();
+        var groups = store.GetSnapshot().Items.Select(i => i.Group).Distinct().ToList();
 
-        Assert.Equal(["Obbligatori", "Opzionali", "Provider AI (ne basta uno)"], headers);
+        Assert.Equal(["Obbligatori", "Opzionali", "Provider AI (ne basta uno)"], groups);
     }
 
     // ── ReloadableSvnService ─────────────────────────────────────────

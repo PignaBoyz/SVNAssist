@@ -1,4 +1,4 @@
-using SVNAssist.ToolWindows;
+using SVNAssist.Stores;
 
 namespace SVNAssist.Tests;
 

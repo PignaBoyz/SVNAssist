@@ -1,5 +1,5 @@
 using SVNAssist.Services;
-using SVNAssist.ToolWindows;
+using SVNAssist.Stores;
 
 namespace SVNAssist.Tests;
 
@@ -26,12 +26,12 @@ public class AiBugFixTests : IDisposable
             => Task.FromException<string>(ex);
     }
 
-    private (CommitMessageViewModel Vm, FakeAiFactory Ai, NoopAiPrompt Prompt) CreateVm()
+    private (CommitStore Vm, FakeAiFactory Ai, NoopAiPrompt Prompt) CreateVm()
     {
         var ai = new FakeAiFactory();
         var prompt = new NoopAiPrompt();
         var path = Path.Combine(_dir, "a.cs");
-        var vm = new CommitMessageViewModel(new StubSettings(), new FakeSvnService(), ai, prompt, () => [path], () => _dir);
+        var vm = new CommitStore(new StubSettings(), new FakeSvnService(), ai, prompt, () => [path], () => _dir);
         return (vm, ai, prompt);
     }
 
@@ -50,9 +50,9 @@ public class AiBugFixTests : IDisposable
         var (vm, ai, prompt) = CreateVm();
         ai.Available = false;
 
-        await vm.GenerateAsync(null, Ct);
-        await vm.GenerateAsync(null, Ct);
-        await vm.GenerateAsync(null, Ct);
+        await vm.GenerateAsync(Ct);
+        await vm.GenerateAsync(Ct);
+        await vm.GenerateAsync(Ct);
 
         Assert.Equal(3, prompt.Calls);
         Assert.False(vm.IsBusy);
@@ -85,7 +85,7 @@ public class AiBugFixTests : IDisposable
         vm.Text = "bozza";
         ai.Custom = new ThrowingAi(new HttpRequestException("401 Unauthorized"));
 
-        await vm.GenerateAsync(null, Ct);
+        await vm.GenerateAsync(Ct);
 
         Assert.Contains("Errore AI", vm.AiStatus);
         Assert.Contains("401", vm.AiStatus);
@@ -98,7 +98,7 @@ public class AiBugFixTests : IDisposable
         var (vm, ai, _) = CreateVm();
         ai.Custom = new ThrowingAi(new OperationCanceledException());
 
-        await vm.GenerateAsync(null, Ct);
+        await vm.GenerateAsync(Ct);
 
         Assert.NotEmpty(vm.AiStatus);
         Assert.DoesNotContain("generato con AI", vm.AiStatus);
@@ -253,7 +253,7 @@ public class AiBugFixTests : IDisposable
         Write(".github/copilot-instructions.md", "Regola X.");
         var (vm, ai, _) = CreateVm();
 
-        await vm.GenerateAsync(null, Ct);
+        await vm.GenerateAsync(Ct);
 
         Assert.Contains("Regola X.", ai.Service.Instructions.Single());
         Assert.Contains("Regole di commit", vm.AiStatus);

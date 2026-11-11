@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Sidecar dell'host in-proc (SVNAssist.Host, net472): console exe net8, apphost, framework-dependent.
+         stdout e' il canale JSON-RPC: MAI scrivere sulla console; i log vanno su file (vedi Hosting/BackendLog). -->
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>12.0</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UseAppHost>true</UseAppHost>
+    <RootNamespace>SVNAssist</RootNamespace>
+    <AssemblyName>SVNAssist.Backend</AssemblyName>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- La versione (Version/AssemblyVersion/FileVersion) e' definita in Directory.Build.props. -->
+  </PropertyGroup>
+
+  <!-- Rende visibili i tipi internal al progetto di test. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="SVNAssist.Tests" />
+  </ItemGroup>
+
+  <!-- Runtime GitHub Copilot (~100 MB compresso): non lo includiamo nella build/VSIX.
+       Viene scaricato al primo uso del provider "copilot" (CopilotRuntimeInstaller).
+       La versione richiesta dall'SDK viene salvata nell'assembly, cosi' non puo' divergere. -->
+  <PropertyGroup>
+    <CopilotSkipCliDownload>true</CopilotSkipCliDownload>
+  </PropertyGroup>
+  <ItemGroup>
+    <AssemblyMetadata Include="CopilotCliVersion" Value="$(CopilotCliVersion)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Anthropic" Version="13.8.0" />
+    <PackageReference Include="GitHub.Copilot.SDK" Version="1.0.31" />
+    <PackageReference Include="StreamJsonRpc" Version="2.22.23" />
+  </ItemGroup>
+
+  <!-- Contratto RPC condiviso con l'host (stesso file, compilato da entrambi). -->
+  <ItemGroup>
+    <Compile Include="..\Shared\RpcContract.cs" Link="Hosting\RpcContract.cs" />
+  </ItemGroup>
+
+</Project>
