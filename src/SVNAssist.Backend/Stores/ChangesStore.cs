@@ -689,8 +689,9 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         var current = new HashSet<string>(_entries.Select(e => e.FullPath), StringComparer.OrdinalIgnoreCase);
         foreach (var entry in _entries.Where(e => !state.Known.Contains(e.FullPath)))
         {
+            // Missing (!) non entra da solo: un salvataggio transitorio di VS diventerebbe una cancellazione nel commit.
             if (entry.Status is SvnStatusKind.Modified or SvnStatusKind.Added or SvnStatusKind.Deleted
-                or SvnStatusKind.Replaced or SvnStatusKind.Missing)
+                or SvnStatusKind.Replaced)
                 state.Staged.Add(entry.FullPath);
         }
 

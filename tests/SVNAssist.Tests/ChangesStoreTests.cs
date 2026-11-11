@@ -93,7 +93,7 @@ public class ChangesStoreTests
     }
 
     [Fact]
-    public async Task Refresh_StagedDiDefault_MAEDRMancanti_ConflittiENonVersionatiNo()
+    public async Task Refresh_StagedDiDefault_MAEDR_MancantiNonSonoStaged_ConflittiENonVersionatiNo()
     {
         var f = new Fixture().With(
             ("m", SvnStatusKind.Modified), ("a", SvnStatusKind.Added), ("d", SvnStatusKind.Deleted),
@@ -102,8 +102,8 @@ public class ChangesStoreTests
 
         await f.Refresh();
 
-        Assert.Equal(["a", "d", "m", "r", "x"], f.Names("staged"));
-        Assert.Equal(["c"], f.Names("changes"));
+        Assert.Equal(["a", "d", "m", "r"], f.Names("staged"));
+        Assert.Equal(["c", "x"], f.Names("changes")); // il Missing resta fuori da Staged
         Assert.Equal(["u"], f.Names("unversioned"));
     }
 
@@ -320,6 +320,7 @@ public class ChangesStoreTests
         var f = new Fixture().With(("new.txt", SvnStatusKind.Unversioned), ("gone.txt", SvnStatusKind.Missing));
         await f.Refresh();
         await f.Cmd("stage", new { key = "unversioned:new.txt" });
+        await f.Cmd("stage", new { key = "changes:gone.txt" }); // il Missing non e' staged di default
         await f.Cmd("setCommitText", new { text = "msg" });
 
         await f.Cmd("commit");
@@ -468,6 +469,7 @@ public class ChangesStoreTests
     {
         var f = new Fixture().With(("mod.cs", SvnStatusKind.Modified), ("gone.cs", SvnStatusKind.Missing));
         await f.Refresh();
+        await f.Cmd("stage", new { key = "changes:gone.cs" }); // il Missing non e' staged di default
 
         await f.Cmd("rowOp", new { op = "deleteFile", key = "staged:mod.cs" });
         await f.Cmd("rowOp", new { op = "deleteFile", key = "staged:gone.cs" });
@@ -690,6 +692,7 @@ public class ChangesStoreTests
         var f = new Fixture().With(("gone.cs", SvnStatusKind.Missing));
         using var _ = f;
         await f.Refresh();
+        await f.Cmd("stage", new { key = "changes:gone.cs" }); // il Missing non e' staged di default
 
         await f.Cmd("showDiff", new { key = "staged:gone.cs" });
 
