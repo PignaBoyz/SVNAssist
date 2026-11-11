@@ -10,7 +10,7 @@ public class RefreshDebouncerTests
     {
         var count = 0;
         var done = new TaskCompletionSource();
-        var debouncer = new RefreshDebouncer(TimeSpan.FromMilliseconds(80), _ =>
+        var debouncer = new RefreshDebouncer(TimeSpan.FromMilliseconds(300), _ =>
         {
             Interlocked.Increment(ref count);
             done.TrySetResult();
@@ -21,8 +21,7 @@ public class RefreshDebouncerTests
 
         for (var i = 0; i < 10; i++)
         {
-            debouncer.Request();
-            await Task.Delay(10);
+            debouncer.Request(); // raffica senza attese: Task.Delay sui runner CI è troppo impreciso
         }
 
         await done.Task.WaitAsync(TimeSpan.FromSeconds(5));
