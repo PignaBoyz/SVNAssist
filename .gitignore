@@ -435,3 +435,4 @@ dist/
 
 # Gli zip di release sono prodotti dalla CI (GitHub Releases), non versionati
 releases/*.zip
+.claude/
