@@ -119,3 +119,56 @@ Roving tabindex: un solo elemento nel tab order. Le icone senza testo hanno `ari
 ## Build e verifica
 - `node tools/build-demo.mjs` → `docs/demo/svnassist-demo.html` (file unico, funziona da `file://`; la UI è incorporata come `srcdoc` negli iframe della shell VS finta).
 - `node --test "tests/ui-web/*.test.mjs"` → contrasto, fixture vs schema, mock-bridge vs schema (snapshot di ogni passo di uno scenario completo), comandi della UI vs schema, render, CSP.
+- `dotnet test tests/SVNAssist.Tests` → store del backend, snapshot reali vs gli stessi schemi (`SnapshotSchemaTests`), backend completo con host finto e repository `file://` (`BackendIntegrationTests`), eseguibile vero su StreamJsonRpc (`BackendProcessTests`).
+
+## Backend (`src/SVNAssist.Backend`) e contratto RPC
+
+`SVNAssist.Backend.exe` (net8, apphost, framework-dependent) parla **StreamJsonRpc su stdin/stdout** (formatter e opzioni di default, nomi dei metodi = nomi C# delle interfacce di `src/Shared/RpcContract.cs`, es. `"DispatchAsync"`).
+stdout è solo canale RPC (le scritture accidentali sulla console sono deviate su stderr); i log vanno in `%LOCALAPPDATA%\SVNAssist\logs\backend-aaaammgg.log`. Il processo termina quando l'host chiude la pipe (anche se VS muore).
+
+| Direzione | Metodo | Note |
+|---|---|---|
+| host → backend | `DispatchAsync(view, json)` | `view` = `changes` \| `log` \| `diff`; `json` = messaggio JS→host (`ready`/`cmd`) inoltrato così com'è. Un `ready` fa partire il caricamento e riceve subito uno `state` |
+| host → backend | `SettingsChangedAsync()` | il backend scarta la cache e rilegge con `IHost.GetSettingsAsync` (tema, provider AI, working copy) |
+| host → backend | `SolutionChangedAsync(dir?)` | cartella della solution (null = nessuna): il backend risale fino a `.svn`. Il setting `workingCopyPath`, se valorizzato, vince |
+| host → backend | **`ThemeChangedAsync(kind)`** *(metodo nuovo)* | `light`\|`dark`\|`blue` = tema di VS; chiamarlo all'avvio e a ogni cambio. Riempie `theme.kind` dello snapshot in modo `auto` |
+| backend → host | `PushAsync(view, json)` | `state` (coalescenza 16 ms, solo se cambiato, `rev` crescente per vista) e `reply` (sempre **dopo** lo `state` che ne mostra gli effetti) |
+| backend → host | `PromptAsync(msg, buttons)` | indice del pulsante, -1 = chiuso. Convenzione: conferme = `["OK","Annulla"]` (0 = sì); risoluzione conflitto = 5 pulsanti |
+| backend → host | `GetSettingsAsync` / `SetSettingAsync("windowTheme", mode)` | vedi "Impostazioni" |
+| backend → host | `OpenDiffAsync(left, right, leftLabel, rightLabel, caption)` | per `showDiff`: `left` = BASE esportato (`svn export -r BASE`) in `%TEMP%\SVNAssist\diff\<guid>\BASE\<nome>`, `right` = il file della working copy (file vuoto temporaneo se mancante/eliminato). Il lato sinistro è vuoto per i file senza BASE (aggiunti) |
+| backend → host | `OpenFileAsync(path)` | per `showFolderDiff`: un unico file `Diff <cartella>.diff` temporaneo (max 100 file) |
+| backend → host | `RunInTerminalAsync(command, dir)` | comandi in **sintassi PowerShell** (`gh auth login ...`, `winget install ...`, `irm https://claude.ai/install.ps1 \| iex`, `& "C:\...\claude.exe"`) |
+| backend → host | `OpenUrlAsync(url)` | solo `https` |
+
+Messaggi `theme` (variabili CSS): li manda **l'host** (all'`ready`, a ogni cambio di tema VS, e quando vede `SetSettingAsync("windowTheme", …)` da `setTheme`). Il backend riporta solo `theme: {mode, kind}` nello snapshot. `rev` del `workingCopy` non è valorizzato (facoltativo nello schema).
+
+La vista `diff` (documento WebView2 di diff affiancato) è facoltativa: il backend risponde a `ready{view:"diff"}` con uno stato vuoto, perché `showDiff` apre l'editor di VS.
+
+### Validazione
+Tutto ciò che arriva dalla UI è non fidato: `v`, `type`, `id`, `name`, `args` e ogni argomento sono controllati (errore → `reply{ok:false,error}`, mai eccezioni verso l'host). Le **chiavi di riga** sono rivalidate contro lo stato corrente di `svn status` (se l'elemento non c'è più: errore "aggiorna l'elenco"); i percorsi usati per operare vengono sempre da `svn status`, mai dalla chiave; un elemento fuori dalla working copy viene scartato; `deleteFile` ricontrolla che il file sia sotto la radice della working copy. Gli unici percorsi che la UI invia sono quelli digitati (`setWorkingCopy`, `logLoad`): devono essere una cartella esistente dentro una working copy (o, per il log, un URL di repository).
+
+### Comportamenti da conoscere (rispetto al piano)
+- **Staged**: insieme in memoria per working copy. I nuovi elementi `M A D R !` partono in Staged; conflitti e non versionati no (un conflitto non si può mettere in Staged; se un file in Staged diventa conflitto il commit si rifiuta).
+- `commit`: aggiunge i non versionati in Staged (con le cartelle padre nuove) e cancella i mancanti, poi `svn commit --depth empty` sui soli percorsi elencati.
+- `rowOp deleteFile` (Canc su file, non cartelle): conferma con `PromptAsync`; versionato → `svn delete --force`; non versionato → cestino (se non disponibile, eliminazione diretta). Mancante → `svn delete`.
+- Il log usa `svn log -v` (percorsi toccati) 50 revisioni alla volta; `logSelect` accetta solo revisioni già in elenco.
+- AI: il diff dei soli file in Staged va ai provider elencati; conferma `PromptAsync` una volta per sessione (e per ogni file sospetto). `commit.trace` è ricostruita dalla catena (`FallbackAiService`); `commit.download` è valorizzato (pct 0) durante il download del runtime Copilot.
+
+## Impostazioni
+
+L'host le espone in Tools > Options > SVNAssist (categoria "SVNAssist") e le restituisce in `IHost.GetSettingsAsync()` come `Dictionary<string,string>` con **queste chiavi** (camelCase; il backend ignora maiuscole/minuscole e usa il default se manca la chiave). `SetSettingAsync` scrive solo `windowTheme`. Dopo ogni modifica l'host chiama `IBackend.SettingsChangedAsync()`. Le etichette (italiano) e i valori delle tendine sono in `docs/legacy-commands.md`.
+
+| Chiave | Tipo | Default | Valori ammessi |
+|---|---|---|---|
+| `aiProvider` | enum | `auto` | `auto`, `copilot`, `claudecode`, `claude`, `openai` |
+| `claudeModel` | enum | `claude-sonnet-5-5` | `claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-opus-5-5` |
+| `anthropicApiKey` | string (segreto) | `` | vuota = variabile `ANTHROPIC_API_KEY` |
+| `copilotModel` | enum | `default` | `default`, `gpt-4.1`, `gpt-5-mini`, `claude-sonnet-4.5` |
+| `aiEndpoint` | string | `https://models.github.ai/inference/chat/completions` | URL Chat Completions OpenAI-compatibile |
+| `aiApiKey` | string (segreto) | `` | chiave o GitHub PAT |
+| `aiModel` | enum | `openai/gpt-4o-mini` | `openai/gpt-4o-mini`, `openai/gpt-4o`, `openai/gpt-4.1-mini`, `openai/gpt-4.1` |
+| `defaultLanguage` | enum | `auto` | `auto`, `italiano`, `english` |
+| `workingCopyPath` | string | `` | se valorizzato vince sull'auto-rilevamento dalla solution |
+| `windowTheme` | enum | `auto` | `auto`, `light`, `dark`, `blue` (scritta dal backend con `SetSettingAsync`) |
+
+Un valore fuori elenco ricade sul default (come prima). Le chiavi segrete non vanno mai loggate.

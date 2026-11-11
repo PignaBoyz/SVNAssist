@@ -28,6 +28,8 @@ public class AiServiceFactoryTests
         public Task<string> GetAiModelAsync(CancellationToken ct) => Task.FromResult(Model);
         public Task<string> GetDefaultLanguageAsync(CancellationToken ct) => Task.FromResult(Language);
         public Task<string> GetWorkingCopyPathAsync(CancellationToken ct) => Task.FromResult(WorkingCopyPath);
+        public Task<string> GetWindowThemeAsync(CancellationToken ct) => Task.FromResult("auto");
+        public Task SetWindowThemeAsync(string mode, CancellationToken ct) => Task.CompletedTask;
     }
 
     /// <summary>Resolver finto: restituisce un token preimpostato (o null).</summary>

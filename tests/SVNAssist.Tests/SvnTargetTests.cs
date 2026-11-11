@@ -1,4 +1,4 @@
-using SVNAssist.Commands;
+using SVNAssist.Services;
 
 namespace SVNAssist.Tests;
 

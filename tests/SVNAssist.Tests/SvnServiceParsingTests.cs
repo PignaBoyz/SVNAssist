@@ -104,6 +104,26 @@ public class SvnServiceParsingTests : IDisposable
         }
     }
 
+    [Fact]
+    public void ParseLogXml_ConVerbose_EstraeIPercorsiToccati()
+    {
+        var xml = """
+            <log>
+              <logentry revision="7"><author>a</author><date>2024-03-15T10:20:30.000000Z</date>
+                <paths>
+                  <path action="M" kind="file">/trunk/Core/A.cs</path>
+                  <path action="A" kind="file">/trunk/Core/B.cs</path>
+                </paths><msg>m</msg></logentry>
+              <logentry revision="6"><msg>senza percorsi</msg></logentry>
+            </log>
+            """;
+
+        var entries = SvnService.ParseLogXml(xml);
+
+        Assert.Equal([new SvnLogPath("M", "/trunk/Core/A.cs"), new SvnLogPath("A", "/trunk/Core/B.cs")], entries[0].Paths);
+        Assert.Empty(entries[1].Paths!);
+    }
+
     // --- Update / commit (D9, D14) ---
 
     [Fact]

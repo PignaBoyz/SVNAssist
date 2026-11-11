@@ -35,9 +35,10 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          $vsix = Get-ChildItem src/SVNAssist/bin/Release -Recurse -Filter *.vsix | Select-Object -First 1
-          if (-not $vsix) { throw 'VSIX non trovato' }
-          Copy-Item $vsix.FullName dist/
+          # TODO integrazione host: copiare il .vsix di src/SVNAssist.Host quando esiste (src/SVNAssist e' stato rimosso).
+          # $vsix = Get-ChildItem src/SVNAssist.Host/bin/Release -Recurse -Filter *.vsix | Select-Object -First 1
+          # if (-not $vsix) { throw 'VSIX non trovato' }
+          # Copy-Item $vsix.FullName dist/
           Compress-Archive -Path docs/demo/* -DestinationPath "dist/SVNAssist-demo-${{ github.ref_name }}.zip"
           $notes = "docs/release-notes/${{ github.ref_name }}.md"
           if (Test-Path $notes) { "NOTES_FILE=$notes" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append }

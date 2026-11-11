@@ -1,6 +1,6 @@
 using SVNAssist.Models;
 using SVNAssist.Services;
-using SVNAssist.ToolWindows;
+using SVNAssist.Stores;
 
 namespace SVNAssist.Tests;
 
@@ -155,15 +155,15 @@ public class AiSafetyTests
         public FakeDialogs Dialogs { get; } = new();
         public FakeAiFactory Ai { get; } = new();
         public StubSettings Settings { get; } = new();
-        public SvnStatusToolWindowData Vm { get; }
+        public ChangesStore Vm { get; }
 
         public Fixture(params (string Path, SvnStatusKind Status)[] items)
         {
             foreach (var (path, status) in items)
                 Svn.Statuses.Add(new SvnFileStatus(path, status, IsTreeConflict: false));
-            Vm = new SvnStatusToolWindowData(
-                Settings, Svn, Ai, new NoopAiPrompt(), Dialogs,
-                new PrerequisitesViewModel(new PrerequisitesService(Settings, new PrerequisiteProbes())))
+            Vm = new ChangesStore(
+                Settings, Svn, Ai, new NoopAiPrompt(), Dialogs, new FakeHost(),
+                new PrereqStore(new PrerequisitesService(Settings, new PrerequisiteProbes())))
             {
                 WorkingCopyPath = Wc,
             };
@@ -176,11 +176,11 @@ public class AiSafetyTests
         var f = new Fixture(("a.cs", SvnStatusKind.Modified));
         await f.Vm.RefreshAsync(Ct);
 
-        await f.Vm.CommitMessage.GenerateAsync(null, Ct);
-        await f.Vm.CommitMessage.GenerateAsync(null, Ct);
+        await f.Vm.CommitMessage.GenerateAsync(Ct);
+        await f.Vm.CommitMessage.GenerateAsync(Ct);
 
         var message = Assert.Single(f.Dialogs.Messages);
-        Assert.Contains("dei soli file selezionati", message);
+        Assert.Contains("dei soli file in Staged", message);
         Assert.Equal(2, f.Ai.Service.Languages.Count);
     }
 
@@ -191,7 +191,7 @@ public class AiSafetyTests
         await f.Vm.RefreshAsync(Ct);
         f.Dialogs.ConfirmResult = false;
 
-        await f.Vm.CommitMessage.GenerateAsync(null, Ct);
+        await f.Vm.CommitMessage.GenerateAsync(Ct);
 
         Assert.Empty(f.Ai.Service.Languages);
         Assert.Empty(f.Svn.AiDiffRequests);
@@ -204,8 +204,8 @@ public class AiSafetyTests
         var f = new Fixture(("appsettings.Production.json", SvnStatusKind.Modified), ("a.cs", SvnStatusKind.Modified));
         await f.Vm.RefreshAsync(Ct);
 
-        await f.Vm.CommitMessage.GenerateAsync(null, Ct);
-        await f.Vm.CommitMessage.GenerateAsync(null, Ct);
+        await f.Vm.CommitMessage.GenerateAsync(Ct);
+        await f.Vm.CommitMessage.GenerateAsync(Ct);
 
         var message = Assert.Single(f.Dialogs.Messages);
         Assert.Contains("segreti", message);
@@ -219,7 +219,7 @@ public class AiSafetyTests
         await f.Vm.RefreshAsync(Ct);
         f.Svn.AiDiff = Section("a.cs", 400_000);
 
-        await f.Vm.CommitMessage.GenerateAsync(null, Ct);
+        await f.Vm.CommitMessage.GenerateAsync(Ct);
 
         Assert.True(f.Ai.Service.Diffs[0].Length < 25_000);
         Assert.Contains("diff molto grande", f.Vm.CommitMessage.AiStatus);
@@ -230,6 +230,6 @@ public class AiSafetyTests
     {
         var chain = new FallbackAiService([("Claude Code", new RecordingAi()), ("GitHub Copilot", new RecordingAi())]);
 
-        Assert.Equal("Claude Code → GitHub Copilot", CommitMessageViewModel.DescribeChain(chain));
+        Assert.Equal("Claude Code → GitHub Copilot", CommitStore.DescribeChain(chain));
     }
 }

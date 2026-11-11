@@ -17,6 +17,13 @@ namespace SVNAssist.Rpc
 
         /// <summary>Solution aperta/chiusa: cartella della solution, null se nessuna.</summary>
         Task SolutionChangedAsync(string? solutionDir);
+
+        /// <summary>
+        /// Tema di Visual Studio corrente: "light" | "dark" | "blue". Va chiamato all'avvio e a ogni cambio tema.
+        /// Serve a riempire <c>theme.kind</c> nello snapshot quando l'utente ha scelto il modo "auto"
+        /// (il backend non vede i colori di VS; i messaggi <c>theme</c> con le variabili CSS li manda l'host).
+        /// </summary>
+        Task ThemeChangedAsync(string kind);
     }
 
     /// <summary>Metodi esposti dall'HOST, chiamati dal backend.</summary>
