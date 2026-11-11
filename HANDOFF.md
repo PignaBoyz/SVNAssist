@@ -37,6 +37,7 @@ Regole: commit in italiano, push sul branch indicato, niente PR se non richiesto
 - [x] Fase A (2026-11-11, Windows): build Release ok, 285 test verdi, .vsix in src/SVNAssist/bin/Release/net8.0-windows8.0/. CI falliva per test debouncer instabile → corretto. softprops/action-gh-release@v2.2.2 esiste. Feedback utente in docs/feedback/0.1.0/.
 - [x] Fase B (bug AI) e C (audit/tema XAML) mergiate: 318 test verdi. Da provare con F5: tema, popup login, Genera con GitHub Models.
 - [x] D1-3 UI web condivisa: src/SVNAssist.UI.Web + docs/demo/src + tools/build-demo.mjs + docs/ui-protocol.md + tests/ui-web (node --test, anche in CI). Screenshot in docs/demo/screenshots. Ritocco: badge demo dice ancora 0.1.0.
-- [ ] Fase D0 spike WebView2 (branch locale spike/webview2) in corso
+- [x] D0 spike WebView2: SÌ (docs/webview2-spike.md). DECISIONE: package VSSDK classico in-proc net472 + .vsct per i comandi (Extensibility "mixed" non mostra i comandi) + Options come DialogPage + backend net8 su StreamJsonRpc. Contratto RPC: src/Shared/RpcContract.cs.
+- [ ] D4-5 backend net8 (branch locale feat/backend) e D6-8 host (branch locale feat/host) IN CORSO in parallelo. Poi: integrazione (merge, sln, VSIX con ui/ + backend/, CI), F5 dell'utente, release.
 - DECISIONE UTENTE: la 0.2.0 esce SOLO con tutte le feature, UI WebView2 compresa (no release parziale). Note: docs/release-notes/v0.2.0.md (bozza)
 - [ ] UI WebView2 completa, UX, release v0.2.0
