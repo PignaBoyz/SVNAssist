@@ -56,6 +56,27 @@ internal static class AiProviderGuide
         _ => GitHubTokenUrl,
     };
 
+    /// <summary>
+    /// Comando di login da lanciare nel terminale per il provider scelto (<c>null</c> se il provider usa solo una chiave).
+    /// GitHub (<c>gh auth login --web</c>) per auto/copilot/openai, <c>claude</c> per Claude Code.
+    /// </summary>
+    internal static ConsoleCommand? LoginCommand(string provider) => Normalize(provider) switch
+    {
+        "claude" => null,
+        "claudecode" => ConsoleCommand.ClaudeLogin,
+        _ => ConsoleCommand.GitHubLogin,
+    };
+
+    /// <summary>Prima scelta (default): fare il login nel terminale. Annulla porta all'alternativa con token/chiave.</summary>
+    internal static string LoginPrompt(string provider) => Normalize(provider) switch
+    {
+        "claudecode" => "Claude Code non è pronto.\n\nVuoi aprire un terminale per accedere a Claude Code (comando: claude, poi /login)?\n\n" +
+                        "OK = apri il terminale. Annulla = altre opzioni.",
+        _ => "Nessun provider AI pronto.\n\nVuoi aprire un terminale per accedere a GitHub (comando: gh auth login --web)? " +
+             "Dopo il login nel browser, premi di nuovo \"Genera con AI\".\n\n" +
+             "OK = accedi nel terminale. Annulla = usa invece un token / un'altra chiave.",
+    };
+
     /// <summary>Domanda mostrata quando nessun provider è utilizzabile, specifica per il provider scelto.</summary>
     internal static string MissingProviderPrompt(string provider) => Normalize(provider) switch
     {

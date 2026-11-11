@@ -133,24 +133,27 @@ internal sealed class FakeAiFactory : IAiServiceFactory
 {
     public RecordingAi Service { get; } = new();
     public bool Available { get; set; } = true;
+    public IAiService? Custom { get; set; }
 
     public Task<IAiService?> CreateAsync(CancellationToken ct)
-        => Task.FromResult<IAiService?>(Available ? Service : null);
+        => Task.FromResult<IAiService?>(Available ? (Custom ?? Service) : null);
 }
 
 internal sealed class RecordingAi : IAiService
 {
     public List<string> Languages { get; } = [];
     public List<string> Diffs { get; } = [];
+    public List<string?> Instructions { get; } = [];
 
-    public Task<string> GenerateCommitMessageAsync(string diff, string language, CancellationToken ct)
+    public Task<string> GenerateCommitMessageAsync(string diff, string language, CancellationToken ct, string? projectInstructions = null)
     {
         Diffs.Add(diff);
+        Instructions.Add(projectInstructions);
         Languages.Add(language);
         return Task.FromResult("messaggio generato");
     }
 
-    public Task<string> ImproveCommitMessageAsync(string draft, string diff, string language, CancellationToken ct)
+    public Task<string> ImproveCommitMessageAsync(string draft, string diff, string language, CancellationToken ct, string? projectInstructions = null)
     {
         Languages.Add(language);
         return Task.FromResult("migliorato: " + draft);
@@ -161,9 +164,9 @@ internal sealed class NoopAiPrompt : IAiSetupPrompt
 {
     public int Calls { get; private set; }
 
-    public Task ShowMissingTokenHelpAsync(CancellationToken ct)
+    public Task<bool> ShowMissingTokenHelpAsync(CancellationToken ct)
     {
         Calls++;
-        return Task.CompletedTask;
+        return Task.FromResult(true);
     }
 }

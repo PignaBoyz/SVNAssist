@@ -13,7 +13,8 @@ internal interface IAiSetupPrompt
 {
     /// <summary>
     /// Propone all'utente di creare/incollare un Personal Access Token GitHub.
-    /// Mostrato al massimo una volta per sessione.
+    /// Va mostrato a ogni richiesta senza provider pronto (mai "una volta sola": chiudere il popup non deve zittire l'estensione).
+    /// Restituisce <c>true</c> se ha avviato il login o aperto la pagina, <c>false</c> se l'utente ha rinunciato.
     /// </summary>
-    Task ShowMissingTokenHelpAsync(CancellationToken ct);
+    Task<bool> ShowMissingTokenHelpAsync(CancellationToken ct);
 }

@@ -167,7 +167,12 @@ internal sealed class CommitMessageViewModel : NotifyPropertyChangedObject
             IsBusy = true;
             await RunAiCoreAsync(improve, ct);
         }
-        catch (Exception ex) when (!ct.IsCancellationRequested)
+        catch (OperationCanceledException)
+        {
+            // Mai silenzio: anche un annullamento (comando interrotto da VS, finestra chiusa) deve lasciare un feedback.
+            AiStatus = ct.IsCancellationRequested ? "Operazione AI annullata." : "Errore AI: richiesta interrotta per timeout.";
+        }
+        catch (Exception ex)
         {
             AiStatus = $"Errore AI: {ex.Message}";
         }
@@ -184,7 +189,10 @@ internal sealed class CommitMessageViewModel : NotifyPropertyChangedObject
         if (ai is null)
         {
             AiStatus = "Nessun provider AI disponibile (Copilot, Claude o token GitHub).";
-            await _aiSetupPrompt.ShowMissingTokenHelpAsync(ct);
+            // La guida compare a ogni click: se l'utente la chiude senza fare nulla riceve comunque questo messaggio.
+            AiStatus += await _aiSetupPrompt.ShowMissingTokenHelpAsync(ct)
+                ? " Completato il login o creato il token, premi di nuovo \"Genera con AI\"."
+                : " Premi di nuovo \"Genera con AI\" per rivedere come configurarlo.";
             return;
         }
 
@@ -233,13 +241,16 @@ internal sealed class CommitMessageViewModel : NotifyPropertyChangedObject
 
         await InitializeAsync(ct);
         var language = LanguageForAi;
+        var rules = CommitInstructions.Load(workingCopy);
         Text = improve
-            ? await ai.ImproveCommitMessageAsync(Text, diff, language, ct)
-            : await ai.GenerateCommitMessageAsync(diff, language, ct);
+            ? await ai.ImproveCommitMessageAsync(Text, diff, language, ct, rules)
+            : await ai.GenerateCommitMessageAsync(diff, language, ct, rules);
 
         var provider = DescribeProvider(ai);
         var done = improve ? "Messaggio migliorato" : "Messaggio generato con AI";
         AiStatus = provider is null ? $"{done}." : $"{done} ({provider}).";
+        if (rules is not null)
+            AiStatus += " Regole di commit del progetto applicate.";
         if (limited.WasTruncated)
             AiStatus += $" Attenzione: diff molto grande, inviata solo una parte (max {DiffLimiter.MaxTotalChars / 1000} KB, {DiffLimiter.MaxFileChars / 1000} KB per file).";
     }

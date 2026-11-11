@@ -338,7 +338,10 @@ public class SvnServiceArgsTests
 
         Assert.True(calls.Count(c => c[0] == "status") > 1);
         Assert.True(calls.Count(c => c[0] == "diff") > 1);
-        Assert.Equal(600, diff.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length);
+        var lines = diff.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(600, lines.Count(l => l.StartsWith("Index: ")));
+        Assert.Contains(lines, l => l.StartsWith("M  ")); // elenco con stato in testa (tagliato a 12 KB: dichiara quanti mancano)
+        Assert.Contains(lines, l => l.StartsWith("... (altri "));
     }
 
     [Fact]

@@ -75,18 +75,20 @@ internal sealed class AiServiceFactory : IAiServiceFactory
         if (provider == "copilot" || (Use("copilot") && _copilotRuntimeInstalled()))
         {
             var token = await _tokenResolver.ResolveAsync(ct);
-            if (token is not null || provider == "copilot")
+            // Come nel checklist: senza token GitHub (login gh) Copilot non è utilizzabile nemmeno se scelto,
+            // così "nessun provider" apre la guida al login invece di un errore oscuro dal runtime.
+            if (token is not null)
                 candidates.Add(("GitHub Copilot", new CopilotAiService(SharedHttpClient, token, NormalizeCopilotModel(await _settings.GetCopilotModelAsync(ct)))));
         }
 
         if (Use("claudecode") && _claudeLocator() is { } claudeExe)
-            candidates.Add(("Claude Code", new ClaudeCodeAiService(_processRunner, claudeExe, await _settings.GetClaudeModelAsync(ct))));
+            candidates.Add(("Claude Code", new ClaudeCodeAiService(_processRunner, claudeExe, ResolveClaudeModel(await _settings.GetClaudeModelAsync(ct)))));
 
         if (Use("claude"))
         {
             var key = await _settings.GetAnthropicApiKeyAsync(ct);
             if (!string.IsNullOrWhiteSpace(key) || !string.IsNullOrWhiteSpace(_environmentReader("ANTHROPIC_API_KEY")))
-                candidates.Add(("Claude API", new AnthropicAiService(key, await _settings.GetClaudeModelAsync(ct))));
+                candidates.Add(("Claude API", new AnthropicAiService(key, ResolveClaudeModel(await _settings.GetClaudeModelAsync(ct)))));
         }
 
         if (Use("openai") && await CreateOpenAiCompatibleAsync(ct) is { } openAi)
@@ -114,9 +116,16 @@ internal sealed class AiServiceFactory : IAiServiceFactory
         return string.IsNullOrWhiteSpace(apiKey) ? null : new AiService(SharedHttpClient, endpoint, model, apiKey);
     }
 
+    /// <summary>Un valore salvato fuori lista (vecchie versioni con testo libero, refusi) ricade sul default invece di rompere la chiamata.</summary>
+    internal static string ResolveClaudeModel(string? model)
+        => SettingDefinitions.KnownClaudeModels.Contains(model?.Trim() ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+            ? model!.Trim()
+            : SettingDefinitions.DefaultClaudeModel;
+
     /// <summary>"default" (o vuoto) significa modello predefinito di Copilot: al servizio si passa la stringa vuota.</summary>
     internal static string NormalizeCopilotModel(string? model)
         => string.IsNullOrWhiteSpace(model) || string.Equals(model.Trim(), SettingDefinitions.CopilotDefaultModel, StringComparison.OrdinalIgnoreCase)
+           || !SettingDefinitions.KnownCopilotModels.Contains(model.Trim(), StringComparer.OrdinalIgnoreCase)
             ? string.Empty
             : model.Trim();
 
@@ -130,7 +139,12 @@ internal sealed class AiServiceFactory : IAiServiceFactory
         var name = string.IsNullOrWhiteSpace(model) ? SettingDefinitions.DefaultAiModel : model.Trim();
         const string prefix = "openai/";
         if (IsGitHubModelsEndpoint(endpoint))
-            return name.Contains('/') ? name : prefix + name;
+        {
+            // Su GitHub Models la lista è chiusa: un id fuori lista (vecchio valore salvato) ricade sul default.
+            var full = name.Contains('/') ? name : prefix + name;
+            return SettingDefinitions.KnownAiModels.Contains(full, StringComparer.OrdinalIgnoreCase) ? full : SettingDefinitions.DefaultAiModel;
+        }
+
         return name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ? name[prefix.Length..] : name;
     }
 
@@ -156,11 +170,11 @@ internal sealed class FallbackAiService : IAiService
     /// <summary>Nome del provider che ha risposto all'ultima richiesta riuscita (<c>null</c> se nessuna).</summary>
     public string? LastUsedProvider { get; private set; }
 
-    public Task<string> GenerateCommitMessageAsync(string diff, string language, CancellationToken ct)
-        => TryEachAsync(s => s.GenerateCommitMessageAsync(diff, language, ct), ct);
+    public Task<string> GenerateCommitMessageAsync(string diff, string language, CancellationToken ct, string? projectInstructions = null)
+        => TryEachAsync(s => s.GenerateCommitMessageAsync(diff, language, ct, projectInstructions), ct);
 
-    public Task<string> ImproveCommitMessageAsync(string draft, string diff, string language, CancellationToken ct)
-        => TryEachAsync(s => s.ImproveCommitMessageAsync(draft, diff, language, ct), ct);
+    public Task<string> ImproveCommitMessageAsync(string draft, string diff, string language, CancellationToken ct, string? projectInstructions = null)
+        => TryEachAsync(s => s.ImproveCommitMessageAsync(draft, diff, language, ct, projectInstructions), ct);
 
     private async Task<string> TryEachAsync(Func<IAiService, Task<string>> call, CancellationToken ct)
     {

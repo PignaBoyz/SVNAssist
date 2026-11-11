@@ -9,13 +9,13 @@ public class AiProvidersTests
     {
         public int Calls { get; private set; }
 
-        public Task<string> GenerateCommitMessageAsync(string diff, string language, CancellationToken ct)
+        public Task<string> GenerateCommitMessageAsync(string diff, string language, CancellationToken ct, string? projectInstructions = null)
         {
             Calls++;
             return Task.FromResult(answer());
         }
 
-        public Task<string> ImproveCommitMessageAsync(string draft, string diff, string language, CancellationToken ct)
+        public Task<string> ImproveCommitMessageAsync(string draft, string diff, string language, CancellationToken ct, string? projectInstructions = null)
             => GenerateCommitMessageAsync(diff, language, ct);
     }
 
