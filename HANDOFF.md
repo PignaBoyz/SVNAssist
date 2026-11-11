@@ -33,5 +33,5 @@ Regole: commit in italiano, push sul branch indicato, niente PR se non richiesto
 - [x] Audit
 - [x] Tendina modelli + default Sonnet + prerequisiti per provider (non compilato)
 - [x] CI + workflow release (non ancora eseguito con successo)
-- [ ] Piano WebView2 (agente Opus in corso nella sessione cloud → docs/webview2-plan.md se completato)
+- [x] Piano WebView2 → docs/webview2-plan.md (scelta ibrido H; spike passo 0 su Windows è il primo gate)
 - [ ] Bug utente, fix audit restanti, UI WebView2, release v0.2.0
