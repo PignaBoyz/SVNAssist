@@ -83,6 +83,7 @@ internal sealed class BackendServer : IBackend, IDisposable
     internal ChangesStore Changes { get; }
     internal LogStore Log { get; }
     private readonly HostSettings? _hostSettings;
+    private readonly PathCommands _pathCommands;
 
     /// <summary>Una vista collegata a uno store, con il suo contatore di revisione e l'ultimo snapshot inviato.</summary>
     private sealed class Channel
@@ -107,6 +108,7 @@ internal sealed class BackendServer : IBackend, IDisposable
             EnableWatcher = services.EnableWatcher,
         };
         Log = new LogStore(services.Svn, services.Settings);
+        _pathCommands = new PathCommands(services.Svn, host, () => Changes.RefreshAsync(_lifetime.Token), Changes.TempRoot);
         _channels = new Dictionary<string, Channel>
         {
             ["changes"] = new Channel { View = "changes", Store = Changes },
@@ -246,6 +248,19 @@ internal sealed class BackendServer : IBackend, IDisposable
     {
         Changes.SetVsThemeKind(kind);
         return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public async Task RunPathCommandAsync(string command, string[] paths)
+    {
+        try
+        {
+            await _pathCommands.RunAsync(command, paths, _lifetime.Token);
+        }
+        catch (Exception ex)
+        {
+            BackendLog.Error("RunPathCommandAsync", ex);
+        }
     }
 
     // ── Invio all'host ───────────────────────────────────────────────
