@@ -1,0 +1,5 @@
+{
+  "title": "Diff OrderService.cs",
+  "subtitle": "Core/Services/OrderService.cs · BASE ⇄ working copy",
+  "diff": "Index: Core/Services/OrderService.cs\n===================================================================\n--- Core/Services/OrderService.cs\t(revision 124)\n+++ Core/Services/OrderService.cs\t(working copy)\n@@ -14,7 +14,9 @@\n     public decimal CalculateTotal(Order order)\n     {\n-        return order.Lines.Sum(l => l.Price * l.Quantity);\n+        var subtotal = order.Lines.Sum(l => l.Price * l.Quantity);\n+        if (order.Coupon == null) return subtotal;\n+        return Math.Max(0, order.Coupon.Apply(subtotal));\n     }\n }\n"
+}

@@ -1,0 +1,667 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "commands.schema.json",
+  "title": "Comandi JS -> host",
+  "description": "Argomenti dei comandi inviati con {type:\"cmd\",name,args}. Generato da una tabella: un solo oggetto \"args\" per comando.",
+  "oneOf": [
+    {
+      "title": "refresh",
+      "description": "Ricarica lo stato (svn status).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "refresh"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "update",
+      "description": "svn update della working copy.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "update"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "commit",
+      "description": "Commit dei file in Staged con il messaggio corrente.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "commit"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "setCommitText",
+      "description": "Aggiorna il messaggio di commit nello store.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "setCommitText"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text"
+          ],
+          "properties": {
+            "text": {
+              "type": "string",
+              "description": "Testo del messaggio (debounce 150 ms lato UI)."
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "genAi",
+      "description": "Genera il messaggio con l'AI dal diff dei file in Staged.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "genAi"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "improveAi",
+      "description": "Migliora la bozza scritta.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "improveAi"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "setLanguage",
+      "description": "Lingua del messaggio generato.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "setLanguage"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "lang"
+          ],
+          "properties": {
+            "lang": {
+              "enum": [
+                "auto",
+                "italiano",
+                "english"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "setWorkingCopy",
+      "description": "Carica una working copy.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "setWorkingCopy"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path"
+          ],
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Percorso inserito dall'utente (unico caso in cui la UI invia un percorso)."
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "stage",
+      "description": "Sposta in Staged: file, cartella (tutti i figli) o sezione. I file in conflitto sono ignorati.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "stage"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "key"
+          ],
+          "properties": {
+            "key": {
+              "type": "string",
+              "description": "Chiave di riga: \"<sezione>:<percorso/con/slash>\" oppure \"section:<id>\" (sezione intera). La UI non manda mai percorsi assoluti."
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "unstage",
+      "description": "Rimuove da Staged: file, cartella o sezione.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "unstage"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "key"
+          ],
+          "properties": {
+            "key": {
+              "type": "string",
+              "description": "Chiave di riga: \"<sezione>:<percorso/con/slash>\" oppure \"section:<id>\" (sezione intera). La UI non manda mai percorsi assoluti."
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "toggleFolder",
+      "description": "Espande/comprime una cartella.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "toggleFolder"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "key"
+          ],
+          "properties": {
+            "key": {
+              "type": "string",
+              "description": "Chiave di riga: \"<sezione>:<percorso/con/slash>\" oppure \"section:<id>\" (sezione intera). La UI non manda mai percorsi assoluti."
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "toggleSection",
+      "description": "Espande/comprime una sezione.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "toggleSection"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sec"
+          ],
+          "properties": {
+            "sec": {
+              "enum": [
+                "staged",
+                "changes",
+                "unversioned"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "expandAll",
+      "description": "Espande tutte le cartelle.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "expandAll"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "collapseAll",
+      "description": "Comprime tutte le cartelle.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "collapseAll"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "setView",
+      "description": "Albero per cartelle o elenco piatto.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "setView"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "view"
+          ],
+          "properties": {
+            "view": {
+              "enum": [
+                "tree",
+                "list"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "showDiff",
+      "description": "L'host apre il diff del file nell'editor di VS (BASE vs working copy).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "showDiff"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "key"
+          ],
+          "properties": {
+            "key": {
+              "type": "string",
+              "description": "Chiave di riga: \"<sezione>:<percorso/con/slash>\" oppure \"section:<id>\" (sezione intera). La UI non manda mai percorsi assoluti."
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "showFolderDiff",
+      "description": "L'host apre il diff di tutti i file modificati della cartella.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "showFolderDiff"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "key"
+          ],
+          "properties": {
+            "key": {
+              "type": "string",
+              "description": "Chiave di riga: \"<sezione>:<percorso/con/slash>\" oppure \"section:<id>\" (sezione intera). La UI non manda mai percorsi assoluti."
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "rowOp",
+      "description": "Operazione su una riga; le conferme sono dialoghi nativi dell'host.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "rowOp"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "key"
+          ],
+          "properties": {
+            "op": {
+              "enum": [
+                "add",
+                "ignore",
+                "revert",
+                "resolve",
+                "deleteFile"
+              ],
+              "description": "deleteFile = tasto Canc: elimina dal filesystem (svn delete se versionato). L'host chiede conferma."
+            },
+            "key": {
+              "type": "string",
+              "description": "Chiave di riga: \"<sezione>:<percorso/con/slash>\" oppure \"section:<id>\" (sezione intera). La UI non manda mai percorsi assoluti."
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "setTheme",
+      "description": "Tema della finestra: auto = segue Visual Studio.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "setTheme"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode"
+          ],
+          "properties": {
+            "mode": {
+              "enum": [
+                "auto",
+                "light",
+                "dark",
+                "blue"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "prereqToggle",
+      "description": "Apre/chiude il pannello Prerequisiti.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "prereqToggle"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "prereqRecheck",
+      "description": "Rilegge i prerequisiti.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "prereqRecheck"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "prereqRun",
+      "description": "Esegue l'azione di un prerequisito.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "prereqRun"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "primary"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Id dell'elemento dei prerequisiti."
+            },
+            "primary": {
+              "type": "boolean",
+              "description": "true = azione principale, false = secondaria."
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "logLoad",
+      "description": "Carica le ultime 50 revisioni.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "logLoad"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path"
+          ],
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Working copy."
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "logMore",
+      "description": "Carica altre 50 revisioni.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "logMore"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "logSelect",
+      "description": "Seleziona una revisione (carica il diff).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "logSelect"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "rev"
+          ],
+          "properties": {
+            "rev": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Revisione."
+            }
+          }
+        }
+      }
+    }
+  ]
+}

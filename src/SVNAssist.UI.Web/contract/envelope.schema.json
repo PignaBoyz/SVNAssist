@@ -1,0 +1,206 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "envelope.schema.json",
+  "title": "Messaggi host <-> JS (v1)",
+  "oneOf": [
+    {
+      "title": "cmd (JS -> host)",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "id",
+        "type",
+        "name",
+        "args"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Id progressivo, ripreso dalla reply."
+        },
+        "type": {
+          "const": "cmd"
+        },
+        "name": {
+          "type": "string",
+          "description": "Vedi commands.schema.json"
+        },
+        "args": {
+          "type": "object"
+        }
+      }
+    },
+    {
+      "title": "ready (JS -> host)",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "view",
+        "id"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "ready"
+        },
+        "view": {
+          "enum": [
+            "changes",
+            "log",
+            "diff"
+          ]
+        },
+        "id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Id dell'istanza (solo diff)."
+        }
+      }
+    },
+    {
+      "title": "state (host -> JS)",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "view",
+        "rev",
+        "state"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "state"
+        },
+        "view": {
+          "enum": [
+            "changes",
+            "log",
+            "diff"
+          ]
+        },
+        "id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "rev": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Contatore crescente."
+        },
+        "state": {
+          "type": "object",
+          "description": "changes-state / log-state / diff-state.schema.json"
+        }
+      }
+    },
+    {
+      "title": "reply (host -> JS)",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "id",
+        "ok"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "reply"
+        },
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Id del cmd."
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "result": {},
+        "error": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "title": "theme (host -> JS)",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "kind",
+        "vars"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "theme"
+        },
+        "kind": {
+          "enum": [
+            "light",
+            "dark",
+            "blue"
+          ]
+        },
+        "vars": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Variabili CSS (--bg0...) che sovrascrivono tokens.css. Vuoto = usa i token del tema."
+        }
+      }
+    },
+    {
+      "title": "event (host -> JS)",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "type",
+        "name"
+      ],
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "type": {
+          "const": "event"
+        },
+        "name": {
+          "enum": [
+            "toast",
+            "focus",
+            "backendRestarted"
+          ]
+        },
+        "text": {
+          "type": "string"
+        }
+      }
+    }
+  ]
+}

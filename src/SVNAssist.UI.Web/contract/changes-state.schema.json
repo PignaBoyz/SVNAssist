@@ -1,0 +1,408 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "changes-state.schema.json",
+  "title": "Stato della vista Changes (snapshot completo)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "workingCopy",
+    "commit",
+    "view",
+    "theme",
+    "sections",
+    "status",
+    "prereq",
+    "loading"
+  ],
+  "properties": {
+    "workingCopy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "showInput",
+        "branch"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "showInput": {
+          "type": "boolean",
+          "description": "Mostra il campo del percorso."
+        },
+        "branch": {
+          "type": "string"
+        },
+        "rev": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Revisione della working copy."
+        }
+      }
+    },
+    "commit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "text",
+        "aiStatus",
+        "busy",
+        "lang",
+        "trace",
+        "download"
+      ],
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "Messaggio corrente."
+        },
+        "aiStatus": {
+          "type": "string",
+          "description": "Ultimo messaggio di stato AI."
+        },
+        "busy": {
+          "type": "boolean",
+          "description": "AI in corso."
+        },
+        "lang": {
+          "enum": [
+            "auto",
+            "italiano",
+            "english"
+          ]
+        },
+        "trace": {
+          "type": "array",
+          "description": "Catena provider AI (diagnostica).",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "state",
+              "detail"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "state": {
+                "enum": [
+                  "wait",
+                  "run",
+                  "ok",
+                  "fail",
+                  "skip"
+                ]
+              },
+              "detail": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "download": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "pct",
+                "label"
+              ],
+              "properties": {
+                "pct": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 100
+                },
+                "label": {
+                  "type": "string"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "view": {
+      "enum": [
+        "tree",
+        "list"
+      ]
+    },
+    "theme": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "kind"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "auto",
+            "light",
+            "dark",
+            "blue"
+          ]
+        },
+        "kind": {
+          "enum": [
+            "light",
+            "dark",
+            "blue"
+          ]
+        }
+      }
+    },
+    "sections": {
+      "type": "array",
+      "description": "Sempre Staged, Modifiche, Non versionati (nell'ordine). Staged = i file che il commit invia; non esiste uno staging in SVN: e' un insieme tenuto dall'estensione.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "title",
+          "count",
+          "expanded",
+          "rows"
+        ],
+        "properties": {
+          "id": {
+            "enum": [
+              "staged",
+              "changes",
+              "unversioned"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "File nella sezione."
+          },
+          "expanded": {
+            "type": "boolean"
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/row"
+            }
+          }
+        }
+      }
+    },
+    "status": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "msg",
+        "err"
+      ],
+      "properties": {
+        "msg": {
+          "type": "string"
+        },
+        "err": {
+          "type": "boolean"
+        }
+      }
+    },
+    "prereq": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "open",
+        "summary",
+        "ai",
+        "feedback",
+        "items"
+      ],
+      "properties": {
+        "open": {
+          "type": "boolean"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "ai": {
+          "type": "string"
+        },
+        "feedback": {
+          "type": "string"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "group",
+              "title",
+              "ok",
+              "detail",
+              "instructions",
+              "primary",
+              "secondary"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "group": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "ok": {
+                "type": "boolean"
+              },
+              "detail": {
+                "type": "string"
+              },
+              "instructions": {
+                "type": "string"
+              },
+              "primary": {
+                "type": "string",
+                "description": "Etichetta del pulsante principale (\"\" = nessuno)."
+              },
+              "secondary": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "loading": {
+      "type": "boolean"
+    }
+  },
+  "$defs": {
+    "row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "kind",
+        "depth",
+        "name",
+        "status",
+        "can"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "description": "Chiave di riga: \"<sezione>:<percorso/con/slash>\" oppure \"section:<id>\" (sezione intera). La UI non manda mai percorsi assoluti."
+        },
+        "kind": {
+          "enum": [
+            "file",
+            "folder"
+          ]
+        },
+        "depth": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Livello di indentazione (0 = figli diretti della sezione)."
+        },
+        "name": {
+          "type": "string",
+          "description": "Etichetta; le cartelle singole sono compattate (\"Core/Services\")."
+        },
+        "detail": {
+          "type": "string",
+          "description": "Cartella del file (solo vista elenco)."
+        },
+        "dir": {
+          "type": "boolean",
+          "description": "File-kind che e' in realta' una cartella (non versionata o con proprieta')."
+        },
+        "expanded": {
+          "type": "boolean",
+          "description": "Solo cartelle."
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Solo cartelle: file contenuti."
+        },
+        "status": {
+          "enum": [
+            "M",
+            "A",
+            "D",
+            "C",
+            "?",
+            "!",
+            "R",
+            null
+          ],
+          "description": "Lettera svn; null per le cartelle."
+        },
+        "statusText": {
+          "type": "string",
+          "description": "Testo esteso per tooltip/aria."
+        },
+        "can": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "diff",
+            "stage",
+            "unstage",
+            "add",
+            "ignore",
+            "revert",
+            "resolve",
+            "deleteFile"
+          ],
+          "properties": {
+            "diff": {
+              "type": "boolean",
+              "description": "Mostra diff."
+            },
+            "stage": {
+              "type": "boolean"
+            },
+            "unstage": {
+              "type": "boolean"
+            },
+            "add": {
+              "type": "boolean",
+              "description": "svn add."
+            },
+            "ignore": {
+              "type": "boolean"
+            },
+            "revert": {
+              "type": "boolean"
+            },
+            "resolve": {
+              "type": "boolean"
+            },
+            "deleteFile": {
+              "type": "boolean",
+              "description": "Canc."
+            }
+          }
+        },
+        "tooltip": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

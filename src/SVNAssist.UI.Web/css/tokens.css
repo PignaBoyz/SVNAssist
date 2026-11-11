@@ -1,0 +1,45 @@
+/* Variabili del tema. Unico posto in cui compaiono colori fissi.
+   Il tema "Auto" e' fornito dall'host (VS) con messaggio {type:"theme",kind,vars}: sovrascrive queste variabili. */
+:root, :root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg0:#181818; --bg1:#1f1f1f; --bg2:#252526; --bg3:#2d2d30; --bg4:#33333a; --bd:#3f3f46; --bd2:#6b6b75;
+  --fg:#e6e6e6; --fg2:#b8b8b8; --fg3:#a4a4a4;
+  --acc:#0e63b0; --acc-fg:#ffffff; --acc-h:#1473c9; --acc2:#6cb6ff; --acc-bg:#04395e; --focus:#6cb6ff;
+  --ok:#4ec9b0; --warn:#e5b84b; --err:#ff8f7a;
+  --st-M:#79a8f5; --st-A:#4fc47f; --st-D:#f59a9a; --st-C:#ff93a4; --st-U:#b0b0b0; --st-X:#ffa53a; --st-R:#b99af0;
+  --add-bg:#12331c; --add-fg:#a8ecb5; --add-hl:#1a5c2e; --del-bg:#3b1519; --del-fg:#ffb8b3; --del-hl:#7a2a30;
+  --hunk-bg:#13263d; --hunk-fg:#8fc2ff; --empty-bg:#202024;
+  --syn-kw:#7cb7ff; --syn-str:#e8a87c; --syn-cm:#8fb98f; --syn-num:#b5cea8; --syn-ty:#4ec9b0;
+  --chip-ok-bg:#12372d; --chip-ok-fg:#8be3c7; --chip-fail-bg:#3d1d17; --chip-fail-fg:#ffb3a3; --chip-run-bg:#10324f; --chip-run-fg:#9fd0ff;
+  --warn-bg:#4a3500; --warn-fg:#ffd98a;
+  --shadow:rgba(0,0,0,.55); --scrim:rgba(0,0,0,.6);
+  --font:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif; --mono:Consolas,"Cascadia Mono","Courier New",monospace; --fs:13px;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg0:#ffffff; --bg1:#ffffff; --bg2:#f3f3f3; --bg3:#e8e8e8; --bg4:#e2e2e2; --bd:#cccccc; --bd2:#767676;
+  --fg:#1e1e1e; --fg2:#4a4a4a; --fg3:#595959;
+  --acc:#005fb8; --acc-fg:#ffffff; --acc-h:#0a4f96; --acc2:#0050a0; --acc-bg:#cfe6fa; --focus:#005fb8;
+  --ok:#0f6b4f; --warn:#8a5a00; --err:#b42318;
+  --st-M:#0550ae; --st-A:#146c2e; --st-D:#b42318; --st-C:#b4132a; --st-U:#595959; --st-X:#954600; --st-R:#6639ba;
+  --add-bg:#dcf5e1; --add-fg:#0f5a26; --add-hl:#9be0ae; --del-bg:#fbe0e0; --del-fg:#8f1d1d; --del-hl:#f2a8a8;
+  --hunk-bg:#e1edfb; --hunk-fg:#0a4f96; --empty-bg:#f0f0f0;
+  --syn-kw:#0b4fb3; --syn-str:#a33d00; --syn-cm:#2d6a2d; --syn-num:#1f6b3a; --syn-ty:#0f6b73;
+  --chip-ok-bg:#d8f3e8; --chip-ok-fg:#0b5a40; --chip-fail-bg:#fbe0dc; --chip-fail-fg:#8f1d12; --chip-run-bg:#dcecfb; --chip-run-fg:#0a4f96;
+  --warn-bg:#fff0c2; --warn-fg:#5c3d00;
+  --shadow:rgba(0,0,0,.25); --scrim:rgba(0,0,0,.35);
+}
+:root[data-theme="blue"] {
+  color-scheme: dark;
+  --bg0:#1f2d45; --bg1:#243551; --bg2:#2b3d5c; --bg3:#344a6c; --bg4:#36507c; --bd:#4d6893; --bd2:#8aa3cc;
+  --fg:#f3f7fd; --fg2:#cbd7ea; --fg3:#b9c8e0;
+  --acc:#1a62ae; --acc-fg:#ffffff; --acc-h:#2272c9; --acc2:#9bcdff; --acc-bg:#285c99; --focus:#ffffff;
+  --ok:#6fe0c4; --warn:#ffd36b; --err:#ffa08e;
+  --st-M:#b3d2ff; --st-A:#8cf0b5; --st-D:#ffb0b0; --st-C:#ffbac6; --st-U:#d8e2f2; --st-X:#ffc680; --st-R:#dcc8ff;
+  --add-bg:#1a4a3a; --add-fg:#b6f3c8; --add-hl:#226a4c; --del-bg:#58283a; --del-fg:#ffc9cd; --del-hl:#8f3f55;
+  --hunk-bg:#1c3a66; --hunk-fg:#a9d2ff; --empty-bg:#27394f;
+  --syn-kw:#9bcdff; --syn-str:#ffc69a; --syn-cm:#a8d5a8; --syn-num:#c6e2b8; --syn-ty:#7fe5d0;
+  --chip-ok-bg:#1a4a3a; --chip-ok-fg:#b6f3e0; --chip-fail-bg:#58283a; --chip-fail-fg:#ffd0d4; --chip-run-bg:#1c3a66; --chip-run-fg:#bfe0ff;
+  --warn-bg:#5c4a12; --warn-fg:#ffe7a8;
+  --shadow:rgba(0,0,0,.5); --scrim:rgba(0,0,0,.55);
+}

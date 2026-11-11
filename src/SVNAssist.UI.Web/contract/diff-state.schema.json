@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "diff-state.schema.json",
+  "title": "Stato della vista Diff (pagina di diff affiancato)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "title",
+    "subtitle",
+    "diff"
+  ],
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "subtitle": {
+      "type": "string"
+    },
+    "diff": {
+      "type": "string",
+      "description": "Testo di \"svn diff\" (uno o piu' file: righe \"Index: ...\")."
+    }
+  }
+}

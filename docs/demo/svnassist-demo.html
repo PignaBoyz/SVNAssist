@@ -1,16 +1,56 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="it" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SVNAssist - Demo interattiva</title>
 <style>
-:root{
-  --bg0:#181818; --bg1:#1f1f1f; --bg2:#252526; --bg3:#2d2d30; --bg4:#37373d; --bd:#3f3f46; --bd2:#4b4b52;
-  --fg:#d4d4d4; --fg2:#9d9d9d; --fg3:#6e6e6e; --acc:#0e70c0; --acc2:#1c97ea; --acc-bg:#04395e;
-  --ok:#4ec9b0; --warn:#e5b84b; --err:#f48771; --pur:#b180d7;
-  --st-M:#6495ed; --st-A:#3cb371; --st-D:#cd5c5c; --st-C:#dc143c; --st-U:#808080; --st-X:#ff8c00; --st-R:#9370db;
-  --font:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif; --mono:Consolas,"Cascadia Mono","Courier New",monospace;
+/* Variabili del tema. Unico posto in cui compaiono colori fissi.
+   Il tema "Auto" e' fornito dall'host (VS) con messaggio {type:"theme",kind,vars}: sovrascrive queste variabili. */
+:root, :root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg0:#181818; --bg1:#1f1f1f; --bg2:#252526; --bg3:#2d2d30; --bg4:#33333a; --bd:#3f3f46; --bd2:#6b6b75;
+  --fg:#e6e6e6; --fg2:#b8b8b8; --fg3:#a4a4a4;
+  --acc:#0e63b0; --acc-fg:#ffffff; --acc-h:#1473c9; --acc2:#6cb6ff; --acc-bg:#04395e; --focus:#6cb6ff;
+  --ok:#4ec9b0; --warn:#e5b84b; --err:#ff8f7a;
+  --st-M:#79a8f5; --st-A:#4fc47f; --st-D:#f59a9a; --st-C:#ff93a4; --st-U:#b0b0b0; --st-X:#ffa53a; --st-R:#b99af0;
+  --add-bg:#12331c; --add-fg:#a8ecb5; --add-hl:#1a5c2e; --del-bg:#3b1519; --del-fg:#ffb8b3; --del-hl:#7a2a30;
+  --hunk-bg:#13263d; --hunk-fg:#8fc2ff; --empty-bg:#202024;
+  --syn-kw:#7cb7ff; --syn-str:#e8a87c; --syn-cm:#8fb98f; --syn-num:#b5cea8; --syn-ty:#4ec9b0;
+  --chip-ok-bg:#12372d; --chip-ok-fg:#8be3c7; --chip-fail-bg:#3d1d17; --chip-fail-fg:#ffb3a3; --chip-run-bg:#10324f; --chip-run-fg:#9fd0ff;
+  --warn-bg:#4a3500; --warn-fg:#ffd98a;
+  --shadow:rgba(0,0,0,.55); --scrim:rgba(0,0,0,.6);
+  --font:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif; --mono:Consolas,"Cascadia Mono","Courier New",monospace; --fs:13px;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg0:#ffffff; --bg1:#ffffff; --bg2:#f3f3f3; --bg3:#e8e8e8; --bg4:#e2e2e2; --bd:#cccccc; --bd2:#767676;
+  --fg:#1e1e1e; --fg2:#4a4a4a; --fg3:#595959;
+  --acc:#005fb8; --acc-fg:#ffffff; --acc-h:#0a4f96; --acc2:#0050a0; --acc-bg:#cfe6fa; --focus:#005fb8;
+  --ok:#0f6b4f; --warn:#8a5a00; --err:#b42318;
+  --st-M:#0550ae; --st-A:#146c2e; --st-D:#b42318; --st-C:#b4132a; --st-U:#595959; --st-X:#954600; --st-R:#6639ba;
+  --add-bg:#dcf5e1; --add-fg:#0f5a26; --add-hl:#9be0ae; --del-bg:#fbe0e0; --del-fg:#8f1d1d; --del-hl:#f2a8a8;
+  --hunk-bg:#e1edfb; --hunk-fg:#0a4f96; --empty-bg:#f0f0f0;
+  --syn-kw:#0b4fb3; --syn-str:#a33d00; --syn-cm:#2d6a2d; --syn-num:#1f6b3a; --syn-ty:#0f6b73;
+  --chip-ok-bg:#d8f3e8; --chip-ok-fg:#0b5a40; --chip-fail-bg:#fbe0dc; --chip-fail-fg:#8f1d12; --chip-run-bg:#dcecfb; --chip-run-fg:#0a4f96;
+  --warn-bg:#fff0c2; --warn-fg:#5c3d00;
+  --shadow:rgba(0,0,0,.25); --scrim:rgba(0,0,0,.35);
+}
+:root[data-theme="blue"] {
+  color-scheme: dark;
+  --bg0:#1f2d45; --bg1:#243551; --bg2:#2b3d5c; --bg3:#344a6c; --bg4:#36507c; --bd:#4d6893; --bd2:#8aa3cc;
+  --fg:#f3f7fd; --fg2:#cbd7ea; --fg3:#b9c8e0;
+  --acc:#1a62ae; --acc-fg:#ffffff; --acc-h:#2272c9; --acc2:#9bcdff; --acc-bg:#285c99; --focus:#ffffff;
+  --ok:#6fe0c4; --warn:#ffd36b; --err:#ffa08e;
+  --st-M:#b3d2ff; --st-A:#8cf0b5; --st-D:#ffb0b0; --st-C:#ffbac6; --st-U:#d8e2f2; --st-X:#ffc680; --st-R:#dcc8ff;
+  --add-bg:#1a4a3a; --add-fg:#b6f3c8; --add-hl:#226a4c; --del-bg:#58283a; --del-fg:#ffc9cd; --del-hl:#8f3f55;
+  --hunk-bg:#1c3a66; --hunk-fg:#a9d2ff; --empty-bg:#27394f;
+  --syn-kw:#9bcdff; --syn-str:#ffc69a; --syn-cm:#a8d5a8; --syn-num:#c6e2b8; --syn-ty:#7fe5d0;
+  --chip-ok-bg:#1a4a3a; --chip-ok-fg:#b6f3e0; --chip-fail-bg:#58283a; --chip-fail-fg:#ffd0d4; --chip-run-bg:#1c3a66; --chip-run-fg:#bfe0ff;
+  --warn-bg:#5c4a12; --warn-fg:#ffe7a8;
+  --shadow:rgba(0,0,0,.5); --scrim:rgba(0,0,0,.55);
+}
+
 }
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
@@ -86,7 +126,7 @@ body.panel-closed .sim-panel{display:none}
 .center{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg1)}
 .doc-tabs{display:flex;background:var(--bg0);border-bottom:1px solid var(--bd);min-height:30px;overflow:hidden}
 .doc-tabs button{background:transparent;border:0;border-right:1px solid var(--bd);padding:6px 12px;color:var(--fg2);font-size:12.5px;white-space:nowrap}
-.doc-tabs button[aria-selected=true]{background:var(--bg1);color:#fff;border-top:2px solid var(--acc2);padding-top:4px}
+.doc-tabs button[aria-selected=true]{background:var(--bg1);color:var(--fg);border-top:2px solid var(--acc2);padding-top:4px}
 .doc-body{flex:1;min-height:0;position:relative;display:flex;flex-direction:column}
 .editor{flex:1;display:flex;min-height:0}
 .gutter{background:var(--bg1);color:var(--fg3);font:12px/1.5 var(--mono);text-align:right;padding:8px 8px 8px 12px;user-select:none;overflow:hidden;white-space:pre}
@@ -97,7 +137,7 @@ body.panel-closed .sim-panel{display:none}
 .dock{width:470px;flex:none;background:var(--bg2);border-left:1px solid var(--bd);display:flex;flex-direction:column;min-height:0}
 .dock-tabs{display:flex;background:var(--bg3);border-bottom:1px solid var(--bd)}
 .dock-tabs button{background:transparent;border:0;padding:5px 12px;color:var(--fg2);font-size:12px;border-top:2px solid transparent}
-.dock-tabs button[aria-selected=true]{color:#fff;background:var(--bg2);border-top-color:var(--acc2)}
+.dock-tabs button[aria-selected=true]{color:var(--fg);background:var(--bg2);border-top-color:var(--acc2)}
 .dock-tabs .x{padding:5px 7px;margin-left:-8px;color:var(--fg3)}
 .dock-body{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column}
 .dock-empty{margin:auto;padding:20px;text-align:center;color:var(--fg2)}
@@ -106,64 +146,7 @@ body.panel-closed .sim-panel{display:none}
 .vs-status .sp{flex:1}
 @media (max-width:1100px){.se{width:170px}.dock{width:400px}}
 
-/* ---------- tool window: SVN Changes ---------- */
-.tw{display:flex;flex-direction:column;height:100%;padding:6px 8px;gap:4px;min-height:0;overflow-y:auto}
-.tw .row{display:flex;align-items:center;gap:6px}
-.tw hr{border:0;border-top:1px solid var(--bd);margin:3px 0;width:100%}
-.branch{font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#commitMsg{min-height:54px;max-height:110px}
-.ai-status{font-size:11px;color:var(--fg2)}
-.trace{display:flex;flex-wrap:wrap;gap:4px;align-items:center;font-size:11px;margin-top:2px}
-.chip{padding:1px 7px;border-radius:9px;border:1px solid var(--bd2);background:var(--bg3);white-space:nowrap}
-.chip.ok{border-color:#1d6b55;background:#12372d;color:#8be3c7}
-.chip.fail{border-color:#8a3a2a;background:#3d1d17;color:#ffb3a3}
-.chip.skip{color:var(--fg3);border-style:dashed}
-.chip.run{border-color:#1c5a91;background:#10324f;color:#9fd0ff}
-.pbar{height:8px;background:var(--bg1);border:1px solid var(--bd2);border-radius:4px;overflow:hidden;margin:3px 0}
-.pbar>i{display:block;height:100%;background:linear-gradient(90deg,var(--acc),var(--acc2));width:0}
-.dl{background:var(--bg3);border:1px solid var(--bd2);padding:6px 8px;border-radius:3px;font-size:11.5px}
-.list-h{display:flex;align-items:center;gap:6px;justify-content:space-between}
-.flist{flex:1 1 150px;min-height:150px;overflow:auto;background:var(--bg1);border:1px solid var(--bd)}
-.frow{display:grid;grid-template-columns:auto 20px 88px 1fr auto;align-items:center;gap:6px;padding:2px 6px}
-.frow:hover{background:var(--bg3)}
-.frow .st{font:700 12px var(--mono);text-align:center}
-.frow .pth{background:transparent;border:0;text-align:left;padding:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px;color:var(--fg)}
-.frow .act{font-size:12px;color:var(--fg2)}
-.frow.ctxed{background:var(--acc-bg)}
-.grow{display:flex;align-items:center;gap:5px;padding:2px 6px;min-height:25px;white-space:nowrap}
-.grow:hover{background:var(--bg3)} .grow.cur{background:var(--acc-bg)}
-.grow input[type=checkbox]{margin:0;flex:none}
-.grow .chev{width:16px;flex:none;background:transparent;border:0;padding:0;color:var(--fg2);text-align:center;font-size:11px}
-.grow .nm{background:transparent;border:0;padding:0;text-align:left;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto;color:var(--fg)}
-.grow .fill{flex:1 1 0}
-.grow .dirp{color:var(--fg3);font-size:11.5px;overflow:hidden;text-overflow:ellipsis;flex:1 1 0;min-width:0;margin-left:2px}
-.grow .btn{flex:none}
-.srow{background:var(--bg3);font-weight:600;border-bottom:1px solid var(--bd);position:sticky;top:0;z-index:1}
-.btn[aria-pressed=true]{background:var(--acc-bg);border-color:var(--acc2)}
-.langsel{width:auto;padding:1px 4px;font-size:11px}
-.grow .nm:disabled{color:var(--fg3);cursor:default}
-.empty-list{padding:16px;text-align:center;color:var(--fg2)}
-.diffbox{display:flex;flex-direction:column;height:210px;flex:none}
-.diffpre{flex:1;margin:0;overflow:auto;background:var(--bg1);border:1px solid var(--bd);font:11.5px/1.45 var(--mono);padding:4px 0;white-space:pre}
-.diffpre div{padding:0 8px;min-height:1.45em}
-.diffpre .add{background:#12331c;color:#9be5a8}.diffpre .del{background:#3b1519;color:#ffb0ab}.diffpre .hunk{color:#7cb7ff;background:#13263d}.diffpre .meta{color:var(--fg2)}
-.tw-status{font-style:italic;color:var(--fg);padding:2px 0 0;font-size:12px}
-.tw-status.err{color:var(--err)}
-.watch{font-size:10.5px;color:var(--fg3);display:flex;gap:8px;align-items:center}
-.watch .dot{width:7px;height:7px;border-radius:50%;background:#3fb950;display:inline-block}
-.watch .dot.fire{background:var(--warn);box-shadow:0 0 6px var(--warn)}
 .ctx{position:fixed;background:var(--bg3);border:1px solid var(--bd2);box-shadow:0 6px 18px #000a;padding:3px 0;z-index:200;min-width:190px}
-/* log */
-.logwin{display:flex;flex-direction:column;height:100%;padding:8px 10px;gap:6px;min-height:0}
-.logwin .row{display:flex;gap:8px;align-items:center}
-.logwin label{white-space:nowrap}
-.loglist{flex:1;min-height:100px;overflow:auto;border:1px solid var(--bd);background:var(--bg1)}
-.logrow{display:grid;grid-template-columns:60px 100px 130px 1fr;width:100%;background:transparent;border:0;text-align:left;padding:2px 4px;gap:4px;border-bottom:1px solid #2a2a2a}
-.logrow:hover{background:var(--bg3)}
-.logrow.sel{background:var(--acc-bg)}
-.logrow b{font-weight:700}
-.logrow .m{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-
 /* ---------- sim panel ---------- */
 .sim-panel h3{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--fg2);margin:16px 0 6px;font-weight:600}
 .sim-panel h3:first-child{margin-top:0}
@@ -192,7 +175,7 @@ body.panel-closed .sim-panel{display:none}
 .opt-grid{display:grid;grid-template-columns:200px 1fr;gap:0;min-height:380px}
 .opt-tree{background:var(--bg1);border-right:1px solid var(--bd);padding:6px 0;font-size:12.5px}
 .opt-tree div{padding:3px 12px;color:var(--fg2)}
-.opt-tree .on{background:var(--acc-bg);color:#fff}
+.opt-tree .on{background:var(--acc-bg);color:var(--fg)}
 .opt-form{padding:10px 14px;overflow:auto;max-height:62vh}
 .opt-row{margin-bottom:11px}
 .opt-row label{display:block;font-size:12px;margin-bottom:3px}
@@ -221,15 +204,6 @@ body.panel-closed .sim-panel{display:none}
 @keyframes pulse{50%{outline-color:#ffd24a00}}
 @media (max-width:800px){#tour .tcard{flex-direction:column;gap:6px}#tour .tr{justify-content:flex-start;max-width:none}#tour{max-height:34vh;padding:6px 12px}#tour .btn{padding:2px 8px}.demo-top .btn{padding:2px 8px}}
 
-/* ---------- prerequisiti ---------- */
-.prq{flex:none;background:var(--bg3);border:1px solid var(--bd2);padding:6px 8px;max-height:46%;overflow:auto;flex:none}
-.prq h5{margin:8px 0 2px;font-size:11px;color:var(--fg2);text-transform:uppercase;letter-spacing:.05em}
-.prow{display:flex;gap:6px;align-items:flex-start;padding:3px 0;border-bottom:1px solid #333}
-.prow .pi{width:16px;flex:none;font-weight:700;text-align:center}
-.prow .pi.ok{color:var(--ok)}.prow .pi.ko{color:var(--err)}
-.prow .pn{flex:1;min-width:0;font-size:12px}
-.prow .pb{display:flex;gap:4px;flex-wrap:wrap}
-pre.cmd{background:#0c0c0c;border:1px solid var(--bd);padding:6px 8px;font:12px/1.4 var(--mono);white-space:pre-wrap;word-break:break-all;margin:4px 0}
 
 /* ---------- layout stretto ---------- */
 .nv{display:none;gap:3px;margin-left:8px}
@@ -254,7 +228,7 @@ pre.cmd{background:#0c0c0c;border:1px solid var(--bd);padding:6px 8px;font:12px/
 .soon-wrap h2{margin:0 0 4px}
 .soon-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;margin-top:16px}
 .card{position:relative;background:var(--bg2);border:1px dashed var(--bd2);padding:14px;border-radius:4px;filter:saturate(.35);opacity:.92}
-.card h3{margin:0 0 6px;font-size:14px;color:#cfcfcf}
+.card h3{margin:0 0 6px;font-size:14px;color:var(--fg)}
 .card p{margin:0 0 10px;color:var(--fg2);font-size:12.5px}
 .card .tag{position:absolute;top:10px;right:10px}
 .card ul{margin:0 0 10px;padding-left:18px;color:var(--fg2);font-size:12px}
@@ -268,6 +242,18 @@ pre.cmd{background:#0c0c0c;border:1px solid var(--bd);padding:6px 8px;font:12px/
 .sugg{position:absolute;background:var(--bg3);border:1px solid var(--bd2);box-shadow:0 6px 16px #000a;z-index:5;min-width:280px}
 .sugg button{display:block;width:100%;background:transparent;border:0;text-align:left;padding:4px 8px}
 .sugg button:hover,.sugg button.on{background:var(--acc-bg)}
+
+/* ---------- UI.Web incorporata (iframe) ---------- */
+.uiframe{display:block;width:100%;height:100%;border:0;background:var(--bg2)}
+.dock-body{overflow:hidden}
+.doc-frames{position:absolute;inset:0}
+.doc-frames iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:var(--bg1)}
+.doc-frames iframe[hidden]{display:none}
+.theme-sel{display:flex;gap:6px;align-items:center;margin:4px 0}
+/* barra della demo e tour: sempre scure, indipendenti dal tema di Visual Studio */
+.demo-top,#tour{--fg:#e6e6e6;--fg2:#b8b8b8;--fg3:#a4a4a4;--bg4:#33333a;--bd2:#6b6b75;--acc2:#6cb6ff;color:var(--fg)}
+.soon-wrap{color:var(--fg)}
+
 </style>
 </head>
 <body class="panel-closed">
@@ -316,6 +302,187 @@ pre.cmd{background:#0c0c0c;border:1px solid var(--bd);padding:6px 8px;font:12px/
 <div id="toasts" aria-live="polite"></div>
 <div id="ctxhost"></div>
 <div id="tour" hidden role="dialog" aria-label="Tour primo utilizzo"></div>
+<script>window.__UI_DOC = "<!DOCTYPE html>\n<html lang=\"it\" data-theme=\"dark\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>SVNAssist</title>\n<style>\n/* Variabili del tema. Unico posto in cui compaiono colori fissi.\n   Il tema \"Auto\" e' fornito dall'host (VS) con messaggio {type:\"theme\",kind,vars}: sovrascrive queste variabili. */\n:root, :root[data-theme=\"dark\"] {\n  color-scheme: dark;\n  --bg0:#181818; --bg1:#1f1f1f; --bg2:#252526; --bg3:#2d2d30; --bg4:#33333a; --bd:#3f3f46; --bd2:#6b6b75;\n  --fg:#e6e6e6; --fg2:#b8b8b8; --fg3:#a4a4a4;\n  --acc:#0e63b0; --acc-fg:#ffffff; --acc-h:#1473c9; --acc2:#6cb6ff; --acc-bg:#04395e; --focus:#6cb6ff;\n  --ok:#4ec9b0; --warn:#e5b84b; --err:#ff8f7a;\n  --st-M:#79a8f5; --st-A:#4fc47f; --st-D:#f59a9a; --st-C:#ff93a4; --st-U:#b0b0b0; --st-X:#ffa53a; --st-R:#b99af0;\n  --add-bg:#12331c; --add-fg:#a8ecb5; --add-hl:#1a5c2e; --del-bg:#3b1519; --del-fg:#ffb8b3; --del-hl:#7a2a30;\n  --hunk-bg:#13263d; --hunk-fg:#8fc2ff; --empty-bg:#202024;\n  --syn-kw:#7cb7ff; --syn-str:#e8a87c; --syn-cm:#8fb98f; --syn-num:#b5cea8; --syn-ty:#4ec9b0;\n  --chip-ok-bg:#12372d; --chip-ok-fg:#8be3c7; --chip-fail-bg:#3d1d17; --chip-fail-fg:#ffb3a3; --chip-run-bg:#10324f; --chip-run-fg:#9fd0ff;\n  --warn-bg:#4a3500; --warn-fg:#ffd98a;\n  --shadow:rgba(0,0,0,.55); --scrim:rgba(0,0,0,.6);\n  --font:\"Segoe UI\",system-ui,-apple-system,Roboto,sans-serif; --mono:Consolas,\"Cascadia Mono\",\"Courier New\",monospace; --fs:13px;\n}\n:root[data-theme=\"light\"] {\n  color-scheme: light;\n  --bg0:#ffffff; --bg1:#ffffff; --bg2:#f3f3f3; --bg3:#e8e8e8; --bg4:#e2e2e2; --bd:#cccccc; --bd2:#767676;\n  --fg:#1e1e1e; --fg2:#4a4a4a; --fg3:#595959;\n  --acc:#005fb8; --acc-fg:#ffffff; --acc-h:#0a4f96; --acc2:#0050a0; --acc-bg:#cfe6fa; --focus:#005fb8;\n  --ok:#0f6b4f; --warn:#8a5a00; --err:#b42318;\n  --st-M:#0550ae; --st-A:#146c2e; --st-D:#b42318; --st-C:#b4132a; --st-U:#595959; --st-X:#954600; --st-R:#6639ba;\n  --add-bg:#dcf5e1; --add-fg:#0f5a26; --add-hl:#9be0ae; --del-bg:#fbe0e0; --del-fg:#8f1d1d; --del-hl:#f2a8a8;\n  --hunk-bg:#e1edfb; --hunk-fg:#0a4f96; --empty-bg:#f0f0f0;\n  --syn-kw:#0b4fb3; --syn-str:#a33d00; --syn-cm:#2d6a2d; --syn-num:#1f6b3a; --syn-ty:#0f6b73;\n  --chip-ok-bg:#d8f3e8; --chip-ok-fg:#0b5a40; --chip-fail-bg:#fbe0dc; --chip-fail-fg:#8f1d12; --chip-run-bg:#dcecfb; --chip-run-fg:#0a4f96;\n  --warn-bg:#fff0c2; --warn-fg:#5c3d00;\n  --shadow:rgba(0,0,0,.25); --scrim:rgba(0,0,0,.35);\n}\n:root[data-theme=\"blue\"] {\n  color-scheme: dark;\n  --bg0:#1f2d45; --bg1:#243551; --bg2:#2b3d5c; --bg3:#344a6c; --bg4:#36507c; --bd:#4d6893; --bd2:#8aa3cc;\n  --fg:#f3f7fd; --fg2:#cbd7ea; --fg3:#b9c8e0;\n  --acc:#1a62ae; --acc-fg:#ffffff; --acc-h:#2272c9; --acc2:#9bcdff; --acc-bg:#285c99; --focus:#ffffff;\n  --ok:#6fe0c4; --warn:#ffd36b; --err:#ffa08e;\n  --st-M:#b3d2ff; --st-A:#8cf0b5; --st-D:#ffb0b0; --st-C:#ffbac6; --st-U:#d8e2f2; --st-X:#ffc680; --st-R:#dcc8ff;\n  --add-bg:#1a4a3a; --add-fg:#b6f3c8; --add-hl:#226a4c; --del-bg:#58283a; --del-fg:#ffc9cd; --del-hl:#8f3f55;\n  --hunk-bg:#1c3a66; --hunk-fg:#a9d2ff; --empty-bg:#27394f;\n  --syn-kw:#9bcdff; --syn-str:#ffc69a; --syn-cm:#a8d5a8; --syn-num:#c6e2b8; --syn-ty:#7fe5d0;\n  --chip-ok-bg:#1a4a3a; --chip-ok-fg:#b6f3e0; --chip-fail-bg:#58283a; --chip-fail-fg:#ffd0d4; --chip-run-bg:#1c3a66; --chip-run-fg:#bfe0ff;\n  --warn-bg:#5c4a12; --warn-fg:#ffe7a8;\n  --shadow:rgba(0,0,0,.5); --scrim:rgba(0,0,0,.55);\n}\n</style>\n<style>\n/* Stile del pannello. Solo variabili di tokens.css: nessun colore fisso qui. */\n*{box-sizing:border-box}\nhtml,body{height:100%;margin:0}\nbody{background:var(--bg2);color:var(--fg);font:var(--fs)/1.4 var(--font);overflow:hidden}\n.sprite{position:absolute;width:0;height:0}\nbutton,input,select,textarea{font:inherit;color:inherit}\nbutton{cursor:pointer}\n:focus-visible{outline:2px solid var(--focus);outline-offset:-1px}\n[hidden]{display:none!important}\n.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}\n.fill{flex:1 1 0;min-width:0}\n.muted{color:var(--fg2)} .small{font-size:.9em}\n.ic{width:16px;height:16px;flex:none;vertical-align:middle}\n.ic.big{width:32px;height:32px;color:var(--ok)}\nb{font-weight:600}\n\n/* pulsanti: pochi, con etichetta; le azioni secondarie sono icone o menu */\n.btn{display:inline-flex;align-items:center;gap:6px;background:var(--bg4);border:1px solid var(--bd2);border-radius:4px;padding:4px 11px;color:var(--fg);white-space:nowrap}\n.btn:hover:not(:disabled){border-color:var(--acc2)}\n.btn:disabled{opacity:.5;cursor:default}\n.btn.primary{background:var(--acc);border-color:var(--acc);color:var(--acc-fg);font-weight:600}\n.btn.primary:hover:not(:disabled){background:var(--acc-h)}\n.btn.sm{padding:2px 8px;font-size:.92em}\n.btn.ghost{background:transparent;border-color:transparent;color:var(--fg2)}\n.btn.ghost:hover:not(:disabled){background:var(--bg4);color:var(--fg)}\n.btn.ghost.warn{color:var(--warn)}\n.btn.ai .ic{color:var(--acc2)}\n.pill{background:var(--acc-fg);color:var(--acc);border-radius:9px;padding:0 6px;font-size:.88em;font-weight:700;min-width:18px;text-align:center}\n.ib{display:inline-grid;place-items:center;width:24px;height:24px;padding:0;background:transparent;border:1px solid transparent;border-radius:4px;color:var(--fg2)}\n.ib:hover:not(:disabled){background:var(--bg4);color:var(--fg)}\n.ib:disabled{opacity:.45;cursor:default}\ninput[type=text],textarea{background:var(--bg1);border:1px solid var(--bd2);border-radius:4px;padding:5px 8px;width:100%;color:var(--fg)}\ninput::placeholder,textarea::placeholder{color:var(--fg3)}\ntextarea{resize:vertical;min-height:62px;max-height:40vh;font-family:var(--font)}\n.spin{display:inline-block;width:12px;height:12px;border:2px solid var(--fg3);border-top-color:var(--acc2);border-radius:50%;animation:sp .7s linear infinite}\n@keyframes sp{to{transform:rotate(360deg)}}\n@media (prefers-reduced-motion:reduce){.spin{animation-duration:2s}}\n\n/* struttura */\n.app{display:flex;flex-direction:column;height:100vh;min-height:0;position:relative}\n.bar{display:flex;align-items:center;gap:6px;padding:6px 8px;flex:none;flex-wrap:wrap}\n.branch{display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}\n.branch b{overflow:hidden;text-overflow:ellipsis}\n.wc{display:flex;gap:6px;align-items:center;padding:0 8px 6px}\n.wc label{font-weight:600;white-space:nowrap}\n.commit{padding:0 8px 4px;flex:none;display:flex;flex-direction:column;gap:2px}\n.commit .bar{padding:6px 0 2px}\n.ai-s{font-size:.92em;color:var(--fg2);padding:2px 0}\n.trace{display:flex;flex-wrap:wrap;gap:4px;align-items:center;font-size:.9em;padding:2px 0}\n.chip{display:inline-flex;gap:4px;align-items:center;padding:1px 8px;border-radius:10px;border:1px solid var(--bd2);background:var(--bg3);color:var(--fg2);white-space:nowrap}\n.chip.ok{background:var(--chip-ok-bg);color:var(--chip-ok-fg);border-color:transparent}\n.chip.fail{background:var(--chip-fail-bg);color:var(--chip-fail-fg);border-color:transparent}\n.chip.run{background:var(--chip-run-bg);color:var(--chip-run-fg);border-color:transparent}\n.chip.skip{border-style:dashed}\n.dl{background:var(--bg3);border:1px solid var(--bd);border-radius:4px;padding:6px 8px;font-size:.92em;margin:3px 0}\nprogress{display:block;width:100%;height:8px;margin:4px 0;accent-color:var(--acc2)}\n.foot{display:flex;align-items:center;gap:8px;padding:4px 8px;border-top:1px solid var(--bd);background:var(--bg3);flex:none;min-height:30px}\n.foot .msg{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}\n.foot .msg.err{color:var(--err)}\n.prog{position:absolute;top:0;left:0;right:0;height:2px;overflow:hidden;display:none;z-index:5}\n.loading>.prog{display:block;background:var(--bg4)}\n.prog::after{content:\"\";display:block;height:100%;width:30%;background:var(--acc2);animation:ld 1s ease-in-out infinite}\n@keyframes ld{from{margin-left:-30%}to{margin-left:100%}}\n\n/* albero */\n.list{flex:1;min-height:80px;overflow:auto;background:var(--bg1);border-top:1px solid var(--bd);padding:2px 0}\n.tr{display:flex;align-items:center;gap:4px;height:26px;padding:0 6px 0 4px;white-space:nowrap;cursor:default;position:relative;user-select:none}\n.tr:hover{background:var(--bg3)}\n.tr[aria-selected=true]{background:var(--acc-bg)}\n.tr:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}\n.tr.sec{background:var(--bg3);font-weight:600;border-bottom:1px solid var(--bd);position:sticky;top:0;z-index:1;text-transform:none}\n.tr.sec:hover{background:var(--bg4)}\n.tr.empty{color:var(--fg2);height:auto;padding:8px 14px;white-space:normal;line-height:1.4}\n.gd{width:14px;height:26px;flex:none;border-left:1px solid var(--bd);margin-left:2px}\n.gd:first-child{border-left-color:transparent}\n.chev{width:16px;height:16px;flex:none;display:grid;place-items:center;color:var(--fg2)}\n.chev .ic{width:12px;height:12px}\n.nm{overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto}\n.fol>.nm{font-weight:500}\n.dt{color:var(--fg2);font-size:.9em;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 100 auto;margin-left:4px}\n.cnt{background:var(--bg4);color:var(--fg);border-radius:9px;padding:0 7px;font-size:.85em;flex:none}\n.fi{flex:none}\n.fi.fld{color:var(--st-X)}\n.fi.st-M{color:var(--st-M)}.fi.st-A{color:var(--st-A)}.fi.st-D{color:var(--st-D)}.fi.st-C{color:var(--st-C)}.fi.st-U{color:var(--st-U)}.fi.st-X{color:var(--st-X)}.fi.st-R{color:var(--st-R)}\n.st{font:700 12px var(--mono);width:18px;text-align:center;flex:none}\n.st.st-M{color:var(--st-M)}.st.st-A{color:var(--st-A)}.st.st-D{color:var(--st-D)}.st.st-C{color:var(--st-C)}.st.st-U{color:var(--st-U)}.st.st-X{color:var(--st-X)}.st.st-R{color:var(--st-R)}\n.acts{display:none;gap:0;flex:none}\n.tr:hover .acts,.tr:focus-within .acts,.tr:focus .acts,.tr[aria-selected=true] .acts{display:flex}\n.empty-state{display:flex;flex-direction:column;align-items:center;gap:4px;padding:28px 16px;text-align:center}\n\n/* menu */\n.menu{position:fixed;z-index:100;min-width:230px;background:var(--bg3);border:1px solid var(--bd2);border-radius:6px;box-shadow:0 8px 24px var(--shadow);padding:4px 0}\n.menu button{display:flex;width:100%;align-items:center;gap:6px;background:transparent;border:0;text-align:left;padding:5px 14px 5px 6px;color:var(--fg)}\n.menu button:hover:not(:disabled),.menu button:focus{background:var(--acc-bg);outline:none}\n.menu button:disabled{color:var(--fg3);cursor:default}\n.menu .mk{width:16px;flex:none;color:var(--acc2)}\n.menu .ml{flex:1}\n.menu kbd{color:var(--fg2);font:inherit;font-size:.9em;margin-left:18px}\n.menu hr{border:0;border-top:1px solid var(--bd);margin:4px 0}\n.menu .mh{padding:4px 12px 2px;color:var(--fg2);font-size:.85em;text-transform:uppercase;letter-spacing:.05em}\n\n/* prerequisiti */\n.prq{flex:none;background:var(--bg3);border-top:1px solid var(--bd);border-bottom:1px solid var(--bd);padding:6px 8px;max-height:45%;overflow:auto}\n.prq-h{display:flex;align-items:center;gap:6px}\n.prq h4{margin:8px 0 2px;font-size:.85em;color:var(--fg2);text-transform:uppercase;letter-spacing:.05em}\n.prq .fb{font-weight:600;margin-top:3px}\n.pi{display:flex;gap:8px;padding:5px 0;border-bottom:1px solid var(--bd)}\n.pm{width:16px;flex:none;margin-top:2px}.pi.ok .pm{color:var(--ok)}.pi.ko .pm{color:var(--st-X)}\n.pt{flex:1;min-width:0}\n.pb{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}\ndetails summary{cursor:pointer;color:var(--acc2);font-size:.9em;margin-top:2px}\npre.cmd{background:var(--bg0);border:1px solid var(--bd);padding:6px 8px;font:12px/1.4 var(--mono);white-space:pre-wrap;word-break:break-all;margin:4px 0;color:var(--fg)}\n\n/* log */\n.app.log .wc{padding-top:6px}\n.llist{flex:0 1 38%;min-height:90px;overflow:auto;background:var(--bg1);border-top:1px solid var(--bd)}\n.lr{display:grid;grid-template-columns:56px 90px 126px 1fr;gap:8px;padding:4px 10px;border-bottom:1px solid var(--bd);cursor:default}\n.lr:hover{background:var(--bg3)}\n.lr.sel{background:var(--acc-bg)}\n.lr .m,.lr .au{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n.ldet{flex:1;min-height:0;overflow:auto;background:var(--bg1);border-top:1px solid var(--bd)}\n.ld-h{padding:8px 12px;border-bottom:1px solid var(--bd);background:var(--bg2)}\n.ld-h p{margin:4px 0;white-space:pre-wrap}\n.paths{list-style:none;margin:6px 0 0;padding:0;font:12px/1.5 var(--mono)}\n.paths li{display:flex;gap:8px}\n@container (max-width:520px){.lr{grid-template-columns:50px 1fr}.lr .dtm,.lr .au{display:none}}\n\n/* diff affiancato */\n.df{margin:0 0 14px}\n.df-h{display:flex;align-items:center;gap:6px;margin:0;padding:6px 12px;font-size:1em;font-weight:600;background:var(--bg3);border-bottom:1px solid var(--bd);position:sticky;top:0;z-index:2}\n.df-meta{margin:0;padding:4px 12px;font:12px/1.4 var(--mono);color:var(--fg2);white-space:pre-wrap}\n.df-hunk{background:var(--hunk-bg);color:var(--hunk-fg);font:12px/1.6 var(--mono);padding:1px 12px}\n.df .r{display:grid;grid-template-columns:1fr 1fr;container-type:inline-size}\n.df .s{display:grid;grid-template-columns:3.6em 1fr;min-width:0;font:12.5px/1.55 var(--mono)}\n.df .s:first-child{border-right:1px solid var(--bd)}\n.df .ln{text-align:right;padding:0 8px;color:var(--fg3);user-select:none;background:var(--bg2)}\n.df .cd{white-space:pre-wrap;overflow-wrap:anywhere;padding:0 8px;min-width:0}\n.df .s.ctx{background:var(--bg1)}\n.df .s.add{background:var(--add-bg);color:var(--add-fg)}\n.df .s.del{background:var(--del-bg);color:var(--del-fg)}\n.df .s.empty{background:var(--empty-bg)}\n.df .s.add mark{background:var(--add-hl);color:inherit;border-radius:2px}\n.df .s.del mark{background:var(--del-hl);color:inherit;border-radius:2px}\n.tk-kw{color:var(--syn-kw);font-style:normal}.tk-str{color:var(--syn-str);font-style:normal}.tk-cm{color:var(--syn-cm);font-style:normal}.tk-num{color:var(--syn-num);font-style:normal}.tk-ty{color:var(--syn-ty);font-style:normal}\n.df-empty{padding:20px;color:var(--fg2);text-align:center}\n@container (max-width:560px){.df .r{grid-template-columns:1fr}.df .s.empty{display:none}.df .s:first-child{border-right:0}}\n.dv{display:flex;flex-direction:column;height:100vh}\n.dv-h{display:flex;gap:10px;align-items:baseline;padding:8px 14px;background:var(--bg3);border-bottom:1px solid var(--bd)}\n.dv-b{flex:1;overflow:auto;background:var(--bg1)}\nhtml[data-view=diff] body{background:var(--bg1)}\nhtml[data-view=diff] body,html[data-view=log] body,html[data-view=changes] body{container-type:inline-size}\n\n#toast{position:fixed;left:50%;bottom:40px;transform:translateX(-50%);background:var(--acc);color:var(--acc-fg);padding:6px 14px;border-radius:4px;box-shadow:0 4px 16px var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s;max-width:90vw;z-index:200}\n#toast.on{opacity:1}\n</style>\n</head>\n<body>\n<svg class=\"sprite\" width=\"0\" height=\"0\" aria-hidden=\"true\" focusable=\"false\"><defs>\n<\!-- icone 16x16, tratto: stroke=\"currentColor\" -->\n<symbol id=\"i-chev-r\" viewBox=\"0 0 16 16\"><path d=\"M6 3.5 10.5 8 6 12.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></symbol>\n<symbol id=\"i-chev-d\" viewBox=\"0 0 16 16\"><path d=\"M3.5 6 8 10.5 12.5 6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></symbol>\n<symbol id=\"i-folder\" viewBox=\"0 0 16 16\"><path d=\"M1.8 4.2c0-.7.5-1.2 1.2-1.2h3l1.4 1.6H13c.7 0 1.2.5 1.2 1.2v6.2c0 .7-.5 1.2-1.2 1.2H3c-.7 0-1.2-.5-1.2-1.2z\" fill=\"currentColor\"/></symbol>\n<symbol id=\"i-folder-open\" viewBox=\"0 0 16 16\"><path d=\"M1.8 4.2c0-.7.5-1.2 1.2-1.2h3l1.4 1.6H13c.7 0 1.2.5 1.2 1.2v.8H4.3L1.8 12.2z M4.3 7h11l-2.2 5.6c-.2.5-.6.7-1.1.7H2.5z\" fill=\"currentColor\"/></symbol>\n<symbol id=\"i-file\" viewBox=\"0 0 16 16\"><path d=\"M4 1.8h5.2L12.6 5.2V13c0 .7-.5 1.2-1.2 1.2H4c-.7 0-1.2-.5-1.2-1.2V3c0-.7.5-1.2 1.2-1.2z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\" stroke-linejoin=\"round\"/><path d=\"M9 2v3.4h3.4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/></symbol>\n<symbol id=\"i-plus\" viewBox=\"0 0 16 16\"><path d=\"M8 3v10M3 8h10\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\"/></symbol>\n<symbol id=\"i-minus\" viewBox=\"0 0 16 16\"><path d=\"M3 8h10\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\"/></symbol>\n<symbol id=\"i-undo\" viewBox=\"0 0 16 16\"><path d=\"M5.5 3 2.5 6l3 3M2.8 6H9a4 4 0 0 1 0 8H6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></symbol>\n<symbol id=\"i-diff\" viewBox=\"0 0 16 16\"><path d=\"M2.5 3.5h4.5v9H2.5zM9 3.5h4.5v9H9z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\" stroke-linejoin=\"round\"/><path d=\"M4 8h1.6M10.5 8h1.6M11.3 7.2v1.6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.2\" stroke-linecap=\"round\"/></symbol>\n<symbol id=\"i-more\" viewBox=\"0 0 16 16\"><circle cx=\"3.5\" cy=\"8\" r=\"1.3\" fill=\"currentColor\"/><circle cx=\"8\" cy=\"8\" r=\"1.3\" fill=\"currentColor\"/><circle cx=\"12.5\" cy=\"8\" r=\"1.3\" fill=\"currentColor\"/></symbol>\n<symbol id=\"i-refresh\" viewBox=\"0 0 16 16\"><path d=\"M13.2 8A5.2 5.2 0 1 1 11.6 4.3M13 2.5v3h-3\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></symbol>\n<symbol id=\"i-down\" viewBox=\"0 0 16 16\"><path d=\"M8 2.5v8M4.8 7.6 8 10.8l3.2-3.2M3 13.3h10\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></symbol>\n<symbol id=\"i-check\" viewBox=\"0 0 16 16\"><path d=\"m3 8.5 3.2 3.2L13 4.8\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></symbol>\n<symbol id=\"i-x\" viewBox=\"0 0 16 16\"><path d=\"m4 4 8 8M12 4l-8 8\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\"/></symbol>\n<symbol id=\"i-spark\" viewBox=\"0 0 16 16\"><path d=\"M7 2.2 8.3 6l3.8 1.3L8.3 8.6 7 12.4 5.7 8.6 1.9 7.3 5.7 6zM12.5 1.5l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6z\" fill=\"currentColor\"/></symbol>\n<symbol id=\"i-branch\" viewBox=\"0 0 16 16\"><circle cx=\"4.5\" cy=\"3.5\" r=\"1.6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><circle cx=\"4.5\" cy=\"12.5\" r=\"1.6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><circle cx=\"11.5\" cy=\"5.5\" r=\"1.6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><path d=\"M4.5 5.1v5.8M11.5 7.1c0 2.4-3 2-6 4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/></symbol>\n</defs></svg>\n<div id=\"root\"></div>\n<script>\n'use strict';\n/* Utilita' condivise. Nessuna dipendenza esterna, nessun eval, nessun inline script (CSP stretta). */\n(function (w) {\n  const U = w.SVNUI = w.SVNUI || { views: {} };\n  U.esc = s => String(s == null ? '' : s).replace(/[&<>\"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', \"'\": '&#39;' }[c]));\n  // icona dallo sprite SVG in index.html\n  U.icon = (name, cls) => `<svg class=\"ic${cls ? ' ' + cls : ''}\" aria-hidden=\"true\" focusable=\"false\"><use href=\"#i-${name}\"/></svg>`;\n  // attributi per un elemento che invia un comando: data-cmd + data-args (JSON)\n  U.cmd = (name, args) => `data-cmd=\"${name}\"${args ? ` data-args=\"${U.esc(JSON.stringify(args))}\"` : ''}`;\n  U.btn = (cls, label, icon, cmd, args, tip, extra) =>\n    `<button type=\"button\" class=\"${cls}\" ${cmd ? U.cmd(cmd, args) : ''} title=\"${U.esc(tip || label)}\" ${icon && !label ? `aria-label=\"${U.esc(tip)}\"` : ''} ${extra || ''}>${icon ? U.icon(icon) : ''}${label ? `<span>${U.esc(label)}</span>` : ''}</button>`;\n  // aggiorna innerHTML solo se cambia (evita di perdere focus/selezione)\n  U.setHTML = (el, html) => { if (el && el.__h !== html) { el.__h = html; el.innerHTML = html; return true; } return false; };\n  U.fmtDate = iso => { const d = new Date(iso); if (isNaN(d)) return String(iso || ''); const p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };\n  U.STATUS = { M: 'Modificato', A: 'Aggiunto', D: 'Eliminato', C: 'Conflitto', '?': 'Non versionato', '!': 'Mancante', R: 'Sostituito' };\n  U.stClass = s => 'st-' + (s === '?' ? 'U' : s === '!' ? 'X' : s);\n})(typeof window !== 'undefined' ? window : globalThis);\n<\/script>\n<script>\n'use strict';\n/* Ponte verso l'host. Reale: window.chrome.webview (WebView2). Demo/test: window.__mockBridge (anche del frame padre).\n   Protocollo: docs/ui-protocol.md */\n(function (w) {\n  const U = w.SVNUI; let seq = 0;\n  const host = w.chrome && w.chrome.webview;\n  let mock = null;\n  if (!host) { try { mock = w.__mockBridge || (w.parent !== w && w.parent.__mockBridge) || null; } catch (e) { mock = null; } }\n  const post = m => { if (host) host.postMessage(m); else if (mock) mock.postMessage(m, w); };\n  U.bridge = {\n    mode: host ? 'webview2' : mock ? 'mock' : 'none',\n    // JS -> host: comando. Ritorna l'id per correlare la risposta {type:\"reply\"}.\n    send(name, args) { const id = ++seq; post({ v: 1, id, type: 'cmd', name, args: args || {} }); return id; },\n    ready(view, id) { post({ v: 1, type: 'ready', view, id: id || null }); },\n    onMessage(fn) { if (host) host.addEventListener('message', e => fn(e.data)); else if (mock) mock.attach(w, fn); },\n  };\n})(window);\n<\/script>\n<script>\n'use strict';\n/* Menu a comparsa (contestuale, overflow, AI). items: {label, cmd, args, run, checked, disabled, sep, header, kbd, hint} */\n(function (w) {\n  const U = w.SVNUI; let el = null, back = null;\n  U.menu = {\n    open(x, y, items, returnFocus) {\n      U.menu.close();\n      back = returnFocus || document.activeElement;\n      el = document.createElement('div'); el.className = 'menu'; el.setAttribute('role', 'menu');\n      el.innerHTML = items.map((it, i) => it.sep ? '<hr role=\"separator\">' : it.header ? `<div class=\"mh\" role=\"presentation\">${U.esc(it.label)}</div>` :\n        `<button type=\"button\" role=\"${it.checked != null ? 'menuitemradio' : 'menuitem'}\" ${it.checked != null ? `aria-checked=\"${!!it.checked}\"` : ''} data-i=\"${i}\" ${it.disabled ? 'disabled' : ''} ${it.hint ? `title=\"${U.esc(it.hint)}\"` : ''}>` +\n        `<span class=\"mk\">${it.checked ? U.icon('check') : ''}</span><span class=\"ml\">${U.esc(it.label)}</span>${it.kbd ? `<kbd>${U.esc(it.kbd)}</kbd>` : ''}</button>`).join('');\n      el.__items = items;\n      document.body.appendChild(el);\n      const r = el.getBoundingClientRect();\n      el.style.left = Math.max(2, Math.min(x, innerWidth - r.width - 2)) + 'px';\n      el.style.top = Math.max(2, Math.min(y, innerHeight - r.height - 2)) + 'px';\n      const f = el.querySelector('button:not(:disabled)'); if (f) f.focus();\n    },\n    close() { if (!el) return; el.remove(); el = null; if (back && back.isConnected) back.focus(); back = null; },\n    get isOpen() { return !!el; },\n  };\n  document.addEventListener('click', e => {\n    if (!el) return;\n    const b = e.target.closest('.menu button');\n    if (!b) { if (!e.target.closest('[data-menu]')) U.menu.close(); return; }\n    const it = el.__items[+b.dataset.i]; U.menu.close();\n    if (it.run) it.run(); else if (it.cmd) U.bridge.send(it.cmd, it.args);\n  }, true);\n  document.addEventListener('keydown', e => {\n    if (!el) return;\n    const bs = [...el.querySelectorAll('button:not(:disabled)')], i = bs.indexOf(document.activeElement);\n    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); U.menu.close(); }\n    else if (e.key === 'ArrowDown') { e.preventDefault(); bs[(i + 1) % bs.length].focus(); }\n    else if (e.key === 'ArrowUp') { e.preventDefault(); bs[(i - 1 + bs.length) % bs.length].focus(); }\n    else if (e.key === 'Tab') { e.preventDefault(); U.menu.close(); }\n  }, true);\n  w.addEventListener('blur', () => U.menu.close());\n})(window);\n<\/script>\n<script>\n'use strict';\n/* Diff unificato (testo di \"svn diff\") -> HTML affiancato (side by side), con evidenziazione intra-riga e\n   colorazione sintattica C#/XML/JSON di base. Render puro: diffHTML(text) -> string. Sotto ~700px si impila. */\n(function (w) {\n  const U = w.SVNUI;\n  const KW = /^(?:abstract|as|async|await|base|bool|break|case|catch|class|const|continue|decimal|default|delegate|do|double|else|enum|false|finally|float|for|foreach|if|in|int|interface|internal|is|lock|long|namespace|new|null|object|out|override|private|protected|public|readonly|ref|return|sealed|static|string|struct|switch|this|throw|true|try|typeof|using|var|virtual|void|while|param|function)$/;\n  const TOK = /(\\/\\/.*$|\"(?:[^\"\\\\]|\\\\.)*\"|'(?:[^'\\\\]|\\\\.)*'|\\b\\d[\\d_.]*\\b|[A-Za-z_]\\w*)/g;\n  // tokenizza una riga in [{t:testo, c:classe}]\n  function tokens(s) {\n    const out = []; let last = 0, m; TOK.lastIndex = 0;\n    while ((m = TOK.exec(s))) {\n      if (m.index > last) out.push({ t: s.slice(last, m.index) });\n      const t = m[0];\n      const c = t.startsWith('//') ? 'cm' : t[0] === '\"' || t[0] === \"'\" ? 'str' : /^\\d/.test(t) ? 'num' : KW.test(t) ? 'kw' : /^[A-Z]/.test(t) && /[a-z]/.test(t) ? 'ty' : '';\n      out.push({ t, c }); last = m.index + t.length;\n    }\n    if (last < s.length) out.push({ t: s.slice(last) });\n    return out;\n  }\n  // HTML di una riga, con [a,b) evidenziato come \"mark\" (parte realmente cambiata)\n  function lineHTML(s, mark) {\n    let pos = 0, h = '';\n    for (const k of tokens(s)) {\n      const e = pos + k.t.length; let i = 0; const piece = (a, b, inMark) => { if (b <= a) return; const x = U.esc(k.t.slice(a, b)); const y = k.c ? `<i class=\"tk-${k.c}\">${x}</i>` : x; h += inMark ? `<mark>${y}</mark>` : y; };\n      if (mark && mark[1] > pos && mark[0] < e) { const a = Math.max(0, mark[0] - pos), b = Math.min(k.t.length, mark[1] - pos); piece(0, a, false); piece(a, b, true); piece(b, k.t.length, false); } else piece(0, k.t.length, false);\n      void i; pos = e;\n    }\n    return h || ' ';\n  }\n  function changed(a, b) { // parte centrale che differisce\n    let p = 0; while (p < a.length && p < b.length && a[p] === b[p]) p++;\n    let q = 0; while (q < a.length - p && q < b.length - p && a[a.length - 1 - q] === b[b.length - 1 - q]) q++;\n    return [[p, a.length - q], [p, b.length - q]];\n  }\n  // parsing: [{title, meta:[righe], hunks:[{head, rows:[{l?:{n,s,k},r?:{n,s,k}}]}]}]\n  function parse(text) {\n    const files = []; let f = null, h = null, o = 0, n = 0, dels = [], adds = [];\n    const flush = () => { if (!h) return; const m = Math.max(dels.length, adds.length); for (let i = 0; i < m; i++) h.rows.push({ l: dels[i], r: adds[i] }); dels = []; adds = []; };\n    const file = t => { flush(); h = null; f = { title: t, meta: [], hunks: [] }; files.push(f); };\n    for (const line of String(text || '').split('\\n')) {\n      if (line.startsWith('Index: ')) { file(line.slice(7)); continue; }\n      if (!f) file('');\n      if (/^(={5,}|_{5,})$/.test(line) || line === '') { if (!h) continue; }\n      const hm = /^@@ -(\\d+)(?:,\\d+)? \\+(\\d+)(?:,\\d+)? @@/.exec(line);\n      if (hm) { flush(); h = { head: line, rows: [] }; f.hunks.push(h); o = +hm[1]; n = +hm[2]; continue; }\n      if (!h) { if (!/^(---|\\+\\+\\+) /.test(line) && line) f.meta.push(line); continue; }\n      const c = line[0], s = line.slice(1);\n      if (c === '-') dels.push({ n: o++, s });\n      else if (c === '+') adds.push({ n: n++, s });\n      else if (c === ' ') { flush(); h.rows.push({ l: { n: o++, s }, r: { n: n++, s }, ctx: true }); }\n      else if (c === '\\\\') { /* \"No newline at end of file\" */ }\n      else if (line) { flush(); h = null; f.meta.push(line); }\n    }\n    flush();\n    return files.filter(x => x.hunks.length || x.meta.length);\n  }\n  const cell = (c, cls, mark) => c ? `<div class=\"s ${cls}\"><span class=\"ln\">${c.n}</span><span class=\"cd\">${lineHTML(c.s, mark)}</span></div>` : '<div class=\"s empty\"><span class=\"ln\"></span><span class=\"cd\"></span></div>';\n  function diffHTML(text) {\n    const files = parse(text);\n    if (!files.length) return '<div class=\"df-empty\">Nessuna differenza testuale (file binario, non versionato o identico).</div>';\n    return files.map(f => `<section class=\"df\">${f.title ? `<h3 class=\"df-h\">${U.icon('file')}<span>${U.esc(f.title)}</span></h3>` : ''}` +\n      (f.meta.length ? `<pre class=\"df-meta\">${U.esc(f.meta.join('\\n'))}</pre>` : '') +\n      f.hunks.map(h => `<div class=\"df-hunk\">${U.esc(h.head)}</div>` + h.rows.map(r => {\n        if (r.ctx) return `<div class=\"r\">${cell(r.l, 'ctx')}${cell(r.r, 'ctx')}</div>`;\n        const m = r.l && r.r ? changed(r.l.s, r.r.s) : [null, null];\n        return `<div class=\"r\">${cell(r.l, 'del', m[0])}${cell(r.r, 'add', m[1])}</div>`;\n      }).join('')).join('') + '</section>').join('');\n  }\n  U.diffHTML = diffHTML; U.parseDiff = parse;\n  U.views.diff = {\n    mount(root) { root.innerHTML = '<div class=\"dv\"><header class=\"dv-h\"><b id=\"dvt\"></b><span id=\"dvs\" class=\"muted\"></span></header><div class=\"dv-b\" id=\"dvb\"></div></div>'; },\n    update(root, st) {\n      root.querySelector('#dvt').textContent = st.title || 'Diff'; root.querySelector('#dvs').textContent = st.subtitle || '';\n      U.setHTML(root.querySelector('#dvb'), diffHTML(st.diff));\n    },\n  };\n})(window);\n<\/script>\n<script>\n'use strict';\n/* Albero delle modifiche (Staged / Modifiche / Non versionati). ARIA tree \"piatto\": ogni riga e' role=treeitem con aria-level.\n   treeHTML(sections, cursor) e' puro. Tastiera in bindTree(). */\n(function (w) {\n  const U = w.SVNUI;\n  const SEC_ACTS = {   // azioni di gruppo visibili sulla riga di sezione\n    staged: [['minus', 'unstage', 'Rimuovi tutto dai file da committare']],\n    changes: [['plus', 'stage', 'Aggiungi tutto ai file da committare']],\n    unversioned: [['plus', 'stage', 'Aggiungi tutto ai file da committare']],\n  };\n  const guides = depth => '<span class=\"gd\"></span>'.repeat(Math.max(0, depth));\n  function rowActs(sec, r) {\n    const a = [], k = { key: r.key };\n    if (r.kind === 'file' && r.can.diff) a.push(['diff', 'showDiff', k, 'Mostra le differenze nell\\'editor (Invio)']);\n    if (r.kind === 'folder' && r.can.diff) a.push(['diff', 'showFolderDiff', k, 'Mostra le differenze della cartella']);\n    if (sec !== 'staged' && r.can.revert) a.push(['undo', 'rowOp', { op: 'revert', key: r.key }, 'Annulla le modifiche (revert)']);\n    if (r.can.unstage) a.push(['minus', 'unstage', k, 'Rimuovi dai file da committare (Spazio)']);\n    if (r.can.stage) a.push(['plus', 'stage', k, 'Aggiungi ai file da committare (Spazio)']);\n    return a.map(([i, c, g, t]) => `<button type=\"button\" class=\"ib\" tabindex=\"-1\" ${U.cmd(c, g)} title=\"${U.esc(t)}\" aria-label=\"${U.esc(t)}\">${U.icon(i)}</button>`).join('');\n  }\n  function sectionHTML(s, cursor) {\n    const key = 'section:' + s.id, open = s.expanded !== false;\n    let h = `<div class=\"tr sec\" role=\"treeitem\" aria-level=\"1\" aria-expanded=\"${open}\" data-key=\"${U.esc(key)}\" data-kind=\"section\" data-sec=\"${s.id}\" tabindex=\"${cursor === key ? 0 : -1}\">` +\n      `<span class=\"chev\">${U.icon(open ? 'chev-d' : 'chev-r')}</span><span class=\"nm\">${U.esc(s.title)}</span><span class=\"cnt\" title=\"${s.count} elementi\">${s.count}</span><span class=\"fill\"></span>` +\n      `<span class=\"acts\">${s.count ? (SEC_ACTS[s.id] || []).map(([i, c, t]) => `<button type=\"button\" class=\"ib\" tabindex=\"-1\" ${U.cmd(c, { key })} title=\"${U.esc(t)}\" aria-label=\"${U.esc(t)}\">${U.icon(i)}</button>`).join('') : ''}</span></div>`;\n    if (!open) return h;\n    if (!s.rows.length) return h + `<div class=\"tr empty\" role=\"none\">${s.id === 'staged' ? 'Nessun file da committare. Usa + sulle modifiche per aggiungerli qui.' : 'Nessun elemento.'}</div>`;\n    for (const r of s.rows) {\n      const lvl = r.depth + 2, isF = r.kind === 'folder', st = r.status;\n      h += `<div class=\"tr ${isF ? 'fol' : 'fil'}\" role=\"treeitem\" aria-level=\"${lvl}\" ${isF ? `aria-expanded=\"${!!r.expanded}\"` : ''} aria-selected=\"${cursor === r.key}\" data-key=\"${U.esc(r.key)}\" data-kind=\"${r.kind}\" data-sec=\"${s.id}\" tabindex=\"${cursor === r.key ? 0 : -1}\" title=\"${U.esc(r.tooltip || r.name)}\">` +\n        guides(r.depth + 1) + `<span class=\"chev\">${isF ? U.icon(r.expanded ? 'chev-d' : 'chev-r') : ''}</span>` +\n        U.icon(isF || r.dir ? (r.expanded ? 'folder-open' : 'folder') : 'file', 'fi ' + (isF || r.dir ? 'fld' : (st ? U.stClass(st) : ''))) +\n        `<span class=\"nm\">${U.esc(r.name)}</span>${r.detail ? `<span class=\"dt\">${U.esc(r.detail)}</span>` : ''}${isF ? `<span class=\"cnt\">${r.count}</span>` : ''}<span class=\"fill\"></span>` +\n        `<span class=\"acts\">${rowActs(s.id, r)}</span>${st ? `<span class=\"st ${U.stClass(st)}\" title=\"${U.esc(r.statusText || U.STATUS[st] || st)}\" aria-label=\"${U.esc(r.statusText || U.STATUS[st] || st)}\">${U.esc(st)}</span>` : ''}</div>`;\n    }\n    return h;\n  }\n  U.treeHTML = (sections, cursor) => sections.map(s => sectionHTML(s, cursor)).join('');\n\n  // ---- interazione ----\n  const rowsOf = list => [...list.querySelectorAll('.tr[role=treeitem]')];\n  const level = r => +r.getAttribute('aria-level');\n  function focusRow(list, r) { if (!r) return; rowsOf(list).forEach(x => { x.tabIndex = -1; x.setAttribute('aria-selected', 'false'); }); r.tabIndex = 0; r.setAttribute('aria-selected', 'true'); r.focus(); r.scrollIntoView({ block: 'nearest' }); list.__cursor = r.dataset.key; }\n  U.bindTree = function (list, ctx) {   // ctx.rowMenu(row, x, y) apre il menu contestuale\n    const toggleCmd = r => r.dataset.kind === 'section' ? ['toggleSection', { sec: r.dataset.sec }] : ['toggleFolder', { key: r.dataset.key }];\n    list.addEventListener('click', e => {\n      const r = e.target.closest('.tr[role=treeitem]'); if (!r || e.target.closest('.ib')) return;\n      focusRow(list, r);\n      if (r.dataset.kind !== 'file' && e.target.closest('.chev, .nm, .cnt')) U.bridge.send(...toggleCmd(r));\n    });\n    list.addEventListener('dblclick', e => {\n      const r = e.target.closest('.tr[role=treeitem]'); if (!r || e.target.closest('.ib')) return;\n      if (r.dataset.kind === 'file') U.bridge.send('showDiff', { key: r.dataset.key });\n      else if (r.dataset.kind === 'folder') U.bridge.send('showFolderDiff', { key: r.dataset.key });\n    });\n    list.addEventListener('contextmenu', e => { const r = e.target.closest('.tr[role=treeitem]'); if (!r) return; e.preventDefault(); focusRow(list, r); ctx.rowMenu(r, e.clientX, e.clientY); });\n    list.addEventListener('keydown', e => {\n      const r = e.target.closest('.tr[role=treeitem]'); if (!r || e.altKey || e.ctrlKey || e.metaKey) return;\n      const rs = rowsOf(list), i = rs.indexOf(r), kind = r.dataset.kind, open = r.getAttribute('aria-expanded');\n      const go = x => { e.preventDefault(); focusRow(list, x); };\n      switch (e.key) {\n        case 'ArrowDown': return go(rs[Math.min(rs.length - 1, i + 1)]);\n        case 'ArrowUp': return go(rs[Math.max(0, i - 1)]);\n        case 'Home': return go(rs[0]);\n        case 'End': return go(rs[rs.length - 1]);\n        case 'ArrowRight':\n          e.preventDefault();\n          if (open === 'false') U.bridge.send(...toggleCmd(r)); else if (open === 'true' && rs[i + 1] && level(rs[i + 1]) > level(r)) focusRow(list, rs[i + 1]);\n          return;\n        case 'ArrowLeft':\n          e.preventDefault();\n          if (open === 'true') U.bridge.send(...toggleCmd(r));\n          else { for (let j = i - 1; j >= 0; j--) if (level(rs[j]) < level(r)) { focusRow(list, rs[j]); break; } }\n          return;\n        case 'Enter': e.preventDefault();\n          if (kind === 'file') U.bridge.send('showDiff', { key: r.dataset.key }); else U.bridge.send(...toggleCmd(r)); return;\n        case ' ': e.preventDefault(); U.bridge.send(r.dataset.sec === 'staged' ? 'unstage' : 'stage', { key: r.dataset.key }); return;\n        case 'Delete': if (kind === 'file') { e.preventDefault(); U.bridge.send('rowOp', { op: 'deleteFile', key: r.dataset.key }); } return;   // come Git Changes: conferma a cura dell'host\n        case 'ContextMenu': { e.preventDefault(); const b = r.getBoundingClientRect(); ctx.rowMenu(r, b.left + 24, b.bottom); return; }\n        case 'F10': if (e.shiftKey) { e.preventDefault(); const b = r.getBoundingClientRect(); ctx.rowMenu(r, b.left + 24, b.bottom); } return;\n      }\n    });\n  };\n  U.focusRow = focusRow;\n})(window);\n<\/script>\n<script>\n'use strict';\n/* Pannello Prerequisiti. prereqHTML(prereq) e' puro. prereq: {open, summary, ai, feedback, items:[{id,group,title,ok,detail,instructions,primary,secondary}]} */\n(function (w) {\n  const U = w.SVNUI;\n  U.prereqHTML = p => {\n    if (!p || !p.open) return '';\n    let last = null;\n    return `<div class=\"prq\" role=\"region\" aria-label=\"Prerequisiti\"><div class=\"prq-h\"><b>Prerequisiti</b><span class=\"fill\"></span>` +\n      U.btn('btn sm', 'Ricontrolla', 'refresh', 'prereqRecheck', null, 'Rilegge lo stato di svn, TortoiseSVN e provider AI') + U.btn('ib', '', 'x', 'prereqToggle', null, 'Chiudi i prerequisiti') + `</div>` +\n      `<div class=\"muted small\">${U.esc(p.ai || '')}</div>${p.feedback ? `<div class=\"small fb\" role=\"status\">${U.esc(p.feedback)}</div>` : ''}` +\n      p.items.map(it => {\n        const g = it.group !== last ? `<h4>${U.esc(it.group)}</h4>` : ''; last = it.group;\n        return g + `<div class=\"pi ${it.ok ? 'ok' : 'ko'}\"><span class=\"pm\" title=\"${it.ok ? 'Presente' : 'Mancante'}\">${U.icon(it.ok ? 'check' : 'x')}<span class=\"sr\">${it.ok ? 'Presente' : 'Mancante'}</span></span>` +\n          `<div class=\"pt\"><b>${U.esc(it.title)}</b><div class=\"muted small\">${U.esc(it.detail)}</div>` +\n          (!it.ok && it.instructions ? `<details><summary>Come si sistema</summary><pre class=\"cmd\">${U.esc(it.instructions)}</pre></details>` : '') +\n          (it.primary || it.secondary ? `<div class=\"pb\">${it.primary ? U.btn('btn sm', it.primary, null, 'prereqRun', { id: it.id, primary: true }, it.primary) : ''}${it.secondary ? U.btn('btn sm', it.secondary, null, 'prereqRun', { id: it.id, primary: false }, it.secondary) : ''}</div>` : '') + `</div></div>`;\n      }).join('') + `</div>`;\n  };\n})(window);\n<\/script>\n<script>\n'use strict';\n/* Vista \"SVN Changes\". update(root, state) ridisegna a regioni, senza distruggere textarea/focus. */\n(function (w) {\n  const U = w.SVNUI, esc = U.esc;\n  const LANGS = [['auto', 'Auto (lingua del codice)'], ['italiano', 'Italiano'], ['english', 'English']];\n  const THEMES = [['auto', 'Auto (segue Visual Studio)'], ['light', 'Chiaro'], ['dark', 'Scuro'], ['blue', 'Blu']];\n  let st = null, forceInput = false, timer = 0;\n\n  function header(s) {\n    const wc = s.workingCopy, rev = wc.rev ? `<span class=\"muted\">r${wc.rev}</span>` : '';\n    return `<div class=\"branch\" title=\"Branch della working copy: ${esc(wc.path)}\">${U.icon('branch')}<b>${esc(wc.branch || '—')}</b>${rev}</div><span class=\"fill\"></span>` +\n      U.btn('btn', 'Aggiorna', 'down', 'update', null, 'Scarica le modifiche dal server (svn update)') +\n      U.btn('ib', '', 'refresh', 'refresh', null, 'Ricarica l\\'elenco delle modifiche (svn status)') +\n      `<button type=\"button\" class=\"ib\" data-menu=\"more\" title=\"Altre azioni: vista, tema, prerequisiti\" aria-label=\"Altre azioni\" aria-haspopup=\"menu\">${U.icon('more')}</button>`;\n  }\n  function wcForm(s) {\n    return (s.workingCopy.showInput || forceInput) ? `<form class=\"wc\" id=\"wcform\"><label for=\"wcp\">Working copy</label><input id=\"wcp\" type=\"text\" value=\"${esc(s.workingCopy.path)}\" placeholder=\"C:\\\\percorso\\\\della\\\\working copy\" spellcheck=\"false\"><button class=\"btn sm\" type=\"submit\" title=\"Carica questa working copy\">Apri</button></form>` : '';\n  }\n  function commitBar(s) {\n    const n = (s.sections.find(x => x.id === 'staged') || { count: 0 }).count, c = s.commit, busy = c.busy || s.loading;\n    const why = n ? `Committa ${n} ${n === 1 ? 'file' : 'file'} (Ctrl+Invio)` : 'Aggiungi almeno un file dalla lista (+) per committare';\n    return `<button type=\"button\" class=\"btn primary\" ${U.cmd('commit')} ${n && !busy ? '' : 'disabled'} title=\"${esc(why)}\">${U.icon('check')}<span>Commit</span>${n ? `<span class=\"pill\">${n}</span>` : ''}</button><span class=\"fill\"></span>` +\n      `<button type=\"button\" class=\"btn ai\" ${U.cmd('genAi')} ${c.busy ? 'disabled' : ''} title=\"Scrive il messaggio dal diff dei file da committare\">${c.busy ? '<span class=\"spin\"></span>' : U.icon('spark')}<span>Genera con AI</span></button>` +\n      `<button type=\"button\" class=\"ib\" data-menu=\"ai\" ${c.busy ? 'disabled' : ''} title=\"Migliora il messaggio, lingua\" aria-label=\"Altre opzioni AI\" aria-haspopup=\"menu\">${U.icon('chev-d')}</button>`;\n  }\n  function aiStat(c) {\n    let h = c.aiStatus ? `<div class=\"ai-s\" role=\"status\">${esc(c.aiStatus).replace(/\\n/g, '<br>')}</div>` : '';\n    if (c.download) h += `<div class=\"dl\"><b>GitHub Copilot: primo utilizzo</b> <span class=\"muted\">(runtime ~100 MB, una sola volta)</span><progress max=\"100\" value=\"${+c.download.pct || 0}\"></progress>${esc(c.download.label)}</div>`;\n    if (c.trace && c.trace.length) h += `<div class=\"trace\">` + c.trace.map((t, i) => {\n      const lab = t.state === 'ok' ? `${t.name}: OK` : t.state === 'fail' ? `${t.name}: errore` : t.state === 'skip' ? `${t.name}: saltato` : t.state === 'run' ? `<span class=\"spin\"></span>${esc(t.name)}…` : esc(t.name);\n      return (i ? '<span class=\"muted\">›</span>' : '') + `<span class=\"chip ${t.state}\" title=\"${esc(t.detail || '')}\">${t.state === 'ok' || t.state === 'fail' || t.state === 'skip' ? esc(lab) : lab}</span>`;\n    }).join('') + `</div>`;\n    return h;\n  }\n  function foot(s) {\n    const p = s.prereq;\n    return `<span class=\"msg ${s.status.err ? 'err' : ''}\" role=\"status\">${esc(s.status.msg)}</span><span class=\"fill\"></span>` +\n      `<button type=\"button\" class=\"btn sm ghost ${p.summary && /da sistemare/.test(p.summary) ? 'warn' : ''}\" ${U.cmd('prereqToggle')} aria-expanded=\"${!!p.open}\" title=\"Mostra/nasconde la checklist: svn, TortoiseSVN, provider AI\">${esc(p.summary || 'Prerequisiti')}</button>`;\n  }\n  const isEmpty = s => s.sections.every(x => !x.count);\n\n  function moreMenu() {\n    return [\n      { header: true, label: 'Vista' },\n      { label: 'Albero per cartelle', cmd: 'setView', args: { view: 'tree' }, checked: st.view === 'tree' },\n      { label: 'Elenco semplice', cmd: 'setView', args: { view: 'list' }, checked: st.view === 'list' },\n      { label: 'Espandi tutto', cmd: 'expandAll' }, { label: 'Comprimi tutto', cmd: 'collapseAll' }, { sep: true },\n      { header: true, label: 'Tema della finestra' },\n      ...THEMES.map(([m, l]) => ({ label: l, cmd: 'setTheme', args: { mode: m }, checked: st.theme.mode === m })), { sep: true },\n      { label: 'Prerequisiti…', cmd: 'prereqToggle' },\n      { label: 'Cambia working copy…', run: () => { forceInput = true; render(); const i = document.getElementById('wcp'); if (i) i.focus(); } },\n    ];\n  }\n  function aiMenu() {\n    return [{ label: 'Migliora il messaggio scritto', cmd: 'improveAi', hint: 'Riscrive la bozza nel campo sopra' }, { sep: true }, { header: true, label: 'Lingua del messaggio' },\n      ...LANGS.map(([l, t]) => ({ label: t, cmd: 'setLanguage', args: { lang: l }, checked: st.commit.lang === l }))];\n  }\n  function rowMenu(row, x, y) {\n    const key = row.dataset.key, kind = row.dataset.kind, sec = row.dataset.sec;\n    const s = st.sections.find(z => z.id === sec); const r = s && s.rows.find(z => z.key === key);\n    const A = (op, label, can, kbd) => ({ label, cmd: 'rowOp', args: { op, key }, disabled: !can, kbd });\n    if (kind === 'section') return U.menu.open(x, y, [{ label: sec === 'staged' ? 'Rimuovi tutto dai file da committare' : 'Aggiungi tutto ai file da committare', cmd: sec === 'staged' ? 'unstage' : 'stage', args: { key } }, { sep: true }, { label: 'Espandi tutto', cmd: 'expandAll' }, { label: 'Comprimi tutto', cmd: 'collapseAll' }], row);\n    if (!r) return;\n    const c = r.can, isF = kind === 'file';\n    U.menu.open(x, y, [\n      { label: isF ? 'Mostra differenze' : 'Mostra differenze della cartella', cmd: isF ? 'showDiff' : 'showFolderDiff', args: { key }, disabled: !c.diff, kbd: isF ? 'Invio' : '' },\n      c.unstage || sec === 'staged' ? { label: 'Rimuovi dai file da committare', cmd: 'unstage', args: { key }, disabled: !c.unstage, kbd: 'Spazio' } : { label: 'Aggiungi ai file da committare', cmd: 'stage', args: { key }, disabled: !c.stage, kbd: 'Spazio', hint: c.stage ? '' : 'Risolvi prima il conflitto' },\n      { sep: true }, A('add', 'Aggiungi a SVN', c.add), A('ignore', 'Aggiungi alla ignore list', c.ignore),\n      A('revert', isF ? 'Annulla le modifiche (revert)…' : 'Annulla le modifiche nella cartella…', c.revert), isF ? A('resolve', 'Risolvi conflitto…', c.resolve) : null,\n      { sep: true }, isF ? A('deleteFile', 'Elimina file…', c.deleteFile, 'Canc') : { label: 'Espandi tutto', cmd: 'expandAll' }, isF ? null : { label: 'Comprimi tutto', cmd: 'collapseAll' },\n    ].filter(Boolean), row);\n  }\n\n  function render() {\n    if (!st) return;\n    const root = document.querySelector('.app'); if (!root) return;\n    root.classList.toggle('loading', !!st.loading);\n    U.setHTML(root.querySelector('#hdr'), header(st));\n    U.setHTML(root.querySelector('#wcbox'), wcForm(st));\n    U.setHTML(root.querySelector('#cbar'), commitBar(st));\n    U.setHTML(root.querySelector('#aist'), aiStat(st.commit));\n    U.setHTML(root.querySelector('#prq'), U.prereqHTML(st.prereq));\n    const ta = root.querySelector('#msg');\n    if (ta.value !== st.commit.text && document.activeElement !== ta) ta.value = st.commit.text;\n    const list = root.querySelector('#list'), had = list.contains(document.activeElement), cur = list.__cursor, top = list.scrollTop;\n    const keys = []; st.sections.forEach(s => { keys.push('section:' + s.id); s.rows.forEach(r => keys.push(r.key)); });\n    const cursor = keys.includes(cur) ? cur : keys[0];\n    const html = isEmpty(st) && !st.loading ? `<div class=\"empty-state\">${U.icon('check', 'big')}<b>Nessuna modifica</b><span class=\"muted\">La working copy è pulita.</span></div>` + '' : '';\n    const changed = U.setHTML(list, (html ? html : '') + U.treeHTML(st.sections.filter(s => s.id === 'staged' || s.count), cursor));\n    if (changed) { list.scrollTop = top; if (had) { const r = list.querySelector(`.tr[data-key=\"${CSS.escape(cursor)}\"]`); if (r) r.focus(); } }\n    list.setAttribute('aria-busy', !!st.loading);\n    U.setHTML(root.querySelector('#foot'), foot(st));\n  }\n\n  U.views.changes = {\n    mount(root) {\n      root.innerHTML = `<div class=\"app\"><div class=\"prog\" aria-hidden=\"true\"></div><header class=\"bar\" id=\"hdr\"></header><div id=\"wcbox\"></div>\n        <section class=\"commit\"><textarea id=\"msg\" rows=\"3\" aria-label=\"Messaggio di commit\" placeholder=\"Messaggio di commit (Ctrl+Invio per committare)\"></textarea>\n        <div class=\"bar\" id=\"cbar\"></div><div id=\"aist\"></div></section><div id=\"prq\"></div>\n        <div class=\"list\" id=\"list\" role=\"tree\" aria-label=\"Modifiche della working copy\"></div>\n        <footer class=\"foot\" id=\"foot\"></footer></div>`;\n      const ta = root.querySelector('#msg');\n      ta.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => U.bridge.send('setCommitText', { text: ta.value }), 150); });\n      ta.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); clearTimeout(timer); U.bridge.send('setCommitText', { text: ta.value }); U.bridge.send('commit'); } });\n      root.addEventListener('submit', e => { if (e.target.id === 'wcform') { e.preventDefault(); forceInput = false; U.bridge.send('setWorkingCopy', { path: e.target.querySelector('input').value }); } });\n      root.addEventListener('click', e => {\n        const b = e.target.closest('[data-menu]'); if (!b || b.disabled) return;\n        const r = b.getBoundingClientRect(); U.menu.open(Math.max(0, r.right - 220), r.bottom + 2, b.dataset.menu === 'ai' ? aiMenu() : moreMenu(), b);\n      });\n      U.bindTree(root.querySelector('#list'), { rowMenu });\n    },\n    update(root, state) { st = state; render(); },\n  };\n})(window);\n<\/script>\n<script>\n'use strict';\n/* Vista \"Log / History\". state: {path, showInput, msg, err, loading, canMore, sel, entries:[{rev,author,date,msg,paths:[{a,p}]}], diff} */\n(function (w) {\n  const U = w.SVNUI, esc = U.esc;\n  const ACT = { A: 'Aggiunto', M: 'Modificato', D: 'Eliminato', R: 'Sostituito' };\n  let st = null;\n  U.logHTML = {\n    top(s) {\n      return `<form class=\"wc\" id=\"logform\"><label for=\"logp\">Working copy</label><input id=\"logp\" type=\"text\" value=\"${esc(s.path)}\" placeholder=\"C:\\\\percorso\\\\della\\\\working copy\" spellcheck=\"false\">` +\n        `<button class=\"btn\" type=\"submit\" title=\"Carica le ultime revisioni (svn log)\">${U.icon('refresh')}<span>Carica log</span></button>` +\n        (s.canMore ? U.btn('btn', 'Altre 50', null, 'logMore', null, 'Carica altre 50 revisioni più vecchie') : '') + `</form>`;\n    },\n    list(s) {\n      if (!s.entries.length) return `<div class=\"empty-state\"><b>Nessuna revisione caricata</b><span class=\"muted\">Inserisci il percorso e premi Carica log.</span></div>`;\n      return s.entries.map(e => `<div class=\"lr${s.sel === e.rev ? ' sel' : ''}\" role=\"option\" aria-selected=\"${s.sel === e.rev}\" tabindex=\"${(s.sel == null ? s.entries[0].rev : s.sel) === e.rev ? 0 : -1}\" data-rev=\"${e.rev}\">` +\n        `<b class=\"rv\">r${e.rev}</b><span class=\"au\">${esc(e.author)}</span><span class=\"dtm muted\">${U.fmtDate(e.date)}</span><span class=\"m\" title=\"${esc(e.msg)}\">${esc(e.msg)}</span></div>`).join('');\n    },\n    detail(s) {\n      const e = s.entries.find(x => x.rev === s.sel);\n      if (!e) return `<div class=\"empty-state\"><span class=\"muted\">Seleziona una revisione per vederne le modifiche.</span></div>`;\n      return `<div class=\"ld-h\"><b>r${e.rev}</b> · ${esc(e.author)} · <span class=\"muted\">${U.fmtDate(e.date)}</span><p>${esc(e.msg)}</p>` +\n        `<ul class=\"paths\">${e.paths.map(p => `<li><span class=\"st ${U.stClass(p.a)}\" title=\"${ACT[p.a] || p.a}\">${esc(p.a)}</span><span>${esc(p.p)}</span></li>`).join('')}</ul></div>` + `<div class=\"ld-d\">${U.diffHTML(s.diff)}</div>`;\n    },\n  };\n  function render(root) {\n    root.classList.toggle('loading', !!st.loading);\n    U.setHTML(root.querySelector('#ltop'), U.logHTML.top(st));\n    const list = root.querySelector('#llist'), had = list.contains(document.activeElement), top = list.scrollTop;\n    if (U.setHTML(list, U.logHTML.list(st))) { list.scrollTop = top; if (had) { const f = list.querySelector('[tabindex=\"0\"]'); if (f) f.focus(); } }\n    U.setHTML(root.querySelector('#ldet'), U.logHTML.detail(st));\n    const m = root.querySelector('#lmsg'); m.textContent = st.msg || ''; m.className = 'foot msg' + (st.err ? ' err' : '');\n  }\n  U.views.log = {\n    mount(root) {\n      root.innerHTML = `<div class=\"app log\"><div class=\"prog\" aria-hidden=\"true\"></div><div id=\"ltop\"></div><div class=\"llist\" id=\"llist\" role=\"listbox\" aria-label=\"Revisioni\"></div><div class=\"ldet\" id=\"ldet\"></div><footer class=\"foot\" id=\"lmsg\" role=\"status\"></footer></div>`;\n      root.addEventListener('submit', e => { if (e.target.id === 'logform') { e.preventDefault(); U.bridge.send('logLoad', { path: e.target.querySelector('input').value }); } });\n      const list = root.querySelector('#llist');\n      list.addEventListener('click', e => { const r = e.target.closest('.lr'); if (r) U.bridge.send('logSelect', { rev: +r.dataset.rev }); });\n      list.addEventListener('keydown', e => {\n        const rs = [...list.querySelectorAll('.lr')], i = rs.indexOf(document.activeElement); if (i < 0) return;\n        const to = { ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: rs.length - 1 }[e.key];\n        if (to != null) { e.preventDefault(); const r = rs[Math.max(0, Math.min(rs.length - 1, to))]; U.bridge.send('logSelect', { rev: +r.dataset.rev }); r.focus(); }\n        else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); U.bridge.send('logSelect', { rev: +rs[i].dataset.rev }); }\n      });\n    },\n    update(root, state) { st = state; render(root); },\n  };\n})(window);\n<\/script>\n<script>\n'use strict';\n/* Avvio: sceglie la vista (?view=changes|log|diff, oppure data-view dell'iframe nella demo), applica tema e stato ricevuti dall'host. */\n(function (w) {\n  const U = w.SVNUI;\n  const q = new URLSearchParams(location.search);\n  let fe = null; try { fe = w.frameElement; } catch (e) { /* cross-origin */ }\n  const view = q.get('view') || (fe && fe.dataset.view) || 'changes';\n  const vid = q.get('id') || (fe && fe.dataset.id) || null;\n  const V = U.views[view]; if (!V) { document.body.textContent = 'Vista sconosciuta: ' + view; return; }\n  const root = document.getElementById('root');\n  document.documentElement.dataset.view = view;\n  V.mount(root);\n\n  function toast(msg) {\n    let t = document.getElementById('toast'); if (!t) { t = document.createElement('div'); t.id = 'toast'; t.setAttribute('role', 'status'); document.body.appendChild(t); }\n    t.textContent = msg; t.classList.add('on'); clearTimeout(t.__t); t.__t = setTimeout(() => t.classList.remove('on'), 3500);\n  }\n  function theme(m) {   // {kind:'dark|light|blue', vars:{'--bg0':'#..',...}}\n    document.documentElement.dataset.theme = m.kind;\n    const s = document.documentElement.style;\n    if (w.__themeVars) w.__themeVars.forEach(k => s.removeProperty(k));\n    w.__themeVars = Object.keys(m.vars || {}); w.__themeVars.forEach(k => { if (/^--[\\w-]+$/.test(k)) s.setProperty(k, m.vars[k]); });   // setProperty (CSSOM) e' ammesso dalla CSP\n  }\n  U.bridge.onMessage(m => {\n    if (!m || typeof m !== 'object') return;\n    if (m.type === 'state' && m.view === view && (!m.id || !vid || m.id === vid)) V.update(root, m.state);\n    else if (m.type === 'theme') theme(m);\n    else if (m.type === 'event') { if (m.name === 'toast') toast(m.text || ''); else if (m.name === 'focus') { const f = root.querySelector('[tabindex=\"0\"],textarea'); if (f) f.focus(); } else if (m.name === 'backendRestarted') toast('Il servizio SVNAssist è stato riavviato.'); }\n    else if (m.type === 'reply' && !m.ok) toast(m.error || 'Operazione non riuscita');\n  });\n  // comandi dichiarativi: <button data-cmd=\"nome\" data-args='{\"k\":1}'>\n  document.addEventListener('click', e => {\n    const b = e.target.closest('[data-cmd]'); if (!b || b.disabled) return;\n    let a; try { a = b.dataset.args ? JSON.parse(b.dataset.args) : undefined; } catch (x) { a = undefined; }\n    U.bridge.send(b.dataset.cmd, a);\n  });\n  U.bridge.ready(view, vid);\n})(window);\n<\/script>\n</body>\n</html>\n";</script>
+<script>
+'use strict';
+/* Host finto per la UI.Web (demo e test). Parla lo stesso protocollo del backend reale (docs/ui-protocol.md):
+   riceve {type:"cmd"|"ready"} dai frame e risponde con {type:"state"|"theme"|"reply"|"event"}.
+   Gli snapshot sono costruiti dalla simulazione (S, vm, lvm, prereq) definita in demo.js. */
+(function (w) {
+  const frames = [];            // frame registrati: {win, view, id, last}
+  const handlers = new Map();   // win -> fn (registrato da bridge.js: attach)
+  const theme = { mode: 'auto', vs: 'dark' };
+  let lastTheme = '', rev = 0;
+
+  // ---------- snapshot ----------
+  const kindOf = () => theme.mode === 'auto' ? theme.vs : theme.mode;
+  const SECS = [['staged', 'Staged'], ['changes', 'Modifiche'], ['unversioned', 'Non versionati']];
+  const key = (sec, p) => sec + ':' + fwd(p);
+  function can(sec, it) {
+    return { diff: !!it.canDiff, stage: sec !== 'staged' && it.st !== 'C', unstage: sec === 'staged', add: !!it.canAdd, ignore: !!it.canIgn, revert: !!it.canRev, resolve: !!it.canRes, deleteFile: !it.dir };
+  }
+  function fileRow(sec, it, depth, list) {
+    const par = parentDir(it.path);
+    return { key: key(sec, it.path), kind: 'file', depth, name: it.path === '.' ? '. (cartella radice)' : base(it.path), detail: list && par !== '.' ? fwd(par) : '', dir: !!it.dir,
+      status: it.st, statusText: STNAME[it.st] + (sec === 'staged' && it.st === '?' ? ' (verrà aggiunto con il commit)' : ''), can: can(sec, it), tooltip: fwd(it.path) + ' — ' + STNAME[it.st] };
+  }
+  function rowsOf(sec, items) {
+    const rows = [], v = S.vm;
+    if (v.view === 'list') {
+      items.slice().sort((a, b) => base(a.path).localeCompare(base(b.path), 'it', { sensitivity: 'base' }) || a.path.localeCompare(b.path)).forEach(it => rows.push(fileRow(sec, it, 0, true)));
+      return rows;
+    }
+    const walk = (node, depth) => {
+      node.dirs.slice().sort(byLabel).forEach(d => {
+        const { cur, label } = compactNode(d), ck = 's:' + sec + ':' + cur.path, exp = !v.collapsed[ck];
+        const its = under(items, cur.path);
+        rows.push({ key: key(sec, cur.path), kind: 'folder', depth, name: fwd(label), detail: '', expanded: exp, count: its.length, status: null, statusText: '',
+          can: { diff: its.some(f => f.st !== '?' && !f.dir), stage: sec !== 'staged' && its.some(f => f.st !== 'C'), unstage: sec === 'staged', add: sec === 'unversioned', ignore: sec === 'unversioned', revert: sec === 'changes', resolve: false, deleteFile: false }, tooltip: fwd(cur.path) });
+        if (exp) walk(cur, depth + 1);
+      });
+      node.files.slice().sort((a, b) => fname(a).localeCompare(fname(b), 'it', { sensitivity: 'base' })).forEach(it => rows.push(fileRow(sec, it, depth, false)));
+    };
+    walk(buildTree(items), 0);
+    return rows;
+  }
+  function prereq() {
+    const P = prqSnap();
+    return { open: !!S.ui.prereq, summary: S.prq.init ? P.summary : 'Prerequisiti', ai: P.ai, feedback: S.prq.feedback || '',
+      items: P.items.map(i => ({ id: i.id, group: i.g, title: i.title, ok: !!i.ok, detail: i.detail, instructions: i.ok ? '' : (i.instr || ''), primary: i.p1 || '', secondary: i.p2 || '' })) };
+  }
+  function snapshotChanges() {
+    const v = S.vm;
+    const sections = SECS.map(([id, title]) => { const items = secItems(id); return { id, title, count: items.length, expanded: !v.collapsed['sec:' + id], rows: rowsOf(id, items) }; });
+    const msg = v.statusMsg || '';
+    return {
+      workingCopy: { path: v.wcPath || '', showInput: !!v.showInput, branch: v.branch || '', rev: S.wcRev || 0 },
+      commit: { text: v.commitMsg || '', aiStatus: v.aiMsg || '', busy: !!v.aiBusy, lang: String(v.lang || S.settings.defaultlanguage || 'auto').toLowerCase(),
+        trace: (v.trace || []).map(t => ({ name: t.name, state: t.state, detail: t.detail || '' })), download: v.dl ? { pct: v.dl.pct, label: v.dl.label } : null },
+      view: v.view, theme: { mode: theme.mode, kind: kindOf() }, sections, status: { msg, err: !!v.err || /^Errore/.test(msg) }, prereq: prereq(), loading: !!v.loading,
+    };
+  }
+  function snapshotLog() {
+    const l = S.lvm;
+    return { path: l.path || '', msg: l.msg || '', err: /^Errore/.test(l.msg || ''), loading: /^Caricamento/.test(l.msg || ''), canMore: !!l.canMore, sel: l.sel == null ? null : l.sel,
+      entries: l.entries.map(e => ({ rev: e.rev, author: e.author, date: e.date.toISOString(), msg: e.msg, paths: e.paths.map(p => ({ a: p.a, p: p.p })) })), diff: l.diff || '' };
+  }
+  function snapshotDiff(id) {
+    const d = S.ui.diffs.find(x => x.id === id); if (!d) return { title: 'Diff', subtitle: '', diff: '' };
+    return { title: d.title, subtitle: d.subtitle, diff: d.paths.map(p => fileDiffText(p).trimEnd()).filter(Boolean).join('\n\n') };
+  }
+  const stateFor = f => f.view === 'changes' ? snapshotChanges() : f.view === 'log' ? snapshotLog() : snapshotDiff(f.id);
+
+  // ---------- trasporto ----------
+  const deliver = (f, m) => { const fn = handlers.get(f.win); if (fn) queueMicrotask(() => { try { fn(JSON.parse(JSON.stringify(m))); } catch (e) { console.error(e); } }); };
+  function pushAll() {
+    const t = JSON.stringify({ kind: kindOf() });
+    for (let i = frames.length - 1; i >= 0; i--) {   // scarta i frame distrutti
+      const f = frames[i]; let alive = false; try { alive = f.win.frameElement && f.win.frameElement.isConnected; } catch (e) { alive = false; }
+      if (!alive) { frames.splice(i, 1); handlers.delete(f.win); }
+    }
+    for (const f of frames) {
+      if (f.theme !== t) { f.theme = t; deliver(f, { v: 1, type: 'theme', kind: kindOf(), vars: {} }); }
+      const st = stateFor(f), s = JSON.stringify(st);
+      if (f.last !== s) { f.last = s; deliver(f, { v: 1, type: 'state', view: f.view, id: f.id, rev: ++rev, state: st }); }
+    }
+    lastTheme = t;
+    setTimeout(() => { try { applyTarget(); } catch (e) { } }, 0);
+  }
+
+  // ---------- comandi ----------
+  function stageKey(k, on) {
+    const row = getRow(k); if (!row) return;
+    row.entries.filter(f => !on || f.st !== 'C').forEach(f => { f.sel = on; });
+    render();
+  }
+  const folderCk = k => { const r = getRow(k); return 's:' + r.section + ':' + r.key; };
+  function allFolderCks() {
+    const out = [];
+    const walk = (node, sec) => node.dirs.forEach(d => { const { cur } = compactNode(d); out.push('s:' + sec + ':' + cur.path); walk(cur, sec); });
+    SECS.forEach(([id]) => walk(buildTree(secItems(id)), id));
+    return out;
+  }
+  function openDiffTab(id, title, subtitle, paths) {
+    if (!S.ui.diffs.some(d => d.id === id)) S.ui.diffs.push({ id, title, subtitle, paths });
+    S.ui.active = id; S.ui.view = 'doc'; S.ui.seOpen = false; render();
+  }
+  async function showDiff(k, folder) {
+    const row = getRow(k);
+    if (folder) {
+      const fs = row.entries.filter(f => f.st !== '?' && !f.dir);
+      if (!fs.length) { setStatus('Nessuna modifica da confrontare in questa cartella.'); return render(); }
+      await svn(`diff "${fwd(row.key || '.')}"`, 300);
+      return openDiffTab('__diff:' + k, 'Diff ' + (row.key ? base(row.key) : row.name), `${fwd(row.key || '.')} · ${fs.length} file`, fs.map(f => f.path));
+    }
+    const it = row.file; if (!it || !it.canDiff) return;
+    if (S.env.tortoise) { await sleep(250); toast('Diff aperto in TortoiseSVN: ' + it.path); logCmd('TortoiseProc.exe /command:diff /path:"' + WC + '\\' + it.path + '"'); return; }
+    await svn(`diff "${fwd(it.path)}"`, 300);
+    openDiffTab('__diff:' + it.path, 'Diff ' + base(it.path), `${fwd(it.path)} · BASE ⇄ working copy`, [it.path]);
+  }
+  const C = {
+    refresh: () => { S.vm.statusAuto = true; return vmRefresh(undefined, true); },
+    update: () => vmUpdate(),
+    commit: () => vmCommit(),
+    setCommitText: a => { S.vm.commitMsg = String(a.text || ''); },   // niente render: e' la UI a tenere il testo
+    genAi: () => vmAi('gen'),
+    improveAi: () => vmAi('improve'),
+    setLanguage: a => { S.vm.lang = a.lang; render(); },
+    setWorkingCopy: a => { S.vm.wcPath = String(a.path || ''); return vmRefresh(undefined, true); },
+    stage: a => stageKey(a.key, true),
+    unstage: a => stageKey(a.key, false),
+    toggleFolder: a => { const ck = folderCk(a.key); S.vm.collapsed[ck] = !S.vm.collapsed[ck]; render(); },
+    toggleSection: a => { S.vm.collapsed['sec:' + a.sec] = !S.vm.collapsed['sec:' + a.sec]; render(); },
+    expandAll: () => { S.vm.collapsed = {}; render(); },
+    collapseAll: () => { allFolderCks().forEach(k => { S.vm.collapsed[k] = true; }); render(); },
+    setView: a => { S.vm.view = a.view === 'list' ? 'list' : 'tree'; render(); },
+    showDiff: a => showDiff(a.key, false),
+    showFolderDiff: a => showDiff(a.key, true),
+    rowOp: a => rowOp(a.op, a.key),
+    setTheme: a => { theme.mode = ['auto', 'light', 'dark', 'blue'].includes(a.mode) ? a.mode : 'auto'; render(); },
+    prereqToggle: () => ACT.prereqToggle(),
+    prereqRecheck: () => prqRecheck(),
+    prereqRun: a => prqRun(a.id + '|' + (a.primary ? 1 : 2)),
+    logLoad: a => { S.lvm.path = String(a.path || ''); return lvmLoad(50); },
+    logMore: () => lvmMore(),
+    logSelect: a => lvmSelect(+a.rev),
+  };
+
+  w.__mockBridge = {
+    theme, commands: Object.keys(C), snapshotChanges, snapshotLog, snapshotDiff, pushAll,
+    attach(win, fn) { handlers.set(win, fn); },
+    postMessage(m, win) {
+      if (!m || m.v !== 1) return;
+      if (m.type === 'ready') {
+        const f = { win, view: m.view, id: m.id || null, last: '', theme: '' };
+        frames.push(f); pushAll(); return;
+      }
+      if (m.type !== 'cmd') return;
+      const f = frames.find(x => x.win === win), fn = C[m.name];
+      const reply = (ok, extra) => f && deliver(f, Object.assign({ v: 1, type: 'reply', id: m.id, ok }, extra));
+      if (!fn) return reply(false, { error: 'Comando sconosciuto: ' + m.name });
+      Promise.resolve().then(() => fn(m.args || {})).then(() => reply(true, { result: null }), e => reply(false, { error: String(e && e.message || e) }));
+    },
+    // iframe della UI.Web (srcdoc = pagina incorporata dal build; in sviluppo non c'e')
+    makeFrame(host, view, id) {
+      const fr = document.createElement('iframe');
+      fr.className = 'uiframe'; fr.dataset.view = view; if (id) fr.dataset.id = id; fr.title = view === 'changes' ? 'SVN Changes' : view === 'log' ? 'SVN Log' : 'Diff';
+      fr.srcdoc = w.__UI_DOC || '<p>UI non incorporata: usa tools/build-demo.mjs</p>';
+      host.appendChild(fr); return fr;
+    },
+    syncFrames(host, wanted, active) {
+      if (!host) return;
+      const have = [...host.querySelectorAll('iframe')];
+      have.forEach(fr => { if (!wanted.some(([id]) => id === (fr.dataset.id || '__log'))) fr.remove(); });
+      for (const [id, view] of wanted) {
+        let fr = have.find(x => (x.dataset.id || '__log') === id);
+        if (!fr || !fr.isConnected) fr = this.makeFrame(host, view, id === '__log' ? null : id);
+        fr.hidden = id !== active;
+      }
+    },
+  };
+})(window);
+
+</script>
 <script>
 'use strict';
 /* =====================================================================
@@ -724,7 +891,7 @@ function freshState(mode) {
     files: freshFiles(), ign: { '.': ['*.suo', '.vs'], 'Web': ['bin'] }, ignBase: { '.': ['*.suo', '.vs'], 'Web': ['bin'] },
     log: seedLog().concat(fillerLog()), headRev: 124, wcRev: 124, branch: 'trunk',
     scn: 0, simStep: 0, cmd: [],
-    ui: { menu: null, sub: false, open: [], active: null, statusOpen: false, logOpen: false, buf: {}, selFile: null, panelOpen: false, view: 'dock', seOpen: false, prereq: false },
+    ui: { menu: null, sub: false, open: [], active: null, statusOpen: false, logOpen: false, buf: {}, selFile: null, panelOpen: false, view: 'dock', seOpen: false, prereq: false, diffs: [] },
     vm: freshVM(), lvm: freshLVM(),
     watch: { pending: false, last: 0, fire: 0, note: '' },
     f: { svnPromptDone: false, svnPromptChoice: null, wcLoaded: false, aiNone: false, aiPromptShown: false, tourCommits: 0, optionsSaved: false },
@@ -1173,16 +1340,6 @@ async function vmUpdate() {
     await vmRefresh(updMsg(), true);
   } catch (e) { setStatus('Errore update: ' + e.message); render(); }
 }
-async function vmShowDiff(path) {
-  const vm = S.vm, it = vm.files.find(f => f.path === path); if (!it || !it.canDiff) return;
-  try {
-    if (S.env.tortoise) { await sleep(250); vm.diffVisible = false; setStatus(`Diff aperto in TortoiseSVN: ${it.path}`); toast('Diff aperto in TortoiseSVN: ' + it.path); logCmd('TortoiseProc.exe /command:diff /path:"' + WC + '\\' + it.path + '"'); return render(); }
-    vm.diffTitle = `Diff: ${it.path}`; vm.diffContent = 'Caricamento diff...'; vm.diffVisible = true; render();
-    await svn(`diff "${fwd(it.path)}"`, 400);
-    const d = fileDiffText(path);
-    vm.diffContent = d.trim() ? d : '(Nessuna differenza testuale — il file potrebbe essere binario o non versionato)'; render();
-  } catch (e) { vm.diffContent = 'Errore: ' + e.message; vm.diffVisible = true; render(); }
-}
 
 // ---------- view model: Log / History (specchio di SvnLogToolWindowData) ----------
 async function lvmLoad(limit) {
@@ -1263,6 +1420,7 @@ function render() {
   $('#vsBody').className = 'vs-body v-' + S.ui.view + (S.ui.seOpen ? ' se-open' : '');
   renderMenu(); renderSE(); renderDoc(); renderDock(); renderStatusBar(); renderSim(); renderTour(); renderSplash(); applyTarget();
   restoreFocus(f);
+  document.documentElement.dataset.theme = __mockBridge.theme.vs; __mockBridge.pushAll();
   $$('input[data-indet]').forEach(e => { e.indeterminate = true; });
 }
 function renderSplash() {
@@ -1306,33 +1464,26 @@ function renderSE() {
 function renderDoc() {
   const open = S.ui.open.filter(p => { const f = fileBy(p); return f && f.text !== null; });
   S.ui.open = open;
-  const tabs = open.map(p => `<button role="tab" aria-selected="${S.ui.active === p}" data-act="activate" data-arg="${esc(p)}">${esc(base(p))} <span data-act="closeTab" data-arg="${esc(p)}" title="Chiudi" style="margin-left:6px;color:var(--fg3)">&#10005;</span></button>`).join('')
-    + (S.ui.logOpen ? `<button role="tab" aria-selected="${S.ui.active === '__log'}" data-act="activate" data-arg="__log">SVN Log <span data-act="closeTab" data-arg="__log" style="margin-left:6px;color:var(--fg3)">&#10005;</span></button>` : '');
-  $('#docTabs').innerHTML = tabs;
+  const x = id => `<span data-act="closeTab" data-arg="${esc(id)}" title="Chiudi" style="margin-left:6px;color:var(--fg3)">&#10005;</span>`;
+  const tab = (id, label) => `<button role="tab" aria-selected="${S.ui.active === id}" data-act="activate" data-arg="${esc(id)}">${esc(label)} ${x(id)}</button>`;
+  $('#docTabs').innerHTML = open.map(p => tab(p, base(p))).join('') + (S.ui.logOpen ? tab('__log', 'SVN Log') : '') + S.ui.diffs.map(d => tab(d.id, d.title)).join('');
   const body = $('#docBody');
-  if (S.ui.active === '__log' && S.ui.logOpen) { body.innerHTML = logHTML(); return; }
+  if (!body.firstChild) body.innerHTML = '<div id="docText" style="flex:1;display:flex;flex-direction:column;min-height:0"></div><div class="doc-frames" id="docFrames" hidden></div>';
+  const fr = (S.ui.logOpen ? [['__log', 'log']] : []).concat(S.ui.diffs.map(d => [d.id, 'diff']));
+  __mockBridge.syncFrames($('#docFrames'), fr, S.ui.active);
+  const showFrame = fr.some(([id]) => id === S.ui.active);
+  $('#docFrames').hidden = !showFrame; $('#docText').hidden = showFrame;
+  if (showFrame) return;
+  const text = $('#docText');
   const f = open.includes(S.ui.active) ? fileBy(S.ui.active) : null;
   if (!f) {
-    body.innerHTML = `<div class="welcome"><h2>Visual Studio</h2><p>${S.solution ? 'Apri un file da Esplora soluzioni per modificarlo: salvandolo, il FileSystemWatcher di SVNAssist aggiorna da solo il pannello SVN Changes.' : 'Apri una soluzione dal menu File per iniziare.'}</p>${S.vsInstalled ? '<p class="small">Menu <b>Estensioni &gt; SVNAssist</b>: SVN Changes, Commit..., Update, Log / History.</p>' : '<p class="small">L\'estensione SVNAssist non è ancora installata.</p>'}</div>`;
+    text.innerHTML = `<div class="welcome"><h2>Visual Studio</h2><p>${S.solution ? 'Apri un file da Esplora soluzioni per modificarlo: salvandolo, il FileSystemWatcher di SVNAssist aggiorna da solo il pannello SVN Changes.' : 'Apri una soluzione dal menu File per iniziare.'}</p>${S.vsInstalled ? '<p class="small">Menu <b>Estensioni &gt; SVNAssist</b>: SVN Changes, Commit..., Update, Log / History.</p>' : '<p class="small">Installa prima l\'estensione SVNAssist.</p>'}</div>`;
     return;
   }
   const txt = S.ui.buf[f.path] != null ? S.ui.buf[f.path] : f.text;
   const n = txt.split('\n').length;
-  body.innerHTML = `<div class="editor"><div class="gutter" id="gut">${Array.from({ length: n }, (_, i) => i + 1).join('\n')}</div><textarea id="edtext" spellcheck="false" aria-label="Editor ${esc(f.path)}">${esc(txt)}</textarea></div>
+  text.innerHTML = `<div class="editor"><div class="gutter" id="gut">${Array.from({ length: n }, (_, i) => i + 1).join('\n')}</div><textarea id="edtext" spellcheck="false" aria-label="Editor ${esc(f.path)}">${esc(txt)}</textarea></div>
    <div class="ed-bar"><button class="btn sm" data-act="saveFile" data-arg="${esc(f.path)}">Salva (Ctrl+S)</button><span>${esc(f.path)} · stato SVN: <b style="color:var(--st-${f.st === '?' ? 'U' : f.st === '!' ? 'X' : f.st === 'N' ? 'U' : f.st})">${f.st === 'N' ? 'invariato' : f.st}</b></span></div>`;
-}
-function logHTML() {
-  const l = S.lvm;
-  return `<div class="logwin">
-   <div class="row"><label for="logPath">Percorso:</label><input type="text" id="logPath" data-model="lvm.path" value="${esc(l.path)}" placeholder="${esc(WC)}"></div>
-   <div class="row"><button class="btn" data-act="logLoad">Carica log</button>${l.canMore ? '<button class="btn" data-act="logMore">Carica altre 50</button>' : ''}</div>
-   <div class="loglist" role="listbox" aria-label="Revisioni">${l.entries.length ? l.entries.map(e => `<button class="logrow ${l.sel === e.rev ? 'sel' : ''}" data-act="logSel" data-arg="${e.rev}"><b>${e.rev}</b><span>${esc(e.author)}</span><span class="muted">${fmtDate(e.date)}</span><span class="m" title="${esc(e.msg)}">${esc(e.msg)}</span></button>`).join('') : '<div class="empty-list">Nessuna revisione caricata.</div>'}</div>
-   <div><b>Diff revisione selezionata:</b></div>
-   <pre class="diffpre" style="flex:1.2">${diffHTML(l.diff)}</pre>
-   <div class="tw-status">${esc(l.msg)}</div></div>`;
-}
-function diffHTML(t) {
-  return (t || '').split('\n').map(l => `<div class="${l.startsWith('@@') ? 'hunk' : l.startsWith('+++') || l.startsWith('---') || l.startsWith('Index:') || l.startsWith('===') ? 'meta' : l.startsWith('+') ? 'add' : l.startsWith('-') ? 'del' : ''}">${esc(l) || ' '}</div>`).join('');
 }
 function traceHTML(v) {
   let h = '';
@@ -1347,31 +1498,14 @@ function traceHTML(v) {
   }
   return h;
 }
-function statusHTML() {
-  const v = S.vm, rows = treeHTML(), P = prqSnap(), busy = v.aiBusy ? 'disabled' : '';
-  const cur = String(v.lang || S.settings.defaultlanguage || 'auto').toLowerCase();
-  return `<div class="tw">
-   ${v.showInput ? `<div class="row"><b>Working Copy:</b><input type="text" id="wcPath" data-model="vm.wcPath" value="${esc(v.wcPath)}" placeholder="${esc(WC)}" aria-label="Working copy"></div>` : ''}
-   <div class="row"><span class="branch">${esc(v.branch)}</span><button class="btn sm" data-act="refresh" title="Ricarica le modifiche (svn status)">Refresh</button><button class="btn sm" data-act="update" title="Aggiorna la working copy (svn update)">Update</button></div>
-   ${S.ui.prereq ? prereqBoxHTML() : ''}
-   <textarea id="commitMsg" data-model="vm.commitMsg" aria-label="Messaggio di commit">${esc(v.commitMsg)}</textarea>
-   <div class="row"><button class="btn primary" data-act="commit" style="font-weight:600" title="Commit dei file selezionati">Commit</button><span style="flex:1"></span>
-     <button class="btn sm" data-act="genAi" title="Genera il messaggio dal diff dei file selezionati" ${busy}>Genera con AI</button>
-     <button class="btn sm" data-act="improveAi" title="Migliora il messaggio scritto con l'AI" ${busy}>Migliora</button>
-     <select class="langsel" data-act="langSel" aria-label="Lingua del messaggio" title="Lingua del messaggio generato (Auto = lingua del codice)">${['Italiano', 'English', 'Auto'].map(t => `<option ${t.toLowerCase() === cur ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
-   ${v.aiMsg ? `<div class="ai-status">${esc(v.aiMsg).replace(/\n/g, '<br>')}</div>` : ''}
-   ${treeToolbarHTML()}
-   <div class="flist" role="list">${rows || '<div class="empty-list">Nessuna modifica.</div>'}</div>
-   ${v.diffVisible ? `<div class="diffbox"><div class="list-h" style="margin:2px 0"><b style="font-size:11px">${esc(v.diffTitle)}</b><button class="btn sm" data-act="closeDiff">Chiudi</button></div><pre class="diffpre">${diffHTML(v.diffContent)}</pre></div>` : ''}
-   <div class="tw-status" role="status">${esc(v.statusMsg)}</div>
-   <div><button class="btn sm" data-act="prereqToggle" title="Mostra/nasconde la checklist dei prerequisiti (svn, TortoiseSVN, provider AI)">${esc(S.prq.init ? P.summary : 'Prerequisiti')}</button></div>
-  </div>`;
-}
 
 function renderDock() {
-  const d = $('#dock');
-  if (!S.ui.statusOpen) { d.innerHTML = `<div class="dock-empty">Nessuna finestra strumenti aperta.<br><br>${S.vsInstalled ? 'Usa <b>Estensioni &gt; SVNAssist &gt; SVN Changes</b>.' : 'Installa prima l\'estensione SVNAssist.'}<br><br>${S.vsInstalled ? '<button class="btn" data-act="cmd" data-arg="status">Apri SVN Changes</button>' : ''}</div>`; return; }
-  d.innerHTML = `<div class="dock-tabs"><button role="tab" aria-selected="true">SVN Changes</button><button class="x" data-act="statusClose" aria-label="Chiudi SVN Changes">&#10005;</button></div><div class="dock-body">${statusHTML()}</div>`;
+  const d = $('#dock'), key = S.ui.statusOpen ? 'open' : S.vsInstalled ? 'closed-i' : 'closed';
+  if (d.__k === key) return;
+  d.__k = key;
+  if (!S.ui.statusOpen) { __mockBridge.syncFrames(null, [], null); d.innerHTML = `<div class="dock-empty">Nessuna finestra strumenti aperta.<br><br>${S.vsInstalled ? 'Usa <b>Estensioni &gt; SVNAssist &gt; SVN Changes</b>.' : 'Installa prima l\'estensione SVNAssist.'}<br><br>${S.vsInstalled ? '<button class="btn" data-act="cmd" data-arg="status">Apri SVN Changes</button>' : ''}</div>`; return; }
+  d.innerHTML = '<div class="dock-tabs"><button role="tab" aria-selected="true">SVN Changes</button><button class="x" data-act="statusClose" aria-label="Chiudi SVN Changes">&#10005;</button></div><div class="dock-body" id="dockBody"></div>';
+  __mockBridge.makeFrame($('#dockBody'), 'changes', null);
 }
 function renderStatusBar() {
   const b = $('#vsStatus'), inWc = S.solution && S.solution.inWc;
@@ -1398,6 +1532,9 @@ function renderSim() {
    <div class="note">&#128274; ${esc(ghOnly)}. Ogni credenziale va solo al proprio servizio.</div>
    <h3>Provider risolti (AiServiceFactory)</h3>
    <div class="chain">${chain.chain.length ? chain.chain.map(c => `<span class="chip ok">${esc(c.name)}</span>`).join(' &rarr; ') : '<span class="chip fail">nessun provider disponibile</span>'}<br><span class="small">AI Provider = <b>${esc(S.settings.aiprovider || '(vuoto)')}</b> · lingua = <b>${esc(S.settings.defaultlanguage)}</b></span></div>
+   <h3>Aspetto</h3>
+   <label class="tg">Tema di Visual Studio:&nbsp;<select data-act="vsTheme" style="width:auto">${[['dark', 'Scuro'], ['light', 'Chiaro'], ['blue', 'Blu']].map(([v, l]) => `<option value="${v}" ${__mockBridge.theme.vs === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+   <div class="note">&#9432; Nel menu &quot;&#8943;&quot; di SVN Changes puoi scegliere il tema della sola finestra (Auto = segue Visual Studio).</div>
    <h3>Azioni</h3>
    <button class="btn" data-act="simChange">Simula modifica di un file</button>
    <button class="btn" data-act="restart">Riavvia Visual Studio</button>
@@ -1419,13 +1556,20 @@ const STEPS = [
   { t: 'Working copy rilevata', p: "Con svn installato premi Ricontrolla nei Prerequisiti (il pannello si apre da solo se svn manca): SVNAssist trova la working copy risalendo dalla solution fino alla cartella .svn e mostra branch e file modificati.", doLabel: 'Ricontrolla', done: () => S.f.wcLoaded, doIt: async () => { await openStatus(); if (Object.keys(S.pending).length) await prqRecheck(); } },
   { t: 'Primo clic su Genera con AI', p: 'Senza nessun provider AI configurato compare il prompt di aiuto (una volta per sessione) con le opzioni disponibili.', doLabel: 'Clicca Genera con AI', done: () => S.f.aiNone, doIt: () => vmAi('gen') },
   { t: 'Configura un provider in Tools > Options', p: 'Apri Strumenti > Opzioni > SVNAssist. Esempio: AI Provider = claude e una Anthropic API Key qualsiasi (la demo non la invia da nessuna parte). Oppure imposta "GitHub CLI loggato" nel Pannello simulazione.', doLabel: 'Apri Opzioni', done: () => resolveChain().chain.length > 0, doIt: () => optionsDlg() },
-  { t: 'Genera il messaggio e committa', p: 'Premi Genera con AI: il messaggio nasce dai file realmente modificati. Poi, con i file giusti spuntati, premi Commit e controlla la nuova revisione in Log / History.', hint: 'I file in conflitto non sono spuntati di default: risolvili (clic destro > Risolvi conflitto...) prima di committare. I non versionati spuntati vengono aggiunti e i mancanti eliminati in automatico.', doLabel: 'Genera con AI', done: () => S.f.tourCommits > 0, doIt: () => vmAi('gen') },
+  { t: 'Genera il messaggio e committa', p: 'Premi Genera con AI: il messaggio nasce dai file realmente modificati. Poi, con i file giusti nella sezione Staged (il + li sposta), premi Commit e controlla la nuova revisione in Log / History.', hint: 'I file in conflitto non possono andare in Staged: risolvili (clic destro > Risolvi conflitto...) prima di committare. I non versionati messi in Staged vengono aggiunti e i mancanti eliminati in automatico.', doLabel: 'Genera con AI', done: () => S.f.tourCommits > 0, doIt: () => vmAi('gen') },
 ];
-const TARGETS = [null, '[data-act="menu"][data-arg="file"]', '[data-act="menu"][data-arg="ext"]', '#dock', '[data-act="genAi"]', '[data-act="menu"][data-arg="tools"]', '[data-act="commit"]'];
+const TARGETS = [null, '[data-act="menu"][data-arg="file"]', '[data-act="menu"][data-arg="ext"]', '#dock', 'frame:[data-cmd="genAi"]', '[data-act="menu"][data-arg="tools"]', 'frame:[data-cmd="commit"]'];
 function applyTarget() {
   $$('.tour-target').forEach(e => e.classList.remove('tour-target'));
+  const fr = $('#dock iframe'), fd = fr && fr.contentDocument;
+  if (fd) fd.querySelectorAll('.tour-target').forEach(e => e.classList.remove('tour-target'));
   if (!S.tour.on || S.tour.finished || S.tour.min) return;
   const sel = TARGETS[S.tour.step]; if (!sel) return;
+  if (sel.startsWith('frame:')) {
+    if (!fd || !fd.head) return;
+    if (!fd.getElementById('tour-css')) { const st = fd.createElement('style'); st.id = 'tour-css'; st.textContent = '.tour-target{outline:2px solid #ffd24a!important;outline-offset:2px;animation:pulse 1.2s ease-in-out infinite}@keyframes pulse{50%{outline-color:#ffd24a00}}'; fd.head.appendChild(st); }
+    const el = fd.querySelector(sel.slice(6)); if (el) el.classList.add('tour-target'); return;
+  }
   const el = $(sel); if (el && el.offsetParent !== null) el.classList.add('tour-target');
 }
 function renderTour() {
@@ -1484,16 +1628,6 @@ function prqCompute() {
 const prqSnap = () => S.prq.snap || (S.prq.snap = prqCompute());
 function prqRefresh() { S.prq.snap = prqCompute(); }
 function prqInit() { if (S.prq.init) return; S.prq.init = true; prqRefresh(); if (S.prq.snap.svnMissing) S.ui.prereq = true; }   // si apre da sola se manca svn
-function prereqBoxHTML() {
-  const P = prqSnap(); let last = null;
-  return `<div class="prq"><div class="row" style="justify-content:space-between"><b>Prerequisiti</b><span><button class="btn sm" data-act="prqRecheck">Ricontrolla</button> <button class="btn sm" data-act="prereqToggle">Chiudi</button></span></div>
-   <div class="small">${esc(P.ai)}</div>${S.prq.feedback ? `<div class="small" style="font-weight:600;margin-top:3px">${esc(S.prq.feedback)}</div>` : ''}
-   ${P.items.map(it => {
-    const hdr = it.g !== last ? `<h5>${esc(it.g)}</h5>` : ''; last = it.g;
-    return hdr + `<div class="prow"><span class="pi" style="color:${it.ok ? '#3cb371' : '#ff8c00'}">${it.ok ? '✓' : '✗'}</span><div class="pn"><b>${esc(it.title)}</b><div class="muted small">${esc(it.detail)}</div>${it.ok ? '' : `<pre class="cmd" style="font-size:11px">${esc(it.instr)}</pre>`}
-     <div class="pb">${it.p1 ? `<button class="btn sm" data-act="prqRun" data-arg="${it.id}|1">${esc(it.p1)}</button>` : ''}${it.p2 ? `<button class="btn sm" data-act="prqRun" data-arg="${it.id}|2">${esc(it.p2)}</button>` : ''}</div></div></div>`;
-  }).join('')}</div>`;
-}
 const openUrl = url => toast('Apertura nel browser: ' + url, 3500);
 // finestra console simulata: comando esatto; l'effetto si vede solo con "Ricontrolla"
 async function consoleRun(key) {
@@ -1563,9 +1697,9 @@ function prereqOpen() { S.ui.statusOpen = true; S.ui.prereq = true; S.ui.view = 
 //  ELENCO FILE STILE "GIT CHANGES" (come ChangeRowFactory / ChangesTreeBuilder)
 //  Lista APPIATTITA di righe (sezione / cartella / file), non un TreeView annidato.
 // =====================================================================
-const SEC_NAMES = { conf: 'Conflitti', chg: 'Modifiche', unv: 'Non versionati' };
+const SEC_NAMES = { staged: 'Staged', changes: 'Modifiche', unversioned: 'Non versionati' };
 const STNAME = { M: 'Modificato', A: 'Aggiunto', D: 'Eliminato', C: 'Conflitto', '?': 'Non versionato', '!': 'Mancante', R: 'Sostituito', N: 'Normale' };
-const secOf = f => f.st === 'C' ? 'conf' : f.st === '?' ? 'unv' : 'chg';
+const secOf = f => f.sel ? 'staged' : f.st === '?' ? 'unversioned' : 'changes';   // sel = "staged"
 const secItems = sec => S.vm.files.filter(f => secOf(f) === sec);
 const under = (items, key) => key ? items.filter(f => f.path === key || f.path.startsWith(key + '\\')) : items;
 const byLabel = (a, b) => a.label.localeCompare(b.label, 'it', { sensitivity: 'base' });
@@ -1584,78 +1718,40 @@ function buildTree(items) {
   return root;
 }
 function compactNode(d) { let cur = d, label = d.label; while (cur.files.length === 0 && cur.dirs.length === 1) { cur = cur.dirs[0]; label += '\\' + cur.label; } return { cur, label }; }
-function flattenTree(node, depth, sec, out) {
-  node.dirs.slice().sort(byLabel).forEach(d => {
-    const { cur, label } = compactNode(d), ck = 's:' + sec + ':' + cur.path, exp = !S.vm.collapsed[ck];
-    out.push({ t: 'folder', sec, key: cur.path, ck, label, depth, exp, count: under(secItems(sec), cur.path).length });
-    if (exp) flattenTree(cur, depth + 1, sec, out);
-  });
-  node.files.slice().sort((a, b) => fname(a).localeCompare(fname(b), 'it', { sensitivity: 'base' })).forEach(it => out.push({ t: 'file', item: it, depth }));
-}
-function folderKeys(node, sec, keys) { node.dirs.forEach(d => { const { cur } = compactNode(d); keys.push('s:' + sec + ':' + cur.path); folderKeys(cur, sec, keys); }); }
-function allFolderKeys() { const k = []; ['conf', 'chg', 'unv'].forEach(s => folderKeys(buildTree(secItems(s)), s, k)); return k; }
-function selState(items) { const n = items.filter(f => f.sel).length; return n === 0 ? 0 : n === items.length ? 2 : 1; }
-function chk(act, arg, items, label) { const s = selState(items); return `<input type="checkbox" data-act="${act}" data-arg="${esc(arg)}" ${s === 2 ? 'checked' : ''} ${s === 1 ? 'data-indet="1"' : ''} aria-label="${esc(label)}">`; }
-function treeHTML() {
-  const v = S.vm; let h = '';
-  ['conf', 'chg', 'unv'].forEach(sec => {
-    const items = secItems(sec); if (!items.length) return;
-    const open = !v.collapsed['sec:' + sec];
-    h += `<div class="grow srow" data-ctxsec="${sec}"><button class="chev" data-act="toggleSec" data-arg="${sec}" aria-expanded="${open}" aria-label="${open ? 'Comprimi' : 'Espandi'} ${SEC_NAMES[sec]}">${open ? '&#9662;' : '&#9656;'}</button>${chk('toggleGroup', sec + '|', items, 'Seleziona tutto: ' + SEC_NAMES[sec])}<button class="nm" style="font-weight:600" data-act="toggleSec" data-arg="${sec}" title="${open ? 'Clic per comprimere' : 'Clic per espandere'}">${SEC_NAMES[sec]} (${items.length})</button></div>`;
-    if (!open) return;
-    const rows = [];
-    if (v.view === 'tree') flattenTree(buildTree(items), 0, sec, rows);
-    else items.slice().sort((a, b) => base(a.path).localeCompare(base(b.path), 'it', { sensitivity: 'base' }) || a.path.localeCompare(b.path)).forEach(it => rows.push({ t: 'file', item: it, depth: 0, list: true }));
-    rows.forEach(r => {
-      const ind = `<span style="width:${8 + r.depth * 14}px;flex:none"></span>`;
-      if (r.t === 'folder') {
-        const its = under(secItems(sec), r.key), arg = sec + '|' + r.key;
-        h += `<div class="grow" data-ctxfolder="${esc(arg)}">${ind}<button class="chev" data-act="toggleFolder" data-arg="${esc(r.ck)}" aria-expanded="${r.exp}" aria-label="${r.exp ? 'Comprimi' : 'Espandi'} ${esc(r.label)}">${r.exp ? '&#9662;' : '&#9656;'}</button>${chk('toggleGroup', arg, its, 'Seleziona cartella ' + r.label)}<button class="nm" data-act="toggleFolder" data-arg="${esc(r.ck)}" title="${esc(r.key)}">${esc(r.label)}</button><span class="fill"></span><span class="muted small">${r.count}</span></div>`;
-      } else {
-        const f = r.item, p = esc(f.path), col = `var(--st-${f.st === '?' ? 'U' : f.st === '!' ? 'X' : f.st})`;
-        const fld = parentDir(f.path) === '.' ? '' : parentDir(f.path);
-        h += `<div class="grow" data-ctxitem="${p}">${ind}<span style="width:18px;flex:none"></span><input type="checkbox" data-act="toggleFile" data-arg="${p}" ${f.sel ? 'checked' : ''} aria-label="Seleziona ${p}"><span class="st" style="color:${col};font:700 12px var(--mono);width:14px;text-align:center;flex:none">${f.st}</span><button class="nm" data-act="showDiff" data-arg="${p}" ${f.canDiff ? '' : 'disabled'} title="${esc(WC + '\\' + f.path)}&#10;${esc(STNAME[f.st])}">${esc(fname(f))}</button>${r.list ? `<span class="dirp">${esc(fld)}</span>` : '<span class="fill"></span>'}<button class="btn sm" data-act="showDiff" data-arg="${p}" ${f.canDiff ? '' : 'disabled'}>Diff</button></div>`;
-      }
-    });
-  });
-  return h;
-}
-function treeToolbarHTML() {
-  const t = S.vm.view === 'tree';
-  return `<div class="row" style="justify-content:space-between"><span><button class="btn sm" data-act="selAll">Seleziona tutto</button> <button class="btn sm" data-act="selNone">Deseleziona</button></span><span><button class="btn sm" data-act="setView" data-arg="tree" aria-pressed="${t}" title="Vista ad albero per cartelle">Albero</button> <button class="btn sm" data-act="setView" data-arg="list" aria-pressed="${!t}" title="Vista a elenco piatto">Lista</button></span></div>${t ? `<div class="row"><button class="btn sm" data-act="expandAll">Espandi tutto</button><button class="btn sm" data-act="collapseAll">Comprimi tutto</button></div>` : ''}`;
-}
-const parseArg = a => { const i = a.indexOf('|'); return [a.slice(0, i), a.slice(i + 1)]; };
-function setGroup(arg, on) { const [sec, key] = parseArg(arg); under(secItems(sec), key).forEach(f => f.sel = on); }
-// descrittore di riga: file | folder | section
-function getRow(spec) {
-  const i = spec.indexOf('|'), kind = spec.slice(0, i), rest = spec.slice(i + 1);
-  if (kind === 'file') { const f = S.vm.files.find(x => x.path === rest); return f ? { kind, entries: [f], file: f } : null; }
-  const [sec, key] = parseArg(rest), all = secItems(sec);
-  return { kind, section: sec, key, entries: kind === 'section' ? all : under(all, key), name: key || SEC_NAMES[sec] };
+// risolve la chiave di riga del protocollo (docs/ui-protocol.md): file | folder | section
+function getRow(key) {
+  const i = key.indexOf(':'), sec = key.slice(0, i), p = key.slice(i + 1).replace(/\//g, '\\');
+  if (sec === 'section') return { kind: 'section', section: p, key: '', entries: secItems(p), name: SEC_NAMES[p] };
+  const all = secItems(sec), f = all.find(x => x.path === p);
+  if (f) return { kind: 'file', entries: [f], file: f, section: sec };
+  return { kind: 'folder', section: sec, key: p, entries: under(all, p), name: p };
 }
 const confirmBox = text => modal({ title: 'SVNAssist', icon: '&#10067;', cancel: false, body: `<p>${esc(text)}</p>`, buttons: [{ label: 'OK', value: true, primary: true }, { label: 'Annulla', value: false }] });
 const listForConfirm = es => es.slice(0, 8).map(e => `• ${e.path} (${STNAME[e.st]})`).join('\n') + (es.length > 8 ? `\n… e altri ${es.length - 8}` : '');
 const IS_REV = ['M', 'A', 'D', 'C', '!', 'R'];
-async function rowOp(op, spec) {
-  const vm = S.vm, row = getRow(spec); if (!row) return;
+async function rowOp(op0, key) {
+  const op = { add: 'add', deleteFile: 'del', revert: 'rev', resolve: 'res', ignore: 'ign' }[op0];
+  const vm = S.vm, row = getRow(key); if (!row || !op) return;
   const done = async msg => { await vmRefresh(msg); };
   try {
     if (op === 'add') {
       const aff = row.entries.filter(f => f.st === '?');
       if (!aff.length) { setStatus('Nessun elemento non versionato da aggiungere.'); return render(); }
       setStatus('Aggiunta a SVN in corso...'); render();
-      await svn(`add --force ${row.kind === 'folder' && row.section === 'unv' ? '"' + fwd(row.key) + '"' : '--targets (' + aff.length + ' elementi)'}`, 500);
+      await svn(`add --force ${row.kind === 'folder' && row.section === 'unversioned' ? '"' + fwd(row.key) + '"' : '--targets (' + aff.length + ' elementi)'}`, 500);
       aff.forEach(f => svnAdd(f.path)); aff.forEach(f => { f.sel = true; });
       await done(`Aggiunti a SVN: ${aff.length} elementi.`);
-    } else if (op === 'del') {
-      const f = row.file; if (!f || !f.canDel) { setStatus('Nessun file idoneo per SVN Delete.'); return render(); }
-      let msg = `SVN Delete di "${f.path}": il file verrà eliminato dalla cartella di lavoro e rimosso da SVN al prossimo commit.`;
+    } else if (op === 'del') {   // Canc su un file: elimina dal filesystem (con conferma) come Git Changes
+      const f = row.file; if (!f || f.dir) { setStatus('Seleziona un file da eliminare.'); return render(); }
+      let msg = f.st === '?' ? `Eliminare "${f.path}" dal disco?\n\nIl file non è versionato: l'operazione non è annullabile.` : `Eliminare "${f.path}"?\n\nIl file verrà eliminato dalla cartella di lavoro e rimosso da SVN al prossimo commit.`;
       const force = ['M', 'R', 'C', 'A'].includes(f.st);
       if (force) msg += '\n\nATTENZIONE: il file ha modifiche locali non committate, che andranno perse.';
       if (!await confirmBox(msg)) return;
-      setStatus('Rimozione da SVN in corso...'); render();
-      await svn(force ? `delete --force "${fwd(f.path)}"` : `delete "${fwd(f.path)}"`, 500); svnDelete(f.path);
-      await done(`Elemento schedulato per delete: ${f.path}.`);
+      setStatus('Eliminazione in corso...'); render();
+      if (f.st === '?') { await svn(`(rimozione dal disco) "${fwd(f.path)}"`, 300); S.files = S.files.filter(x => x.path !== f.path); }
+      else if (f.st === '!') { await svn(`delete "${fwd(f.path)}"`, 400); svnDelete(f.path); }
+      else { await svn(force ? `delete --force "${fwd(f.path)}"` : `delete "${fwd(f.path)}"`, 500); svnDelete(f.path); }
+      await done(`Eliminato: ${f.path}.`);
     } else if (op === 'rev') {
       const t = row.entries.filter(f => IS_REV.includes(f.st));
       if (!t.length) { setStatus('Nessun elemento idoneo per SVN Revert.'); return render(); }
@@ -1682,13 +1778,6 @@ async function rowOp(op, spec) {
       setStatus('Aggiornamento ignore list in corso...'); render();
       await svn('propset svn:ignore', 400); t.forEach(f => { if (fileBy(f.path)) svnIgnore(f.path); });
       await done(`Aggiunti alla ignore list: ${t.length} elementi.`);
-    } else if (op === 'fdiff') {
-      const fs = row.entries.filter(f => f.st !== '?' && !f.dir);
-      if (!fs.length) { setStatus('Nessuna modifica da confrontare in questa cartella.'); return render(); }
-      vm.diffTitle = `Diff cartella: ${row.key || row.name} (${fs.length} file)`; vm.diffContent = 'Caricamento diff...'; vm.diffVisible = true; render();
-      await svn(`diff "${fwd(row.key || '.')}"`, 400);
-      const parts = fs.slice(0, 100).map(f => fileDiffText(f.path).trimEnd()).filter(Boolean);
-      vm.diffContent = parts.length ? parts.join('\n\n') : '(Nessuna differenza testuale)'; render();
     }
   } catch (e) {
     const lab = { add: 'add', del: 'delete', rev: 'revert', res: 'resolve', ign: 'ignore list' }[op];
@@ -1961,28 +2050,15 @@ const ACT = {
   prereqToggle: () => { S.ui.prereq = !S.ui.prereq; if (S.ui.prereq) prqRefresh(); render(); }, prereqOpen: () => prereqOpen(), prqRecheck: () => prqRecheck(), prqRun: a => prqRun(a),
   tourMin: () => { S.tour.min = !S.tour.min; render(); },
   activate: a => { S.ui.active = a; render(); },
-  closeTab: a => { S.ui.open = S.ui.open.filter(x => x !== a); if (a === '__log') S.ui.logOpen = false; if (S.ui.active === a) S.ui.active = S.ui.open[0] || (S.ui.logOpen ? '__log' : null); render(); },
+  closeTab: a => { S.ui.open = S.ui.open.filter(x => x !== a); S.ui.diffs = S.ui.diffs.filter(d => d.id !== a); if (a === '__log') S.ui.logOpen = false; if (S.ui.active === a) S.ui.active = S.ui.open[0] || (S.ui.diffs[0] && S.ui.diffs[0].id) || (S.ui.logOpen ? '__log' : null); render(); },
+  vsTheme: (a, el) => { __mockBridge.theme.vs = el.value; render(); },
   saveFile: a => saveFile(a),
   statusClose: () => { S.ui.statusOpen = false; render(); },
-  refresh: () => { S.vm.statusAuto = true; vmRefresh(undefined, true); }, update: () => vmUpdate(), commit: () => vmCommit(),
-  genAi: () => vmAi('gen'), improveAi: () => vmAi('improve'),
-  selAll: () => { S.vm.files.forEach(f => f.sel = true); render(); }, selNone: () => { S.vm.files.forEach(f => f.sel = false); render(); },
-  toggleFile: (a, el) => { const f = S.vm.files.find(x => x.path === a); if (f) f.sel = el.checked; render(); },
-  toggleGroup: (a, el) => { setGroup(a, el.checked); render(); },
-  toggleSec: a => { S.vm.collapsed['sec:' + a] = !S.vm.collapsed['sec:' + a]; render(); },
-  toggleFolder: a => { S.vm.collapsed[a] = !S.vm.collapsed[a]; render(); },
-  expandAll: () => { S.vm.collapsed = {}; render(); },
-  collapseAll: () => { allFolderKeys().forEach(k => S.vm.collapsed[k] = true); render(); },
-  setView: a => { S.vm.view = a; render(); },
-  showDiff: a => vmShowDiff(a), closeDiff: () => { S.vm.diffVisible = false; S.vm.diffContent = ''; S.vm.diffTitle = ''; render(); },
-  rowop: (a, el) => { closeCtx(); rowOp(a, el.dataset.arg2); },
-  logLoad: () => lvmLoad(50), logMore: () => lvmMore(), logSel: a => lvmSelect(+a),
   env: (a, el) => { S.env[a] = el.checked; if (a === 'gh' && el.checked) S.env.ghInstalled = true; if (a === 'ghInstalled' && !el.checked) S.env.gh = false; prqRefresh(); render(); },
   simChange: () => simulateChange(),
   restart: () => restartVS(),
   branchSel: (a, el) => { S.branch = el.value; if (S.vm.wcPath) vmRefresh(); render(); },
   soon: a => SOON[a](),
-  langSel: (a, el) => { S.vm.lang = el.value; render(); },
   seSub: (a, el) => { const r = el.getBoundingClientRect(); ctxMenu(r.right - 4, r.top, [{ label: 'SVN Update', act: 'seOp', arg: 'update', arg2: a }, { label: 'SVN Commit...', act: 'seOp', arg: 'commit', arg2: a }, '-', { label: 'Diff con BASE', act: 'seOp', arg: 'diff', arg2: a }, { label: 'Mostra log', act: 'seOp', arg: 'log', arg2: a }, '-', { label: 'SVN Add', act: 'seOp', arg: 'add', arg2: a }, { label: 'SVN Revert', act: 'seOp', arg: 'revert', arg2: a }, { label: 'Aggiungi a ignore list', act: 'seOp', arg: 'ign', arg2: a }], true); },
   seOp: (a, el) => { closeCtx(); seOp(a, el.dataset.arg2); },
   sectx: (a, el) => { closeCtx(); toast('Anteprima: "' + el.textContent + '" — non ancora implementato'); },
@@ -2002,21 +2078,6 @@ document.addEventListener('input', e => {
   const [o, k] = m.split('.'); S[o][k] = el.type === 'number' ? (+el.value || 0) : el.value;
 });
 document.addEventListener('contextmenu', e => {
-  const fo = e.target.closest('[data-ctxfolder]');
-  if (fo) {
-    e.preventDefault(); const arg = fo.dataset.ctxfolder, unv = parseArg(arg)[0] === 'unv', sp = 'folder|' + arg;
-    return ctxMenu(e.clientX, e.clientY, [{ label: 'SVN Add (contenuto non versionato)', act: 'rowop', arg: 'add', arg2: sp, off: !unv }, { label: 'SVN Revert cartella', act: 'rowop', arg: 'rev', arg2: sp, off: unv }, { label: 'Aggiungi a ignore list', act: 'rowop', arg: 'ign', arg2: sp, off: !unv }, { label: 'Diff cartella', act: 'rowop', arg: 'fdiff', arg2: sp, off: unv }, '-', { label: 'Espandi tutto', act: 'expandAll' }, { label: 'Comprimi tutto', act: 'collapseAll' }]);
-  }
-  const sc = e.target.closest('[data-ctxsec]');
-  if (sc) {
-    e.preventDefault(); const sec = sc.dataset.ctxsec, sp = 'section|' + sec + '|';
-    return ctxMenu(e.clientX, e.clientY, [{ label: 'Aggiungi tutti a SVN', act: 'rowop', arg: 'add', arg2: sp, off: sec !== 'unv' }, { label: 'Revert tutto', act: 'rowop', arg: 'rev', arg2: sp, off: sec !== 'chg' }, '-', { label: 'Espandi tutto', act: 'expandAll' }, { label: 'Comprimi tutto', act: 'collapseAll' }]);
-  }
-  const row = e.target.closest('[data-ctxitem]');
-  if (row) {
-    e.preventDefault(); const it = S.vm.files.find(f => f.path === row.dataset.ctxitem); if (!it) return; const sp = 'file|' + it.path;
-    return ctxMenu(e.clientX, e.clientY, [{ label: 'SVN Add', act: 'rowop', arg: 'add', arg2: sp, off: !it.canAdd }, { label: 'Aggiungi a ignore list', act: 'rowop', arg: 'ign', arg2: sp, off: !it.canIgn }, { label: 'SVN Delete', act: 'rowop', arg: 'del', arg2: sp, off: !it.canDel }, { label: 'SVN Revert', act: 'rowop', arg: 'rev', arg2: sp, off: !it.canRev }, '-', { label: 'Risolvi conflitto...', act: 'rowop', arg: 'res', arg2: sp, off: !it.canRes }, '-', { label: 'Mostra diff', act: 'showDiff', arg: it.path, off: !it.canDiff }]);
-  }
   const se = e.target.closest('[data-sectx]');
   if (se) { e.preventDefault(); const t = se.dataset.sectx; return ctxMenu(e.clientX, e.clientY, [...(t.startsWith('file|') ? [{ label: 'Apri', act: 'openFile', arg: t.slice(5) }, '-'] : []), { label: 'Taglia', act: 'sectx', off: true }, { label: 'Elimina', act: 'sectx', off: true }, '-', { label: 'SVN  ▸', act: 'seSub', arg: t }]); }
   const mini = e.target.closest('[data-minictx]');
@@ -2059,6 +2120,7 @@ startMode('free');
 let savedTab = null;
 try { savedTab = localStorage.getItem('svnassist-demo-tab'); } catch (e) { }
 if (savedTab === 'soon') ACT.tab('soon'); else showWelcome();
+
 </script>
 </body>
 </html>

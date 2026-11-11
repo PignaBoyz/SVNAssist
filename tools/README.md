@@ -33,3 +33,14 @@ Prerequisito: `svn.exe` e `svnadmin.exe` nel PATH (es. `winget install --id Slik
 
 > In alternativa puoi puntare l'estensione a una working copy SVN che hai già mappato tu:
 > lo script serve solo ad avere un ambiente riproducibile e cancellabile.
+
+## build-demo.mjs
+
+Costruisce `docs/demo/svnassist-demo.html` (file unico, apribile da `file://`) da `src/SVNAssist.UI.Web` + `docs/demo/src/*`.
+
+```
+node tools/build-demo.mjs
+node --test "tests/ui-web/*.test.mjs"   # contrasto, contratto, mock-bridge, render, CSP
+```
+
+Vedi `docs/ui-protocol.md`.

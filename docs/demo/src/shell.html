@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="it" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SVNAssist - Demo interattiva</title>
+<style>
+/*TOKENS*/
+/*SHELLCSS*/
+</style>
+</head>
+<body class="panel-closed">
+<header class="demo-top">
+  <h1>SVN<span>Assist</span> &middot; demo interattiva</h1><span class="tag soon" title="Versione">0.1.0</span>
+  <nav class="tabs" role="tablist" aria-label="Sezioni della demo">
+    <button role="tab" id="tabbtn-sim" aria-selected="true" data-act="tab" data-arg="sim">Simulazione</button>
+    <button role="tab" id="tabbtn-soon" aria-selected="false" data-act="tab" data-arg="soon">Prossimamente</button>
+  </nav>
+  <span class="tag info" title="Tutto quello che vedi e' simulato in memoria nel browser">Simulazione: nessuna connessione reale</span>
+  <span class="sp"></span>
+  <button class="btn" data-act="tourStart">Primo utilizzo (tour)</button>
+  <button class="btn" id="btnPanel" data-act="togglePanel" aria-pressed="false">Pannello simulazione</button>
+  <button class="btn" data-act="reset">Reset demo</button>
+</header>
+<main id="page">
+  <section class="view" id="view-sim">
+    <div class="sim">
+      <div class="vs" id="vs">
+        <div class="vs-title">
+          <div class="vs-logo" aria-hidden="true">VS</div>
+          <div class="menubar" id="menubar" role="menubar"></div>
+          <div class="nv"><button class="btn sm" data-act="nvSe">Esplora</button><button class="btn sm" data-act="nvView" data-arg="doc">Editor / Log</button><button class="btn sm" data-act="nvView" data-arg="dock">SVN Changes</button></div>
+          <div class="sp"></div>
+          <span class="sol-name" id="solName"></span>
+        </div>
+        <div class="vs-body v-dock" id="vsBody">
+          <aside class="se" aria-label="Esplora soluzioni">
+            <div class="pane-h"><span>Esplora soluzioni</span><span class="muted small" id="seNote"></span></div>
+            <div class="se-tree" id="seTree"></div>
+          </aside>
+          <div class="center">
+            <div class="doc-tabs" id="docTabs" role="tablist"></div>
+            <div class="doc-body" id="docBody"></div>
+          </div>
+          <aside class="dock" id="dock" aria-label="Finestre strumenti"></aside>
+        </div>
+        <div class="vs-status" id="vsStatus"></div>
+      </div>
+      <aside class="sim-panel" id="simPanel" aria-label="Pannello simulazione"></aside>
+    </div>
+  </section>
+  <section class="view" id="view-soon" hidden></section>
+</main>
+<div id="overlay" role="presentation"></div>
+<div id="toasts" aria-live="polite"></div>
+<div id="ctxhost"></div>
+<div id="tour" hidden role="dialog" aria-label="Tour primo utilizzo"></div>
+<script>/*UIDOC*/</script>
+<script>
+/*MOCKBRIDGE*/
+</script>
+<script>
+/*DEMOJS*/
+</script>
+</body>
+</html>
