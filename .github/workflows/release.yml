@@ -1,0 +1,50 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Installa svn
+        shell: pwsh
+        run: |
+          choco install sliksvn -y --no-progress
+          $svnDir = 'C:\Program Files\SlikSvn\bin'
+          if (-not (Test-Path "$svnDir\svn.exe")) { throw "svn.exe non trovato in $svnDir" }
+          $svnDir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Build
+        run: dotnet build SVNAssist.sln -c Release
+
+      - name: Test
+        run: dotnet test tests/SVNAssist.Tests/SVNAssist.Tests.csproj -c Release --no-build
+
+      - name: Prepara asset
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          $vsix = Get-ChildItem src/SVNAssist/bin/Release -Recurse -Filter *.vsix | Select-Object -First 1
+          if (-not $vsix) { throw 'VSIX non trovato' }
+          Copy-Item $vsix.FullName dist/
+          Compress-Archive -Path docs/demo/* -DestinationPath "dist/SVNAssist-demo-${{ github.ref_name }}.zip"
+          $notes = "docs/release-notes/${{ github.ref_name }}.md"
+          if (Test-Path $notes) { "NOTES_FILE=$notes" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append }
+
+      - name: Crea GitHub Release
+        uses: softprops/action-gh-release@v2.2.2
+        with:
+          files: dist/*
+          body_path: ${{ env.NOTES_FILE }}
+          generate_release_notes: ${{ env.NOTES_FILE == '' }}

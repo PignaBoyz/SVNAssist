@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # I test di integrazione usano svn.exe (repository temporanei file://).
+      - name: Installa svn
+        shell: pwsh
+        run: |
+          choco install sliksvn -y --no-progress
+          $svnDir = 'C:\Program Files\SlikSvn\bin'
+          if (-not (Test-Path "$svnDir\svn.exe")) { throw "svn.exe non trovato in $svnDir" }
+          $svnDir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          & "$svnDir\svn.exe" --version --quiet
+
+      - name: Build
+        run: dotnet build SVNAssist.sln -c Release
+
+      - name: Test
+        run: dotnet test tests/SVNAssist.Tests/SVNAssist.Tests.csproj -c Release --no-build
+
+      - name: Upload VSIX
+        uses: actions/upload-artifact@v4
+        with:
+          name: SVNAssist-vsix
+          path: src/SVNAssist/bin/Release/**/*.vsix
+          if-no-files-found: error
