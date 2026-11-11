@@ -12,8 +12,13 @@
               xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
               xmlns:vs="http://schemas.microsoft.com/visualstudio/extensibility/2022/xaml"
               xmlns:styles="clr-namespace:Microsoft.VisualStudio.Shell;assembly=Microsoft.VisualStudio.Shell.15.0">
-  <Grid Margin="6,4">
+  <Grid Margin="6,4"
+        Background="{DynamicResource {x:Static styles:VsBrushes.ToolWindowBackgroundKey}}">
     <Grid.Resources>
+      <!-- Testo tematizzato di default: senza, in tema scuro i TextBlock restano neri su nero -->
+      <Style TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource {x:Static styles:VsBrushes.ToolWindowTextKey}}"/>
+      </Style>
       <Style TargetType="TextBox"
              BasedOn="{StaticResource {x:Static styles:VsResourceKeys.ThemedDialogTextBoxStyleKey}}"/>
       <Style TargetType="Button"

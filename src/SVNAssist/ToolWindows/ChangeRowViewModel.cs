@@ -25,6 +25,7 @@ internal enum ChangeRowKind
 internal sealed class ChangeRowViewModel : NotifyPropertyChangedObject
 {
     private bool? _isChecked = false;
+    private bool _canAdd, _canDelete, _canRevert, _canResolve, _canIgnore, _canDiff;
     private string _chevron = string.Empty;
     private string _name = string.Empty;
     private string _detail = string.Empty;
@@ -83,27 +84,51 @@ internal sealed class ChangeRowViewModel : NotifyPropertyChangedObject
 
     /// <summary>Il file può essere aggiunto a SVN (non versionato) / la cartella/sezione contiene elementi non versionati.</summary>
     [DataMember]
-    public bool CanAdd { get; set; }
+    public bool CanAdd
+    {
+        get => _canAdd;
+        set => SetProperty(ref _canAdd, value);
+    }
 
     /// <summary>L'elemento può essere cancellato da SVN (solo file versionati).</summary>
     [DataMember]
-    public bool CanDelete { get; set; }
+    public bool CanDelete
+    {
+        get => _canDelete;
+        set => SetProperty(ref _canDelete, value);
+    }
 
     /// <summary>L'elemento (o il suo contenuto) può essere ripristinato.</summary>
     [DataMember]
-    public bool CanRevert { get; set; }
+    public bool CanRevert
+    {
+        get => _canRevert;
+        set => SetProperty(ref _canRevert, value);
+    }
 
     /// <summary>Il file è in conflitto.</summary>
     [DataMember]
-    public bool CanResolve { get; set; }
+    public bool CanResolve
+    {
+        get => _canResolve;
+        set => SetProperty(ref _canResolve, value);
+    }
 
     /// <summary>L'elemento (o il suo contenuto non versionato) può essere aggiunto alla ignore list.</summary>
     [DataMember]
-    public bool CanIgnore { get; set; }
+    public bool CanIgnore
+    {
+        get => _canIgnore;
+        set => SetProperty(ref _canIgnore, value);
+    }
 
     /// <summary>È disponibile il diff (file versionati / cartelle con modifiche).</summary>
     [DataMember]
-    public bool CanDiff { get; set; }
+    public bool CanDiff
+    {
+        get => _canDiff;
+        set => SetProperty(ref _canDiff, value);
+    }
 
     /// <summary>Spazio a sinistra (px) per l'indentazione dell'albero.</summary>
     [DataMember]

@@ -218,7 +218,7 @@ Tutte le impostazioni sono in **Tools → Options → SVNAssist**:
 | AI API Key | *(vuoto)* | API key o GitHub PAT per l'autenticazione |
 | AI Model | `openai/gpt-4o-mini` | Modello AI (elenco) |
 | Default Language | `auto` | Lingua dei commit message (`auto`, `italiano`, `english`) |
-| Working Copy Path | *(vuoto)* | Percorso della working copy SVN (auto-rilevato se vuoto) |
+| Working Copy Path | *(vuoto)* | Percorso della working copy SVN (se impostato ha la precedenza sull'auto-rilevamento, in entrambe le finestre; se vuoto viene auto-rilevato) |
 
 ---
 
