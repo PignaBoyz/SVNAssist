@@ -432,3 +432,6 @@ FodyWeavers.xsd
 
 # Pacchetti di test da distribuire a mano
 dist/
+
+# Gli zip di release sono prodotti dalla CI (GitHub Releases), non versionati
+releases/*.zip
