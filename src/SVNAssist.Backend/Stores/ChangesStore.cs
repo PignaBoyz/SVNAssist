@@ -765,19 +765,11 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         return new ChangeEntry(fullPath, relative, status.Status, status.IsTreeConflict, IsDirectory(fullPath), status.IsLocked);
     }
 
-    /// <summary>I nuovi elementi M/A/D/R/! partono in Staged; gli altri mantengono la scelta dell'utente.</summary>
+    /// <summary>Come Git: nulla entra in Staged da solo (restano in Modifiche); si tiene la scelta dell'utente e si tolgono i percorsi spariti.</summary>
     private void UpdateStagedAfterRefresh()
     {
         var state = Wc;
         var current = new HashSet<string>(_entries.Select(e => e.FullPath), StringComparer.OrdinalIgnoreCase);
-        foreach (var entry in _entries.Where(e => !state.Known.Contains(e.FullPath)))
-        {
-            // Missing (!) non entra da solo: un salvataggio transitorio di VS diventerebbe una cancellazione nel commit.
-            if (entry.Status is SvnStatusKind.Modified or SvnStatusKind.Added or SvnStatusKind.Deleted
-                or SvnStatusKind.Replaced)
-                state.Staged.Add(entry.FullPath);
-        }
-
         state.Staged.RemoveWhere(p => !current.Contains(p));
         state.Known = current;
     }

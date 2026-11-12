@@ -763,7 +763,7 @@ const vmAiUi = () => ({
 });
 
 // ---------- view model: SVN Changes (specchio di SvnStatusToolWindowData) ----------
-const DEFAULT_SEL = ['M', 'A', 'D', 'R', '!'];   // i nuovi elementi: modificati/aggiunti/eliminati/sostituiti/mancanti spuntati; conflitti e non versionati no
+const DEFAULT_SEL = [];   // come Git: nulla e' in Staged da solo, lo mette l'utente (Staged vuoto = "Commit All")
 const LOCKS = new Set();   // file bloccati (svn lock) nella demo
 function mkItem(e, old) {
   const st = e.st;

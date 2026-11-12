@@ -109,6 +109,9 @@ public class SnapshotSchemaTests
     {
         var store = NewStore(SvnWithEverything());
         await store.RefreshAsync(Ct);
+        // Nulla e' in Staged da solo: ne metto una riga, cosi' la prima sezione ha righe da confrontare con la fixture.
+        var key = ((ChangesState)store.GetSnapshot()).Sections.SelectMany(x => x.Rows).First(r => r.Kind == "file" && r.Status is "M" or "A").Key;
+        await store.DispatchAsync("stage", System.Text.Json.JsonSerializer.SerializeToElement(new { key }), Ct);
         var ours = JsonNode.Parse(UiJson.Serialize(store.GetSnapshot()))!.AsObject();
         var fixture = JsonNode.Parse(File.ReadAllText(ContractPath("fixtures/changes.json")))!.AsObject();
 

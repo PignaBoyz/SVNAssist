@@ -292,6 +292,13 @@ public class SvnCleanupLockAuthTests
         }
 
         public ChangesState Snap => (ChangesState)Store.GetSnapshot();
+        /// <summary>Refresh + M/A/D/R messi in Staged esplicitamente (come farebbe l'utente).</summary>
+        public async Task RefreshStaged()
+        {
+            await Store.RefreshAsync(Ct);
+            foreach (var row in Snap.Sections.Single(s => s.Id == "changes").Rows.Where(r => r.Kind == "file" && (r.Status is "M" or "A" or "D" or "R")))
+                await Cmd("stage", new { key = row.Key });
+        }
         public RowDto Row(string key) => Snap.Sections.SelectMany(s => s.Rows).Single(r => r.Key == key);
         public Task Cmd(string name, object? args = null) => Store.DispatchAsync(name, JsonSerializer.SerializeToElement(args ?? new { }), Ct);
         public void Dispose() => Store.Dispose();
@@ -305,7 +312,7 @@ public class SvnCleanupLockAuthTests
         f.Svn.Statuses.Add(new SvnFileStatus("mine.cs", SvnStatusKind.Modified, IsLocked: true));
         f.Svn.Statuses.Add(new SvnFileStatus("k.cs", SvnStatusKind.Normal, IsLocked: true));
         f.Svn.Statuses.Add(new SvnFileStatus("plain.cs", SvnStatusKind.Normal)); // non bloccato: non compare
-        await f.Store.RefreshAsync(Ct);
+        await f.RefreshStaged();
 
         Assert.True(f.Row("staged:m.cs").Can.Lock);
         Assert.False(f.Row("staged:m.cs").Can.Unlock);
@@ -331,7 +338,7 @@ public class SvnCleanupLockAuthTests
     {
         using var f = new Fx();
         f.Svn.Statuses.Add(new SvnFileStatus("m.cs", SvnStatusKind.Modified));
-        await f.Store.RefreshAsync(Ct);
+        await f.RefreshStaged();
         f.Dialogs.TextResult = "lavoro io";
 
         await f.Cmd("rowOp", new { op = "lock", key = "staged:m.cs" });
@@ -343,7 +350,7 @@ public class SvnCleanupLockAuthTests
 
         f.Svn.Statuses.Clear();
         f.Svn.Statuses.Add(new SvnFileStatus("m.cs", SvnStatusKind.Modified, IsLocked: true));
-        await f.Store.RefreshAsync(Ct);
+        await f.RefreshStaged();
         await f.Cmd("rowOp", new { op = "unlock", key = "staged:m.cs" });
 
         Assert.Single(f.Svn.Unlocked);
@@ -354,7 +361,7 @@ public class SvnCleanupLockAuthTests
     {
         using var f = new Fx();
         f.Svn.Statuses.Add(new SvnFileStatus("m.cs", SvnStatusKind.Modified));
-        await f.Store.RefreshAsync(Ct);
+        await f.RefreshStaged();
         f.Dialogs.TextResult = null;
 
         await f.Cmd("rowOp", new { op = "lock", key = "staged:m.cs" });
@@ -367,7 +374,7 @@ public class SvnCleanupLockAuthTests
     {
         using var f = new Fx();
         f.Svn.Statuses.Add(new SvnFileStatus("m.cs", SvnStatusKind.Modified));
-        await f.Store.RefreshAsync(Ct);
+        await f.RefreshStaged();
         f.Svn.LockErrorUnlessForced = "svn: warning: W160035: Path '/trunk/m.cs' is already locked by user 'bob'";
 
         f.Dialogs.ConfirmResult = false;

@@ -104,7 +104,7 @@ Filtri: `svn log --xml -v -l N` con `-r {data}:{data}` per le date e `--search`/
 ### Novità rispetto al piano (`webview2-plan.md` §3)
 - **Staged** (stile Git Changes): SVN non ha uno staging, è un insieme tenuto dall'estensione. Sostituisce le caselle di selezione:
   `toggleFile`, `toggleGroup`, `selectAll`, `unselectAll` → `stage` / `unstage` (anche su cartella e su sezione intera).
-  I file nuovi (M/A/D/R/!) partono in Staged, i conflitti e i non versionati no.
+  Come Git, **nulla entra in Staged da solo**: le modifiche restano in Modifiche e Staged contiene solo ciò che l'utente ci mette (la scelta resta tra un refresh e l'altro).
 - **`rowOp{op:"deleteFile"}`**: tasto **Canc** su un file = elimina dal filesystem (se versionato: `svn delete`), con conferma dell'host e avviso se ci sono modifiche locali. Sostituisce `op:"delete"`. Non si applica a cartelle.
 - **`showDiff`** non produce più un campo `diff` nello snapshot: il diff si apre nell'editor di VS (`closeDiff` è sparito).
   Facoltativo: l'host può ospitare la vista `diff` (pagina di diff affiancato con evidenziazione) in un documento WebView2; è ciò che fa la demo.
@@ -200,7 +200,7 @@ La vista `diff` (documento WebView2 di diff affiancato) è facoltativa: il backe
 Tutto ciò che arriva dalla UI è non fidato: `v`, `type`, `id`, `name`, `args` e ogni argomento sono controllati (errore → `reply{ok:false,error}`, mai eccezioni verso l'host). Le **chiavi di riga** sono rivalidate contro lo stato corrente di `svn status` (se l'elemento non c'è più: errore "aggiorna l'elenco"); i percorsi usati per operare vengono sempre da `svn status`, mai dalla chiave; un elemento fuori dalla working copy viene scartato; `deleteFile` ricontrolla che il file sia sotto la radice della working copy. Gli unici percorsi che la UI invia sono quelli digitati (`setWorkingCopy`, `logLoad`): devono essere una cartella esistente dentro una working copy (o, per il log, un URL di repository).
 
 ### Comportamenti da conoscere (rispetto al piano)
-- **Staged**: insieme in memoria per working copy. I nuovi elementi `M A D R !` partono in Staged; conflitti e non versionati no (un conflitto non si può mettere in Staged; se un file in Staged diventa conflitto il commit si rifiuta).
+- **Staged**: insieme in memoria per working copy. Nulla ci entra da solo (come Git): lo riempie l'utente con `stage`; i percorsi spariti dalla working copy ne escono (un conflitto non si può mettere in Staged; se un file in Staged diventa conflitto il commit si rifiuta).
 - `commit`: insieme = Staged, o con Staged vuoto tutte le modifiche versionate (`CommitSet`). Aggiunge i non versionati in Staged (con le cartelle padre nuove) e cancella i mancanti, poi `svn commit --depth empty` sui soli percorsi elencati.
 - `rowOp deleteFile` (Canc su file, non cartelle): conferma con `PromptAsync`; versionato → `svn delete --force`; non versionato → cestino (se non disponibile, eliminazione diretta). Mancante → `svn delete`.
 - **Lock**: lo stato dei lock è solo quello **locale** (`<lock>` in `svn status --xml`, la "K" di svn), a costo zero (nessuna rete, nessun `-u`). I lock di altri (O/T/B) non si leggono; si scoprono quando `svn lock` fallisce ("già bloccato da X") e si offre di rubarlo con conferma. Un file bloccato ma non modificato compare in Modifiche con stato `K` (non si può mettere in Staged, né diff/revert). Il `commit` rilascia i lock dei file committati (default di svn).

@@ -162,8 +162,11 @@ public sealed class BackendIntegrationTests : IDisposable
         var state = await WaitStateAsync(s => !s["loading"]!.GetValue<bool>() && s["workingCopy"]!["branch"]!.GetValue<string>() != "");
 
         Assert.Equal(_wc, state["workingCopy"]!["path"]!.GetValue<string>());
-        Assert.Equal(["staged:a.txt"], Keys(state, "staged"));
+        Assert.Empty(Keys(state, "staged")); // come Git: nulla in Staged da solo
+        Assert.Equal(["changes:a.txt"], Keys(state, "changes"));
         Assert.Equal(["unversioned:n.txt"], Keys(state, "unversioned"));
+        Assert.True(state["commit"]!["all"]!.GetValue<bool>()); // Commit All
+        Assert.Equal(1, state["commit"]!["count"]!.GetValue<int>());
         AssertAllMessagesValid();
     }
 
@@ -178,9 +181,9 @@ public sealed class BackendIntegrationTests : IDisposable
         File.WriteAllText(Path.Combine(_wc, "x.txt"), "non voglio\n");
         StartServer();
         await OpenAsync();
-        await WaitStateAsync(s => Keys(s, "staged").Any());
+        await WaitStateAsync(s => Keys(s, "changes").Count() == 2);
 
-        Assert.True((await CmdAsync("unstage", new { key = "staged:b.txt" }))["ok"]!.GetValue<bool>());
+        Assert.True((await CmdAsync("stage", new { key = "changes:a.txt" }))["ok"]!.GetValue<bool>());
         Assert.True((await CmdAsync("stage", new { key = "unversioned:n.txt" }))["ok"]!.GetValue<bool>());
         Assert.True((await CmdAsync("setCommitText", new { text = "Commit dal test d'integrazione" }))["ok"]!.GetValue<bool>());
         var state = LastState();
@@ -214,7 +217,7 @@ public sealed class BackendIntegrationTests : IDisposable
         StartServer();
         _server!.Changes.DeleteFromDisk = File.Delete; // niente cestino reale nei test
         await OpenAsync();
-        await WaitStateAsync(s => Keys(s, "staged").Any() && Keys(s, "unversioned").Any());
+        await WaitStateAsync(s => Keys(s, "changes").Any() && Keys(s, "unversioned").Any());
 
         // Annullato dall'utente (secondo pulsante): non cambia nulla.
         _host.PromptAnswers.Enqueue(1);
@@ -223,14 +226,14 @@ public sealed class BackendIntegrationTests : IDisposable
 
         // Confermato: il non versionato sparisce dal disco, il versionato diventa D (svn delete --force).
         Assert.True((await CmdAsync("rowOp", new { op = "deleteFile", key = "unversioned:u.txt" }))["ok"]!.GetValue<bool>());
-        Assert.True((await CmdAsync("rowOp", new { op = "deleteFile", key = "staged:v.txt" }))["ok"]!.GetValue<bool>());
+        Assert.True((await CmdAsync("rowOp", new { op = "deleteFile", key = "changes:v.txt" }))["ok"]!.GetValue<bool>());
 
         Assert.False(File.Exists(Path.Combine(_wc, "u.txt")));
         Assert.False(File.Exists(Path.Combine(_wc, "v.txt")));
         Assert.Contains("D       v.txt", Svn("status"));
         var state = LastState();
-        Assert.Equal(["staged:v.txt"], Keys(state, "staged"));
-        Assert.Equal("D", state["sections"]![0]!["rows"]![0]!["status"]!.GetValue<string>());
+        Assert.Equal(["changes:v.txt"], Keys(state, "changes"));
+        Assert.Equal("D", state["sections"]![1]!["rows"]![0]!["status"]!.GetValue<string>());
         Assert.Empty(Keys(state, "unversioned"));
         Assert.Equal(3, _host.Prompts.Count);
         AssertAllMessagesValid();
@@ -243,9 +246,9 @@ public sealed class BackendIntegrationTests : IDisposable
         File.WriteAllText(Path.Combine(_wc, "a.txt"), "modificato\n");
         StartServer();
         await OpenAsync();
-        await WaitStateAsync(s => Keys(s, "staged").Any());
+        await WaitStateAsync(s => Keys(s, "changes").Any());
 
-        var reply = await CmdAsync("showDiff", new { key = "staged:a.txt" });
+        var reply = await CmdAsync("showDiff", new { key = "changes:a.txt" });
 
         Assert.True(reply["ok"]!.GetValue<bool>());
         var diff = Assert.Single(_host.Diffs);
