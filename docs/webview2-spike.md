@@ -1,6 +1,6 @@
 # Spike WebView2 (passo 0): esito
 
-Codice in `spike/` (fuori da `SVNAssist.sln` e dalla CI). Provato su Windows 11, VS 18.12 Community, istanza `/rootsuffix Exp`, .NET SDK 11.
+Codice in `spike/` (**cartella rimossa**: storico; il launcher e' ora `tools/msb.cs`, host e backend in `src/`) (era fuori da `SVNAssist.sln` e dalla CI). Provato su Windows 11, VS 18.12 Community, istanza `/rootsuffix Exp`, .NET SDK 11.
 
 ## Verdetto: SI per l'ibrido "H", con una correzione sui comandi
 

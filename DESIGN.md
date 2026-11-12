@@ -11,8 +11,10 @@
 **SVNAssist** è un'estensione **VSIX per Visual Studio 2026** che porta **Subversion** dentro l'IDE
 con un'esperienza in stile *Git Changes*, più la generazione automatica dei commit message via AI.
 
-- **Modello**: `VisualStudio.Extensibility` **out-of-process** (.NET 8), non il vecchio VSSDK:
-  se l'estensione crasha, **VS non crasha**.
+- **Architettura**: **host in-proc** (net472, package VSSDK + tool window WebView2, `src/SVNAssist.Host`) ↔
+  **backend .NET** (net8, processo separato, logica SVN e AI) via **StreamJsonRpc su stdio**
+  (`src/Shared/RpcContract.cs`); la **UI web** (`src/SVNAssist.UI.Web`) e' condivisa con la demo
+  (`tools/build-demo.mjs`). Se il backend cade, VS no.
 - **SVN**: `svn.exe` come processo esterno (`IProcessRunner`, `ArgumentList`, output in inglese e non
   interattivo). Comportamento allineato a svn/TortoiseSVN (non versionati spuntati aggiunti al commit,
   mancanti cancellati, conflitti che bloccano il commit, Revert/Delete con conferma).
@@ -20,11 +22,8 @@ con un'esperienza in stile *Git Changes*, più la generazione automatica dei com
   primo uso) → **Claude Code** → **Claude API** → **OpenAI-compatibile** (GitHub Models di default), con
   fallback tra provider. All'AI va il **diff minimo** dei soli file selezionati (`GetDiffForAiAsync`).
   Lingua scelta nel pannello (Italiano / English / Auto), default da *Default Language*.
-- **UI**: Remote UI (XAML + ViewModel `[DataContract]`, senza code-behind né convertitori). Il pannello
-  *SVN Changes* ricalca Git Changes: sezioni Conflitti / Modifiche / Non versionati, vista Albero (cartelle
-  compattate) o Lista, checkbox tri-state, menu contestuali per file/cartella/sezione, checklist dei
-  prerequisiti con installazione/login a un clic. L'albero è una `ListBox` **appiattita** di righe
-  (`ChangeRowViewModel`: sezione/cartella/file, indentazione e chevron precalcolati).
+- **UI**: pagina web in WebView2. Il pannello *SVN Changes* ricalca Git Changes: sezioni Conflitti / Modifiche /
+  Non versionati, vista Albero o Lista, checkbox tri-state, menu contestuali, checklist dei prerequisiti.
 - **Natura**: progetto **didattico** → il codice deve restare chiaro e commentato.
 
 ### Mappa dei componenti
@@ -139,7 +138,7 @@ Commands  ──▶  ToolWindow  ──▶  ViewModel (sottile, solo UI state)
 
 - ViewModel **sottile**: solo stato UI e binding; la logica SVN/AI vive nei servizi iniettati.
 - `IProcessRunner` astrae l'esecuzione di `svn.exe` → **arg-building unit-testabile** senza SVN reale.
-- Servizi registrati nel container DI di `VisualStudio.Extensibility` e iniettati ovunque.
+- Servizi registrati nel container DI del backend e iniettati ovunque.
 
 ### 3.4 Come testarlo facilmente in locale (punto chiave per te)
 
@@ -245,13 +244,13 @@ Restano le feature di prodotto e il polish.
 Obiettivo: portare SVNAssist anche su **Visual Studio Code**, riusando il più possibile.
 
 **Realtà tecnica.** Le estensioni VS Code sono in **TypeScript/Node**, con API completamente
-diverse da `VisualStudio.Extensibility` (.NET): non esiste un "wrapper" che ricicli direttamente
+diverse da VS (.NET): non esiste un "wrapper" che ricicli direttamente
 l'assembly .NET dentro VS Code. Le strade percorribili:
 
 1. **Core .NET condiviso + due frontend** (consigliato da valutare): estrarre la logica comune
    (invocazione `svn.exe`, parsing status/log/diff, chiamate AI — sostanzialmente i nostri
    `Services/`) in un piccolo **CLI/daemon `svnassist-core`**. Sia l'estensione VS sia quella
-   VS Code lo invocano; la UI resta specifica (Remote UI su VS, SCM API/webview su VS Code).
+   VS Code lo invocano; la UI resta specifica (UI web su VS, SCM API/webview su VS Code).
 2. **Reimplementazione in TS** della logica leggera, riusando i *concetti* (non il codice).
 
 **Perché è interessante farlo su VS Code:**
@@ -286,7 +285,7 @@ condividere il core o reimplementare.
 
 ### Limiti noti / da verificare a runtime in VS (non testabili senza Visual Studio)
 - ⚠️ **Comportamento dentro l'IDE non verificato qui** (manca VS): apertura tool window, rendering
-  Remote UI, risoluzione DI dei costruttori, prompt `ShowPromptAsync`, watcher solution/filesystem.
+  UI web, risoluzione DI dei costruttori, prompt `ShowPromptAsync`, watcher solution/filesystem.
   Questi vanno provati con F5 (vedi §9).
 - ⚠️ Token GitHub via `gh`/PAT: il percorso è testato con stub; la chiamata **reale** a GitHub Models
   va validata con un account loggato (formato endpoint/permessi del token possono cambiare).
@@ -299,7 +298,7 @@ condividere il core o reimplementare.
 Come provare l'estensione end-to-end sulla tua macchina.
 
 ### Prerequisiti
-1. **Visual Studio 2026** con il tooling *VisualStudio.Extensibility* (per fare F5-debug del VSIX).
+1. **Visual Studio 2022 o VS 18** con il workload di sviluppo estensioni (per provare il VSIX in istanza sperimentale).
 2. **.NET 8 SDK** (`dotnet --version` ≥ 8).
 3. **svn.exe** nel PATH — oppure lascia che l'estensione te lo proponga al primo avvio
    (`winget install --id Slik.Subversion -e`).
@@ -314,7 +313,7 @@ Come provare l'estensione end-to-end sulla tua macchina.
 2. **Avvia l'estensione**: apri `SVNAssist.sln` in VS, imposta `SVNAssist` come progetto di avvio,
    premi **F5** → si apre un'**istanza sperimentale** di VS con l'estensione caricata.
 3. Nell'istanza sperimentale **apri `DemoApp.sln`** (dentro la working copy creata dallo script).
-4. Apri il pannello: **Extensions → SVNAssist → Mostra Status** (*SVN Changes*).
+4. Apri il pannello: **Extensions → SVNAssist → SVN Changes**.
    - ✅ Attesa: l'header mostra il branch `trunk`; la lista modifiche è vuota.
 5. **Modifica** `DemoApp/Program.cs` e salva.
    - ✅ Attesa: il file compare con stato **M** (refresh automatico).

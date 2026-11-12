@@ -1,9 +1,9 @@
-# SVNAssist — Estensione SVN per Visual Studio 2026
+# SVNAssist — Estensione SVN per Visual Studio
 
-Estensione VSIX per Visual Studio 2026 che integra **Subversion (SVN)** nell'IDE con un pannello stile **Git Changes**, generazione automatica dei messaggi di commit tramite AI e supporto multi-provider.
+Estensione VSIX per Visual Studio 2022 / VS 18 che integra **Subversion (SVN)** nell'IDE con un pannello stile **Git Changes**, generazione automatica dei messaggi di commit tramite AI e supporto multi-provider.
 
 ![.NET 8](https://img.shields.io/badge/.NET-8.0-purple)
-![VS 2026](https://img.shields.io/badge/Visual%20Studio-2026-blue)
+![VS](https://img.shields.io/badge/Visual%20Studio-2022%20%7C%2018-blue)
 ![SVN](https://img.shields.io/badge/SVN-CLI-orange)
 
 ---
@@ -29,20 +29,22 @@ Estensione VSIX per Visual Studio 2026 che integra **Subversion (SVN)** nell'IDE
 
 ### Prerequisiti
 
-1. **Visual Studio 2026** (Community, Professional o Enterprise)
+1. **Visual Studio 2022 o VS 18** (Community, Professional o Enterprise)
 2. **svn.exe** nel PATH di sistema — installabile tramite:
    - [TortoiseSVN](https://tortoisesvn.net/) (con l'opzione "command line client tools")
    - [SlikSVN](https://sliksvn.com/download/)
    - [CollabNet SVN](https://www.collab.net/downloads/subversion)
+3. **Runtime .NET 8** (il backend e' un'app .NET framework-dependent, non e' incluso nel VSIX). *Nota: l'host non controlla ancora che sia presente; senza, il pannello non carica i dati.*
+4. **WebView2 Runtime** (gia' presente con VS e Windows 11)
 
 ### Installazione dell'estensione
 
-1. Scarica il file `.vsix` dalla sezione [Releases](https://github.com/PignaBoyz/SVNAssist/releases)
-2. Fai doppio click sul file `.vsix` per installarlo
+1. Scarica **`SVNAssist.vsix`** dalla [Release GitHub](https://github.com/PignaBoyz/SVNAssist/releases)
+2. Doppio clic sul file per installarlo
 3. Riavvia Visual Studio
 
 L'estensione comparirà nel menu **Extensions** con i comandi:
-- **Mostra Status** — Apre il pannello SVN Changes
+- **SVN Changes** — Apre il pannello SVN Changes
 - **Commit...** — Apre il pannello SVN Changes per il commit
 - **Update** — Esegue `svn update`
 - **Log / History** — Mostra la cronologia delle revisioni
@@ -89,7 +91,7 @@ SVNAssist usa di default **GitHub Models**, un servizio gratuito di GitHub che o
 
 1. Apri una solution che si trova in una working copy SVN
 2. Modifica un file e salva
-3. Apri il pannello SVN Changes (**Extensions → Mostra Status**)
+3. Apri il pannello SVN Changes (**Extensions → SVNAssist → SVN Changes**)
 4. Clicca **Genera con AI** per generare il messaggio di commit
 5. Il messaggio apparirà nella TextBox di commit
 
@@ -176,7 +178,7 @@ Per il provider `openai` puoi usare qualsiasi endpoint compatibile con il format
 
 ### Pannello SVN Changes
 
-Si apre da **Extensions → Mostra Status** e si ancora di solito a destra, accanto a Solution Explorer.
+Si apre da **Extensions → SVNAssist → SVN Changes** e si ancora di solito a destra, accanto a Solution Explorer.
 
 ```
 ┌─ SVN Changes ─────────────────────────┐
@@ -227,8 +229,22 @@ Il pulsante in basso apre la checklist: **svn.exe** (obbligatorio; "Installa con
 
 Tutte le impostazioni sono in **Tools → Options → SVNAssist**:
 
-| Impostazione | Default | Descrizione |
+| Chiave (`docs/ui-protocol.md`) | Default | Descrizione |
 |---|---|---|
+| `aiProvider` | `auto` | `auto`, `copilot`, `claudecode`, `claude`, `openai` |
+| `claudeModel` | `claude-sonnet-5-5` | Modello Claude (Claude Code e Claude API) |
+| `anthropicApiKey` | *(vuoto)* | API key Anthropic (o `ANTHROPIC_API_KEY`) |
+| `copilotModel` | `default` | Modello Copilot |
+| `aiEndpoint` | `https://models.github.ai/inference/chat/completions` | Endpoint OpenAI Chat Completions |
+| `aiApiKey` | *(vuoto)* | API key o GitHub PAT |
+| `aiModel` | `openai/gpt-4o-mini` | Modello OpenAI-compatibile |
+| `defaultLanguage` | `auto` | Lingua dei commit message (`auto`, `italiano`, `english`) |
+| `workingCopyPath` | *(vuoto)* | Se impostato ha la precedenza sull'auto-rilevamento |
+| `windowTheme` | `auto` | Tema delle finestre (`auto` segue VS) |
+
+Le API key sono cifrate con DPAPI (utente corrente) nel registro.
+
+---|---|---|
 | AI Endpoint | `https://models.github.ai/inference/chat/completions` | URL dell'endpoint AI (formato OpenAI Chat Completions) |
 | AI API Key | *(vuoto)* | API key o GitHub PAT per l'autenticazione |
 | AI Model | `openai/gpt-4o-mini` | Modello AI (elenco) |
@@ -239,13 +255,12 @@ Tutte le impostazioni sono in **Tools → Options → SVNAssist**:
 
 ## 🏗️ Architettura
 
-- **Modello**: VisualStudio.Extensibility (out-of-process, .NET 8)
-- **UI**: Remote UI (XAML + ViewModel `[DataContract]`, senza code-behind né convertitori). L'albero è una `ListBox` appiattita di righe (sezione/cartella/file); raggruppamento e tri-state sono in `ChangesTreeBuilder` (puro, testato)
-- **ViewModel**: `SvnStatusToolWindowData` (orchestrazione), `CommitMessageViewModel` (messaggio + AI + lingua), `PrerequisitesViewModel`, righe `ChangeRowViewModel`; dipendono solo da `ISvnService`, `IAiServiceFactory`, `IDialogService`
-- **SVN**: `svn.exe` via `Process` (no SharpSVN), output forzato in inglese e non interattivo; `ReloadableSvnService` ritrova svn se installato a VS aperto
-- **AI multi-provider**: `AiServiceFactory` costruisce la catena Copilot → Claude Code → Claude API → OpenAI-compatibile (con fallback); il diff inviato è minimo (`GetDiffForAiAsync`: niente contesto, binari e cancellati omessi)
-- **Refresh**: un solo ciclo con debounce (`RefreshDebouncer`) alimentato dal FileSystemWatcher (ignora `bin/ obj/ .vs/ .svn/`); `svn info` solo quando cambia la working copy o dopo update/commit
-- **Settings**: `SettingCategory` con source-generated observer
+- **Host** (`src/SVNAssist.Host`, net472, in-proc): package VSSDK, comandi `.vsct`, pagina Options, tool window con **WebView2**; fa da relay verso il backend e inoltra il tema di VS
+- **Backend** (`src/SVNAssist.Backend`, net8, processo separato): logica SVN (`svn.exe` via `Process`) e AI multi-provider; parla **StreamJsonRpc su stdio** (contratto in `src/Shared/RpcContract.cs`)
+- **UI web** (`src/SVNAssist.UI.Web`): HTML/CSS/JS condivisi con la demo (`docs/demo`, costruita da `tools/build-demo.mjs`)
+- **AI**: catena Copilot → Claude Code → Claude API → OpenAI-compatibile con fallback; il diff inviato e' minimo
+
+Dettagli in `DESIGN.md`, `docs/host.md`, `docs/ui-protocol.md`.
 
 ---
 
@@ -253,23 +268,21 @@ Tutte le impostazioni sono in **Tools → Options → SVNAssist**:
 
 ### Build
 
-```bash
-dotnet build src/SVNAssist/SVNAssist.csproj
-```
+Vedi `docs/host.md` (publish del backend + MSBuild dell'host; strumenti in `tools/README.md`).
 
 ### Test
 
 ```bash
 dotnet test tests/SVNAssist.Tests/SVNAssist.Tests.csproj
+node --test "tests/ui-web/*.test.mjs"
 ```
 
-I test di integrazione richiedono `svn.exe` nel PATH (repository temporanei `file://`); i test dei ViewModel usano servizi finti.
+I test di integrazione richiedono `svn.exe` nel PATH (repository temporanei `file://`).
 
 ### Debug
 
-1. Apri `SVNAssist.sln` in Visual Studio 2026
-2. Premi **F5** — si apre un'istanza sperimentale di VS con l'estensione caricata
-3. Nell'istanza sperimentale, apri una solution in una working copy SVN
+1. Compila il VSIX (vedi `docs/host.md`) e installalo in un'istanza sperimentale (`VSIXInstaller /rootSuffix:Exp`)
+2. Nell'istanza sperimentale, apri una solution in una working copy SVN
 
 ---
 

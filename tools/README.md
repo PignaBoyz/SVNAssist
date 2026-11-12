@@ -1,6 +1,6 @@
 # tools
 
-Script di supporto allo sviluppo di SVNAssist.
+Script di supporto allo sviluppo di SVNAssist: `setup-local-svn.ps1`, `build-demo.mjs`, `msb.cs`.
 
 ## setup-local-svn.ps1
 
@@ -26,7 +26,7 @@ Prerequisito: `svn.exe` e `svnadmin.exe` nel PATH (es. `winget install --id Slik
 
 ### Come testare l'estensione
 
-1. Apri `SVNAssist.sln` in Visual Studio e premi **F5** → si apre l'istanza sperimentale.
+1. Compila e installa il VSIX in un'istanza sperimentale (vedi `docs/host.md`).
 2. Nell'istanza sperimentale apri la `DemoApp.sln` creata dallo script.
 3. SVNAssist rileva automaticamente la working copy. Modifica `Program.cs` per vedere
    lo stato passare a **Modified** nel pannello *SVN Changes*.
@@ -44,3 +44,14 @@ node --test "tests/ui-web/*.test.mjs"   # contrasto, contratto, mock-bridge, ren
 ```
 
 Vedi `docs/ui-protocol.md`.
+
+## msb.cs
+
+Launcher per il MSBuild di VS 18 quando manca `MSBuild.exe.config` (errore "Could not load System.Memory"): esegue `MSBuild.exe` in un AppDomain con la config presa da `MSBuild.exe.config.template`, senza modificare l'installazione.
+
+```
+csc /out:msb.exe tools\msb.cs
+msb.exe src\SVNAssist.Host\SVNAssist.Host.csproj -p:Configuration=Release
+```
+
+Vedi `docs/host.md`. Il percorso di VS (`...\18\Community`) e' fisso nel sorgente: adattalo se serve.

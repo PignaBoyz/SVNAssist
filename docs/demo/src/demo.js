@@ -1024,7 +1024,7 @@ function renderDock() {
 function renderStatusBar() {
   const b = $('#vsStatus'), inWc = S.solution && S.solution.inWc;
   b.className = 'vs-status';
-  b.innerHTML = `<span>${S.vm.loading || S.vm.aiBusy ? '<span class="spin"></span>Operazione in corso...' : 'Pronto'}</span><span class="sp"></span>${inWc ? `<span>&#9095; ${esc(S.branch)} · r${S.wcRev}</span>` : ''}<span>${S.vsInstalled ? 'SVNAssist 0.1.0' : 'SVNAssist non installato'}</span>`;
+  b.innerHTML = `<span>${S.vm.loading || S.vm.aiBusy ? '<span class="spin"></span>Operazione in corso...' : 'Pronto'}</span><span class="sp"></span>${inWc ? `<span>&#9095; ${esc(S.branch)} · r${S.wcRev}</span>` : ''}<span>${S.vsInstalled ? 'SVNAssist 0.2.0' : 'SVNAssist non installato'}</span>`;
 }
 function renderSim() {
   const e = S.env, chain = resolveChain();
@@ -1376,7 +1376,7 @@ async function vsixFlow() {
   if (S.vsInstalled) return toast('SVNAssist è già installato');
   const go = await modal({
     title: 'VSIX Installer', body: `<div class="vsix"><div class="row"><div class="logo">SVN</div><div><b>SVNAssist</b><div class="muted">Estensione per Visual Studio 2026 · Subversion + commit message con AI</div></div></div>
-      <table style="margin-top:12px;font-size:12.5px;border-collapse:collapse"><tr><td class="muted" style="padding:2px 14px 2px 0">Editore</td><td>Andrea Pinelli</td></tr><tr><td class="muted" style="padding:2px 14px 2px 0">Versione</td><td>0.1.0</td></tr><tr><td class="muted" style="padding:2px 14px 2px 0">Firma digitale</td><td>nessuna</td></tr></table>
+      <table style="margin-top:12px;font-size:12.5px;border-collapse:collapse"><tr><td class="muted" style="padding:2px 14px 2px 0">Editore</td><td>Andrea Pinelli</td></tr><tr><td class="muted" style="padding:2px 14px 2px 0">Versione</td><td>0.2.0</td></tr><tr><td class="muted" style="padding:2px 14px 2px 0">Firma digitale</td><td>nessuna</td></tr></table>
       <p class="small muted" style="margin-top:12px">Prodotti di destinazione: Visual Studio Community / Professional / Enterprise 2026. Estensione non firmata: Windows può mostrare un avviso. Dopo l'installazione sarà necessario riavviare Visual Studio.</p></div>`,
     buttons: [{ label: 'Installa', value: true, primary: true }, { label: 'Annulla', value: false }], cancel: false,
   });
