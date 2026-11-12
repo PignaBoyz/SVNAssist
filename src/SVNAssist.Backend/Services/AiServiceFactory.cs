@@ -105,6 +105,9 @@ internal sealed class AiServiceFactory : IAiServiceFactory
     private async Task<IAiService?> CreateOpenAiCompatibleAsync(CancellationToken ct)
     {
         var endpoint = await _settings.GetAiEndpointAsync(ct);
+        // Non configurato (endpoint vuoto o non URL): meglio saltarlo che produrre un errore confuso in "Automatico".
+        if (!Uri.TryCreate(endpoint?.Trim(), UriKind.Absolute, out _))
+            return null;
         var model = NormalizeOpenAiModel(endpoint, await _settings.GetAiModelAsync(ct));
 
         // La key esplicita nelle opzioni vince. In mancanza, il token GitHub rilevato in automatico
@@ -166,6 +169,12 @@ internal sealed class FallbackAiService : IAiService
 
     /// <summary>Nomi dei provider nell'ordine in cui vengono provati.</summary>
     public IEnumerable<string> ProviderNames => _providers.Select(p => p.Name);
+
+    /// <summary>Inoltra la notifica di avanzamento ai provider (analisi a blocchi di diff grandi).</summary>
+    public Action<string>? Progress
+    {
+        set { foreach (var (_, s) in _providers) if (s is AiServiceBase b) b.Progress = value; }
+    }
 
     /// <summary>Nome del provider che ha risposto all'ultima richiesta riuscita (<c>null</c> se nessuna).</summary>
     public string? LastUsedProvider { get; private set; }

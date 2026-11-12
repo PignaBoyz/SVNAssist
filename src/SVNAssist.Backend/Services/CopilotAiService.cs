@@ -35,20 +35,54 @@ internal sealed class CopilotAiService : AiServiceBase
     }
 
     /// <inheritdoc />
-    protected override int MaxUserMessageChars => LargeContextUserMessageChars;
+    protected override int MaxUserMessageChars => CopilotUserMessageChars;
+
+    // Prompt troppo grandi (decine di file) fanno rispondere Copilot con "No response was returned": budget piu' prudente di LargeContext.
+    internal const int CopilotUserMessageChars = 60_000;
+
+    /// <summary>Solo test: sostituisce la chiamata reale al runtime Copilot.</summary>
+    internal Func<string, string, CancellationToken, Task<string>>? CoreOverride { get; init; }
 
     /// <inheritdoc />
     protected override async Task<string> CompleteAsync(string systemPrompt, string userMessage, CancellationToken ct)
     {
         try
         {
-            return await CompleteCoreAsync(systemPrompt, userMessage, ct);
+            return await CompleteWithRetryAsync(systemPrompt, userMessage, ct);
         }
         catch (Exception) when (!ct.IsCancellationRequested)
         {
             // Runtime morto o sessione rotta: si butta il client condiviso, la prossima chiamata lo riavvia.
             await DropSharedClientAsync();
             throw;
+        }
+    }
+
+    // Risposta vuota / "No response was returned": un solo nuovo tentativo con il messaggio dimezzato.
+    private async Task<string> CompleteWithRetryAsync(string systemPrompt, string userMessage, CancellationToken ct)
+    {
+        var core = CoreOverride ?? CompleteCoreAsync;
+        try
+        {
+            var first = await core(systemPrompt, userMessage, ct);
+            if (!string.IsNullOrWhiteSpace(first))
+                return first;
+        }
+        catch (Exception) when (!ct.IsCancellationRequested)
+        {
+            // si riprova sotto
+        }
+
+        try
+        {
+            var second = await core(systemPrompt, TrimToMaxChars(userMessage, Math.Max(2000, userMessage.Length / 2)), ct);
+            if (!string.IsNullOrWhiteSpace(second))
+                return second;
+            throw new InvalidOperationException(Loc.T("Copilot non ha risposto: riprova o scegli un modello diverso."));
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested && ex is not InvalidOperationException { InnerException: null })
+        {
+            throw new InvalidOperationException(Loc.T("Copilot non ha risposto: riprova o scegli un modello diverso.") + " (" + ex.Message + ")", ex);
         }
     }
 

@@ -21,11 +21,8 @@ public abstract class AiServiceBase : IAiService
     private const int MaxUserTokens = MaxRequestTokens - MaxResponseTokens - SafetyPromptTokens;
     private const int DiffChunkSizeChars = 12000;
     private const int MaxSummaryChars = 1200;
-    private const int MaxCombinedSummaryChars = 8000;
     private const int MaxFileListChars = 6000;
     private const int MinDiffContextChars = 2000;
-    private const int MaxSummaryChunks = 5;
-    private const int MinPerFileChars = 1500;
 
     /// <summary>Budget del messaggio utente per i provider con contesto ampio (~25k token).</summary>
     protected const int LargeContextUserMessageChars = 100_000;
@@ -49,7 +46,10 @@ public abstract class AiServiceBase : IAiService
     public async Task<string> GenerateCommitMessageAsync(string diff, string language, CancellationToken ct, string? projectInstructions = null)
     {
         var systemPrompt = "Sei un assistente per sviluppatori. Analizza il seguente diff SVN " +
-                           "e genera un messaggio di commit chiaro e conciso. " +
+                           "e genera un messaggio di commit completo nello stile dei buoni commit Git: " +
+                           "una riga di titolo (max 72 caratteri), riga vuota, poi un elenco puntato per area o modulo con cosa è cambiato e perché; " +
+                           "per modifiche piccole bastano il titolo e poche righe. " +
+                           "Se il diff arriva come riassunti per blocco, usali tutti. In un merge cita le revisioni unite se note. " +
                            "Elenca nel messaggio anche i file aggiunti (A) o eliminati (D), non solo quelli modificati. " +
                            "Rispondi solo con il messaggio, niente altro." +
                            GetLanguageInstruction(language) +
@@ -97,9 +97,6 @@ public abstract class AiServiceBase : IAiService
 
     private async Task<string> GetDiffContextAsync(string diff, string language, CancellationToken ct)
     {
-        // Rete di sicurezza: anche chi chiama senza averlo già fatto non può mandare più di DiffLimiter.MaxTotalChars.
-        diff = DiffLimiter.Limit(diff).Diff;
-
         var maxFileListChars = Math.Min(MaxFileListChars, Math.Max(0, MaxUserMessageChars - MinDiffContextChars));
         var fileListContext = BuildFileListContext(diff, maxFileListChars);
         var diffBudgetChars = MaxUserMessageChars - fileListContext.Length;
@@ -109,9 +106,10 @@ public abstract class AiServiceBase : IAiService
         if (diffBudgetChars <= 0)
             return fileListContext;
 
+        // Diff che sta in una richiesta: una sola chiamata. Altrimenti map-reduce su TUTTO il diff (nessun file escluso).
         var diffContext = diff.Length <= diffBudgetChars
             ? diff
-            : await SummarizeLargeDiffAsync(diff, language, ct);
+            : await MapReduceDiffAsync(diff, language, diffBudgetChars, ct);
 
         diffContext = TrimToMaxChars(diffContext, diffBudgetChars);
 
@@ -121,50 +119,122 @@ public abstract class AiServiceBase : IAiService
         return $"{fileListContext}\n\n{diffContext}";
     }
 
-    private async Task<string> SummarizeLargeDiffAsync(string diff, string language, CancellationToken ct)
-    {
-        var languageInstruction = GetLanguageInstruction(language);
-        diff = CompactForSummary(diff);
-        var chunks = SplitDiffIntoChunks(diff, DiffChunkSizeChars).ToList();
-        var summaries = new List<string>(chunks.Count);
+    private const int MaxMapFileChars = 100_000;
 
-        for (var i = 0; i < chunks.Count; i++)
-        {
-            var systemPrompt = "Sei un assistente per sviluppatori. Riassumi le modifiche del diff SVN " +
-                               "in un elenco puntato breve e tecnico (max 6 punti, max 1200 caratteri). " +
-                               "Rispondi solo con l'elenco." +
-                               languageInstruction;
-            var userMessage = $"Chunk {i + 1}/{chunks.Count}:\n{chunks[i]}";
+    /// <summary>Richieste "map" in parallelo.</summary>
+    internal const int MapConcurrency = 3;
 
-            var summary = await AskAsync(systemPrompt, userMessage, ct);
-            summaries.Add(TrimToMaxChars(summary, MaxSummaryChars));
-        }
+    /// <summary>Notifica l'avanzamento (es. "Analisi blocco 3/12...") a chi mostra lo stato; impostato dal chiamante.</summary>
+    internal Action<string>? Progress { get; set; }
 
-        var combined = string.Join("\n", summaries);
-        if (combined.Length > MaxCombinedSummaryChars)
-            combined = await SummarizeTextAsync(combined, language, ct);
-
-        return TrimToMaxChars(combined, MaxCombinedSummaryChars);
-    }
+    /// <summary>Dimensione di un blocco del diff: meta' del budget del modello (prudente per i modelli ridotti), tra 4k e 24k caratteri.</summary>
+    internal int ChunkChars => Math.Clamp(MaxUserMessageChars / 2, 4000, DiffChunkSizeChars * 2);
 
     /// <summary>
-    /// Con molti file il diff darebbe decine di richieste di riassunto in serie (lente, e oltre il limite di richieste al minuto
-    /// di GitHub Models): lo si riduce a poche decine di KB dando a ogni file la stessa quota, così nessun file sparisce.
+    /// Map: ogni blocco del diff (file interi o pezzi per hunk) diventa un riassunto fattuale. Reduce: i riassunti
+    /// (a piu' livelli se servono) entrano nel budget e il messaggio finale li usa tutti.
     /// </summary>
-    internal static string CompactForSummary(string diff)
+    private async Task<string> MapReduceDiffAsync(string diff, string language, int budgetChars, CancellationToken ct)
     {
-        const int budget = MaxSummaryChunks * DiffChunkSizeChars;
-        if (diff.Length <= budget)
-            return diff;
+        var (textDiff, propLines, merged) = DiffLimiter.CollapsePropertyOnly(diff);
+        var propsBlock = BuildPropsBlock(propLines, merged);
+        // shortcut: un singolo file oltre 100k caratteri (es. SQL/dati aggiunti per errore) si analizza solo nell'inizio; alzare se serve.
+        textDiff = string.Concat(DiffLimiter.SplitByFile(textDiff).Select(s => s.Length > MaxMapFileChars
+            ? s[..MaxMapFileChars] + "\n... (file molto grande: analizzato solo l'inizio)\n" : s));
+        var chunks = ChunkDiff(textDiff, ChunkChars);
+        var summaries = new string[chunks.Count];
+        var languageInstruction = GetLanguageInstruction(language);
+        var started = 0;
 
-        var files = Math.Max(1, ExtractFilePaths(diff).Count);
-        return DiffLimiter.Limit(diff, budget, Math.Max(MinPerFileChars, budget / files)).Diff;
+        using var gate = new SemaphoreSlim(MapConcurrency);
+        using var failure = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        await Task.WhenAll(chunks.Select(async (chunk, i) =>
+        {
+            await gate.WaitAsync(failure.Token);
+            try
+            {
+                Progress?.Invoke(Loc.T("Analisi blocco {0}/{1}...", Interlocked.Increment(ref started), chunks.Count));
+                var systemPrompt = "Sei un assistente per sviluppatori. Riassumi in modo fattuale e conciso le modifiche di questo " +
+                                   "blocco di diff SVN: cosa cambia e perché, citando nomi di classi, metodi e file. " +
+                                   "Elenco puntato (max 8 punti, max 1200 caratteri), solo l'elenco." + languageInstruction;
+                var userMessage = $"Blocco {i + 1}/{chunks.Count}:\n{chunk}";
+                string summary;
+                try
+                {
+                    summary = await AskAsync(systemPrompt, userMessage, failure.Token);
+                }
+                catch (InvalidOperationException) when (!failure.IsCancellationRequested)
+                {
+                    summary = await AskAsync(systemPrompt, userMessage, failure.Token); // un nuovo tentativo per risposta vuota
+                }
+
+                summaries[i] = $"[{i + 1}/{chunks.Count}] " + TrimToMaxChars(summary, MaxSummaryChars);
+            }
+            catch
+            {
+                failure.Cancel();
+                throw;
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }));
+
+        var reduceBudget = Math.Max(1000, budgetChars - propsBlock.Length - 100);
+        var level = summaries.ToList();
+        for (var round = 0; round < 6 && level.Sum(s => s.Length + 1) > reduceBudget; round++)
+        {
+            // Raggruppa riassunti consecutivi in lotti che stanno nel budget e li riassume a loro volta.
+            var batches = new List<string>();
+            var current = new StringBuilder();
+            foreach (var s in level)
+            {
+                if (current.Length > 0 && current.Length + s.Length + 1 > reduceBudget * 4 / 5)
+                {
+                    batches.Add(current.ToString());
+                    current.Clear();
+                }
+
+                current.AppendLine(s);
+            }
+
+            if (current.Length > 0)
+                batches.Add(current.ToString());
+            if (batches.Count >= level.Count)
+                break; // nessun progresso possibile: si tronca sotto
+
+            var reduced = new List<string>();
+            for (var b = 0; b < batches.Count; b++)
+            {
+                Progress?.Invoke(Loc.T("Riduzione riassunti {0}/{1}...", b + 1, batches.Count));
+                reduced.Add(await SummarizeTextAsync(batches[b], language, ct));
+            }
+
+            level = reduced;
+        }
+
+        Progress?.Invoke(Loc.T("Composizione del messaggio finale..."));
+        var body = TrimToMaxChars(string.Join("\n", level), reduceBudget);
+        var header = $"Riassunti per blocco di tutto il diff ({chunks.Count} blocchi, nessun file escluso):\n";
+        return header + body + (propsBlock.Length > 0 ? "\n\n" + propsBlock : string.Empty);
+    }
+
+    private static string BuildPropsBlock(List<string> propLines, List<string> merged)
+    {
+        if (propLines.Count == 0)
+            return string.Empty;
+
+        var sb = new StringBuilder($"{propLines.Count} file con sole modifiche di proprietà (nessuna riga di testo cambiata)");
+        if (merged.Count > 0)
+            sb.Append(". Revisioni unite (svn:mergeinfo): ").Append(string.Join("; ", merged));
+        return TrimToMaxChars(sb.ToString(), 1500);
     }
 
     private async Task<string> SummarizeTextAsync(string text, string language, CancellationToken ct)
     {
-        var systemPrompt = "Sei un assistente per sviluppatori. Riassumi il testo seguente " +
-                           "in un elenco puntato chiaro e tecnico (max 8 punti). " +
+        var systemPrompt = "Sei un assistente per sviluppatori. Riassumi i riassunti seguenti, senza perdere nomi di classi, metodi e aree toccate, " +
+                           "in un elenco puntato chiaro e tecnico (max 10 punti). " +
                            "Rispondi solo con l'elenco." +
                            GetLanguageInstruction(language);
 
@@ -172,28 +242,91 @@ public abstract class AiServiceBase : IAiService
         return TrimToMaxChars(summary, MaxSummaryChars * 2);
     }
 
-    private static IEnumerable<string> SplitDiffIntoChunks(string diff, int chunkSize)
+    /// <summary>
+    /// Divide TUTTO il diff in blocchi di al massimo <paramref name="size"/> caratteri: file interi raggruppati; un file
+    /// piu' grande si spezza per hunk (e, se un hunk e' enorme, per righe) ripetendo l'intestazione "Index:" nel blocco.
+    /// Ogni carattere del diff finisce in almeno un blocco.
+    /// </summary>
+    internal static List<string> ChunkDiff(string diff, int size)
     {
         var chunks = new List<string>();
-        var builder = new StringBuilder();
+        var current = new StringBuilder();
 
-        using var reader = new StringReader(diff);
-        string? line;
-        while ((line = reader.ReadLine()) is not null)
+        void Flush()
         {
-            if (builder.Length + line.Length + Environment.NewLine.Length > chunkSize && builder.Length > 0)
-            {
-                chunks.Add(builder.ToString());
-                builder.Clear();
-            }
-
-            builder.AppendLine(line);
+            if (current.Length > 0)
+                chunks.Add(current.ToString());
+            current.Clear();
         }
 
-        if (builder.Length > 0)
-            chunks.Add(builder.ToString());
+        void Add(string piece, string label)
+        {
+            if (current.Length + piece.Length > size)
+                Flush();
+            if (current.Length == 0 && !piece.StartsWith("Index: ", StringComparison.Ordinal))
+                current.Append(label);
+            current.Append(piece);
+        }
 
+        foreach (var section in DiffLimiter.SplitByFile(diff))
+        {
+            if (current.Length + section.Length <= size)
+            {
+                current.Append(section);
+                continue;
+            }
+
+            if (section.Length <= size)
+            {
+                Flush();
+                current.Append(section);
+                continue;
+            }
+
+            // File grande: pezzi per hunk, ognuno non oltre size - etichetta.
+            var first = section.Split('\n', 2)[0].TrimEnd('\r');
+            var label = (first.Length > 200 ? first[..200] : first) + " (continua)\n";
+            var limit = Math.Max(500, size - label.Length);
+            Flush();
+            foreach (var hunk in SplitHunks(section))
+                for (var pos = 0; pos < hunk.Length;)
+                {
+                    var take = Math.Min(limit, hunk.Length - pos);
+                    if (take == limit)
+                    {
+                        var nl = hunk.LastIndexOf('\n', pos + take - 1, take); // spezza a fine riga se possibile
+                        if (nl > pos)
+                            take = nl - pos + 1;
+                    }
+
+                    Add(hunk.Substring(pos, take), label);
+                    pos += take;
+                }
+        }
+
+        Flush();
         return chunks;
+    }
+
+    private static IEnumerable<string> SplitHunks(string section)
+    {
+        var start = 0;
+        var pos = 0;
+        while (pos < section.Length)
+        {
+            var next = section.IndexOf('\n', pos);
+            var end = next < 0 ? section.Length : next + 1;
+            if (pos > start && section[pos] == '@' && string.CompareOrdinal(section, pos, "@@", 0, 2) == 0)
+            {
+                yield return section[start..pos];
+                start = pos;
+            }
+
+            pos = end;
+        }
+
+        if (start < section.Length)
+            yield return section[start..];
     }
 
     private static string BuildFileListContext(string diff, int maxChars)

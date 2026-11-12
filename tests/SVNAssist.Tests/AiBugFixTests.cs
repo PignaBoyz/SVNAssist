@@ -138,42 +138,6 @@ public class AiBugFixTests : IDisposable
         Assert.Contains("altri", list);
     }
 
-    [Fact]
-    public void CompactForSummary_MoltiFile_OgniFileResta_EIlTotaleScende()
-    {
-        var diff = string.Concat(Enumerable.Range(0, 80).Select(i =>
-            $"Index: f{i}.cs\n" + string.Concat(Enumerable.Range(0, 300).Select(l => $"+riga {l} del file {i}\n"))));
-
-        var compact = AiServiceBase.CompactForSummary(diff);
-
-        Assert.True(compact.Length < diff.Length / 2);
-        Assert.True(compact.Length <= 5 * 12_000 + 1_000);
-        Assert.Contains("Index: f0.cs", compact);
-        Assert.Contains("Index: f20.cs", compact);
-    }
-
-    [Fact]
-    public async Task MoltiFile_NonServonoDecineDiRichiesteAlProvider()
-    {
-        var diff = string.Concat(Enumerable.Range(0, 100).Select(i =>
-            $"Index: f{i}.cs\n" + string.Concat(Enumerable.Range(0, 300).Select(l => $"+riga {l} del file {i}\n"))));
-        var ai = new CountingAi();
-
-        await ai.GenerateCommitMessageAsync(diff, "auto", Ct);
-
-        Assert.True(ai.Calls <= 8, $"{ai.Calls} richieste");
-    }
-
-    private sealed class CountingAi : AiServiceBase
-    {
-        public int Calls { get; private set; }
-
-        protected override Task<string> CompleteAsync(string systemPrompt, string userMessage, CancellationToken ct)
-        {
-            Calls++;
-            return Task.FromResult("ok");
-        }
-    }
 
     // ── Bug 5: regole di commit ──
 
