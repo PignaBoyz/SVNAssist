@@ -154,6 +154,14 @@ namespace SVNAssist.Host
         [LDescription("Automatica usa la lingua di Visual Studio (italiano se è italiano, altrimenti inglese). Si applica subito a finestre e messaggi; la lingua dei commit message AI è un'impostazione separata.")]
         public string UiLanguage { get; set; } = "auto";
 
+        [LCategory("Scorciatoie"), LDisplayName("Prossima modifica nel diff"), DefaultValue("Alt+F8")]
+        [LDescription("Scorciatoia globale, es. Alt+F8 o Ctrl+Shift+Down. Vuota = nessuna scorciatoia. Se non valida resta quella precedente (vedi il log di SVNAssist).")]
+        public string NextChangeShortcut { get; set; } = "Alt+F8";
+
+        [LCategory("Scorciatoie"), LDisplayName("Modifica precedente nel diff"), DefaultValue("Shift+Alt+F8")]
+        [LDescription("Scorciatoia globale, es. Shift+Alt+F8. Vuota = nessuna scorciatoia. Se non valida resta quella precedente (vedi il log di SVNAssist).")]
+        public string PreviousChangeShortcut { get; set; } = "Shift+Alt+F8";
+
         /// <summary>Cultura UI di Visual Studio (valorizzata dal package sul thread UI): serve a risolvere "auto".</summary>
         internal static string VsCulture = "";
 

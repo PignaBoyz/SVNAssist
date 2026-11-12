@@ -53,9 +53,47 @@ namespace SVNAssist.Host
             Microsoft.VisualStudio.Shell.Events.SolutionEvents.OnAfterOpenSolution += (s, e) => NotifySolution();
             Microsoft.VisualStudio.Shell.Events.SolutionEvents.OnAfterCloseSolution += (s, e) => NotifySolution();
             NotifySolution();
+            SvnAssistOptions.Changed += ApplyShortcuts;
+            ApplyShortcuts();
             // Verifica end-to-end: apre la finestra Changes a package caricato (spento di default).
             if (Environment.GetEnvironmentVariable("SVNASSIST_AUTO_OPEN") == "1")
                 JoinableTaskFactory.RunAsync(async () => { await Task.Delay(5000); await ShowViewAsync("changes"); }).FileAndForget("SVNAssist/autoopen");
+        }
+
+        // ---- scorciatoie personalizzabili (Tools > Options > SVNAssist > Scorciatoie) ----
+
+        /// <summary>
+        /// Applica le scorciatoie delle Options ai comandi con EnvDTE <c>Command.Bindings</c> ("Global::Alt+F8"); vuoto = nessuna scorciatoia.
+        /// Valore non valido: errore nel log e binding precedente invariato, mai un'eccezione.
+        /// </summary>
+        private void ApplyShortcuts()
+        {
+            try
+            {
+                ThreadHelper.ThrowIfNotOnUIThread();
+                var dte = GetService(typeof(EnvDTE.DTE)) as EnvDTE.DTE;
+                if (dte == null) { Log.Write("scorciatoie: DTE non disponibile"); return; }
+                SetBinding(dte, "SVNAssist.NextChange", Options.NextChangeShortcut);
+                SetBinding(dte, "SVNAssist.PreviousChange", Options.PreviousChangeShortcut);
+            }
+            catch (Exception ex) { Log.Write("scorciatoie: " + ex.Message); }
+        }
+
+        private static void SetBinding(EnvDTE.DTE dte, string command, string keys)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            try
+            {
+                keys = (keys ?? "").Trim();
+                var cmd = dte.Commands.Item(command);
+                if (keys.Length == 0) { cmd.Bindings = new object[0]; return; }
+                // un solo tasto/accordo; formato DTE "Scope::Keys"
+                var binding = "Global::" + keys;
+                var current = cmd.Bindings as object[];
+                if (current != null && current.Length == 1 && string.Equals(current[0] as string, binding, StringComparison.OrdinalIgnoreCase)) return;
+                cmd.Bindings = new object[] { binding };
+            }
+            catch (Exception ex) { Log.Write("scorciatoia non valida '" + keys + "' per " + command + ": " + ex.Message); }
         }
 
         // ---- solution ----
