@@ -98,7 +98,14 @@ internal sealed class FakeSvnService : ISvnService
     public Task AddAsync(IEnumerable<string> paths, CancellationToken ct) { Added.Add(paths.ToList()); return Task.CompletedTask; }
     public Task DeleteAsync(IEnumerable<string> paths, CancellationToken ct, bool force = false) { Deleted.Add(paths.ToList()); DeleteForced.Add(force); return Task.CompletedTask; }
     public List<bool> RevertRecursive { get; } = [];
-    public Task RevertAsync(IEnumerable<string> paths, CancellationToken ct, bool recursive = true) { Reverted.Add(paths.ToList()); RevertRecursive.Add(recursive); return Task.CompletedTask; }
+    public Task RevertAsync(IEnumerable<string> paths, CancellationToken ct, bool recursive = true)
+    {
+        Reverted.Add(paths.ToList());
+        RevertRecursive.Add(recursive);
+        // Il revert vero fa sparire dallo stato le modifiche dei percorsi indicati (i non versionati restano).
+        Statuses.RemoveAll(s => s.Status != SvnStatusKind.Unversioned && Reverted[^1].Contains(s.Path, StringComparer.OrdinalIgnoreCase));
+        return Task.CompletedTask;
+    }
     /// <summary>Percorsi per cui <see cref="ResolveAsync"/> fallisce (prova della risoluzione di gruppo con un errore in mezzo).</summary>
     public HashSet<string> ResolveFailPaths { get; } = [];
     public Task ResolveAsync(string path, SvnConflictChoice accept, CancellationToken ct)
@@ -109,8 +116,13 @@ internal sealed class FakeSvnService : ISvnService
         return Task.CompletedTask;
     }
     public Task AddToIgnoreListAsync(string path, CancellationToken ct) { Ignored.Add(path); return Task.CompletedTask; }
+    public int Updates { get; private set; }
+
     public Task<UpdateResult> UpdateAsync(string workingCopyPath, CancellationToken ct)
-        => UpdateError is not null ? throw new InvalidOperationException(UpdateError) : Task.FromResult(new UpdateResult(7, UpdateConflicts));
+    {
+        Updates++;
+        return UpdateError is not null ? throw new InvalidOperationException(UpdateError) : Task.FromResult(new UpdateResult(7, UpdateConflicts));
+    }
 
     public IReadOnlyList<string> UpdateConflicts { get; set; } = [];
 
@@ -305,7 +317,7 @@ internal sealed class FakeDialogs : IDialogService
     public string? TextResult { get; set; } = "";
     public List<string> TextPrompts { get; } = [];
 
-    /// <summary>Risposta di <see cref="AskAsync"/> ("Risolvi ora" = true, "Più tardi" = false) e domande ricevute.</summary>
+    /// <summary>Risposta di <see cref="AskAsync"/> e domande ricevute (Changes non fa piu' domande sui conflitti: i test verificano che resti vuoto).</summary>
     public bool AskResult { get; set; }
     public List<string> Asked { get; } = [];
 

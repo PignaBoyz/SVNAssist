@@ -7,7 +7,7 @@ namespace SVNAssist.Stores;
 /// "SVN Merge..." da un branch: il Log in modalita' merge mostra le revisioni ancora da unire (<c>svn mergeinfo --show-revs eligible</c>)
 /// e da li si fa l'anteprima (<c>--dry-run</c>), il merge di tutto o il cherry-pick delle revisioni scelte (<c>-c</c>).
 /// Il merge parte sempre dalla radice della working copy, con <c>--accept postpone</c>, e non committa: i conflitti compaiono in Changes,
-/// il messaggio di commit e' precompilato e un banner offre "Annulla merge" (revert ricorsivo, <see cref="ChangesStore"/>).
+/// il messaggio di commit va nei Recenti e un banner offre "Annulla merge" (revert ricorsivo, <see cref="ChangesStore"/>).
 /// Il merge richiede una working copy senza modifiche locali, cosi' annullarlo non porta via lavoro non correlato.
 /// </summary>
 internal sealed class MergeStore
@@ -57,7 +57,7 @@ internal sealed class MergeStore
         var pending = _changes.MergePending; // prima del lock: prende il lock di ChangesStore
         lock (_lock)
             return !_active || _source is null ? null
-                : new MergeDto(_source.Name, Title(_source), _loading, _busy, _error, _blocked, _selected.Order().ToList(), _entries.Count, _result, pending);
+                : new MergeDto(_source.Name, Title(_source), _loading, _busy, _error, _blocked, _selected.Order().ToList(), _entries.Count, _result, pending, SvnErrors.SuggestsUpdate(_error));
     }
 
     internal void Close()
@@ -134,6 +134,26 @@ internal sealed class MergeStore
         }
 
         Changed?.Invoke();
+    }
+
+    /// <summary>"SVN Revert di tutto..." dall'avviso: conferma con l'elenco (in Changes), poi rilegge revisioni e avviso, cosi' il merge si puo' rifare.</summary>
+    internal async Task RevertAllAsync(CancellationToken ct)
+    {
+        if (!Active)
+            return;
+        await _changes.RevertAllAsync(ct);
+        await RefreshAsync(ct);
+    }
+
+    /// <summary>"SVN Update ora" dall'errore di revisioni miste: aggiorna la working copy e ricalcola le revisioni da unire.</summary>
+    internal async Task UpdateAsync(CancellationToken ct)
+    {
+        if (!Active)
+            return;
+        await _changes.UpdateNowAsync(ct);
+        lock (_lock)
+            _error = string.Empty;
+        await RefreshAsync(ct);
     }
 
     internal void Toggle(long rev)
@@ -222,11 +242,12 @@ internal sealed class MergeStore
                     IReadOnlyList<LogEntryDto> shown;
                     lock (_lock)
                         shown = _entries;
-                    _changes.AfterMerge(MergeCommitMessage(revs is null ? shown.Select(e => e.Rev).ToList() : revs, shown, source.Path),
-                        Loc.T("Merge {0} da {1}: rivedi le modifiche e committa, oppure annulla il merge.", label, "^/" + source.Path));
                     await _changes.RefreshAsync(ct, reloadBranch: false, output.Conflicts > 0
                         ? Loc.T("Merge completato: {0} file in conflitto da risolvere.", output.Conflicts)
                         : Loc.T("Merge completato: rivedi le modifiche e committa."));
+                    // Dopo il refresh: il repository (chiave dei Recenti) e' noto.
+                    _changes.AfterMerge(MergeCommitMessage(revs is null ? shown.Select(e => e.Rev).ToList() : revs, shown, source.Path),
+                        Loc.T("Merge {0} da {1}: rivedi le modifiche e committa, oppure annulla il merge. Messaggio del merge disponibile nei Recenti.", label, "^/" + source.Path));
                 }
                 catch (Exception ex) when (!ct.IsCancellationRequested)
                 {
@@ -243,7 +264,7 @@ internal sealed class MergeStore
                 Say(output.Conflicts > 0
                     ? Loc.T("Merge eseguito, da committare. Conflitti da risolvere in Changes: {0}.", output.Conflicts)
                     : Loc.T("Merge eseguito, da committare."));
-                await _changes.OfferResolveConflictsAsync(output.Conflicts, ct);
+                await _changes.RevealConflictsAsync(output.Conflicts, ct);
             }
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)

@@ -41,6 +41,15 @@ public static class SvnErrors
                || text.Contains("run 'cleanup'", StringComparison.OrdinalIgnoreCase)
                || text.Contains("performing 'cleanup'", StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>L'errore suggerisce SVN Update: revisioni miste (E195020), file piu' recenti sul server (E155011, E160024, "out of date").</summary>
+    public static bool SuggestsUpdate(string? text)
+        => !string.IsNullOrEmpty(text)
+           && (text.Contains("E195020", StringComparison.Ordinal)
+               || text.Contains("E155011", StringComparison.Ordinal)
+               || text.Contains("E160024", StringComparison.Ordinal)
+               || text.Contains("mixed-revision", StringComparison.OrdinalIgnoreCase)
+               || text.Contains("out of date", StringComparison.OrdinalIgnoreCase));
+
     /// <summary><c>svn lock</c> fallito perché il file è già bloccato da un altro (W160035/E160035, E200035 "already locked").</summary>
     public static bool IsLockedByOther(string? text)
         => !string.IsNullOrEmpty(text)

@@ -191,11 +191,17 @@
     return [{ label: t('Migliora il messaggio scritto'), cmd: 'improveAi', hint: t('Riscrive la bozza nel campo sopra') }, { label: t('Cambia provider AI…'), cmd: 'wizardOpen', hint: t('Procedura guidata: provider, accesso, modello') }, { sep: true }, { header: true, label: t('Lingua del messaggio') },
       ...LANGS().map(([l, t]) => ({ label: t, cmd: 'setLanguage', args: { lang: l }, checked: st.commit.lang === l }))];
   }
+  // menu della riga di sezione (Changes / Staged / Non versionati): SVN Revert di tutto dove ci sono modifiche annullabili
+  function sectionMenu(sec, key, s) {
+    return [{ label: sec === 'staged' ? t('Rimuovi tutto dai file da committare') : t('Aggiungi tutto ai file da committare'), cmd: sec === 'staged' ? 'unstage' : 'stage', args: { key } }, { sep: true },
+      sec === 'unversioned' ? null : { label: t('SVN Revert di tutto…'), cmd: 'rowOp', args: { op: 'revert', key }, disabled: !(s && s.count), hint: t('Annulla tutte le modifiche di questa sezione (anche in più cartelle), dopo conferma con l’elenco dei file; i non versionati non si toccano') },
+      sec === 'unversioned' ? null : { sep: true }, { label: t('Espandi tutto'), cmd: 'expandAll' }, { label: t('Comprimi tutto'), cmd: 'collapseAll' }].filter(Boolean);
+  }
   function rowMenu(row, x, y) {
     const key = row.dataset.key, kind = row.dataset.kind, sec = row.dataset.sec;
     const s = st.sections.find(z => z.id === sec); const r = s && s.rows.find(z => z.key === key);
     const A = (op, label, can, kbd) => ({ label, cmd: 'rowOp', args: { op, key }, disabled: !can, kbd });
-    if (kind === 'section') return U.menu.open(x, y, [{ label: sec === 'staged' ? t('Rimuovi tutto dai file da committare') : t('Aggiungi tutto ai file da committare'), cmd: sec === 'staged' ? 'unstage' : 'stage', args: { key } }, { sep: true }, { label: t('Espandi tutto'), cmd: 'expandAll' }, { label: t('Comprimi tutto'), cmd: 'collapseAll' }], row);
+    if (kind === 'section') return U.menu.open(x, y, sectionMenu(sec, key, s), row);
     if (!r) return;
     const c = r.can, isF = kind === 'file';
     U.menu.open(x, y, [
@@ -477,7 +483,7 @@
     else if (!e.shiftKey && (a === last || !box.contains(a))) { e.preventDefault(); first.focus(); }
   }
 
-  U.changesHTML = { header, commitBar, foot, revHTML, switchHTML, mergeBanner, conflictsHTML, revIndicator, statusKind, OK_TTL, recentHTML, trackStatus, listHTML };   // parti pure, provate senza DOM (tests/ui-web)
+  U.changesHTML = { sectionMenu, header, commitBar, foot, revHTML, switchHTML, mergeBanner, conflictsHTML, revIndicator, statusKind, OK_TTL, recentHTML, trackStatus, listHTML };   // parti pure, provate senza DOM (tests/ui-web)
 
   U.views.changes = {
     mount(root) {

@@ -61,7 +61,7 @@
     [/^Merge completato\.$/, 'Merge completed.'],
     [/^Seleziona almeno una revisione da unire\.$/, 'Select at least one revision to merge.'], [/^Merge completato: rivedi le modifiche e committa\.$/, 'Merge completed: review the changes and commit.'],
     [/^Merge completato: (\d+) file in conflitto da risolvere\.$/, 'Merge completed: $1 conflicted files to resolve.'], [/^Merge annullato: (\d+) elementi ripristinati\.$/, 'Merge undone: $1 items restored.'],
-    [/^Annullamento del merge in corso\.\.\.$/, 'Undoing the merge...'], [/^Merge (.+) da (\^\/.+): rivedi le modifiche e committa, oppure annulla il merge\.$/, 'Merge $1 from $2: review the changes and commit, or undo the merge.'],
+    [/^Annullamento del merge in corso\.\.\.$/, 'Undoing the merge...'], [/^Merge (.+) da (\^\/.+): rivedi le modifiche e committa, oppure annulla il merge\. Messaggio del merge disponibile nei Recenti\.$/, 'Merge $1 from $2: review the changes and commit, or undo the merge. Merge message available in Recent.'], [/^Errore: La working copy è a revisioni miste: [\s\S]*$/, 'Error: The working copy has mixed revisions: run SVN Update and try again.\nsvn: E195020: Cannot merge into mixed-revision working copy'],
     [/^Merge (r[\d, r-]+?)( \(selezione di (\d+) revisioni\))? da (\^\/.+)$/, 'Merge $1$2 from $4'],
     [/^La working copy ha (\d+) elementi con modifiche locali\. Per unire .*$/, 'The working copy has $1 items with local changes. Merging needs a clean working copy (so "Undo merge" does not touch other work): Commit or Revert first, then try again.'],
     [/^(\d+) file cambiati tra r(\d+) e r(\d+)\.$/, '$1 files changed between r$2 and r$3.'], [/^(\d+) file modificati\.$/, '$1 files modified.'],
@@ -149,7 +149,7 @@
   }
   function mergeSnap(m) {   // il Log in modalita merge (come MergeStore)
     const el = mgEligible(m.name);
-    return { source: m.name, title: tr('Merge da ' + m.name), loading: !!m.loading, busy: !!m.busy, error: tr(m.error || ''), blocked: tr(m.blocked || ''), selected: m.sel.slice().sort((a, b) => a - b), eligible: el.length, result: m.result || null, pending: !!(S.vm.mergeBanner && commitSet().files.length) };
+    return { source: m.name, title: tr('Merge da ' + m.name), loading: !!m.loading, busy: !!m.busy, error: tr(m.error || ''), blocked: tr(m.blocked || ''), selected: m.sel.slice().sort((a, b) => a - b), eligible: el.length, result: m.result || null, pending: !!(S.vm.mergeBanner && commitSet().files.length), needsUpdate: /E195020/.test(m.error || '') };
   }
   function snapshotLog() {
     const l = S.lvm;
@@ -230,6 +230,8 @@
     switchRefresh: () => vmSwitchOpen(true, S.vm.sw && S.vm.sw.mode),
     mergeOpen: () => vmSwitchOpen(false, 'merge'),
     mergeUndo: () => mgUndo(),
+    mergeRevertAll: () => mgRevertAll(),
+    mergeUpdate: () => mgUpdate(),
     mergeResolve: () => { S.ui.statusOpen = true; S.ui.view = 'dock'; S.ui.seOpen = false; S.ui.menu = null; render(); },
     conflictOp: a => conflictOp(a.op, a.key),
     resolveTreeConflicts: () => resolveTreeConflicts(),

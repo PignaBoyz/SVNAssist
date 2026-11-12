@@ -842,6 +842,7 @@ async function vmCommit() {
     const first = vm.commitMsg.trim().split('\n')[0];
     await svn(`commit --depth empty -m "${first}" --targets (${paths.length} elementi)`, 900);
     const rev = svnCommit(paths, vm.commitMsg.trim());
+    S.mixed = true;   // come svn: i file committati sono a una revisione piu' recente della radice (revisioni miste)
     S.recentMsgs = [vm.commitMsg.trim()].concat(S.recentMsgs.filter(x => x !== vm.commitMsg.trim())).slice(0, 25);   // tendina "Recenti": al massimo 25, senza doppioni
     vm.commitMsg = ''; vm.aiMsg = ''; vm.trace = [];
     if (S.tour.on) S.f.tourCommits++;
@@ -856,6 +857,7 @@ async function vmUpdate() {
   try {
     setStatus('Update in corso...'); render();
     await svn('update', 900);
+    S.mixed = false;   // dopo l'update la working copy e' tutta alla stessa revisione
     const out = svnUpdate();
     toast('svn update (output demo): ' + out.join(' | '), 5500);
     await vmRefresh(updMsg(), true);
@@ -896,13 +898,9 @@ const SW_ITEMS = (() => {
   const byName = (a, b) => a[0].localeCompare(b[0], 'en', { numeric: true });
   return [['trunk', 'trunk', 134, 'mrossi', 0], ...br.sort(byName), ...tags.sort(byName)];
 })();
-// SVN Update / Merge / Switch che lasciano conflitti: si propone di risolverli subito (porta in primo piano Changes) o piu' tardi (postpone).
+// SVN Update / Merge / Switch che lasciano conflitti: nessun dialogo, si porta solo in primo piano Changes (sezione Conflitti).
 async function offerResolve(n) {
   if (n <= 0) return;
-  const now = await modal({ title: 'SVNAssist', icon: '&#10067;', cancel: false,
-    body: `<p>${n} file in conflitto.\n\nVuoi risolverli ora? "Risolvi ora" apre la sezione Conflitti di Changes, con un editor di merge per ogni file. "Più tardi" lascia i conflitti come sono (svn non li risolve da solo): potrai risolverli quando vuoi, ma finché restano non si può committare.</p>`,
-    buttons: [{ label: 'Risolvi ora', value: true, primary: true }, { label: 'Più tardi', value: false }] });
-  if (!now) return;
   S.ui.statusOpen = true; S.ui.view = 'dock'; S.ui.seOpen = false; S.ui.menu = null;
   setStatus(`${n} file in conflitto: risolvili nella sezione Conflitti, poi committa.`); render();
 }
@@ -999,10 +997,27 @@ async function mgStart(name) {
   } catch (e) { m.error = 'Errore: ' + e.message; }
   m.loading = false; render();
 }
+// Revisioni miste (dopo un commit): svn rifiuta il merge (E195020); l'errore offre "SVN Update ora".
+const MIXED_ERR = 'La working copy è a revisioni miste: esegui SVN Update e riprova.\nsvn: E195020: Cannot merge into mixed-revision working copy';
+async function mgRevertAll() {   // "SVN Revert di tutto..." dall'avviso: conferma con l'elenco, poi il merge si puo' rifare
+  const t = S.files.filter(f => IS_REV.includes(f.st));
+  if (!t.length) { setStatus('Nessun elemento idoneo per SVN Revert.'); return render(); }
+  if (!await confirmBox(`Annullare le modifiche locali su ${t.length} elementi?\n\n${listForConfirm(t)}\n\nLe modifiche andranno perse e l'operazione non è annullabile.`)) return;
+  setStatus('Revert in corso...'); render();
+  await svn(`revert --depth infinity --targets (${t.length} elementi)`, 500); t.forEach(f => svnRevert(f.path));
+  S.vm.mergeBanner = null;
+  const m = S.lvm.merge; if (m) { m.result = null; m.error = ''; m.blocked = mgBlocked(); }
+  await vmRefresh(`Revert completato su ${t.length} elementi.`, false);
+}
+async function mgUpdate() {   // "SVN Update ora" dall'errore di revisioni miste: update, poi ricalcola le revisioni da unire
+  const m = S.lvm.merge; if (!m) return;
+  await vmUpdate();
+  m.error = ''; m.blocked = mgBlocked(); render();
+}
 async function mgPreview() {
   const m = S.lvm.merge; if (!m || m.busy || m.loading) return;
   m.busy = true; m.error = ''; m.result = null; render();
-  try { m.blocked = mgBlocked(); const revs = mgRevs(m); await svn(`merge --dry-run --accept postpone ${m.sel.length ? '-c ' + revs.join(',') + ' ' : ''}^/${m.name}`, 700); m.result = mgResult(m, 'preview', revs); m.msg = 'Anteprima completata.'; }
+  try { m.blocked = mgBlocked(); if (S.mixed) throw new Error(MIXED_ERR); const revs = mgRevs(m); await svn(`merge --dry-run --accept postpone ${m.sel.length ? '-c ' + revs.join(',') + ' ' : ''}^/${m.name}`, 700); m.result = mgResult(m, 'preview', revs); m.msg = 'Anteprima completata.'; }
   catch (e) { m.error = 'Errore: ' + e.message; }
   m.busy = false; render();
 }
@@ -1012,6 +1027,7 @@ async function mgRun(all) {
   m.busy = true; m.error = ''; render();
   try {
     m.blocked = mgBlocked(); if (m.blocked) { m.busy = false; return render(); }
+    if (S.mixed) throw new Error(MIXED_ERR);
     const pick = all ? [] : m.sel.slice(), revs = all ? mgEligible(m.name).map(r => r.rev).sort((a, b) => a - b) : pick.sort((a, b) => a - b);
     const probe = { name: m.name, sel: pick }, label = mgLabel(probe, revs);
     await svn(`merge --accept postpone ${all ? '' : '-c ' + revs.join(',') + ' '}^/${m.name}`, 900);
@@ -1025,8 +1041,8 @@ async function mgRun(all) {
     }
     (S.mgDone = S.mgDone || []).push({ name: m.name, revs });
     const text = `Merge ${label} da ^/${m.name}`, ctext = mgCommitText(m.name, revs);
-    S.vm.mergeBanner = { text: `${text}: rivedi le modifiche e committa, oppure annulla il merge.`, conflicts: res.counts.conflicted, commit: ctext };
-    if (!S.vm.commitMsg.trim()) S.vm.commitMsg = ctext;
+    S.vm.mergeBanner = { text: `${text}: rivedi le modifiche e committa, oppure annulla il merge. Messaggio del merge disponibile nei Recenti.`, conflicts: res.counts.conflicted };
+    S.recentMsgs = [ctext].concat(S.recentMsgs.filter(x => x !== ctext)).slice(0, 25);   // il messaggio (stile TortoiseSVN) va in cima ai Recenti, non nel campo
     m.sel = []; m.msg = res.counts.conflicted ? `Merge eseguito, da committare. Conflitti da risolvere in Changes: ${res.counts.conflicted}.` : 'Merge eseguito, da committare.';
     await vmRefresh(res.counts.conflicted ? `Merge completato: ${res.counts.conflicted} file in conflitto da risolvere.` : 'Merge completato: rivedi le modifiche e committa.', false);
     await offerResolve(res.counts.conflicted);
@@ -1039,7 +1055,6 @@ async function mgUndo() {
   if (!await confirmBox(`Annullare il merge? Tutte le modifiche locali della working copy (${t.length} elementi) tornano allo stato di BASE.\n\n${listForConfirm(t)}\n\nL'operazione non è annullabile.`)) return;
   setStatus('Annullamento del merge in corso...'); render();
   await svn('revert --depth infinity .', 600); t.forEach(f => svnRevert(f.path));
-  if (S.vm.commitMsg === S.vm.mergeBanner.commit) S.vm.commitMsg = '';
   S.vm.mergeBanner = null; S.mgDone = (S.mgDone || []).slice(0, -1);
   const m = S.lvm.merge; if (m) { m.result = null; m.sel = []; m.blocked = mgBlocked(); }
   await vmRefresh(`Merge annullato: ${t.length} elementi ripristinati.`, false);

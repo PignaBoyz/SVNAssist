@@ -127,6 +127,7 @@ public class MergeTests
         public FakeHost Host { get; } = new();
         public ChangesStore Changes { get; }
         public LogStore Log { get; }
+        public RecentMessages Recent { get; } = new(Path.Combine(Path.GetTempPath(), "SVNAssist_RecentMsg_" + Guid.NewGuid().ToString("N")[..8] + ".json"));
 
         public Fixture()
         {
@@ -144,7 +145,7 @@ public class MergeTests
             ];
             Changes = new ChangesStore(Settings, Svn, new FakeAiFactory(), new NoopAiPrompt(), Dialogs, Host,
                 new PrereqStore(new PrerequisitesService(Settings, new PrerequisiteProbes())), recentTargetsFile: Path.Combine(Path.GetTempPath(), "SVNAssist_Recent_" + Guid.NewGuid().ToString("N")[..8] + ".json"))
-            { WorkingCopyPath = @"C:\wc", TempRoot = Path.Combine(Path.GetTempPath(), "SVNAssist_Mg_" + Guid.NewGuid().ToString("N")[..8]) };
+            { WorkingCopyPath = @"C:\wc", TempRoot = Path.Combine(Path.GetTempPath(), "SVNAssist_Mg_" + Guid.NewGuid().ToString("N")[..8]), Recent = Recent };
             Log = new LogStore(Svn, Settings, Host, null, Changes);
             Changes.StartMerge = Log.StartMergeAsync;
             Changes.MergeUndone = ct => Log.Merge!.RefreshAsync(ct);
@@ -262,7 +263,7 @@ public class MergeTests
     }
 
     [Fact]
-    public async Task MergeTutto_DallaRadice_MessaggioPrecompilato_BannerESenzaAutoStage()
+    public async Task MergeTutto_DallaRadice_MessaggioNeiRecenti_NonNelCampo_BannerESenzaAutoStage()
     {
         using var f = new Fixture();
         f.Svn.MergeResult = MergeParser.ParseMerge(DryRun);
@@ -273,8 +274,10 @@ public class MergeTests
 
         Assert.Equal(["- False"], Fixture.Calls(f));
         var c = f.ChangesSnap;
-        Assert.Equal("Unite le revisioni 4-5,7 da branches/feature-x:\n........\nr4 | mrossi | feat: modifica a\n........\nr5 | lbianchi | feat: aggiunge new\ndettaglio\n........\nr7 | gverdi | feat: elimina b", c.Commit.Text);
+        Assert.Equal("", c.Commit.Text);   // il campo del messaggio non si tocca
+        Assert.Equal(["Unite le revisioni 4-5,7 da branches/feature-x:\n........\nr4 | mrossi | feat: modifica a\n........\nr5 | lbianchi | feat: aggiunge new\ndettaglio\n........\nr7 | gverdi | feat: elimina b"], c.Commit.Recent);   // in cima ai Recenti
         Assert.Contains("annulla il merge", c.Merge!.Text);
+        Assert.Contains("nei Recenti", c.Merge.Text);
         Assert.Equal(0, c.Merge.Conflicts);
         Assert.True(c.Commit.All);   // regola di sempre: Staged vuoto = Commit All, nulla finisce in Staged da solo
         Assert.Equal(0, c.Sections.Single(s => s.Id == "staged").Count);
@@ -299,7 +302,8 @@ public class MergeTests
         await f.LogCmd("mergeSelected");
 
         Assert.Equal(["4,7 False"], Fixture.Calls(f));
-        Assert.Equal("Unite le revisioni 4,7 da branches/feature-x:\n........\nr4 | mrossi | feat: modifica a\n........\nr7 | gverdi | feat: elimina b", f.ChangesSnap.Commit.Text);
+        Assert.Equal("", f.ChangesSnap.Commit.Text);
+        Assert.Equal("Unite le revisioni 4,7 da branches/feature-x:\n........\nr4 | mrossi | feat: modifica a\n........\nr7 | gverdi | feat: elimina b", f.ChangesSnap.Commit.Recent![0]);
         Assert.Equal([5L], f.LogSnap.Entries.Select(e => e.Rev));
         Assert.Empty(f.Merge.Selected);
         Assert.Equal("", f.Merge.Error);
@@ -366,8 +370,86 @@ public class MergeTests
 
         Assert.Contains("mixed-revision", f.Merge.Error);
         Assert.False(f.Merge.Busy);
+        Assert.True(f.Merge.NeedsUpdate);   // la UI offre "SVN Update ora"
         Assert.Null(f.ChangesSnap.Merge);
         Assert.Equal("", f.ChangesSnap.Commit.Text);
+        Assert.Empty(f.ChangesSnap.Commit.Recent!);
+    }
+
+    [Fact]
+    public async Task Merge_RevisioniMiste_SvnUpdateOra_AggiornaERicalcolaLeRevisioni_SenzaDialoghi()
+    {
+        using var f = new Fixture();
+        await f.OpenMergeAsync();
+        f.Svn.MergeError = "svn: E195020: Cannot merge into mixed-revision working copy";
+        await f.LogCmd("mergeAll");
+        Assert.True(f.Merge.NeedsUpdate);
+        f.Svn.MergeError = null;
+        f.Svn.Eligible = [5, 7];   // dopo l'update il calcolo e' diverso
+
+        await f.LogCmd("mergeUpdate");
+
+        Assert.Equal(1, f.Svn.Updates);
+        Assert.Equal("", f.Merge.Error);
+        Assert.False(f.Merge.NeedsUpdate);
+        Assert.Equal(2, f.Merge.Eligible);   // revisioni ricalcolate
+        Assert.Empty(f.Dialogs.Asked);
+        Assert.Empty(f.Svn.Merges);   // l'update non fa partire il merge
+    }
+
+    [Fact]
+    public async Task ErroreCheSuggeriscUpdate_InChanges_OffreIlPulsanteUpdate()
+    {
+        using var f = new Fixture();
+        f.Changes.WorkingCopyPath = @"C:\wc";
+        await f.Changes.RefreshAsync(Ct);
+        f.Svn.StatusError = "svn: E195020: Cannot merge into mixed-revision working copy";
+        await f.Changes.RefreshAsync(Ct);
+
+        var st = f.ChangesSnap.Status;
+        Assert.True(st.Err);
+        Assert.Equal("update", st.Action?.Cmd);
+    }
+
+    [Fact]
+    public async Task MergeBloccato_SvnRevertDiTutto_ConfermaConElenco_NonTocca_INonVersionati_EPoiSiRiprova()
+    {
+        using var f = new Fixture();
+        f.Svn.Statuses.Add(new SvnFileStatus(@"C:\wc\a.txt", SvnStatusKind.Modified, IsTreeConflict: false));
+        f.Svn.Statuses.Add(new SvnFileStatus(@"C:\wc\sub\b.txt", SvnStatusKind.Added, IsTreeConflict: false));
+        f.Svn.Statuses.Add(new SvnFileStatus(@"C:\wc\u.txt", SvnStatusKind.Unversioned, IsTreeConflict: false));
+        await f.OpenMergeAsync();
+        Assert.Contains("2 elementi", f.Merge.Blocked);
+
+        f.Dialogs.ConfirmResult = false;   // conferma negata: niente
+        await f.LogCmd("mergeRevertAll");
+        Assert.Empty(f.Svn.Reverted);
+        Assert.Contains("2 elementi", f.Merge.Blocked);
+
+        f.Dialogs.ConfirmResult = true;
+        await f.LogCmd("mergeRevertAll");
+
+        var msg = f.Dialogs.Messages.Last();
+        Assert.Contains("a.txt", msg);
+        Assert.Contains("sub/b.txt", msg);
+        Assert.DoesNotContain("u.txt", msg);
+        var reverted = f.Svn.Reverted.SelectMany(r => r).ToList();
+        Assert.Equal([@"C:\wc\a.txt", @"C:\wc\sub\b.txt"], reverted.Order());
+        Assert.DoesNotContain(@"C:\wc\u.txt", reverted);
+        Assert.Equal("", f.Merge.Blocked);   // avviso ricalcolato: il merge si puo' rifare
+        await f.LogCmd("mergeAll");
+        Assert.Single(f.Svn.Merges);
+    }
+
+    [Fact]
+    public async Task MergeBloccato_VaiAChanges_PortaInPrimoPianoLaFinestra()
+    {
+        using var f = new Fixture();
+        await f.OpenMergeAsync();
+
+        await f.LogCmd("mergeResolve");
+
+        Assert.Equal(1, f.Host.ChangesShown);
     }
 
     [Fact]
@@ -383,7 +465,6 @@ public class MergeTests
         f.Svn.Statuses.Clear();   // ripulita a mano: si puo' unire di nuovo
         f.Svn.Merges.Clear();
         await f.LogCmd("mergeAll");   // di nuovo
-        var prefilled = f.ChangesSnap.Commit.Text;
         Assert.NotNull(f.ChangesSnap.Merge);
         f.Dialogs.ConfirmResult = false;
         await f.Cmd("mergeUndo");   // conferma negata: non si tocca nulla
@@ -398,8 +479,8 @@ public class MergeTests
         Assert.Equal([[@"C:\wc"]], f.Svn.Reverted);
         Assert.Equal([true], f.Svn.RevertRecursive);
         Assert.Null(f.ChangesSnap.Merge);
-        Assert.NotEqual(prefilled, f.ChangesSnap.Commit.Text);   // il messaggio precompilato e' stato ritirato
         Assert.Equal("", f.ChangesSnap.Commit.Text);
+        Assert.Single(f.ChangesSnap.Commit.Recent!);   // il messaggio del merge resta nei Recenti anche dopo il revert
         Assert.Contains("Merge annullato", f.ChangesSnap.Status.Msg);
         Assert.Equal(4, f.Merge.Eligible);
     }
