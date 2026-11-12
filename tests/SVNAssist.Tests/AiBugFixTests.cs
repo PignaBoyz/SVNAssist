@@ -158,6 +158,18 @@ public class AiBugFixTests : IDisposable
     }
 
     [Fact]
+    public void Regole_LeggeAncheClaudeMdEAgentsMd_GlobaleEDiProgetto()
+    {
+        Write("home/.claude/CLAUDE.md", "Globale Claude.");
+        Write("CLAUDE.md", "Progetto Claude.");
+        Write("AGENTS.md", "Progetto Agents.");
+
+        var rules = CommitInstructions.Load(_dir, userHome: Path.Combine(_dir, "home"))!;
+
+        Assert.Equal("Globale Claude.\n\nProgetto Claude.\n\nProgetto Agents.", rules);
+    }
+
+    [Fact]
     public void Regole_FileUtenteGlobale_ESpecificheDelProgettoDopo()
     {
         Write("home/.copilot/copilot-instructions.md", "Regola globale.");

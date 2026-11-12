@@ -8,9 +8,9 @@ namespace SVNAssist.Services;
 /// </summary>
 /// <remarks>
 /// Fonti, dalla più generale alla più specifica (le più specifiche stanno in fondo e prevalgono):
-/// 1. <c>~/.copilot/copilot-instructions.md</c> (file utente globale, lo stesso della Copilot CLI)
+/// 1. <c>~/.copilot/copilot-instructions.md</c> (file utente globale, lo stesso della Copilot CLI) e <c>~/.claude/CLAUDE.md</c>
 /// 2. risalendo dalla working copy, la prima cartella con <c>.github/copilot-instructions.md</c>
-///    e/o <c>.github/instructions/*.instructions.md</c> con <c>applyTo</c> globale (<c>**</c>, <c>*</c> o assente).
+///    e/o <c>.github/instructions/*.instructions.md</c> con <c>applyTo</c> globale (<c>**</c>, <c>*</c> o assente), <c>CLAUDE.md</c> o <c>AGENTS.md</c>.
 /// Il contenuto è limitato in dimensione: va nel prompt di ogni richiesta.
 /// </remarks>
 internal static class CommitInstructions
@@ -28,7 +28,10 @@ internal static class CommitInstructions
         {
             userHome ??= Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
             if (!string.IsNullOrEmpty(userHome))
+            {
                 AddFile(parts, Path.Combine(userHome, ".copilot", "copilot-instructions.md"));
+                AddFile(parts, Path.Combine(userHome, ".claude", "CLAUDE.md"));
+            }
 
             var dir = string.IsNullOrWhiteSpace(workingCopyPath) ? null : new DirectoryInfo(workingCopyPath);
             for (var level = 0; dir is not null && level < MaxParentLevels; level++, dir = dir.Parent)
@@ -36,6 +39,8 @@ internal static class CommitInstructions
                 var github = Path.Combine(dir.FullName, ".github");
                 var before = parts.Count;
                 AddFile(parts, Path.Combine(github, "copilot-instructions.md"));
+                AddFile(parts, Path.Combine(dir.FullName, "CLAUDE.md"));
+                AddFile(parts, Path.Combine(dir.FullName, "AGENTS.md"));
 
                 var folder = Path.Combine(github, "instructions");
                 if (Directory.Exists(folder))
