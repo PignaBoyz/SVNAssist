@@ -41,7 +41,16 @@ public class ChangesStoreTests
             return this;
         }
 
-        public Task Refresh() => Store.RefreshAsync(Ct);
+        /// <summary>Refresh + M/A/D/R messi in Staged esplicitamente (come farebbe l'utente): i test sullo staging partono da qui.</summary>
+        public async Task Refresh()
+        {
+            await Store.RefreshAsync(Ct);
+            foreach (var row in Section("changes").Rows.Where(r => r.Kind == "file" && (r.Status is "M" or "A" or "D" or "R")))
+                await Cmd("stage", new { key = row.Key });
+        }
+
+        /// <summary>Solo il refresh: nulla viene messo in Staged da solo.</summary>
+        public Task RefreshOnly() => Store.RefreshAsync(Ct);
 
         public ChangesState Snap => (ChangesState)Store.GetSnapshot();
 
@@ -93,18 +102,25 @@ public class ChangesStoreTests
     }
 
     [Fact]
-    public async Task Refresh_StagedDiDefault_MAEDR_MancantiNonSonoStaged_ConflittiENonVersionatiNo()
+    public async Task Refresh_NienteInStagedDaSolo_TuttoInModificheENonVersionati()
     {
         var f = new Fixture().With(
             ("m", SvnStatusKind.Modified), ("a", SvnStatusKind.Added), ("d", SvnStatusKind.Deleted),
             ("r", SvnStatusKind.Replaced), ("x", SvnStatusKind.Missing),
             ("u", SvnStatusKind.Unversioned), ("c", SvnStatusKind.Conflicted));
 
-        await f.Refresh();
+        await f.RefreshOnly();
 
-        Assert.Equal(["a", "d", "m", "r"], f.Names("staged"));
-        Assert.Equal(["c", "x"], f.Names("changes")); // il Missing resta fuori da Staged
+        Assert.Empty(f.Names("staged")); // come Git: Staged contiene solo cio' che l'utente ci mette
+        Assert.Equal(["a", "c", "d", "m", "r", "x"], f.Names("changes"));
         Assert.Equal(["u"], f.Names("unversioned"));
+        Assert.True(f.Snap.Commit.All);
+        Assert.Equal(6, f.Snap.Commit.Count); // Commit All: tutte le modifiche versionate (u escluso)
+
+        await f.Cmd("stage", new { key = "changes:m" });
+        await f.RefreshOnly(); // la scelta dell'utente resta tra un refresh e l'altro
+        Assert.Equal(["m"], f.Names("staged"));
+        Assert.False(f.Snap.Commit.All);
     }
 
     [Fact]
@@ -211,10 +227,10 @@ public class ChangesStoreTests
     public async Task Staged_MantieneLaSceltaDellUtenteTraUnRefreshELAltro()
     {
         var f = new Fixture().With(("a.cs", SvnStatusKind.Modified), ("b.cs", SvnStatusKind.Modified));
-        await f.Refresh();
-        await f.Cmd("unstage", new { key = "staged:a.cs" });
+        await f.RefreshOnly();
+        await f.Cmd("stage", new { key = "changes:b.cs" });
 
-        await f.Refresh();
+        await f.RefreshOnly();
 
         Assert.Equal(["changes:a.cs"], f.FileKeys("changes"));
         Assert.Equal(["staged:b.cs"], f.FileKeys("staged"));
@@ -224,18 +240,18 @@ public class ChangesStoreTests
     public async Task Staged_ResistePerWorkingCopy_TornandoAllaPrimaLaSceltaRestaIntatta()
     {
         var f = new Fixture().With(("a.cs", SvnStatusKind.Modified));
-        await f.Refresh();
-        await f.Cmd("unstage", new { key = "staged:a.cs" });
+        await f.RefreshOnly();
+        await f.Cmd("stage", new { key = "changes:a.cs" });
 
         f.Store.WorkingCopyPath = @"C:\altra";
         f.Svn.Statuses.Clear();
-        await f.Refresh();
+        await f.RefreshOnly();
         Assert.Equal(0, f.Section("staged").Count);
 
         f.Svn.Statuses.Add(new SvnFileStatus("a.cs", SvnStatusKind.Modified));
         f.Store.WorkingCopyPath = Wc;
-        await f.Refresh();
-        Assert.Equal(["changes:a.cs"], f.FileKeys("changes"));
+        await f.RefreshOnly();
+        Assert.Equal(["staged:a.cs"], f.FileKeys("staged")); // la scelta per working copy resta
     }
 
     // ── Chiavi di riga e validazione ─────────────────────────────────
@@ -404,11 +420,66 @@ public class ChangesStoreTests
         Assert.Empty(f.Svn.Commits);
         Assert.Contains("messaggio", f.Status);
 
-        await f.Cmd("setCommitText", new { text = "m" });
+    }
+
+    [Fact]
+    public async Task Commit_NienteDaCommittare_NonCommitta()
+    {
+        var f = new Fixture().With(("n.txt", SvnStatusKind.Unversioned));
+        await f.Refresh();
         await f.Cmd("unstage", new { key = "section:staged" });
+        await f.Cmd("setCommitText", new { text = "m" });
+
         await f.Cmd("commit");
+
         Assert.Empty(f.Svn.Commits);
-        Assert.Contains("Staged", f.Status);
+        Assert.Contains("Nessuna modifica da committare", f.Status);
+        Assert.Equal(0, f.Snap.Commit.Count);
+    }
+
+    [Fact]
+    public async Task Commit_StagedVuoto_CommittaTutteLeModificheVersionate_NonIlNonVersionato()
+    {
+        var f = new Fixture().With(("a.cs", SvnStatusKind.Modified), ("b.cs", SvnStatusKind.Added), ("d.cs", SvnStatusKind.Deleted),
+            ("m.cs", SvnStatusKind.Missing), ("n.txt", SvnStatusKind.Unversioned));
+        await f.Refresh();
+        await f.Cmd("unstage", new { key = "section:staged" });
+        await f.Cmd("setCommitText", new { text = "tutto" });
+        Assert.True(f.Snap.Commit.All);
+        Assert.Equal(4, f.Snap.Commit.Count);
+
+        await f.Cmd("commit");
+
+        var commit = Assert.Single(f.Svn.Commits);
+        Assert.Equivalent(new[] { Full("a.cs"), Full("b.cs"), Full("d.cs"), Full("m.cs") }, commit.Paths);
+        Assert.DoesNotContain(Full("n.txt"), commit.Paths);
+        Assert.Empty(f.Svn.Added);
+        Assert.Contains(Full("m.cs"), f.Svn.Deleted.SelectMany(d => d)); // il mancante viene cancellato come delete
+    }
+
+    [Fact]
+    public async Task Commit_StagedVuoto_ConflittoBlocca()
+    {
+        var f = new Fixture().With(("a.cs", SvnStatusKind.Modified), ("c.cs", SvnStatusKind.Conflicted));
+        await f.Refresh();
+        await f.Cmd("unstage", new { key = "section:staged" });
+        await f.Cmd("setCommitText", new { text = "m" });
+
+        await f.Cmd("commit");
+
+        Assert.Empty(f.Svn.Commits);
+        Assert.Contains("conflitti", f.Status);
+    }
+
+    [Fact]
+    public async Task Commit_ConFileInStaged_ResteSoloQuelli_EilContatoreLoDice()
+    {
+        var f = new Fixture().With(("a.cs", SvnStatusKind.Modified), ("b.cs", SvnStatusKind.Modified));
+        await f.Refresh();
+        await f.Cmd("unstage", new { key = "staged:b.cs" });
+
+        Assert.False(f.Snap.Commit.All);
+        Assert.Equal(1, f.Snap.Commit.Count);
     }
 
     [Fact]
@@ -858,14 +929,25 @@ public class ChangesStoreTests
     [Fact]
     public async Task Ai_SenzaFileInStaged_AvvisaSenzaChiamareLAi()
     {
-        var f = new Fixture().With(("a.cs", SvnStatusKind.Modified));
+        var f = new Fixture().With(("n.txt", SvnStatusKind.Unversioned)); // i non versionati non fanno parte del commit
+        await f.Refresh();
+
+        await f.Cmd("genAi");
+
+        Assert.Contains("Nessuna modifica da committare", f.Snap.Commit.AiStatus);
+        Assert.Empty(f.Ai.Service.Languages);
+    }
+
+    [Fact]
+    public async Task Ai_StagedVuoto_UsaTutteLeModificheVersionate()
+    {
+        var f = new Fixture().With(("a.cs", SvnStatusKind.Modified), ("n.txt", SvnStatusKind.Unversioned));
         await f.Refresh();
         await f.Cmd("unstage", new { key = "section:staged" });
 
         await f.Cmd("genAi");
 
-        Assert.Contains("Staged", f.Snap.Commit.AiStatus);
-        Assert.Empty(f.Ai.Service.Languages);
+        Assert.Single(f.Ai.Service.Languages); // genera dalle modifiche versionate
     }
 
     // ── Concorrenza ──────────────────────────────────────────────────

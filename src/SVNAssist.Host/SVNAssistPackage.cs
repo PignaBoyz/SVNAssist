@@ -115,7 +115,7 @@ namespace SVNAssist.Host
             Add(Ids.CmdSeIgnore, () => SeAsync("ignore", null));
             Add(Ids.CmdSeCommit, () => SeAsync("commit", "changes"));
             Add(Ids.CmdSeLog, () => SeAsync("log", "log"));
-            Add(Ids.CmdSeUpdateRev, () => SeAsync("updaterev", null));
+            Add(Ids.CmdSeUpdateRev, () => SeAsync("updaterev", "changes"));
             Add(Ids.CmdSeCleanup, () => SeAsync("cleanup", null));
             Add(Ids.CmdSeLock, () => SeAsync("lock", null));
             Add(Ids.CmdSeUnlock, () => SeAsync("unlock", null));

@@ -44,11 +44,15 @@ Vale per file e cartelle (la cartella ha il percorso della cartella; le catene a
 |---|---|---|
 | `refresh` | – | `svn status` |
 | `update` | – | `svn update` |
-| `updateToRevision` | – | **SVN Update to revision**: l'host chiede la revisione (`IHost.PromptTextAsync`; intero positivo o `HEAD`, altrimenti richiede) e fa `svn update -r N`. Esito come l'update (revisione, conflitti) |
+| `updateToRevision` | – | **SVN Update to revision**: apre in Changes la scelta guidata (`revPicker.open`): le ultime revisioni del repository (`svn log`, 30 alla volta), `HEAD` in cima, campo "oppure numero". Da Solution Explorer parte lo stesso su quei percorsi (l'host mostra prima Changes) |
+| `revPickerMore` | – | "Carica altre": altre 30 revisioni |
+| `revPickerCancel` | – | chiude la scelta senza aggiornare |
+| `revPickerOk` | `rev` | intero positivo o `HEAD`: chiude ed esegue `svn update -r N` (esito come l'update: revisione, conflitti). Se non valido la scelta resta aperta con `revPicker.error` |
+| `showLog` | – | apre il Log della working copy (`IHost.ShowLogAsync`, come Extensions > Log) |
 | `cleanup` | – | **SVN Cleanup** della working copy (`svn cleanup`). Compare anche come pulsante "Esegui Cleanup" accanto a un errore di working copy bloccata (`status.action`) |
-| `commit` | – | commit dei soli file in **Staged**; se ci sono non versionati li aggiunge, i mancanti li elimina; rifiuta i conflitti |
+| `commit` | – | come Git: se **Staged** ha file, commit dei soli quelli (pulsante "Commit Staged (n)"); se è vuoto, commit di **tutte** le modifiche dei file versionati M/A/D/R/mancanti (pulsante "Commit All", come `git commit -a`; i non versionati non entrano). Gli aggiunti non versionati in Staged si aggiungono, i mancanti si eliminano; i conflitti bloccano |
 | `setCommitText` | `text` | aggiorna il messaggio |
-| `genAi` / `improveAi` | – | genera / migliora il messaggio dal diff dei file in Staged |
+| `genAi` / `improveAi` | – | genera / migliora il messaggio dal diff degli stessi file del commit (Staged, o tutte le modifiche versionate se Staged è vuoto) |
 | `setLanguage` | `lang`: `auto|italiano|english` | lingua del messaggio AI |
 | `setWorkingCopy` | `path` | carica una working copy |
 | **`stage`** / **`unstage`** | `key` | sposta file, cartella o sezione tra Staged e Modifiche/Non versionati (i conflitti non si possono mettere in Staged) |
@@ -100,7 +104,7 @@ Filtri: `svn log --xml -v -l N` con `-r {data}:{data}` per le date e `--search`/
 ### Novità rispetto al piano (`webview2-plan.md` §3)
 - **Staged** (stile Git Changes): SVN non ha uno staging, è un insieme tenuto dall'estensione. Sostituisce le caselle di selezione:
   `toggleFile`, `toggleGroup`, `selectAll`, `unselectAll` → `stage` / `unstage` (anche su cartella e su sezione intera).
-  I file nuovi (M/A/D/R/!) partono in Staged, i conflitti e i non versionati no.
+  Come Git, **nulla entra in Staged da solo**: le modifiche restano in Modifiche e Staged contiene solo ciò che l'utente ci mette (la scelta resta tra un refresh e l'altro).
 - **`rowOp{op:"deleteFile"}`**: tasto **Canc** su un file = elimina dal filesystem (se versionato: `svn delete`), con conferma dell'host e avviso se ci sono modifiche locali. Sostituisce `op:"delete"`. Non si applica a cartelle.
 - **`showDiff`** non produce più un campo `diff` nello snapshot: il diff si apre nell'editor di VS (`closeDiff` è sparito).
   Facoltativo: l'host può ospitare la vista `diff` (pagina di diff affiancato con evidenziazione) in un documento WebView2; è ciò che fa la demo.
@@ -113,7 +117,8 @@ Filtri: `svn log --xml -v -l N` con `-r {data}:{data}` per le date e `--search`/
 ### `changes` (`changes-state.schema.json`)
 ```
 workingCopy {path, showInput, branch, rev}
-commit      {text, aiStatus, aiLevel: ""|busy|ok|warn|err|info, aiSeq, busy, lang, trace[{name,state,detail}], download{pct,label}|null}
+commit      {text, aiStatus, aiLevel: ""|busy|ok|warn|err|info, aiSeq, busy, lang, trace[{name,state,detail}], download{pct,label}|null,
+             count?, all?}   // count = elementi del prossimo commit; all = Staged vuoto -> "Commit All"
 view        "tree" | "list"
 theme       {mode: auto|light|dark|blue, kind: light|dark|blue}
 sections[3] {id: staged|changes|unversioned, title, count, expanded, rows[]}
@@ -124,6 +129,7 @@ prereq      {open, summary, ai, feedback, items[{id, group, title, ok, detail, i
 loading     bool
 wizard      {open, mode: ai|prereq, step 1-4, fromGenerate, provider, busy, feedback, providers[{id,title,cost}], items[prereq item],
              auth: ""|github|claudecode|key|openai, authOk, authDetail, endpoint, models[{value,label}], model, canNext}
+revPicker?  {open, target, loading, error, canMore, items[{rev, author, date (ISO), msg (prima riga)}]}   // modale "Update to revision"
 ```
 `aiLevel` colora il messaggio AI (avviso giallo, errore rosso, esito verde); `aiSeq` cresce a ogni messaggio, cosi' anche uno ripetuto si ridisegna.
 Le righe sono **già piatte e ordinate** (albero calcolato dal backend con `ChangesTreeBuilder`): la UI non ricostruisce nulla.
@@ -195,14 +201,14 @@ La vista `diff` (documento WebView2 di diff affiancato) è facoltativa: il backe
 Tutto ciò che arriva dalla UI è non fidato: `v`, `type`, `id`, `name`, `args` e ogni argomento sono controllati (errore → `reply{ok:false,error}`, mai eccezioni verso l'host). Le **chiavi di riga** sono rivalidate contro lo stato corrente di `svn status` (se l'elemento non c'è più: errore "aggiorna l'elenco"); i percorsi usati per operare vengono sempre da `svn status`, mai dalla chiave; un elemento fuori dalla working copy viene scartato; `deleteFile` ricontrolla che il file sia sotto la radice della working copy. Gli unici percorsi che la UI invia sono quelli digitati (`setWorkingCopy`, `logLoad`): devono essere una cartella esistente dentro una working copy (o, per il log, un URL di repository).
 
 ### Comportamenti da conoscere (rispetto al piano)
-- **Staged**: insieme in memoria per working copy. I nuovi elementi `M A D R !` partono in Staged; conflitti e non versionati no (un conflitto non si può mettere in Staged; se un file in Staged diventa conflitto il commit si rifiuta).
-- `commit`: aggiunge i non versionati in Staged (con le cartelle padre nuove) e cancella i mancanti, poi `svn commit --depth empty` sui soli percorsi elencati.
+- **Staged**: insieme in memoria per working copy. Nulla ci entra da solo (come Git): lo riempie l'utente con `stage`; i percorsi spariti dalla working copy ne escono (un conflitto non si può mettere in Staged; se un file in Staged diventa conflitto il commit si rifiuta).
+- `commit`: insieme = Staged, o con Staged vuoto tutte le modifiche versionate (`CommitSet`). Aggiunge i non versionati in Staged (con le cartelle padre nuove) e cancella i mancanti, poi `svn commit --depth empty` sui soli percorsi elencati.
 - `rowOp deleteFile` (Canc su file, non cartelle): conferma con `PromptAsync`; versionato → `svn delete --force`; non versionato → cestino (se non disponibile, eliminazione diretta). Mancante → `svn delete`.
 - **Lock**: lo stato dei lock è solo quello **locale** (`<lock>` in `svn status --xml`, la "K" di svn), a costo zero (nessuna rete, nessun `-u`). I lock di altri (O/T/B) non si leggono; si scoprono quando `svn lock` fallisce ("già bloccato da X") e si offre di rubarlo con conferma. Un file bloccato ma non modificato compare in Modifiche con stato `K` (non si può mettere in Staged, né diff/revert). Il `commit` rilascia i lock dei file committati (default di svn).
 - **Login SVN**: il backend esegue sempre svn con `--non-interactive`. Solo per un errore di autenticazione (`E170001`, `E215004`, `Authentication failed`, `No more credentials`…) chiama `IHost.PromptCredentialsAsync` (utente, password mascherata, "Ricorda" di default sì) e **ripete il comando una sola volta** con `--username U --password-from-stdin` (svn ≥ 1.10; con svn più vecchio `--password` e un avviso nel log), senza `--no-auth-cache` se "Ricorda". Annulla = errore normale. Le credenziali non vanno in nessun log né nello stato UI. Con l'accesso integrato di Windows il dialogo non dovrebbe mai comparire.
 - Working copy bloccata (`E155004`/`E155037`, "run 'cleanup'"): il messaggio d'errore ha il pulsante "Esegui Cleanup" (`status.action`).
 - Il log usa `svn log -v` (percorsi toccati) 50 revisioni alla volta; `logSelect` accetta solo revisioni già in elenco.
-- AI: il diff dei soli file in Staged va ai provider elencati; conferma `PromptAsync` una volta per sessione (e per ogni file sospetto). `commit.trace` è ricostruita dalla catena (`FallbackAiService`); `commit.download` è valorizzato (pct 0) durante il download del runtime Copilot.
+- AI: il diff dei file del commit (Staged, o tutte le modifiche versionate se Staged è vuoto) va ai provider elencati; conferma `PromptAsync` una volta per sessione (e per ogni file sospetto). `commit.trace` è ricostruita dalla catena (`FallbackAiService`); `commit.download` è valorizzato (pct 0) durante il download del runtime Copilot.
 
 ## Impostazioni
 

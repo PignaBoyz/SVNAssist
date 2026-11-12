@@ -292,6 +292,13 @@ public class SvnCleanupLockAuthTests
         }
 
         public ChangesState Snap => (ChangesState)Store.GetSnapshot();
+        /// <summary>Refresh + M/A/D/R messi in Staged esplicitamente (come farebbe l'utente).</summary>
+        public async Task RefreshStaged()
+        {
+            await Store.RefreshAsync(Ct);
+            foreach (var row in Snap.Sections.Single(s => s.Id == "changes").Rows.Where(r => r.Kind == "file" && (r.Status is "M" or "A" or "D" or "R")))
+                await Cmd("stage", new { key = row.Key });
+        }
         public RowDto Row(string key) => Snap.Sections.SelectMany(s => s.Rows).Single(r => r.Key == key);
         public Task Cmd(string name, object? args = null) => Store.DispatchAsync(name, JsonSerializer.SerializeToElement(args ?? new { }), Ct);
         public void Dispose() => Store.Dispose();
@@ -305,7 +312,7 @@ public class SvnCleanupLockAuthTests
         f.Svn.Statuses.Add(new SvnFileStatus("mine.cs", SvnStatusKind.Modified, IsLocked: true));
         f.Svn.Statuses.Add(new SvnFileStatus("k.cs", SvnStatusKind.Normal, IsLocked: true));
         f.Svn.Statuses.Add(new SvnFileStatus("plain.cs", SvnStatusKind.Normal)); // non bloccato: non compare
-        await f.Store.RefreshAsync(Ct);
+        await f.RefreshStaged();
 
         Assert.True(f.Row("staged:m.cs").Can.Lock);
         Assert.False(f.Row("staged:m.cs").Can.Unlock);
@@ -331,7 +338,7 @@ public class SvnCleanupLockAuthTests
     {
         using var f = new Fx();
         f.Svn.Statuses.Add(new SvnFileStatus("m.cs", SvnStatusKind.Modified));
-        await f.Store.RefreshAsync(Ct);
+        await f.RefreshStaged();
         f.Dialogs.TextResult = "lavoro io";
 
         await f.Cmd("rowOp", new { op = "lock", key = "staged:m.cs" });
@@ -343,7 +350,7 @@ public class SvnCleanupLockAuthTests
 
         f.Svn.Statuses.Clear();
         f.Svn.Statuses.Add(new SvnFileStatus("m.cs", SvnStatusKind.Modified, IsLocked: true));
-        await f.Store.RefreshAsync(Ct);
+        await f.RefreshStaged();
         await f.Cmd("rowOp", new { op = "unlock", key = "staged:m.cs" });
 
         Assert.Single(f.Svn.Unlocked);
@@ -354,7 +361,7 @@ public class SvnCleanupLockAuthTests
     {
         using var f = new Fx();
         f.Svn.Statuses.Add(new SvnFileStatus("m.cs", SvnStatusKind.Modified));
-        await f.Store.RefreshAsync(Ct);
+        await f.RefreshStaged();
         f.Dialogs.TextResult = null;
 
         await f.Cmd("rowOp", new { op = "lock", key = "staged:m.cs" });
@@ -367,7 +374,7 @@ public class SvnCleanupLockAuthTests
     {
         using var f = new Fx();
         f.Svn.Statuses.Add(new SvnFileStatus("m.cs", SvnStatusKind.Modified));
-        await f.Store.RefreshAsync(Ct);
+        await f.RefreshStaged();
         f.Svn.LockErrorUnlessForced = "svn: warning: W160035: Path '/trunk/m.cs' is already locked by user 'bob'";
 
         f.Dialogs.ConfirmResult = false;
@@ -381,32 +388,66 @@ public class SvnCleanupLockAuthTests
     }
 
     [Fact]
-    public async Task Store_UpdateToRevision_ValidaERiprovaFinoAUnaRevisioneValida()
+    public async Task Store_UpdateToRevision_ApreLaScelta_ElencaLeRevisioni_CaricaAltre_OkEseguiUpdate()
     {
         using var f = new Fx();
-        f.Dialogs.TextResult = "abc"; // il dialogo fake risponde sempre allo stesso modo: annullo dopo il primo rifiuto
-        var queue = new Queue<string?>(["abc", "-3", "42"]);
-        var dialogs = new QueueDialogs(queue);
-        using var s = new ChangesStore(f.Settings, f.Svn, new FakeAiFactory(), new NoopAiPrompt(), dialogs, f.Host,
-            new PrereqStore(new PrerequisitesService(f.Settings, new PrerequisiteProbes())))
-        { WorkingCopyPath = @"C:\wc", TempRoot = Path.Combine(Path.GetTempPath(), "SVNAssist_LK2_" + Guid.NewGuid().ToString("N")[..8]) };
+        f.Svn.LogEntryCount = 100;
 
-        await s.DispatchAsync("updateToRevision", JsonSerializer.SerializeToElement(new { }), Ct);
+        await f.Cmd("updateToRevision");
+        var p = f.Snap.RevPicker;
+        Assert.True(p.Open);
+        Assert.Equal(@"C:\wc", p.Target);
+        Assert.Equal(RevisionPickerStore.PageSize, p.Items.Count);
+        Assert.True(p.CanMore);
+        Assert.Equal("m1", p.Items[0].Msg);
+        Assert.Empty(f.Svn.UpdatedToRevision); // aprire la scelta non aggiorna nulla
 
+        await f.Cmd("revPickerMore");
+        Assert.Equal(2 * RevisionPickerStore.PageSize, f.Snap.RevPicker.Items.Count);
+
+        await f.Cmd("revPickerOk", new { rev = "abc" });
+        Assert.True(f.Snap.RevPicker.Open); // non valido: resta aperta, con l'errore
+        Assert.Contains("non è una revisione valida", f.Snap.RevPicker.Error);
+        Assert.Empty(f.Svn.UpdatedToRevision);
+
+        await f.Cmd("revPickerOk", new { rev = "42" });
+        Assert.False(f.Snap.RevPicker.Open);
         Assert.Equal([(@"C:\wc", "42")], f.Svn.UpdatedToRevision);
-        Assert.Equal(3, dialogs.Asked);
-        Assert.Contains("42", ((ChangesState)s.GetSnapshot()).Status.Msg);
+        Assert.Contains("42", f.Snap.Status.Msg);
     }
 
     [Fact]
-    public async Task Store_UpdateToRevision_Annullato_NonAggiorna()
+    public async Task Store_UpdateToRevision_Annulla_NonAggiorna_HeadAccettato()
     {
         using var f = new Fx();
-        f.Dialogs.TextResult = null;
+        await f.Cmd("updateToRevision");
+        await f.Cmd("revPickerCancel");
+        Assert.False(f.Snap.RevPicker.Open);
+        Assert.Empty(f.Svn.UpdatedToRevision);
 
         await f.Cmd("updateToRevision");
+        await f.Cmd("revPickerOk", new { rev = "head" });
+        Assert.Equal([(@"C:\wc", "HEAD")], f.Svn.UpdatedToRevision);
+    }
 
-        Assert.Empty(f.Svn.UpdatedToRevision);
+    [Fact]
+    public async Task Store_UpdateToRevision_DaSolutionExplorer_AggiornaIlPercorsoScelto()
+    {
+        using var f = new Fx();
+        await f.Store.OpenRevisionPickerAsync([@"C:\wc\sub"], Ct);
+        Assert.Equal(@"C:\wc\sub", f.Snap.RevPicker.Target);
+
+        await f.Cmd("revPickerOk", new { rev = "7" });
+
+        Assert.Equal([(@"C:\wc\sub", "7")], f.Svn.UpdatedToRevision);
+    }
+
+    [Fact]
+    public async Task Store_ShowLog_ApreIlLogDellaWorkingCopy()
+    {
+        using var f = new Fx();
+        await f.Cmd("showLog");
+        Assert.Equal([@"C:\wc"], f.Host.LogShown);
     }
 
     private sealed class QueueDialogs(Queue<string?> answers) : IDialogService
@@ -485,17 +526,17 @@ public class SvnCleanupLockAuthTests
     }
 
     [Fact]
-    public async Task SolutionExplorer_UpdateRev_ValidaERipete()
+    public async Task SolutionExplorer_UpdateRev_ApreLaScelta_SuiPercorsiSelezionati()
     {
         using var f = new PcFx();
-        f.Host.TextAnswers.Enqueue("boh");
-        f.Host.TextAnswers.Enqueue("HEAD");
+        var opened = new List<string>();
+        var cmd = new PathCommands(f.Svn, f.Host, () => Task.CompletedTask, Path.Combine(f.Root, "tmp"), (t, _) => { opened.AddRange(t); return Task.CompletedTask; });
 
-        await f.Run("updaterev", f.P("a.cs"));
+        await cmd.RunAsync("updaterev", [f.P("a.cs")], Ct);
 
-        Assert.Equal([(f.P("a.cs"), "HEAD")], f.Svn.UpdatedToRevision);
-        Assert.Equal(2, f.Host.TextPrompts.Count);
-        Assert.Contains("non è una revisione valida", f.Host.TextPrompts[1].Message);
+        Assert.Equal([f.P("a.cs")], opened);
+        Assert.Empty(f.Svn.UpdatedToRevision); // l'update parte dalla modale, non dal comando
+        Assert.Empty(f.Host.TextPrompts);      // niente piu' dialogo con il campo di testo
     }
 
     [Fact]

@@ -145,6 +145,15 @@
           "type": "integer",
           "minimum": 0,
           "description": "Cresce a ogni messaggio AI (rende visibile un messaggio ripetuto)."
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Elementi del prossimo commit: quelli in Staged, o (Staged vuoto) tutte le modifiche dei file versionati."
+        },
+        "all": {
+          "type": "boolean",
+          "description": "true se Staged e' vuoto e il commit prende tutte le modifiche: il pulsante diventa \"Commit All\"."
         }
       }
     },
@@ -491,6 +500,69 @@
         },
         "canNext": {
           "type": "boolean"
+        }
+      }
+    },
+    "revPicker": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Scelta guidata della revisione per \"Update to revision\" (finestra modale).",
+      "required": [
+        "open",
+        "target",
+        "loading",
+        "error",
+        "canMore",
+        "items"
+      ],
+      "properties": {
+        "open": {
+          "type": "boolean"
+        },
+        "target": {
+          "type": "string",
+          "description": "Percorso che verra' aggiornato."
+        },
+        "loading": {
+          "type": "boolean"
+        },
+        "error": {
+          "type": "string",
+          "description": "Es. numero non valido."
+        },
+        "canMore": {
+          "type": "boolean",
+          "description": "Ha senso \"Carica altre\"."
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "rev",
+              "author",
+              "date",
+              "msg"
+            ],
+            "properties": {
+              "rev": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "author": {
+                "type": "string"
+              },
+              "date": {
+                "type": "string",
+                "description": "ISO 8601."
+              },
+              "msg": {
+                "type": "string",
+                "description": "Prima riga del messaggio."
+              }
+            }
+          }
         }
       }
     }

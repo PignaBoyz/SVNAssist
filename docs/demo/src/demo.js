@@ -715,8 +715,8 @@ async function aiCore(kind, ui) {
   }
   if (kind === 'improve' && !ui.draft().trim()) { ui.status(ui.noDraft); return; }
   if (!S.vm.wcPath) { ui.status('Nessuna working copy configurata.'); return; }
-  const selAll = S.vm.files.filter(f => f.sel);
-  if (!selAll.length) { ui.status(kind === 'improve' ? 'Metti almeno un file in Staged per migliorare il messaggio.' : 'Metti almeno un file in Staged per generare il messaggio.'); return; }
+  const selAll = commitSet().files;   // come il commit: Staged, o (vuoto) tutte le modifiche dei file versionati
+  if (!selAll.length) { ui.status('Nessuna modifica da committare.'); return; }
   const selPaths = selAll.filter(f => !f.dir && ['M', 'A', 'D', 'R', 'C'].includes(f.st)).map(f => f.path);
   ui.busy(true);
   const trace = r.auto ? r.all.map(a => ({ name: a.name, k: a.k, state: a.ok ? 'wait' : 'skip', detail: a.ok ? '' : a.why })) : r.chain.map(a => ({ name: a.name, k: a.k, state: 'wait', detail: '' }));
@@ -763,7 +763,7 @@ const vmAiUi = () => ({
 });
 
 // ---------- view model: SVN Changes (specchio di SvnStatusToolWindowData) ----------
-const DEFAULT_SEL = ['M', 'A', 'D', 'R', '!'];   // i nuovi elementi: modificati/aggiunti/eliminati/sostituiti/mancanti spuntati; conflitti e non versionati no
+const DEFAULT_SEL = [];   // come Git: nulla e' in Staged da solo, lo mette l'utente (Staged vuoto = "Commit All")
 const LOCKS = new Set();   // file bloccati (svn lock) nella demo
 function mkItem(e, old) {
   const st = e.st;
@@ -812,12 +812,19 @@ async function openStatus() {
   await autoDetect();
   if (S.vm.wcPath && S.vm.err === false && !S.vm.files.length && !S.f.wcLoaded) await vmRefresh(undefined, true);
 }
+// Come Git: i file in Staged; se Staged e' vuoto tutte le modifiche dei file versionati (mai i non versionati).
+function commitSet() {
+  const staged = S.vm.files.filter(f => f.sel);
+  if (staged.length) return { files: staged, all: false };
+  const v = S.vm.files.filter(f => ['M', 'A', 'D', 'R', '!', 'C'].includes(f.st));
+  return { files: v, all: v.length > 0 };
+}
 async function vmCommit() {
-  const vm = S.vm, sel = vm.files.filter(f => f.sel);
-  if (!sel.length) { setStatus('Seleziona almeno un file per il commit.'); return render(); }
+  const vm = S.vm, sel = commitSet().files;
+  if (!sel.length) { setStatus('Nessuna modifica da committare.'); return render(); }
   if (!vm.commitMsg.trim()) { setStatus('Scrivi un messaggio di commit.'); return render(); }
   const conf = sel.filter(f => f.st === 'C');
-  if (conf.length) { setStatus(`Risolvi prima i conflitti (${conf.length} file) o deselezionali: svn non committa file in conflitto.`); return render(); }
+  if (conf.length) { setStatus(`Risolvi prima i conflitti (${conf.length} file): svn non committa file in conflitto.`); return render(); }
   try {
     setStatus('Commit in corso...'); render();
     const chosen = new Set(sel.map(f => f.path)), parents = [];
@@ -851,13 +858,26 @@ async function vmUpdate() {
   } catch (e) { setStatus('Errore update: ' + e.message); render(); }
 }
 
+// Update to revision: scelta guidata (modale con le ultime revisioni, HEAD, numero) come nel prodotto.
 async function vmUpdateRev() {
   if (!S.vm.wcPath.trim()) { setStatus('Nessuna working copy configurata.'); return render(); }
-  if (!await confirmBox('Aggiorna alla revisione HEAD? (nel prodotto un dialogo chiede il numero di revisione: intero positivo oppure HEAD)')) return;
+  S.vm.rp = { limit: 30, loading: true, error: '' }; render();
+  await svn('log --xml -l 30', 500); if (S.vm.rp) S.vm.rp.loading = false; render();
+}
+async function rpMore() {
+  const r = S.vm.rp; if (!r || r.loading) return;
+  r.limit += 30; r.loading = true; render(); await svn(`log --xml -l ${r.limit}`, 500); r.loading = false; render();
+}
+async function rpOk(a) {
+  const r = S.vm.rp; if (!r) return;
+  const typed = String(a.rev || '').trim(), rev = /^head$/i.test(typed) ? 'HEAD' : /^\d{1,18}$/.test(typed) && +typed > 0 ? String(+typed) : null;
+  if (!rev) { r.error = `"${typed}" non è una revisione valida: scrivi un numero intero positivo (es. 1234) oppure HEAD.`; return render(); }
+  S.vm.rp = null;
   try {
-    setStatus('Update alla revisione HEAD in corso...'); render();
-    await svn('update -r HEAD', 900);
-    await vmRefresh(updMsg(), true);
+    setStatus(`Update alla revisione ${rev} in corso...`); render();
+    await svn(`update -r ${rev}`, 900);
+    S.wcRev = rev === 'HEAD' ? S.headRev : Math.min(+rev, S.headRev);
+    await vmRefresh(`Aggiornato alla revisione ${S.wcRev}.`, true);
   } catch (e) { setStatus('Errore update: ' + e.message); render(); }
 }
 async function vmCleanup() {

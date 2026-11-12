@@ -13,8 +13,10 @@ internal sealed record TraceDto(string Name, string State, string Detail);
 internal sealed record DownloadDto(double Pct, string Label);
 
 /// <param name="AiLevel">Gravita' di <c>AiStatus</c> per la UI: busy | ok | warn | err | info (vuoto se nessun messaggio).</param>
+/// <param name="Count">Elementi del prossimo commit: quelli in Staged, oppure (Staged vuoto) tutte le modifiche dei file versionati.</param>
+/// <param name="All">true se Staged e' vuoto e il commit prende tutte le modifiche (pulsante "Commit All").</param>
 /// <param name="AiSeq">Cresce a ogni messaggio AI: la UI lo usa per rendere visibile anche un messaggio ripetuto.</param>
-internal sealed record CommitDto(string Text, string AiStatus, string AiLevel, int AiSeq, bool Busy, string Lang, IReadOnlyList<TraceDto> Trace, DownloadDto? Download);
+internal sealed record CommitDto(string Text, string AiStatus, string AiLevel, int AiSeq, bool Busy, string Lang, IReadOnlyList<TraceDto> Trace, DownloadDto? Download, int Count = 0, bool All = false);
 
 internal sealed record ThemeDto(string Mode, string Kind);
 
@@ -69,6 +71,11 @@ internal sealed record WizardDto(
     string Model,
     bool CanNext);
 
+internal sealed record RevItemDto(long Rev, string Author, string Date, string Msg);
+
+/// <summary>Scelta guidata della revisione per "Update to revision": <c>Target</c> e' il percorso da aggiornare, <c>Error</c> un numero non valido.</summary>
+internal sealed record RevPickerDto(bool Open, string Target, bool Loading, string Error, bool CanMore, IReadOnlyList<RevItemDto> Items);
+
 /// <summary>Snapshot della vista <c>changes</c> (changes-state.schema.json).</summary>
 internal sealed record ChangesState(
     WorkingCopyDto WorkingCopy,
@@ -79,7 +86,8 @@ internal sealed record ChangesState(
     StatusDto Status,
     PrereqDto Prereq,
     bool Loading,
-    WizardDto Wizard);
+    WizardDto Wizard,
+    RevPickerDto RevPicker);
 
 /// <param name="K"><c>dir</c> per le cartelle (non si aprono nel diff); assente altrimenti.</param>
 internal sealed record LogPathDto(string A, string P, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? K = null);

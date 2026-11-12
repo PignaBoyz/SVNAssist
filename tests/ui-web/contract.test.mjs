@@ -28,10 +28,14 @@ test('mock-bridge: ogni snapshot e ogni messaggio sono conformi', async () => {
   check();
   let st = last();
   assert.equal(st.sections.map(s => s.id).join(), 'staged,changes,unversioned');
-  assert.ok(st.sections[0].count > 0 && st.sections[2].count > 0, 'dati demo presenti');
+  assert.ok(st.sections[1].count > 0 && st.sections[2].count > 0, 'dati demo presenti');
+  assert.equal(st.sections[0].count, 0, 'come Git: Staged parte vuoto');
+  assert.equal(st.commit.all, true, 'Staged vuoto = Commit All');
   assert.ok(st.workingCopy.branch, 'branch presente');
 
-  // staged: sposta e riporta un file
+  // staged: metti un file, poi spostalo e riportalo
+  await send('stage', { key: st.sections[1].rows.find(r => r.kind === 'file' && r.status !== 'C').key }); st = last();
+  assert.equal(st.commit.all, false, 'con file in Staged = Commit Staged');
   const k = st.sections[0].rows.find(r => r.kind === 'file').key;
   await send('unstage', { key: k }); st = last();
   assert.ok(!st.sections[0].rows.some(r => r.key === k), 'file uscito da Staged');

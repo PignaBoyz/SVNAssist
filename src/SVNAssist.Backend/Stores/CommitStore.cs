@@ -88,7 +88,7 @@ internal sealed class CommitStore
         // Prefissi italiani e inglesi (i testi sono nella lingua corrente al momento in cui sono stati scritti).
         if (status.StartsWith("Error", StringComparison.Ordinal))
             return "err";
-        if (StartsWithAny(status, "Nessun", "Metti almeno", "Scrivi prima", "Operazione", "No ", "Add at least", "First write", "Operation"))
+        if (StartsWithAny(status, "Nessun", "Scrivi prima", "Operazione", "No ", "First write", "Operation"))
             return "warn";
         return StartsWithAny(status, "Messaggio", "Message") ? "ok" : "info";
     }
@@ -110,10 +110,10 @@ internal sealed class CommitStore
     }
 
     /// <summary>Parte dello snapshot <c>commit</c>.</summary>
-    internal CommitDto GetSnapshot(DownloadDto? download)
+    internal CommitDto GetSnapshot(DownloadDto? download, int count = 0, bool all = false)
     {
         lock (_lock)
-            return new CommitDto(_text, _aiStatus, LevelOf(_aiStatus, _busy), _aiSeq, _busy, _lang, _trace, download);
+            return new CommitDto(_text, _aiStatus, LevelOf(_aiStatus, _busy), _aiSeq, _busy, _lang, _trace, download, count, all);
     }
 
     /// <summary>Cambia la lingua del messaggio AI (valori: auto, italiano, english).</summary>
@@ -257,13 +257,11 @@ internal sealed class CommitStore
             return;
         }
 
-        // L'AI descrive solo i file in Staged (gli stessi che finiranno nel commit).
+        // L'AI descrive gli stessi file del commit: quelli in Staged, o tutte le modifiche versionate se Staged e' vuoto.
         var paths = _stagedPaths();
         if (paths.Count == 0)
         {
-            AiStatus = improve
-                ? Loc.T("Metti almeno un file in Staged per migliorare il messaggio.")
-                : Loc.T("Metti almeno un file in Staged per generare il messaggio.");
+            AiStatus = Loc.T("Nessuna modifica da committare.");
             return;
         }
 
@@ -321,7 +319,7 @@ internal sealed class CommitStore
 
     /// <summary>
     /// Conferma (una volta per sessione, e di nuovo per ogni file dal nome sospetto non ancora confermato) di inviare
-    /// il diff dei soli file in Staged ai provider elencati. Senza dialogo (test) non chiede nulla.
+    /// il diff dei file da committare ai provider elencati. Senza dialogo (test) non chiede nulla.
     /// </summary>
     private async Task<bool> ConfirmDisclosureAsync(IReadOnlyList<string> paths, string? chain, CancellationToken ct)
     {
@@ -332,7 +330,7 @@ internal sealed class CommitStore
         if (_disclosureAccepted && sensitive.Count == 0)
             return true;
 
-        var message = Loc.T("Per usare l'AI, il diff dei soli file in Staged ({0} elementi) verrà inviato a un servizio esterno: {1}.",
+        var message = Loc.T("Per usare l'AI, il diff dei file da committare ({0} elementi) verrà inviato a un servizio esterno: {1}.",
             paths.Count, chain ?? Loc.T("provider AI configurato"));
         if (chain is not null && chain.Contains("→"))
             message += Loc.T(" I provider vengono provati nell'ordine indicato: se il primo fallisce, il diff passa al successivo.");
@@ -341,7 +339,7 @@ internal sealed class CommitStore
             message += "\n\n" + Loc.T("ATTENZIONE: questi file sembrano contenere segreti (chiavi, certificati, configurazioni):") + "\n" +
                        string.Join("\n", sensitive.Take(8).Select(p => $"• {Path.GetFileName(p)}")) +
                        (sensitive.Count > 8 ? "\n" + Loc.T("… e altri {0}", sensitive.Count - 8) : string.Empty) +
-                       "\n" + Loc.T("Togli dallo Staged i file di cui non vuoi che il contenuto lasci il computer.");
+                       "\n" + Loc.T("Metti in Staged solo i file il cui contenuto può lasciare il computer.");
         message += "\n\n" + Loc.T("Procedere?");
 
         if (!await _dialogs.ConfirmAsync(message, ct))

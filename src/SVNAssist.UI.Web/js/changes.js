@@ -11,6 +11,7 @@
     const wc = s.workingCopy, rev = wc.rev ? `<span class="muted">r${wc.rev}</span>` : '';
     return `<div class="branch" title="${esc(t('Branch della working copy: {0}', wc.path))}">${U.icon('branch')}<b>${esc(wc.branch || '—')}</b>${rev}</div><span class="fill"></span>` +
       U.btn('btn', 'SVN Update', 'down', 'update', null, t('Scarica le modifiche dal server (svn update)')) +
+      U.btn('btn', 'Show Log', 'file', 'showLog', null, t('Apre il Log della working copy (cronologia delle revisioni)')) +
       U.btn('ib', '', 'refresh', 'refresh', null, t("Ricarica l'elenco delle modifiche (svn status)")) +
       `<button type="button" class="ib" data-menu="more" title="${esc(t('Altre azioni: vista, tema, prerequisiti'))}" aria-label="${esc(t('Altre azioni'))}" aria-haspopup="menu">${U.icon('more')}</button>`;
   }
@@ -18,9 +19,13 @@
     return (s.workingCopy.showInput || forceInput) ? `<form class="wc" id="wcform"><label for="wcp">Working copy</label><input id="wcp" type="text" value="${esc(s.workingCopy.path)}" placeholder="${esc(t('C:\\percorso\\della\\working copy'))}" spellcheck="false"><button class="btn sm" type="submit" title="${esc(t('Carica questa working copy'))}">${t('Apri')}</button></form>` : '';
   }
   function commitBar(s) {
-    const n = (s.sections.find(x => x.id === 'staged') || { count: 0 }).count, c = s.commit, busy = c.busy || s.loading;
-    const why = n ? t('Committa {0} file (Ctrl+Invio)', n) : t('Aggiungi almeno un file dalla lista (+) per committare');
-    return `<button type="button" class="btn primary" ${U.cmd('commit')} ${n && !busy ? '' : 'disabled'} title="${esc(why)}">${U.icon('check')}<span>Commit</span>${n ? `<span class="pill">${n}</span>` : ''}</button><span class="fill"></span>` +
+    // Come Git: con Staged vuoto "Commit All" prende tutte le modifiche dei file versionati; con file in Staged "Commit Staged (n)".
+    const c = s.commit, busy = c.busy || s.loading, staged = (s.sections.find(x => x.id === 'staged') || { count: 0 }).count;
+    const n = c.count != null ? c.count : staged, all = c.count != null ? !!c.all : false;
+    const why = !n ? t('Nessuna modifica da committare')
+      : all ? t('Staged è vuoto: committa tutte le {0} modifiche dei file versionati; i file non versionati restano fuori (Ctrl+Invio)', n)
+        : t('Committa i {0} file in Staged (Ctrl+Invio)', n);
+    return `<button type="button" class="btn primary" ${U.cmd('commit')} ${n && !busy ? '' : 'disabled'} title="${esc(why)}">${U.icon('check')}<span>${all || !n ? 'Commit All' : 'Commit Staged'}</span>${n ? `<span class="pill">${n}</span>` : ''}</button><span class="fill"></span>` +
       `<button type="button" class="btn ai" ${U.cmd('genAi')} ${c.busy ? 'disabled aria-busy="true"' : ''} title="${esc(t('Scrive il messaggio dal diff dei file da committare'))}">${c.busy ? '<span class="spin"></span>' : U.icon('spark')}<span>${c.busy ? t('Generazione in corso…') : t('Genera con AI')}</span></button>` +
       `<button type="button" class="ib" data-menu="ai" ${c.busy ? 'disabled' : ''} title="${esc(t('Migliora il messaggio, lingua'))}" aria-label="${esc(t('Altre opzioni AI'))}" aria-haspopup="menu">${U.icon('chev-d')}</button>`;
   }
@@ -40,10 +45,11 @@
     // Esito: icona + colore + semibold (stessa dimensione del testo); i messaggi di sola informazione restano normali.
     const kind = s.status.err ? 'err' : /(completat|aggiornat|annullat|aggiunt|eliminat|risolt|ignorat|salvat|completed|updated|cancel|added|deleted|resolved|ignore|saved)/i.test(m) ? 'ok' : '';
     const act = s.status.action;
-    return `<span class="msg ${kind}" role="status">${kind ? U.icon(kind === 'err' ? 'x' : 'check') : ''}<span>${esc(m)}</span></span>` +
-      (act ? `<button type="button" class="btn sm" ${U.cmd(act.cmd)} title="${esc(t('Esegue svn cleanup sulla working copy'))}">${esc(act.label)}</button>` : '') + `<span class="fill"></span>` +
+    // Riga 1: messaggio a tutta larghezza (ellissi + tooltip col testo completo); riga 2: prerequisiti, a destra.
+    return `<div class="foot-r1"><span class="msg ${kind}" role="status" title="${esc(m)}">${kind ? U.icon(kind === 'err' ? 'x' : 'check') : ''}<span>${esc(m)}</span></span>` +
+      (act ? `<button type="button" class="btn sm" ${U.cmd(act.cmd)} title="${esc(t('Esegue svn cleanup sulla working copy'))}">${esc(act.label)}</button>` : '') + `</div><div class="foot-r2"><span class="fill"></span>` +
       (bad ? `<button type="button" class="btn sm prq-st bad" ${U.cmd('wizardOpenPrereq')} title="${esc(t('Manca qualcosa: apre la procedura guidata per sistemarlo'))}">${U.icon('warn')}<span>${esc(p.summary)}</span></button>`
-        : `<button type="button" class="btn sm prq-st ok" ${U.cmd('prereqToggle')} aria-expanded="${!!p.open}" title="${esc(t('Tutto a posto. Mostra/nasconde la checklist: svn, TortoiseSVN, provider AI'))}">${U.icon('check')}<span>${esc((p.summary || t('Prerequisiti')).replace(/\s*✓/, ''))}</span></button>`);
+        : `<button type="button" class="btn sm prq-st ok" ${U.cmd('prereqToggle')} aria-expanded="${!!p.open}" title="${esc(t('Tutto a posto. Mostra/nasconde la checklist: svn, TortoiseSVN, provider AI'))}">${U.icon('check')}<span>${esc((p.summary || t('Prerequisiti')).replace(/\s*✓/, ''))}</span></button>`) + `</div>`;
   }
   const isEmpty = s => s.sections.every(x => !x.count);
 
@@ -103,7 +109,9 @@
     if (changed) { list.scrollTop = top; if (had) { const r = list.querySelector(`.tr[data-key="${CSS.escape(cursor)}"]`); if (r) r.focus(); } }
     list.setAttribute('aria-busy', !!st.loading);
     U.setHTML(root.querySelector('#foot'), foot(st));
-    renderWizard(root);
+    const anyModal = !!(st.wizard && st.wizard.open) || !!(st.revPicker && st.revPicker.open);
+    renderWizard(root, anyModal);
+    renderRev(root, anyModal);
   }
 
   // Procedura guidata: dialogo modale (il resto e' inert), il testo digitato e il focus sopravvivono ai ridisegni.
@@ -111,7 +119,7 @@
   function wizNeedsPolling(wz) {
     return !!(wz && wz.open && !wz.busy && (wz.mode === 'prereq' ? !wz.canNext : (wz.step === 2 && !wz.canNext) || (wz.step === 3 && (wz.auth === 'github' || wz.auth === 'openai') && !wz.authOk)));
   }
-  function renderWizard(app) {
+  function renderWizard(app, anyModal) {
     const box = document.getElementById('wiz'), wz = st.wizard; if (!box) return;
     const open = !!(wz && wz.open), was = !!box.__open, keep = {};
     box.querySelectorAll('input,select').forEach(e => { keep[e.id] = e.value; });
@@ -119,13 +127,70 @@
     if (open && !was) box.__prev = document.activeElement;
     const changed = U.setHTML(box, U.wizardHTML(wz));
     if (changed) box.querySelectorAll('input,select').forEach(e => { if (keep[e.id] != null && sameStep) e.value = keep[e.id]; });
-    app.classList.toggle('modal-open', open); app.inert = open;
+    if (open || !anyModal) { app.classList.toggle('modal-open', anyModal); app.inert = anyModal; }
     if (open && (!was || !sameStep || !box.contains(document.activeElement))) { const t = box.querySelector(!was || !sameStep ? '#wiz-t' : '.wiz [data-cmd]:not(:disabled),.wiz input,.wiz select'); if (t) t.focus(); }
     if (!open && was && box.__prev && box.__prev.isConnected) box.__prev.focus();
     box.__open = open; box.__step = wz && wz.step; box.__mode = wz && wz.mode;
     const need = wizNeedsPolling(wz);   // ricontrollo leggero finche' manca qualcosa (il terminale e' fuori dalla pagina)
     if (need && !wizTimer) wizTimer = setInterval(() => U.bridge.send('wizardRecheck'), 4000);
     else if (!need && wizTimer) { clearInterval(wizTimer); wizTimer = 0; }
+  }
+  // Scelta guidata della revisione (Update to revision): modale con elenco, HEAD in cima e campo "oppure numero".
+  let revSel = 'HEAD', revTyped = '';
+  const revEff = () => revTyped.trim() || revSel;
+  function revHTML(r) {
+    if (!r || !r.open) return '';
+    const row = (rev, body) => `<div class="rp-row${!revTyped.trim() && revSel === String(rev) ? ' sel' : ''}" role="option" tabindex="${revSel === String(rev) ? 0 : -1}" aria-selected="${!revTyped.trim() && revSel === String(rev)}" data-rev="${rev}">${body}</div>`;
+    const rows = row('HEAD', `<b class="rv">HEAD</b><span class="m">${esc(t('HEAD (ultima revisione)'))}</span>`) +
+      r.items.map(e => row(e.rev, `<b class="rv">r${e.rev}</b><span class="au">${esc(e.author)}</span><span class="dtm muted">${U.fmtDate(e.date)}</span><span class="m" title="${esc(e.msg)}">${esc(e.msg)}</span>`)).join('');
+    const more = r.loading ? `<div class="rp-note muted"><span class="spin"></span> ${t('Caricamento delle revisioni…')}</div>`
+      : r.canMore ? `<div class="rp-note">${U.btn('btn sm', t('Carica altre'), null, 'revPickerMore', null, t('Mostra altre revisioni più vecchie'))}</div>` : '';
+    return `<div class="wiz-scrim"><div class="wiz rp" role="dialog" aria-modal="true" aria-labelledby="rp-t"><div class="wiz-h"><h3 id="rp-t" tabindex="-1">SVN Update to revision</h3><span class="fill"></span>${U.btn('ib', '', 'x', 'revPickerCancel', null, t('Annulla (Esc)'))}</div>` +
+      `<div class="wiz-b"><p class="muted">${t('Scegli la revisione a cui aggiornare:')} <code class="rp-t" title="${esc(r.target)}">${esc(r.target)}</code></p>` +
+      `<div class="rp-list" id="rp-list" role="listbox" aria-label="${esc(t('Revisioni del repository'))}">${rows}${more}</div>` +
+      (r.error ? `<div class="rp-err" role="alert">${U.icon('warn')}<span>${esc(r.error)}</span></div>` : '') +
+      `<label for="rp-num">${t('oppure numero di revisione')}</label><input id="rp-num" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="${esc(t('es. 1234'))}" value="${esc(revTyped)}"></div>` +
+      `<div class="wiz-f">${U.btn('btn ghost', t('Annulla'), null, 'revPickerCancel', null, t('Chiude senza aggiornare'))}<span class="fill"></span><button type="button" class="btn primary" data-rp="ok" title="${esc(t('Aggiorna la working copy a questa revisione (svn update -r)'))}">${U.icon('down')}<span>OK</span></button></div></div></div>`;
+  }
+  function renderRev(app, anyModal) {
+    const box = document.getElementById('rev'), r = st.revPicker; if (!box) return;
+    const open = !!(r && r.open), was = !!box.__open, a = document.activeElement;
+    if (open && !was) { revSel = 'HEAD'; revTyped = ''; box.__prev = a; }
+    const inNum = box.contains(a) && a.id === 'rp-num', inRow = box.contains(a) && a.classList && a.classList.contains('rp-row');
+    const caret = inNum ? a.selectionStart : 0, top = box.querySelector('#rp-list') ? box.querySelector('#rp-list').scrollTop : 0;
+    const changed = U.setHTML(box, revHTML(r));
+    app.classList.toggle('modal-open', anyModal); app.inert = anyModal;
+    if (open && changed) {
+      const list = box.querySelector('#rp-list'); if (list) list.scrollTop = top;
+      if (!was) { const f = box.querySelector('.rp-row[tabindex="0"]'); if (f) f.focus(); }
+      else if (inNum) { const n = box.querySelector('#rp-num'); n.focus(); n.setSelectionRange(caret, caret); }
+      else if (inRow || !box.contains(document.activeElement)) { const f = box.querySelector('.rp-row[tabindex="0"]'); if (f) f.focus(); }
+    }
+    if (!open && was && box.__prev && box.__prev.isConnected) box.__prev.focus();
+    box.__open = open;
+  }
+  function revPick(box, rev, focus) {
+    revSel = String(rev); revTyped = '';
+    box.querySelectorAll('.rp-row').forEach(x => { const on = x.dataset.rev === revSel; x.classList.toggle('sel', on); x.setAttribute('aria-selected', on); x.tabIndex = on ? 0 : -1; if (on && focus) { x.focus(); x.scrollIntoView({ block: 'nearest' }); } });
+    const n = box.querySelector('#rp-num'); if (n) n.value = '';
+  }
+  const revOk = () => U.bridge.send('revPickerOk', { rev: revEff() });
+  function revKeys(e) {
+    const box = document.getElementById('rev'); if (!box || !box.__open) return;
+    const a = document.activeElement;
+    if (e.key === 'Escape') { e.preventDefault(); U.bridge.send('revPickerCancel'); return; }
+    if (a && a.classList && a.classList.contains('rp-row')) {
+      const rows = [...box.querySelectorAll('.rp-row')], i = rows.indexOf(a);
+      const to = e.key === 'ArrowDown' ? i + 1 : e.key === 'ArrowUp' ? i - 1 : e.key === 'Home' ? 0 : e.key === 'End' ? rows.length - 1 : -1;
+      if (to >= 0) { e.preventDefault(); if (rows[Math.max(0, Math.min(rows.length - 1, to))]) revPick(box, rows[Math.max(0, Math.min(rows.length - 1, to))].dataset.rev, true); return; }
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); revPick(box, a.dataset.rev, true); if (e.key === 'Enter') revOk(); return; }
+    }
+    if (e.key === 'Enter' && a && a.id === 'rp-num') { e.preventDefault(); revOk(); return; }
+    if (e.key !== 'Tab') return;
+    const f = [...box.querySelectorAll('button:not(:disabled),input,.rp-row[tabindex="0"]')]; if (!f.length) return;
+    const first = f[0], last = f[f.length - 1];
+    if (e.shiftKey && (a === first || !box.contains(a))) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && (a === last || !box.contains(a))) { e.preventDefault(); first.focus(); }
   }
   function wizKeys(e) {
     const box = document.getElementById('wiz'); if (!box || !box.__open) return;
@@ -137,6 +202,8 @@
     else if (!e.shiftKey && (a === last || !box.contains(a))) { e.preventDefault(); first.focus(); }
   }
 
+  U.changesHTML = { header, commitBar, foot, revHTML };   // parti pure, provate senza DOM (tests/ui-web)
+
   U.views.changes = {
     mount(root) {
       root.innerHTML = `<div class="app"><div class="prog" aria-hidden="true"></div><header class="bar" id="hdr"></header><div id="wcbox"></div>
@@ -144,12 +211,24 @@
         <div class="bar" id="cbar"></div><div id="aist"></div></section><div id="prq"></div>
         <div class="flt"><input id="flt" type="search" spellcheck="false" autocomplete="off"></div>
         <div class="list" id="list" role="tree"></div>
-        <footer class="foot" id="foot"></footer></div><div id="wiz"></div>`;
+        <footer class="foot" id="foot"></footer></div><div id="wiz"></div><div id="rev"></div>`;
       U.views.changes.relang(root);
       const ta = root.querySelector('#msg');
       ta.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => U.bridge.send('setCommitText', { text: ta.value }), 150); });
       ta.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); clearTimeout(timer); U.bridge.send('setCommitText', { text: ta.value }); U.bridge.send('commit'); } });
       root.addEventListener('keydown', wizKeys);
+      root.addEventListener('keydown', revKeys);
+      root.addEventListener('click', e => {
+        const box = document.getElementById('rev'), row = e.target.closest('.rp-row');
+        if (row && box && box.contains(row)) { revPick(box, row.dataset.rev, true); return; }
+        if (e.target.closest('[data-rp="ok"]')) revOk();
+      });
+      root.addEventListener('dblclick', e => { const row = e.target.closest('.rp-row'); if (row) { revPick(document.getElementById('rev'), row.dataset.rev, false); revOk(); } });
+      root.addEventListener('input', e => {
+        if (e.target.id !== 'rp-num') return;
+        revTyped = e.target.value;
+        document.querySelectorAll('#rev .rp-row').forEach(x => { const on = !revTyped.trim() && x.dataset.rev === revSel; x.classList.toggle('sel', on); x.setAttribute('aria-selected', on); });
+      });
       w.addEventListener('focus', () => { if (wizNeedsPolling(st && st.wizard)) U.bridge.send('wizardRecheck'); });   // di ritorno dal terminale/browser
       root.addEventListener('click', e => {
         const b = e.target.closest('[data-wiz="finish"]'); if (!b || b.disabled) return;

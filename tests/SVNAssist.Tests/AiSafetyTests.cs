@@ -180,7 +180,7 @@ public class AiSafetyTests
         await f.Vm.CommitMessage.GenerateAsync(Ct);
 
         var message = Assert.Single(f.Dialogs.Messages);
-        Assert.Contains("dei soli file in Staged", message);
+        Assert.Contains("dei file da committare", message);
         Assert.Equal(2, f.Ai.Service.Languages.Count);
     }
 

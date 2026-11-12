@@ -9,7 +9,9 @@
       { "name": "Copilot", "state": "skip", "detail": "runtime non scaricato" },
       { "name": "Claude Code", "state": "ok", "detail": "" }
     ],
-    "download": null
+    "download": null,
+    "count": 2,
+    "all": false
   },
   "view": "tree",
   "theme": { "mode": "auto", "kind": "dark" },
@@ -49,5 +51,6 @@
     ]
   },
   "loading": false,
-  "wizard": {"open":false,"mode":"ai","step":1,"fromGenerate":false,"provider":"","busy":false,"feedback":"","providers":[],"items":[],"auth":"","authOk":false,"authDetail":"","endpoint":"","models":[],"model":"","canNext":false}
+  "wizard": {"open":false,"mode":"ai","step":1,"fromGenerate":false,"provider":"","busy":false,"feedback":"","providers":[],"items":[],"auth":"","authOk":false,"authDetail":"","endpoint":"","models":[],"model":"","canNext":false},
+  "revPicker": {"open":false,"target":"","loading":false,"error":"","canMore":false,"items":[]}
 }

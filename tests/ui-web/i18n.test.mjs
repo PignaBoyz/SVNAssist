@@ -46,10 +46,10 @@ test('le voci inglesi senza uso nel codice sono solo i nomi degli stati (util.js
 test('t(): italiano = chiave, inglese = traduzione, segnaposto sostituiti, chiave ignota = chiave', () => {
   const U = loadUi();
   assert.equal(U.lang(), 'it');
-  assert.equal(U.t('Committa {0} file (Ctrl+Invio)', 3), 'Committa 3 file (Ctrl+Invio)');
+  assert.equal(U.t('Committa i {0} file in Staged (Ctrl+Invio)', 3), 'Committa i 3 file in Staged (Ctrl+Invio)');
   assert.equal(U.setLang('en'), true);
   assert.equal(U.setLang('en'), false);
-  assert.equal(U.t('Committa {0} file (Ctrl+Invio)', 3), 'Commit 3 file(s) (Ctrl+Enter)');
+  assert.equal(U.t('Committa i {0} file in Staged (Ctrl+Invio)', 3), 'Commit the 3 file(s) in Staged (Ctrl+Enter)');
   assert.equal(U.t('testo mai tradotto'), 'testo mai tradotto');
   assert.equal(U.setLang('xx'), true, 'lingua sconosciuta = italiano');
   assert.equal(U.lang(), 'it');
