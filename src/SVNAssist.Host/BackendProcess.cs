@@ -60,6 +60,8 @@ namespace SVNAssist.Host
             if (!File.Exists(exe))
                 throw new FileNotFoundException("Backend SVNAssist non trovato (" + exe + "). Reinstalla l'estensione.");
 
+            var dotnetRoot = EnsureRuntime();
+
             var p = new Process
             {
                 StartInfo = new ProcessStartInfo(exe)
@@ -73,6 +75,7 @@ namespace SVNAssist.Host
                 },
                 EnableRaisingEvents = true,
             };
+            p.StartInfo.EnvironmentVariables["DOTNET_ROOT"] = dotnetRoot; // l'apphost trova cosi' anche un runtime installato in cartella utente
             p.ErrorDataReceived += (s, e) => { if (e.Data != null) Log.Write("[backend] " + e.Data); };
             p.Start();
             JobObject.Assign(p);
@@ -87,6 +90,83 @@ namespace SVNAssist.Host
 
             lock (_gate) { _proc = p; _rpc = rpc; _proxy = proxy; }
             Log.Write("backend avviato pid " + p.Id);
+        }
+
+        private const string DownloadUrl = "https://dotnet.microsoft.com/download/dotnet/10.0";
+        private static readonly string UserDotnetDir =
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "dotnet");
+
+        /// <summary>Radice dotnet con Microsoft.NETCore.App 10.x (anche se dotnet non e' nel PATH), o null.</summary>
+        private static string FindRuntimeRoot()
+        {
+            var pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            foreach (var exe in new[] { "dotnet", Path.Combine(pf, "dotnet", "dotnet.exe"), Path.Combine(UserDotnetDir, "dotnet.exe") })
+            {
+                if (exe != "dotnet" && !File.Exists(exe)) continue;
+                try
+                {
+                    var psi = new ProcessStartInfo(exe, "--list-runtimes")
+                    { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+                    using (var pr = Process.Start(psi))
+                    {
+                        var output = pr.StandardOutput.ReadToEnd();
+                        pr.WaitForExit(10000);
+                        var root = DotnetRuntime.FindRoot(output);
+                        if (root != null) return root;
+                    }
+                }
+                catch (Exception ex) { Log.Write("dotnet --list-runtimes (" + exe + "): " + ex.Message); }
+            }
+            return null;
+        }
+
+        /// <summary>Verifica il runtime .NET 10; se manca propone installazione automatica o pagina download.</summary>
+        private static string EnsureRuntime()
+        {
+            var root = FindRuntimeRoot();
+            if (root != null) return root;
+
+            var choice = Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory.Run(async () =>
+            {
+                await Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                return PromptDialog.Show(
+                    "SVNAssist richiede il runtime .NET 10, che non e' installato.\n\n" +
+                    "Installa automaticamente: parte l'installazione (winget, oppure lo script ufficiale dotnet-install) in una finestra visibile.\n\n" +
+                    "Apri pagina download: scarica \".NET Runtime 10.x – Windows x64 installer\" (non l'SDK), installalo e riprova.",
+                    new[] { "Installa automaticamente", "Apri pagina download", "Annulla" });
+            });
+
+            if (choice == 1)
+            {
+                try { Process.Start(new ProcessStartInfo(DownloadUrl) { UseShellExecute = true }); } catch (Exception ex) { Log.Write("apri download: " + ex.Message); }
+                throw new InvalidOperationException("Runtime .NET 10 mancante: installa \".NET Runtime 10.x – Windows x64 installer\" da " + DownloadUrl + " e riprova.");
+            }
+            if (choice != 0) throw new InvalidOperationException("Runtime .NET 10 mancante: SVNAssist non puo' avviare il servizio.");
+
+            // Finestra console visibile; exit code ignorato: conta solo il ricontrollo.
+            RunVisible("winget", "install --id Microsoft.DotNet.Runtime.10 -e --silent --accept-package-agreements --accept-source-agreements");
+            root = FindRuntimeRoot();
+            if (root == null)
+            {
+                RunVisible("powershell",
+                    "-NoProfile -ExecutionPolicy Bypass -Command \"[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; " +
+                    "& ([scriptblock]::Create((Invoke-RestMethod https://dot.net/v1/dotnet-install.ps1))) -Runtime dotnet -Channel 10.0 -InstallDir '" + UserDotnetDir + "'\"");
+                root = FindRuntimeRoot();
+            }
+            if (root == null)
+                throw new InvalidOperationException("Installazione del runtime .NET 10 non riuscita: installa \".NET Runtime 10.x – Windows x64 installer\" da " + DownloadUrl);
+            Log.Write("runtime .NET 10 in " + root);
+            return root;
+        }
+
+        private static void RunVisible(string exe, string args)
+        {
+            try
+            {
+                using (var pr = Process.Start(new ProcessStartInfo(exe, args) { UseShellExecute = true }))
+                    pr.WaitForExit(15 * 60 * 1000);
+            }
+            catch (Exception ex) { Log.Write(exe + ": " + ex.Message); } // es. winget assente
         }
 
         private void OnGone(Process p)

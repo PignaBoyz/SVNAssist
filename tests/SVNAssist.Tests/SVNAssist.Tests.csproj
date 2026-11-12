@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
 
@@ -26,6 +26,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\SVNAssist.Backend\SVNAssist.Backend.csproj" />
+    <Compile Include="..\..\src\Shared\DotnetRuntime.cs" Link="DotnetRuntime.cs" />
   </ItemGroup>
 
   <!-- Contratto UI (schemi + fixture): i test verificano che gli snapshot del backend li rispettino. -->

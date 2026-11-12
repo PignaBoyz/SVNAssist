@@ -34,6 +34,7 @@
     <Reference Include="System.Design" />
     <Reference Include="System.Security" />
     <Compile Include="..\Shared\RpcContract.cs" Link="RpcContract.cs" />
+    <Compile Include="..\Shared\DotnetRuntime.cs" Link="DotnetRuntime.cs" />
     <VSCTCompile Include="SVNAssist.vsct">
       <ResourceName>Menus.ctmenu</ResourceName>
     </VSCTCompile>
@@ -42,7 +43,7 @@
   <ItemGroup>
     <!-- UI web: tutto src/SVNAssist.UI.Web tranne contract/ (schemi e fixture, solo per i test). -->
     <Content Include="$(UiWebDir)**" Exclude="$(UiWebDir)contract\**" Link="ui\%(RecursiveDir)%(Filename)%(Extension)" IncludeInVSIX="true" />
-    <!-- Backend net8 framework-dependent (dotnet publish), sotto backend/ accanto all'assembly. -->
+    <!-- Backend net10 framework-dependent (dotnet publish), sotto backend/ accanto all'assembly. -->
     <Content Include="$(BackendPublishDir)**" Exclude="$(BackendPublishDir)**\*.pdb" Link="backend\%(RecursiveDir)%(Filename)%(Extension)" IncludeInVSIX="true" Condition="Exists('$(BackendPublishDir)')" />
   </ItemGroup>
 

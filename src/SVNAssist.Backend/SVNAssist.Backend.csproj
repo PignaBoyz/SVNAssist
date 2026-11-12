@@ -1,10 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- Sidecar dell'host in-proc (SVNAssist.Host, net472): console exe net8, apphost, framework-dependent.
+    <!-- Sidecar dell'host in-proc (SVNAssist.Host, net472): console exe net10, apphost, framework-dependent.
          stdout e' il canale JSON-RPC: MAI scrivere sulla console; i log vanno su file (vedi Hosting/BackendLog). -->
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <LangVersion>12.0</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>

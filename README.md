@@ -2,7 +2,7 @@
 
 Estensione VSIX per Visual Studio 2022 / VS 18 che integra **Subversion (SVN)** nell'IDE con un pannello stile **Git Changes**, generazione automatica dei messaggi di commit tramite AI e supporto multi-provider.
 
-![.NET 8](https://img.shields.io/badge/.NET-8.0-purple)
+![.NET 10](https://img.shields.io/badge/.NET-10.0-purple)
 ![VS](https://img.shields.io/badge/Visual%20Studio-2022%20%7C%2018-blue)
 ![SVN](https://img.shields.io/badge/SVN-CLI-orange)
 
@@ -34,7 +34,7 @@ Estensione VSIX per Visual Studio 2022 / VS 18 che integra **Subversion (SVN)** 
    - [TortoiseSVN](https://tortoisesvn.net/) (con l'opzione "command line client tools")
    - [SlikSVN](https://sliksvn.com/download/)
    - [CollabNet SVN](https://www.collab.net/downloads/subversion)
-3. **Runtime .NET 8** (il backend e' un'app .NET framework-dependent, non e' incluso nel VSIX). *Nota: l'host non controlla ancora che sia presente; senza, il pannello non carica i dati.*
+3. **Runtime .NET 10** (il backend e' un'app .NET framework-dependent, non e' incluso nel VSIX). All'avvio del backend l'host controlla che `Microsoft.NETCore.App` 10.x sia installato (anche se `dotnet` non e' nel PATH); se manca propone di installarlo automaticamente (`winget`, con fallback allo script ufficiale `dotnet-install.ps1`) oppure di aprire la pagina di download (".NET Runtime 10.x – Windows x64 installer").
 4. **WebView2 Runtime** (gia' presente con VS e Windows 11)
 
 ### Installazione dell'estensione
@@ -256,7 +256,7 @@ Le API key sono cifrate con DPAPI (utente corrente) nel registro.
 ## 🏗️ Architettura
 
 - **Host** (`src/SVNAssist.Host`, net472, in-proc): package VSSDK, comandi `.vsct`, pagina Options, tool window con **WebView2**; fa da relay verso il backend e inoltra il tema di VS
-- **Backend** (`src/SVNAssist.Backend`, net8, processo separato): logica SVN (`svn.exe` via `Process`) e AI multi-provider; parla **StreamJsonRpc su stdio** (contratto in `src/Shared/RpcContract.cs`)
+- **Backend** (`src/SVNAssist.Backend`, net10, processo separato): logica SVN (`svn.exe` via `Process`) e AI multi-provider; parla **StreamJsonRpc su stdio** (contratto in `src/Shared/RpcContract.cs`)
 - **UI web** (`src/SVNAssist.UI.Web`): HTML/CSS/JS condivisi con la demo (`docs/demo`, costruita da `tools/build-demo.mjs`)
 - **AI**: catena Copilot → Claude Code → Claude API → OpenAI-compatibile con fallback; il diff inviato e' minimo
 
