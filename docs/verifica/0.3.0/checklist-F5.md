@@ -47,3 +47,8 @@ Segna ✅ / ❌ (+ una riga su cosa vedi).
 24. [ ] SVN Update che lascia un conflitto propone lo stesso "Risolvi ora / Più tardi".
 25. [ ] Switch / Merge: scegli un ramo, richiudi e riapri: compare il gruppo **Usati di recente** con l'ultimo scelto in cima; digitando nel campo l'elenco si filtra subito.
 26. [ ] **Mostra tutti / vista estesa…** (con un repository con molti rami): tabella Nome / Tipo / Rev. / Autore / Data, filtro per nome e per tipo, clic su Nome o Data per ordinare, scorrimento fluido. La stessa vista c'è in "SVN Merge...".
+
+**Revert di singole righe, scorciatoie del diff, menu**
+27. [ ] Apri il diff di un file con piu' modifiche (da Changes). Nel pannello destro, seleziona 2-3 righe modificate/aggiunte, clic destro > **SVN: Revert Selected Changes**: compare "Annullate N righe", il file torna com'era per quelle righe e le altre modifiche restano; il diff e Changes si aggiornano. Prova anche con il solo cursore su una riga, con una riga cancellata (cursore sulla riga adiacente), in un editor normale del file e con modifiche non salvate (viene salvato prima). Se tutte le modifiche spariscono, il file esce da Changes.
+28. [ ] Nel diff di un file lungo premi **Ctrl+Alt+Giu'** (poi **Ctrl+Alt+Su'**): si salta alla differenza successiva (precedente). Alt+Su/Giu' nell'editor normale continuano a spostare la riga. (Se non funziona: Tools > Options > Environment > Keyboard, comandi `SVNAssist.NextChange` / `SVNAssist.PreviousChange`.)
+29. [ ] Il clic destro su file/cartella/progetto in Solution Explorer non mostra piu' il sottomenu "SVN".

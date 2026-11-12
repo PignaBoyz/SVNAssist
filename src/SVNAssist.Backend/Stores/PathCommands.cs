@@ -37,6 +37,13 @@ internal sealed class PathCommands
         if (command == "commit")
             return;
 
+        // revertlines: paths = [file, "da-a"] (righe 1-based del file di lavoro); il secondo elemento non e' un percorso.
+        if (command == "revertlines")
+        {
+            await RevertLinesAsync(paths, ct);
+            return;
+        }
+
         var targets = new List<SvnTarget>();
         foreach (var p in paths ?? [])
             if (SvnTarget.Resolve(p) is { } t && !targets.Any(x => string.Equals(x.Path, t.Path, StringComparison.OrdinalIgnoreCase)))
@@ -205,6 +212,49 @@ internal sealed class PathCommands
         await _svn.RevertAsync(paths, ct);
         await InfoAsync(Loc.T("Modifiche annullate."));
         await _refresh();
+    }
+
+    /// <summary>
+    /// "Annulla le modifiche selezionate": riporta a BASE solo le righe del file di lavoro nell'intervallo (vedi <see cref="LineRevert"/>).
+    /// Scrive su disco mantenendo encoding, BOM e fine riga; l'host ha gia' salvato il documento aperto.
+    /// </summary>
+    private async Task RevertLinesAsync(string[] paths, CancellationToken ct)
+    {
+        try
+        {
+            var range = paths.Length > 1 ? paths[1].Split('-') : [];
+            if (paths.Length < 2 || range.Length != 2 || !int.TryParse(range[0], out var from) || !int.TryParse(range[1], out var to) || from < 1 || to < from)
+                throw new ArgumentException(Loc.T("Intervallo di righe non valido."));
+            var t = SvnTarget.Resolve(paths[0]);
+            if (t is null || t.IsDirectory || !File.Exists(t.Path)) { await InfoAsync(Loc.T("Nessun percorso valido selezionato.")); return; }
+            if (t.WorkingCopyRoot is null) { await InfoAsync(SvnTarget.NotWorkingCopyMessage); return; }
+
+            var hunks = LineRevert.ParseHunks(await _svn.GetFileDiffAsync(t.Path, ct));
+            if (hunks.Count == 0) { await InfoAsync(Loc.T("Il file non ha modifiche locali da annullare.")); return; }
+
+            var baseFile = Path.Combine(Path.GetTempPath(), "SVNAssist_base_" + Guid.NewGuid().ToString("N") + Path.GetExtension(t.Path));
+            string baseText;
+            try
+            {
+                await _svn.ExportBaseAsync(t.Path, baseFile, ct);
+                baseText = LineRevert.Decode(await File.ReadAllBytesAsync(baseFile, ct)).Text;
+            }
+            finally { try { File.Delete(baseFile); } catch { /* best effort */ } }
+
+            var (work, enc, bom) = LineRevert.Decode(await File.ReadAllBytesAsync(t.Path, ct));
+            var (text, count) = LineRevert.Apply(work, baseText, hunks, from, to);
+            if (count == 0) { await InfoAsync(Loc.T("Nessuna modifica nelle righe selezionate.")); return; }
+
+            await File.WriteAllBytesAsync(t.Path, [.. bom, .. enc.GetBytes(text)], ct);
+            await InfoAsync(Loc.T("Annullate {0} righe", count));
+            await _refresh();
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+        catch (Exception ex)
+        {
+            BackendLog.Warn($"Comando percorso revertlines: {ex.Message}");
+            await InfoAsync(Loc.T("Errore ({0}):\n{1}", "revertlines", ex.Message));
+        }
     }
 
     private async Task DiffAsync(SvnTarget t, CancellationToken ct)
