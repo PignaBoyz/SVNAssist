@@ -353,6 +353,8 @@ Ordine consigliato: F-INFO e versione, switch, branch/tag, poi merge (eligible, 
 
 ## 5. Candidati 0.4.0 (ordinati per valore/costo)
 
+> **DECISO dall'utente (2026-11-12):** 0.3.1 = correzioni (log host, Ctrl+Z dopo annulla righe, watcher solo con VS attivo, diagnostica pulsante Annulla). **0.4.0 = flusso branch completo**: Crea branch/tag, avanzamento/annullamento per repo lenti, lock di altri utenti, crea/applica patch con backup prima di Annulla merge e Revert di tutto, "Usa la mia/loro per tutti", verifica VS 2022 (~35 h). **0.5.0 = AI e lettura del codice**: Blame/Annotate, AI spiega revisione, AI cosa sta per arrivare (+ "n in arrivo"), elenco modelli dinamico (~35 h). La tabella sotto resta come riferimento.
+
 | # | Candidato | Ore | Motivazione |
 |---|---|---|---|
 | 1 | Crea / applica patch (F-PATCH) | 7 | Poco costo, abilita undo sicuro del revert e dell'annulla merge |
