@@ -47,3 +47,14 @@ Segna ✅ / ❌ (+ una riga su cosa vedi).
 24. [ ] SVN Update che lascia un conflitto propone lo stesso "Risolvi ora / Più tardi".
 25. [ ] Switch / Merge: scegli un ramo, richiudi e riapri: compare il gruppo **Usati di recente** con l'ultimo scelto in cima; digitando nel campo l'elenco si filtra subito.
 26. [ ] **Mostra tutti / vista estesa…** (con un repository con molti rami): tabella Nome / Tipo / Rev. / Autore / Data, filtro per nome e per tipo, clic su Nome o Data per ordinare, scorrimento fluido. La stessa vista c'è in "SVN Merge...".
+
+**Dal collaudo aziendale: barra di stato, revisione, messaggi recenti, file nuovi** (VSIX da reinstallare in `SvnHost`)
+27. [ ] Dopo un commit (o un SVN Update) il messaggio verde "Commit completato..." sparisce da solo dopo circa 5 secondi; in basso resta solo la revisione (`r1234`). Un messaggio d'errore invece resta finché non lo sostituisce un altro.
+28. [ ] L'indicatore `r1234` in basso a sinistra è **verde** (con la spunta) quando la working copy è all'ultima revisione del ramo; passando il mouse il tooltip lo conferma.
+29. [ ] Da un altro PC (o con un secondo checkout) fai un commit sullo stesso ramo, poi attendi l'intervallo (o riapri la finestra / cambia l'impostazione): l'indicatore diventa **arancio**: `r1234 · disponibile r1240 — SVN Update`. Un clic lo esegue; dopo l'update torna verde. Un commit su un altro ramo non lo cambia.
+30. [ ] Tools > Options > SVNAssist > Generale > "Controllo nuove revisioni (minuti)": 5 di default; con `0` l'indicatore diventa neutro (tooltip "Controllo ... spento") e non parte nessuna richiesta; cambiando il valore e premendo OK vale subito.
+31. [ ] Senza rete o con le credenziali non in cache: nessun popup e nessun login; l'indicatore resta neutro (grigio) con il motivo nel tooltip e il messaggio di stato non diventa un errore.
+32. [ ] Con la working copy pulita lo stato vuoto "Nessuna modifica / La working copy è pulita" compare **sotto** la sezione Staged, non sopra.
+33. [ ] Vicino al messaggio di commit c'è la tendina **Recenti**: dopo un commit il messaggio compare in cima; un clic lo inserisce nel campo; i messaggi sono per repository (al massimo 25) e restano dopo aver riavviato VS (`%LOCALAPPDATA%\SVNAssist\recent-messages.json`).
+34. [ ] Dopo "Merge tutto" o "Merge selezionate" il messaggio precompilato è nel formato TortoiseSVN: `Unite le revisioni 4-6 da branches/feature-demo:` (con la lingua inglese `Merged revision(s) 4-6 from ...`), poi per ogni revisione una riga `........` e `rN | autore | messaggio originale`.
+35. [ ] Doppio clic (o Invio) su un file **aggiunto (A)** o **non versionato (?)** lo apre intero nell'editor di Visual Studio (nessun diff contro il vuoto); su un file **eliminato (D)** si apre il diff con il contenuto BASE a sinistra; su un modificato (M) il diff di sempre. Nel menu contestuale la voce è "Apri file" per A e ?.

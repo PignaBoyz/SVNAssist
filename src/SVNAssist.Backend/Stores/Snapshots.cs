@@ -7,7 +7,10 @@ namespace SVNAssist.Stores;
 // (verificato dai test SnapshotSchemaTests). Proprieta' camelCase; i campi facoltativi null non vengono scritti.
 
 internal sealed record WorkingCopyDto(string Path, bool ShowInput, string Branch, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? Rev = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? SvnVersion = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? SvnVersion = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? Head = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? RevState = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? RevNote = null);
 
 internal sealed record TraceDto(string Name, string State, string Detail);
 
@@ -17,7 +20,8 @@ internal sealed record DownloadDto(double Pct, string Label);
 /// <param name="Count">Elementi del prossimo commit: quelli in Staged, oppure (Staged vuoto) tutte le modifiche dei file versionati.</param>
 /// <param name="All">true se Staged e' vuoto e il commit prende tutte le modifiche (pulsante "Commit All").</param>
 /// <param name="AiSeq">Cresce a ogni messaggio AI: la UI lo usa per rendere visibile anche un messaggio ripetuto.</param>
-internal sealed record CommitDto(string Text, string AiStatus, string AiLevel, int AiSeq, bool Busy, string Lang, IReadOnlyList<TraceDto> Trace, DownloadDto? Download, int Count = 0, bool All = false);
+internal sealed record CommitDto(string Text, string AiStatus, string AiLevel, int AiSeq, bool Busy, string Lang, IReadOnlyList<TraceDto> Trace, DownloadDto? Download, int Count = 0, bool All = false,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? Recent = null);
 
 internal sealed record ThemeDto(string Mode, string Kind);
 
@@ -43,7 +47,7 @@ internal sealed record SectionDto(string Id, string Title, int Count, bool Expan
 /// <summary>Pulsante d'azione accanto al messaggio di stato (es. "Esegui Cleanup" quando la working copy è bloccata).</summary>
 internal sealed record StatusActionDto(string Label, string Cmd);
 
-internal sealed record StatusDto(string Msg, bool Err, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] StatusActionDto? Action = null);
+internal sealed record StatusDto(string Msg, bool Err, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] StatusActionDto? Action = null, int Seq = 0);
 
 internal sealed record PrereqItemDto(string Id, string Group, string Title, bool Ok, string Detail, string Instructions, string Primary, string Secondary);
 

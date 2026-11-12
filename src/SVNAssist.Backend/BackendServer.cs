@@ -108,6 +108,7 @@ internal sealed class BackendServer : IBackend, IDisposable
         Changes = new ChangesStore(services.Settings, services.Svn, services.Ai, services.AiSetupPrompt, services.Dialogs, host, prereq)
         {
             EnableWatcher = services.EnableWatcher,
+            Recent = services.EnableWatcher ? new RecentMessages() : null, // come il watcher: spento nei test, che non devono scrivere in %LOCALAPPDATA%
         };
         Changes.CommitMessage.OpenAiWizard = ct => Changes.Wizard.OpenAsync(fromGenerate: true, ct);
         Log = new LogStore(services.Svn, services.Settings, host, Changes.TempRoot, Changes);

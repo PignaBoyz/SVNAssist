@@ -45,6 +45,11 @@ internal static class SettingDefinitions
     /// <summary>Nomi delle cartelle trunk/branches/tags (separati da /), per elencare i rami di SVN Switch.</summary>
     internal const string RepoLayout = "repoLayout";
 
+    /// <summary>Ogni quanti minuti controllare se altri hanno committato sul ramo (0 = spento).</summary>
+    internal const string HeadCheckMinutes = "headCheckMinutes";
+
+    internal const int DefaultHeadCheckMinutes = 5;
+
     /// <summary>Lingua dell'interfaccia: auto | it | en (l'host manda anche <c>uiLanguageEffective</c>, gia' risolta).</summary>
     internal const string UiLanguage = "uiLanguage";
     internal const string UiLanguageEffective = "uiLanguageEffective";
@@ -63,6 +68,7 @@ internal static class SettingDefinitions
         [WorkingCopyPath] = "",
         [WindowTheme] = "auto",
         [RepoLayout] = SVNAssist.Models.RepoLayout.Default,
+        [HeadCheckMinutes] = DefaultHeadCheckMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture),
         // UiLanguage non ha default qui: senza il valore dell'host (es. nei test) l'interfaccia resta in italiano.
     };
 }
@@ -102,6 +108,9 @@ internal interface ISvnAssistSettings
 
     /// <summary>Layout del repository: "trunk/branches/tags" o i nomi scelti dall'utente.</summary>
     Task<string> GetRepoLayoutAsync(CancellationToken ct) => Task.FromResult(SVNAssist.Models.RepoLayout.Default);
+
+    /// <summary>Minuti fra due controlli "altri hanno committato?" (0 = spento; il default dell'interfaccia e' spento, quello vero lo da <see cref="HostSettings"/>).</summary>
+    Task<int> GetHeadCheckMinutesAsync(CancellationToken ct) => Task.FromResult(0);
 
     /// <summary>Tema della finestra (auto/light/dark/blue).</summary>
     Task<string> GetWindowThemeAsync(CancellationToken ct);
@@ -182,6 +191,11 @@ internal sealed class HostSettings : ISvnAssistSettings
     public Task<string> GetWorkingCopyPathAsync(CancellationToken ct) => GetAsync(SettingDefinitions.WorkingCopyPath, ct);
     public Task<string> GetWindowThemeAsync(CancellationToken ct) => GetAsync(SettingDefinitions.WindowTheme, ct);
     public Task<string> GetRepoLayoutAsync(CancellationToken ct) => GetAsync(SettingDefinitions.RepoLayout, ct);
+
+    /// <summary>Intero 0..1440; un valore illeggibile ricade sul default (5), non spegne il controllo.</summary>
+    public async Task<int> GetHeadCheckMinutesAsync(CancellationToken ct)
+        => int.TryParse((await GetAsync(SettingDefinitions.HeadCheckMinutes, ct)).Trim(), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var n)
+            ? Math.Min(n, 24 * 60) : SettingDefinitions.DefaultHeadCheckMinutes;
 
     /// <summary>Legge l'endpoint AI. Chi aveva salvato il vecchio endpoint (dismesso) passa in automatico al nuovo.</summary>
     public async Task<string> GetAiEndpointAsync(CancellationToken ct)

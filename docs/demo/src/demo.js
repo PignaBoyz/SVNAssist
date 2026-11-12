@@ -383,7 +383,7 @@ function fillerLog() {
   return out;
 }
 function freshEnv() {
-  return { svn: true, ghInstalled: true, winget: true, tortoise: false, gh: true, copilotRuntime: false, claudeInstalled: true, claudeLogin: true, anthropicKey: false, failFirst: false, bigDiff: false };
+  return { svn: true, ghInstalled: true, winget: true, tortoise: false, gh: true, copilotRuntime: false, claudeInstalled: true, claudeLogin: true, anthropicKey: false, failFirst: false, bigDiff: false, colleague: false };
 }
 function freshSettings() {
   return { aiprovider: 'auto', claudemodel: 'claude-sonnet-5-5', anthropicapikey: '', copilotmodel: 'default', aiendpoint: GH_MODELS, aiapikey: '', aimodel: 'openai/gpt-4o-mini', defaultlanguage: 'auto', workingcopypath: '' };
@@ -403,7 +403,7 @@ function freshState(mode) {
     env: freshEnv(), settings: freshSettings(),
     sess: { svnPrompted: false, aiPrompted: false },   // flag "una volta per sessione" (si azzerano con "Riavvia VS")
     files: freshFiles(), ign: { '.': ['*.suo', '.vs'], 'Web': ['bin'] }, ignBase: { '.': ['*.suo', '.vs'], 'Web': ['bin'] },
-    log: seedLog().concat(fillerLog()), headRev: 124, wcRev: 124, branch: 'trunk',
+    log: seedLog().concat(fillerLog()), headRev: 124, wcRev: 124, branch: 'trunk', recentMsgs: ['Aggiunge il calcolo del totale con coupon', "Corregge l'arrotondamento dell'IVA", 'Aggiorna le dipendenze'],
     scn: 0, simStep: 0, cmd: [],
     ui: { menu: null, sub: false, open: [], active: null, statusOpen: false, logOpen: false, buf: {}, selFile: null, panelOpen: false, view: 'dock', seOpen: false, prereq: false, diffs: [] },
     vm: freshVM(), lvm: freshLVM(),
@@ -768,9 +768,9 @@ const LOCKS = new Set();   // file bloccati (svn lock) nella demo
 function mkItem(e, old) {
   const st = e.st;
   return { path: e.path, st, action: STNAME[st] || 'Sconosciuto', sel: old && old.has(e.path) ? old.get(e.path) : DEFAULT_SEL.includes(st), dir: e.dir, prop: e.prop,
-    canAdd: st === '?', canIgn: st === '?', canDel: st !== '?', canRev: ['M', 'A', 'D', 'C', '!', 'R'].includes(st), canRes: st === 'C', canDiff: st !== '?', locked: LOCKS.has(e.path) };
+    canAdd: st === '?', canIgn: st === '?', canDel: st !== '?', canRev: ['M', 'A', 'D', 'C', '!', 'R'].includes(st), canRes: st === 'C', canDiff: st !== '?' || !e.dir, locked: LOCKS.has(e.path) };
 }
-function setStatus(m) { S.vm.statusAuto = false; S.vm.statusMsg = m; S.vm.err = false; }
+function setStatus(m) { S.vm.statusAuto = false; S.vm.statusMsg = m; S.vm.err = false; S.vm.statusSeq = (S.vm.statusSeq || 0) + 1; }
 function vmSummary() {
   const f = S.vm.files; if (!f.length) return 'Nessuna modifica.';
   const c = f.filter(x => x.st === 'C').length, m = f.filter(x => x.st !== 'C' && x.st !== '?').length, u = f.filter(x => x.st === '?').length, p = [];
@@ -839,6 +839,7 @@ async function vmCommit() {
     const first = vm.commitMsg.trim().split('\n')[0];
     await svn(`commit --depth empty -m "${first}" --targets (${paths.length} elementi)`, 900);
     const rev = svnCommit(paths, vm.commitMsg.trim());
+    S.recentMsgs = [vm.commitMsg.trim()].concat(S.recentMsgs.filter(x => x !== vm.commitMsg.trim())).slice(0, 25);   // tendina "Recenti": al massimo 25, senza doppioni
     vm.commitMsg = ''; vm.aiMsg = ''; vm.trace = [];
     if (S.tour.on) S.f.tourCommits++;
     toast(`Creata la revisione r${rev} (visibile in Log / History)`);
@@ -966,6 +967,10 @@ const mgBlocked = () => { const n = S.files.filter(f => ['M', 'A', 'D', 'R', '!'
 const mgEligible = name => (MG[name] || []).filter(r => !(S.mgDone || []).some(d => d.name === name && d.revs.includes(r.rev)));
 const mgRevs = m => m.sel.length ? m.sel.slice().sort((a, b) => a - b) : mgEligible(m.name).map(r => r.rev).sort((a, b) => a - b);
 const mgLabel = (m, revs) => !m.sel.length ? (revs.length > 1 ? `r${revs[0]}-r${revs[revs.length - 1]}` : `r${revs[0]}`) : revs.length <= 6 ? revs.map(r => 'r' + r).join(', ') : `r${revs[0]}-r${revs[revs.length - 1]} (selezione di ${revs.length} revisioni)`;
+// messaggio di commit dopo il merge, come TortoiseSVN: intervalli (1,3-5) e, per ogni revisione, "........" + "rN | autore | messaggio"
+const mgRanges = revs => { const out = []; let s = null, p = null; const fl = () => { if (s != null) out.push(s === p ? '' + s : s + '-' + p); }; for (const r of revs) { if (p != null && r === p + 1) { p = r; continue; } fl(); s = p = r; } fl(); return out.join(','); };
+const mgCommitText = (name, revs) => (__mockBridge.getLang() === 'en' ? `Merged revision(s) ${mgRanges(revs)} from ${name}:` : `Unite le revisioni ${mgRanges(revs)} da ${name}:`) +
+  revs.map(r => { const e = (MG[name] || []).find(x => x.rev === r); return '\n........\nr' + r + (e ? ` | ${e.author} | ${e.msg}` : ''); }).join('');
 function mgResult(m, mode, revs) {
   const fl = new Map();
   for (const r of MG[m.name] || []) if (revs.includes(r.rev)) for (const [k, p] of r.files) fl.set(p, k);
@@ -1007,9 +1012,9 @@ async function mgRun(all) {
       else if (f && f.st !== 'C') { f.st = 'M'; f.text = (f.base || '') + `\n// unito da ${m.name}`; }
     }
     (S.mgDone = S.mgDone || []).push({ name: m.name, revs });
-    const text = `Merge ${label} da ^/${m.name}`;
-    S.vm.mergeBanner = { text: `${text}: rivedi le modifiche e committa, oppure annulla il merge.`, conflicts: res.counts.conflicted, commit: text };
-    if (!S.vm.commitMsg.trim()) S.vm.commitMsg = text;
+    const text = `Merge ${label} da ^/${m.name}`, ctext = mgCommitText(m.name, revs);
+    S.vm.mergeBanner = { text: `${text}: rivedi le modifiche e committa, oppure annulla il merge.`, conflicts: res.counts.conflicted, commit: ctext };
+    if (!S.vm.commitMsg.trim()) S.vm.commitMsg = ctext;
     m.sel = []; m.msg = res.counts.conflicted ? `Merge eseguito, da committare. Conflitti da risolvere in Changes: ${res.counts.conflicted}.` : 'Merge eseguito, da committare.';
     await vmRefresh(res.counts.conflicted ? `Merge completato: ${res.counts.conflicted} file in conflitto da risolvere.` : 'Merge completato: rivedi le modifiche e committa.', false);
     await offerResolve(res.counts.conflicted);
@@ -1224,6 +1229,7 @@ function renderSim() {
    ${tg('anthropicKey', 'Variabile ANTHROPIC_API_KEY impostata')}
    ${tg('failFirst', 'Simula errore del primo provider', 'mostra il fallback sul successivo')}
    ${tg('bigDiff', 'Simula diff molto grande', 'riassunto a blocchi da 12.000 caratteri')}
+   ${tg('colleague', 'Simula: un collega ha committato', 'la revisione in basso diventa arancio, SVN Update la riporta verde')}
    <div class="note">&#128274; ${esc(ghOnly)}. Ogni credenziale va solo al proprio servizio.</div>
    <h3>Provider risolti (AiServiceFactory)</h3>
    <div class="chain">${chain.chain.length ? chain.chain.map(c => `<span class="chip ok">${esc(c.name)}</span>`).join(' &rarr; ') : '<span class="chip fail">nessun provider disponibile</span>'}<br><span class="small">AI Provider = <b>${esc(S.settings.aiprovider || '(vuoto)')}</b> · lingua = <b>${esc(S.settings.defaultlanguage)}</b></span></div>
@@ -1843,7 +1849,8 @@ const ACT = {
   vsTheme: (a, el) => { __mockBridge.theme.vs = el.value; render(); },
   saveFile: a => saveFile(a),
   statusClose: () => { S.ui.statusOpen = false; render(); },
-  env: (a, el) => { S.env[a] = el.checked; if (a === 'gh' && el.checked) S.env.ghInstalled = true; if (a === 'ghInstalled' && !el.checked) S.env.gh = false; prqRefresh(); render(); },
+  env: (a, el) => { S.env[a] = el.checked; if (a === 'colleague' && el.checked && S.headRev <= S.wcRev) S.headRev = S.wcRev + 1;   // un collega committa: l'indicatore diventa arancio
+ if (a === 'gh' && el.checked) S.env.ghInstalled = true; if (a === 'ghInstalled' && !el.checked) S.env.gh = false; prqRefresh(); render(); },
   simChange: () => simulateChange(),
   restart: () => restartVS(),
   branchSel: (a, el) => { S.branch = el.value; if (S.vm.wcPath) vmRefresh(); render(); },

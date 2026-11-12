@@ -68,6 +68,13 @@ progress{display:block;width:100%;height:8px;margin:4px 0;accent-color:var(--acc
 .foot .msg.ok{background:var(--chip-ok-bg);color:var(--chip-ok-fg)}
 .foot .msg.err{background:var(--chip-fail-bg);color:var(--chip-fail-fg)}
 @keyframes flash{0%,35%{box-shadow:0 0 0 3px var(--acc2)}100%{box-shadow:0 0 0 3px transparent}}
+/* Revisione in cui e' la working copy: neutro = non si sa, verde = e' l'ultima del ramo, arancio = il server ne ha una piu' recente */
+.rev{display:inline-flex;align-items:center;gap:5px;min-width:0;padding:1px 8px;border-radius:10px;border:1px solid transparent;background:none;font:inherit;color:var(--fg2)}
+.rev>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.rev.ok{background:var(--chip-ok-bg);color:var(--chip-ok-fg);font-weight:600}
+.rev.bad{background:var(--warn-bg);color:var(--warn-fg);font-weight:600;cursor:pointer}
+.rev.bad:hover{border-color:currentColor}
+.foot-r1:empty{display:none}
 .prq-st{border-color:transparent;font-weight:600}
 .prq-st.ok{background:var(--chip-ok-bg);color:var(--chip-ok-fg)}
 .prq-st.bad{background:var(--chip-fail-bg);color:var(--chip-fail-fg)}

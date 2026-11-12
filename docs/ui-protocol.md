@@ -60,6 +60,7 @@ Vale per file e cartelle (la cartella ha il percorso della cartella; le catene a
 | `cleanup` | – | **SVN Cleanup** della working copy (`svn cleanup`). Compare anche come pulsante "Esegui Cleanup" accanto a un errore di working copy bloccata (`status.action`) |
 | `commit` | – | come Git: se **Staged** ha file, commit dei soli quelli (pulsante "Commit Staged (n)"); se è vuoto, commit di **tutte** le modifiche dei file versionati M/A/D/R/mancanti (pulsante "Commit All", come `git commit -a`; i non versionati non entrano). Gli aggiunti non versionati in Staged si aggiungono, i mancanti si eliminano; i conflitti bloccano |
 | `setCommitText` | `text` | aggiorna il messaggio |
+| `useRecentMessage` | `i` | tendina **Recenti** (come TortoiseSVN): inserisce nel campo `commit.recent[i]` (l'indice si rivalida contro l'elenco corrente). I messaggi si salvano a ogni commit riuscito, per repository (radice dell'URL), in `%LOCALAPPDATA%SVNAssistecent-messages.json`: al massimo 25, un duplicato risale in cima |
 | `genAi` / `improveAi` | – | genera / migliora il messaggio dal diff degli stessi file del commit (Staged, o tutte le modifiche versionate se Staged è vuoto) |
 | `setLanguage` | `lang`: `auto|italiano|english` | lingua del messaggio AI |
 | `setWorkingCopy` | `path` | carica una working copy |
@@ -132,6 +133,13 @@ Regole: il merge parte **solo da una working copy senza modifiche locali** (non 
 Dopo il merge: se restano conflitti il backend propone **"Risolvi ora"** (porta in primo piano Changes) o **"Più tardi"** (postpone: restano come sono; la stessa proposta compare dopo SVN Update, Update to revision e Switch con conflitti); refresh di Changes (i conflitti compaiono nella sezione Conflitti e bloccano il commit), messaggio di commit **precompilato solo se vuoto** ("Merge r120-r135 da ^/branches/x" per tutto; "Merge r120, r124 da ^/..." per le scelte, oltre 6 "r120-r135 (selezione di N revisioni)") e **banner** in Changes (`merge {text, conflicts}`) con Annulla merge / Nascondi. Il banner sparisce da solo dopo un commit, un cambio di working copy o se non restano modifiche; con conflitti dice "N conflitti: risolvili qui sotto, poi committa" (N e' il numero **attuale**, scende a ogni resolve). Nel Log `merge.pending` e' vero finche' il merge non e' committato o annullato: la UI scrive "Merge eseguito, da committare" al posto di "0 revisioni da unire" (le eligible sono gia' ricalcolate) e il risultato con conflitti ha **Risolvi i conflitti** (`mergeResolve`). Le righe `--- Recording mergeinfo` / `Eliding` di svn non sono file e non si contano.
 Parser (`MergeParser`, `tests/SVNAssist.Tests/MergeTests.cs`): righe d'azione = 4 colonne (file `U A D C G E R`, proprieta' `U C G`, lock, albero `C`) + spazio + percorso; riepilogo `Summary of conflicts` (Text/Property/Tree/Skipped); `Skipped '...'`.
 
+### Barra di stato, revisione e controllo delle nuove revisioni
+- **Messaggi**: un messaggio di successo (verde) sparisce dalla UI dopo circa 5 secondi (`status.seq` riparte il timer anche per un testo ripetuto); gli errori restano finché non sono sostituiti. I messaggi di sola informazione (riepilogo "2 modificati.") restano.
+- **Indicatore della revisione** (sempre in basso, riga dei prerequisiti): `workingCopy.rev` = revisione della working copy (da `svn info`, almeno la revisione del nostro ultimo commit, perché un commit non porta la radice a quella revisione); `workingCopy.head` = ultima revisione del ramo sul server. `revState`: **current** (verde, `head <= rev`), **behind** (arancio, `head > rev`: "r1234 · disponibile r1240 — SVN Update", il clic manda `update`), **unknown** (neutro, `revNote` = perché: controllo spento, in corso, errore di rete o di autenticazione).
+- **Controllo (watcher)**: ogni N minuti (impostazione `headCheckMinutes`, default 5, 0 = spento) `svn info --show-item last-changed-revision --non-interactive <URL della working copy>` (una richiesta piccola, in sola lettura, nessun dato oltre all'URL, credenziali già in cache di svn). Non è mai interattivo: un errore (rete, autenticazione, certificato) **non apre il login**, non è un errore di stato e non mostra popup, rende solo l'indicatore neutro. Parte alla prima apertura della finestra Changes, non parte se un'operazione dell'utente (commit, update, merge...) è in corso (riprova dopo 15 s) e due controlli non si sovrappongono. Si rifà subito dopo uno switch o un cambio di working copy e quando cambia l'impostazione. Limite noto: un nostro commit conta come revisione minima, quindi un commit altrui arrivato prima del nostro si vede solo dopo SVN Update.
+- **Doppio clic / Invio su una riga** (`showDiff`): file modificato/conflitto = diff BASE ⇄ working copy; **file aggiunto (A) o non versionato (?) = il file intero nell'editor di VS** (`IHost.OpenFileAsync`, come Git Changes, senza diff contro il vuoto); file eliminato (D) o mancante (!) = diff con il contenuto BASE a sinistra e vuoto a destra (come Git).
+- **Messaggio dopo un merge** (formato TortoiseSVN): `Unite le revisioni 4-6 da branches/feature-demo:` (inglese: `Merged revision(s) 4-6 from branches/feature-demo:`), poi per ogni revisione una riga `........` e `rN | autore | messaggio originale`; gli intervalli consecutivi si uniscono (`1,3-5`). Usa i dati del log già caricati nella vista merge. Il banner di Changes conserva il testo breve ("Merge r4-r6 da ^/branches/x: ...").
+
 ### Novità rispetto al piano (`webview2-plan.md` §3)
 - **Staged** (stile Git Changes): SVN non ha uno staging, è un insieme tenuto dall'estensione. Sostituisce le caselle di selezione:
   `toggleFile`, `toggleGroup`, `selectAll`, `unselectAll` → `stage` / `unstage` (anche su cartella e su sezione intera).
@@ -147,15 +155,15 @@ Parser (`MergeParser`, `tests/SVNAssist.Tests/MergeTests.cs`): righe d'azione = 
 
 ### `changes` (`changes-state.schema.json`)
 ```
-workingCopy {path, showInput, branch, rev?, svnVersion?}   // branch = ramo dedotto dall'URL (trunk, branches/x, tags/y, "/ (radice)"); svnVersion = es. "1.14.2" (la UI nasconde le funzioni che richiedono svn piu' recente)
+workingCopy {path, showInput, branch, rev?, svnVersion?, head?, revState?: current|behind|unknown, revNote?}   // rev/head/revState = indicatore della revisione in basso (verde current, arancio behind, neutro unknown con il perche' in revNote); head = last-changed-revision del ramo sul server   // branch = ramo dedotto dall'URL (trunk, branches/x, tags/y, "/ (radice)"); svnVersion = es. "1.14.2" (la UI nasconde le funzioni che richiedono svn piu' recente)
 commit      {text, aiStatus, aiLevel: ""|busy|ok|warn|err|info, aiSeq, busy, lang, trace[{name,state,detail}], download{pct,label}|null,
-             count?, all?}   // count = elementi del prossimo commit; all = Staged vuoto -> "Commit All"
+             count?, all?, recent?[]}   // count = elementi del prossimo commit; all = Staged vuoto -> "Commit All"; recent = ultimi messaggi committati nel repository (max 25, il più recente per primo)
 view        "tree" | "list"
 theme       {mode: auto|light|dark|blue, kind: light|dark|blue}
 sections[3] {id: staged|changes|unversioned, title, count, expanded, rows[]}
   row       {key, kind: file|folder, depth, name, detail, dir, expanded, count, status, statusText, can{…, lock?, unlock?}, tooltip, locked?}
               status "K" = file solo bloccato (lock tenuto da questa working copy, nessuna modifica); `locked:true` = lucchetto accanto al nome
-status      {msg, err, action?{label, cmd:"cleanup"}}
+status      {msg, err, seq?, action?{label, cmd:"cleanup"}}   // seq cresce a ogni messaggio d'azione: un successo (verde) sparisce dopo ~5 s, un errore resta
 prereq      {open, summary, ai, feedback, items[{id, group, title, ok, detail, instructions, primary, secondary}]}
 loading     bool
 wizard      {open, mode: ai|prereq, step 1-4, fromGenerate, provider, busy, feedback, providers[{id,title,cost}], items[prereq item],
@@ -261,6 +269,7 @@ L'host le espone in Tools > Options > SVNAssist (categoria "SVNAssist") e le res
 | `defaultLanguage` | enum | `auto` | `auto`, `italiano`, `english` |
 | `workingCopyPath` | string | `` | se valorizzato vince sull'auto-rilevamento dalla solution |
 | `repoLayout` | string | `trunk/branches/tags` | nomi delle cartelle tronco/branch/tag separati da `/` (o `,` `;`); se non sono tre nomi ricade sul default. Funziona anche con il progetto alla radice (base vuota) o sotto un sottopercorso (`^/progetto/trunk` -> branch in `^/progetto/branches`) |
+| `headCheckMinutes` | int | `5` | ogni quanti minuti chiedere al server l'ultima revisione del ramo (`svn info --show-item last-changed-revision --non-interactive <URL>`, sola lettura) per l'indicatore della revisione; `0` = spento; massimo 1440 |
 | `windowTheme` | enum | `auto` | `auto`, `light`, `dark`, `blue` (scritta dal backend con `SetSettingAsync`) |
 | `uiLanguage` | enum | `auto` | `auto`, `it`, `en` — lingua dell'interfaccia (vedi "Lingua dell'interfaccia"); l'host aggiunge `uiLanguageEffective` (`it`/`en`, già risolta, non è un'impostazione) |
 

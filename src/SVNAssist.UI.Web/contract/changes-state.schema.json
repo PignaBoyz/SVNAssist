@@ -40,6 +40,23 @@
           "minimum": 0,
           "description": "Revisione della working copy."
         },
+        "head": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Ultima revisione del ramo sul server (controllo periodico); assente se sconosciuta."
+        },
+        "revState": {
+          "enum": [
+            "current",
+            "behind",
+            "unknown"
+          ],
+          "description": "Indicatore nella barra di stato: current = verde (alla HEAD), behind = arancio (il server ha una revisione piu' recente), unknown = neutro."
+        },
+        "revNote": {
+          "type": "string",
+          "description": "Con revState unknown: perche' (controllo spento, errore di rete o di autenticazione); e' il tooltip dell'indicatore."
+        },
         "svnVersion": {
           "type": "string",
           "description": "Versione di svn (es. 1.14.2): la UI nasconde le funzioni che richiedono svn piu' recente."
@@ -71,6 +88,13 @@
         "busy": {
           "type": "boolean",
           "description": "AI in corso."
+        },
+        "recent": {
+          "type": "array",
+          "description": "Ultimi messaggi committati per questo repository (al massimo 25, il piu' recente per primo): tendina \"Recenti\".",
+          "items": {
+            "type": "string"
+          }
         },
         "lang": {
           "enum": [
@@ -246,6 +270,11 @@
         },
         "err": {
           "type": "boolean"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Cresce a ogni messaggio: un messaggio di successo ripetuto riparte da capo e sparisce dopo ~5 s."
         },
         "action": {
           "type": "object",

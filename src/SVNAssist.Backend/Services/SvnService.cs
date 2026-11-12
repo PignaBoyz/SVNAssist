@@ -836,6 +836,18 @@ public class SvnService : ISvnService
     }
 
     /// <inheritdoc />
+    public async Task<long> GetHeadRevisionAsync(string url, CancellationToken ct)
+    {
+        // RunSvnOnceAsync e non RunSvnRawAsync: un controllo in background non deve mai aprire il dialogo di login.
+        var r = await RunSvnOnceAsync(["info", "--show-item", "last-changed-revision", Peg(SafeTarget(url))], null, ct, true, null);
+        if (r.ExitCode != 0)
+            throw new InvalidOperationException(BuildErrorMessage("info", r.ExitCode, r.StandardError));
+        return long.TryParse(r.StandardOutput.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var n)
+            ? n
+            : throw new InvalidOperationException("svn info: revisione non valida: " + r.StandardOutput.Trim());
+    }
+
+    /// <inheritdoc />
     public async Task<SvnInfo> GetInfoAsync(string workingCopyPath, CancellationToken ct)
         => ParseInfoXml(await RunSvnAsync(["info", "--xml"], workingCopyPath, ct));
 

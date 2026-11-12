@@ -9,6 +9,14 @@ namespace SVNAssist
     {
         internal static readonly Dictionary<string, string> En = new Dictionary<string, string>
         {
+            ["Impossibile controllare le nuove revisioni: {0}"] = "Cannot check for new revisions: {0}",
+            ["Controllo delle nuove revisioni spento (Tools > Options > SVNAssist > Controllo nuove revisioni)."] = "New-revision check is off (Tools > Options > SVNAssist > New revision check).",
+            ["Controllo delle nuove revisioni in corso..."] = "Checking for new revisions...",
+            ["File aperto: {0}"] = "File opened: {0}",
+            ["Errore apertura file: {0}"] = "Error opening file: {0}",
+            ["Unite le revisioni {0} da {1}:"] = "Merged revision(s) {0} from {1}:",
+            ["Controllo nuove revisioni (minuti)"] = "New revision check (minutes)",
+            ["Ogni quanti minuti SVNAssist chiede al server l'ultima revisione del ramo (una sola richiesta piccola, in sola lettura) per avvisarti se altri hanno committato. 0 = spento."] = "How often SVNAssist asks the server for the latest revision of the branch (one small read-only request) to tell you whether others have committed. 0 = off.",
             ["Comando sconosciuto: {0}"] = "Unknown command: {0}",
             ["Operazione annullata."] = "Operation cancelled.",
             ["Annulla"] = "Cancel",
@@ -162,7 +170,6 @@ namespace SVNAssist
             ["Anteprima completata."] = "Preview completed.",
             ["Seleziona almeno una revisione da unire."] = "Select at least one revision to merge.",
             ["Merge da {0} in corso..."] = "Merging from {0}...",
-            ["Merge {0} da {1}"] = "Merge {0} from {1}",
             ["Merge {0} da {1}: rivedi le modifiche e committa, oppure annulla il merge."] = "Merge {0} from {1}: review the changes and commit, or undo the merge.",
             ["Merge completato: {0} file in conflitto da risolvere."] = "Merge completed: {0} conflicted files to resolve.",
             ["Merge completato: rivedi le modifiche e committa."] = "Merge completed: review the changes and commit.",

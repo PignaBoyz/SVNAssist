@@ -697,8 +697,8 @@ public class ChangesStoreTests
         Assert.False(m.Stage || m.Add || m.Ignore || m.Resolve);
 
         var n = f.Row("unversioned:n.txt").Can;
-        Assert.True(n.Stage && n.Add && n.Ignore && n.DeleteFile);
-        Assert.False(n.Diff || n.Unstage || n.Revert);
+        Assert.True(n.Stage && n.Add && n.Ignore && n.DeleteFile && n.Diff);   // Diff = "Apri file" per i non versionati
+        Assert.False(n.Unstage || n.Revert);
 
         var c = f.Row("changes:c.cs").Can;
         Assert.True(c.Resolve && c.Revert && c.Diff);
@@ -773,15 +773,30 @@ public class ChangesStoreTests
     }
 
     [Fact]
-    public async Task ShowDiff_NonVersionato_NonApreNulla()
+    public async Task ShowDiff_NuovoONonVersionato_ApreIlFileIntero_NonUnDiffControIlVuoto()
     {
-        var f = new Fixture().With(("n.txt", SvnStatusKind.Unversioned));
-        await f.Refresh();
+        // Come Git Changes: un file nuovo (A) o non versionato (?) si apre come documento, senza diff.
+        var f = new Fixture().With(("n.txt", SvnStatusKind.Unversioned), ("a.txt", SvnStatusKind.Added));
+        await f.RefreshOnly();
 
         await f.Cmd("showDiff", new { key = "unversioned:n.txt" });
+        await f.Cmd("showDiff", new { key = "changes:a.txt" });
 
         Assert.Empty(f.Host.Diffs);
-        Assert.Contains("non è versionato", f.Status);
+        Assert.Equal([Path.Combine(Wc, "n.txt"), Path.Combine(Wc, "a.txt")], f.Host.OpenedFiles);
+        Assert.Contains("a.txt", f.Status);
+    }
+
+    [Fact]
+    public async Task ShowDiff_Eliminato_RestaUnDiff_ContenutoBaseASinistra()
+    {
+        var f = new Fixture().With(("d.txt", SvnStatusKind.Deleted));
+        await f.RefreshOnly();
+
+        await f.Cmd("showDiff", new { key = "changes:d.txt" });
+
+        Assert.Single(f.Host.Diffs);
+        Assert.Empty(f.Host.OpenedFiles);
     }
 
     [Fact]

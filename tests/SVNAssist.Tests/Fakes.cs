@@ -197,11 +197,22 @@ internal sealed class FakeSvnService : ISvnService
     public string InfoRelativeUrl { get; set; } = "^/trunk";
     public string RepoRoot { get; set; } = "file:///repo";
     public Version? SvnVersion { get; set; } = new(1, 14, 2);
+    public long InfoRevision { get; set; } = 7;
+    /// <summary>Ultima revisione del ramo sul server per <see cref="GetHeadRevisionAsync"/>; <see cref="HeadError"/> la fa fallire.</summary>
+    public long HeadRevision { get; set; } = 7;
+    public string? HeadError { get; set; }
+    public List<string> HeadUrls { get; } = [];
+
+    public Task<long> GetHeadRevisionAsync(string url, CancellationToken ct)
+    {
+        HeadUrls.Add(url);
+        return HeadError is not null ? throw new InvalidOperationException(HeadError) : Task.FromResult(HeadRevision);
+    }
 
     public Task<SvnInfo> GetInfoAsync(string workingCopyPath, CancellationToken ct)
     {
         BranchCalls++;
-        return Task.FromResult(new SvnInfo(RepoRoot + InfoRelativeUrl[1..], InfoRelativeUrl, RepoRoot, 7, 7, "u", null));
+        return Task.FromResult(new SvnInfo(RepoRoot + InfoRelativeUrl[1..], InfoRelativeUrl, RepoRoot, InfoRevision, 7, "u", null));
     }
 
     public Task<Version?> GetSvnVersionAsync(CancellationToken ct) => Task.FromResult(SvnVersion);

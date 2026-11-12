@@ -571,6 +571,34 @@
       }
     },
     {
+      "title": "useRecentMessage",
+      "description": "Tendina \"Recenti\": inserisce nel campo il messaggio commit.recent[i] (sostituisce quello scritto).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "useRecentMessage"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "i"
+          ],
+          "properties": {
+            "i": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    },
+    {
       "title": "genAi",
       "description": "Genera il messaggio con l'AI dal diff dei file in Staged.",
       "type": "object",

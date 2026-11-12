@@ -8,8 +8,8 @@
   let st = null, forceInput = false, timer = 0, filter = '';
 
   function header(s) {
-    const wc = s.workingCopy, rev = wc.rev ? `<span class="muted">r${wc.rev}</span>` : '';
-    return `<button type="button" class="branch" ${U.cmd('switchOpen')} title="${esc(t('SVN Switch…: cambia branch o tag (ramo attuale: {0})', wc.branch || '—'))}" aria-label="${esc(t('SVN Switch…: cambia branch o tag (ramo attuale: {0})', wc.branch || '—'))}">${U.icon('branch')}<b>${esc(wc.branch || '—')}</b>${rev}${U.icon('chev-d')}</button><span class="fill"></span>` +
+    const wc = s.workingCopy;
+    return `<button type="button" class="branch" ${U.cmd('switchOpen')} title="${esc(t('SVN Switch…: cambia branch o tag (ramo attuale: {0})', wc.branch || '—'))}" aria-label="${esc(t('SVN Switch…: cambia branch o tag (ramo attuale: {0})', wc.branch || '—'))}">${U.icon('branch')}<b>${esc(wc.branch || '—')}</b>${U.icon('chev-d')}</button><span class="fill"></span>` +
       U.btn('btn', 'SVN Update', 'down', 'update', null, t('Scarica le modifiche dal server (svn update)')) +
       U.btn('btn', 'Show Log', 'file', 'showLog', null, t('Apre il Log della working copy (cronologia delle revisioni)')) +
       U.btn('ib', '', 'refresh', 'refresh', null, t("Ricarica l'elenco delle modifiche (svn status)")) +
@@ -26,6 +26,7 @@
       : all ? t('Staged è vuoto: committa tutte le {0} modifiche dei file versionati; i file non versionati restano fuori (Ctrl+Invio)', n)
         : t('Committa i {0} file in Staged (Ctrl+Invio)', n);
     return `<button type="button" class="btn primary" ${U.cmd('commit')} ${n && !busy ? '' : 'disabled'} title="${esc(why)}">${U.icon('check')}<span>${all || !n ? 'Commit All' : 'Commit Staged'}</span>${n ? `<span class="pill">${n}</span>` : ''}</button><span class="fill"></span>` +
+      `<button type="button" class="btn sm" data-menu="recent" title="${esc(t('Messaggi recenti: riusa un messaggio già committato in questo repository'))}" aria-haspopup="menu">${U.icon('chev-d')}<span>${t('Recenti')}</span></button>` +
       `<button type="button" class="btn ai" ${U.cmd('genAi')} ${c.busy ? 'disabled aria-busy="true"' : ''} title="${esc(t('Scrive il messaggio dal diff dei file da committare'))}">${c.busy ? '<span class="spin"></span>' : U.icon('spark')}<span>${c.busy ? t('Generazione in corso…') : t('Genera con AI')}</span></button>` +
       `<button type="button" class="ib" data-menu="ai" ${c.busy ? 'disabled' : ''} title="${esc(t('Migliora il messaggio, lingua'))}" aria-label="${esc(t('Altre opzioni AI'))}" aria-haspopup="menu">${U.icon('chev-d')}</button>`;
   }
@@ -40,14 +41,34 @@
     }).join('') + `</div>`;
     return h;
   }
+  // Esito: successo (verde), errore (rosso) o sola informazione. I successi spariscono dopo OK_TTL, gli errori restano finche' non sono sostituiti.
+  const statusKind = (m, err) => err ? 'err' : /(completat|aggiornat|annullat|aggiunt|eliminat|risolt|ignorat|salvat|completed|updated|cancel|added|deleted|resolved|ignore|saved)/i.test(m || '') ? 'ok' : '';
+  const OK_TTL = 5000;
+  const statusKey = s => (s.status.seq || 0) + '|' + (s.status.msg || '');
+  let goneKey = '', trackKey = '', trackTimer = 0;
+  function trackStatus(s) {   // a ogni nuovo messaggio di successo parte il timer che lo nasconde
+    const k = statusKey(s); if (k === trackKey) return;
+    trackKey = k; clearTimeout(trackTimer);
+    if (statusKind(s.status.msg, s.status.err) === 'ok') trackTimer = setTimeout(() => { goneKey = k; render(); }, OK_TTL);
+  }
+  // Revisione della working copy: verde = e' l'ultima del ramo, arancio = il server ne ha una piu' recente (clic = SVN Update), neutro = non si sa (tooltip col perche')
+  function revIndicator(s) {
+    const wc = s.workingCopy, r = wc.rev; if (!r) return '';
+    if (wc.revState === 'behind' && wc.head) {
+      const tip = t('Qualcuno ha committato: sul server c\'è la r{0}, la tua working copy è alla r{1}. Clic per fare SVN Update.', wc.head, r);
+      return `<button type="button" class="rev bad" ${U.cmd('update')} title="${esc(tip)}" aria-label="${esc(tip)}">${U.icon('warn')}<span>r${r} · ${esc(t('disponibile r{0} — SVN Update', wc.head))}</span></button>`;
+    }
+    const ok = wc.revState === 'current';
+    const tip = ok ? t('La working copy è all\'ultima revisione del ramo (r{0}).', r) : (wc.revNote || t('Revisione della working copy: r{0}.', r));
+    return `<span class="rev${ok ? ' ok' : ''}" title="${esc(tip)}">${ok ? U.icon('check') : ''}<span>r${r}</span></span>`;
+  }
   function foot(s) {
-    const p = s.prereq, bad = !!(p.summary && /da sistemare|to fix/.test(p.summary)), m = s.status.msg || '';
-    // Esito: icona + colore + semibold (stessa dimensione del testo); i messaggi di sola informazione restano normali.
-    const kind = s.status.err ? 'err' : /(completat|aggiornat|annullat|aggiunt|eliminat|risolt|ignorat|salvat|completed|updated|cancel|added|deleted|resolved|ignore|saved)/i.test(m) ? 'ok' : '';
+    const p = s.prereq, bad = !!(p.summary && /da sistemare|to fix/.test(p.summary));
+    const m = statusKey(s) === goneKey ? '' : (s.status.msg || ''), kind = statusKind(m, s.status.err);
     const act = s.status.action;
-    // Riga 1: messaggio a tutta larghezza (ellissi + tooltip col testo completo); riga 2: prerequisiti, a destra.
-    return `<div class="foot-r1"><span class="msg ${kind}" role="status" title="${esc(m)}">${kind ? U.icon(kind === 'err' ? 'x' : 'check') : ''}<span>${esc(m)}</span></span>` +
-      (act ? `<button type="button" class="btn sm" ${U.cmd(act.cmd)} title="${esc(t('Esegue svn cleanup sulla working copy'))}">${esc(act.label)}</button>` : '') + `</div><div class="foot-r2"><span class="fill"></span>` +
+    // Riga 1 (solo se c'e' un messaggio): messaggio a tutta larghezza (ellissi + tooltip col testo completo); riga 2: revisione a sinistra, prerequisiti a destra.
+    return `<div class="foot-r1">` + (m ? `<span class="msg ${kind}" role="status" title="${esc(m)}">${kind ? U.icon(kind === 'err' ? 'x' : 'check') : ''}<span>${esc(m)}</span></span>` : '') +
+      (m && act ? `<button type="button" class="btn sm" ${U.cmd(act.cmd)} title="${esc(t('Esegue svn cleanup sulla working copy'))}">${esc(act.label)}</button>` : '') + `</div><div class="foot-r2">${revIndicator(s)}<span class="fill"></span>` +
       (bad ? `<button type="button" class="btn sm prq-st bad" ${U.cmd('wizardOpenPrereq')} title="${esc(t('Manca qualcosa: apre la procedura guidata per sistemarlo'))}">${U.icon('warn')}<span>${esc(p.summary)}</span></button>`
         : `<button type="button" class="btn sm prq-st ok" ${U.cmd('prereqToggle')} aria-expanded="${!!p.open}" title="${esc(t('Tutto a posto. Mostra/nasconde la checklist: svn, TortoiseSVN, provider AI'))}">${U.icon('check')}<span>${esc((p.summary || t('Prerequisiti')).replace(/\s*✓/, ''))}</span></button>`) + `</div>`;
   }
@@ -98,6 +119,15 @@
       { label: t('Cambia working copy…'), run: () => { forceInput = true; render(); const i = document.getElementById('wcp'); if (i) i.focus(); } },
     ];
   }
+  // Tendina "Recenti" (come TortoiseSVN): ultimi messaggi committati per repository; il clic inserisce il messaggio nel campo.
+  function recentMenu(s = st) {
+    const r = (s.commit && s.commit.recent) || [];
+    if (!r.length) return [{ label: t('Nessun messaggio recente'), disabled: true }];
+    return [{ header: true, label: t('Messaggi recenti') }, ...r.map((m, i) => {
+      const first = m.split('\n').find(l => l.trim()) || m, short = first.length > 70 ? first.slice(0, 69) + '…' : first;
+      return { label: short, cmd: 'useRecentMessage', args: { i }, hint: m };
+    })];
+  }
   function aiMenu() {
     return [{ label: t('Migliora il messaggio scritto'), cmd: 'improveAi', hint: t('Riscrive la bozza nel campo sopra') }, { label: t('Cambia provider AI…'), cmd: 'wizardOpen', hint: t('Procedura guidata: provider, accesso, modello') }, { sep: true }, { header: true, label: t('Lingua del messaggio') },
       ...LANGS().map(([l, t]) => ({ label: t, cmd: 'setLanguage', args: { lang: l }, checked: st.commit.lang === l }))];
@@ -110,7 +140,7 @@
     if (!r) return;
     const c = r.can, isF = kind === 'file';
     U.menu.open(x, y, [
-      { label: isF ? t('Mostra differenze') : t('Mostra differenze della cartella'), cmd: isF ? 'showDiff' : 'showFolderDiff', args: { key }, disabled: !c.diff, kbd: isF ? t('Invio') : '' },
+      { label: isF ? (r.status === 'A' || r.status === '?' ? t('Apri file') : t('Mostra differenze')) : t('Mostra differenze della cartella'), cmd: isF ? 'showDiff' : 'showFolderDiff', args: { key }, disabled: !c.diff, kbd: isF ? t('Invio') : '' },
       c.unstage || sec === 'staged' ? { label: t('Rimuovi dai file da committare'), cmd: 'unstage', args: { key }, disabled: !c.unstage, kbd: t('Spazio') } : { label: t('Aggiungi ai file da committare'), cmd: 'stage', args: { key }, disabled: !c.stage, kbd: t('Spazio'), hint: c.stage ? '' : t('Risolvi prima il conflitto') },
       { sep: true }, A('add', t('SVN Add (aggiungi al controllo di versione)'), c.add), A('ignore', t('Aggiungi alla ignore list'), c.ignore),
       A('revert', isF ? t('SVN Revert (annulla le modifiche)…') : t('SVN Revert della cartella (annulla le modifiche)…'), c.revert), isF ? A('resolve', t('Risolvi conflitto…'), c.resolve) : null,
@@ -119,8 +149,15 @@
     ].filter(Boolean), row);
   }
 
+  // Come Git Changes: prima le sezioni (Staged c'e' sempre), lo stato vuoto sta sotto.
+  function listHTML(s, cursor, flt) {
+    const empty = isEmpty(s) && !s.loading ? `<div class="empty-state">${U.icon('check', 'big')}<b>${t('Nessuna modifica')}</b><span class="muted">${t('La working copy è pulita.')}</span></div>` : '';
+    return U.treeHTML(s.sections.filter(x => x.id === 'staged' || x.count), cursor, flt) + empty;
+  }
+
   function render() {
     if (!st) return;
+    trackStatus(st);
     const root = document.querySelector('.app'); if (!root) return;
     root.classList.toggle('loading', !!st.loading);
     U.setHTML(root.querySelector('#hdr'), header(st));
@@ -135,8 +172,9 @@
     const list = root.querySelector('#list'), had = list.contains(document.activeElement), cur = list.__cursor, top = list.scrollTop;
     const keys = []; st.sections.forEach(s => { keys.push('section:' + s.id); s.rows.forEach(r => keys.push(r.key)); });
     const cursor = keys.includes(cur) ? cur : keys[0];
-    const html = isEmpty(st) && !st.loading ? `<div class="empty-state">${U.icon('check', 'big')}<b>${t('Nessuna modifica')}</b><span class="muted">${t('La working copy è pulita.')}</span></div>` + '' : '';
-    const changed = U.setHTML(list, (html ? html : '') + U.treeHTML(st.sections.filter(s => s.id === 'staged' || s.count), cursor, filter));
+    // Come Git Changes: prima le sezioni (Staged c'e' sempre), lo stato vuoto sta sotto.
+    const html = isEmpty(st) && !st.loading ? `<div class="empty-state">${U.icon('check', 'big')}<b>${t('Nessuna modifica')}</b><span class="muted">${t('La working copy è pulita.')}</span></div>` : '';
+    const changed = U.setHTML(list, U.treeHTML(st.sections.filter(s => s.id === 'staged' || s.count), cursor, filter) + html);
     if (changed) { list.scrollTop = top; if (had) { const r = list.querySelector(`.tr[data-key="${CSS.escape(cursor)}"]`); if (r) r.focus(); } }
     list.setAttribute('aria-busy', !!st.loading);
     U.setHTML(root.querySelector('#foot'), foot(st));
@@ -363,7 +401,7 @@
     else if (!e.shiftKey && (a === last || !box.contains(a))) { e.preventDefault(); first.focus(); }
   }
 
-  U.changesHTML = { header, commitBar, foot, revHTML, switchHTML, mergeBanner, conflictsHTML };   // parti pure, provate senza DOM (tests/ui-web)
+  U.changesHTML = { header, commitBar, foot, revHTML, switchHTML, mergeBanner, conflictsHTML, revIndicator, statusKind, OK_TTL, recentMenu, trackStatus, listHTML };   // parti pure, provate senza DOM (tests/ui-web)
 
   U.views.changes = {
     mount(root) {
@@ -409,7 +447,7 @@
       root.addEventListener('submit', e => { if (e.target.id === 'wcform') { e.preventDefault(); forceInput = false; U.bridge.send('setWorkingCopy', { path: e.target.querySelector('input').value }); } });
       root.addEventListener('click', e => {
         const b = e.target.closest('[data-menu]'); if (!b || b.disabled) return;
-        const r = b.getBoundingClientRect(); U.menu.open(Math.max(0, r.right - 220), r.bottom + 2, b.dataset.menu === 'ai' ? aiMenu() : moreMenu(), b);
+        const r = b.getBoundingClientRect(); U.menu.open(Math.max(0, r.right - 220), r.bottom + 2, b.dataset.menu === 'ai' ? aiMenu() : b.dataset.menu === 'recent' ? recentMenu() : moreMenu(), b);
       });
       const fl = root.querySelector('#flt');
       fl.addEventListener('input', () => { filter = fl.value; render(); });
