@@ -91,18 +91,29 @@ test('stato vuoto: prima le sezioni (Staged c\'e\' sempre), poi "Nessuna modific
   assert.equal(H.listHTML(fx(), null, '').includes('empty-state'), false, 'con modifiche niente stato vuoto');
 });
 
-test('tendina Recenti: bottone nella barra del commit, voci con il testo intero nel tooltip, comando valido', () => {
+test('pannello Recenti: bottone nella barra del commit, voci con prima riga in grassetto + anteprima + testo intero nel tooltip, ricerca, indici originali', () => {
   const s = fx(); s.commit.count = 1;
-  assert.match(H.commitBar(s), /data-menu="recent"[^>]*aria-haspopup="menu"[\s\S]*?<span>Recenti<\/span>/);
-  s.commit.recent = ['Prima riga\nseconda riga', 'x'.repeat(100), 'Corregge il totale'];
-  const m = H.recentMenu(s);
-  assert.equal(m[0].header, true); assert.equal(m.length, 4);
-  assert.equal(m[1].label, 'Prima riga'); assert.equal(m[1].hint, 'Prima riga\nseconda riga');
-  assert.ok(m[2].label.length <= 70 && m[2].label.endsWith('…'));
-  m.slice(1).forEach((x, i) => { assert.deepEqual(JSON.parse(JSON.stringify(x.args)), { i }); assert.deepEqual(validate(cmds, { name: x.cmd, args: x.args }), []); });
+  assert.match(H.commitBar(s), /data-recent[^>]*aria-haspopup="dialog"[\s\S]*?<span>Recenti<\/span>/);
+  s.commit.recent = ['Prima riga\n\nseconda riga\nterza <b>riga</b>', 'x'.repeat(100), 'Corregge il totale', 'fix: ARROTONDAMENTO iva\n\ndettaglio'];
+  const h = H.recentHTML(s);
+  assert.match(h, /<input id="rc-q"[^>]*role="combobox"[^>]*placeholder="Cerca nei messaggi recenti…"/); assert.match(h, /id="rc-list" role="listbox"/);
+  const rows = [...h.matchAll(/<div class="rc-row[^"]*" role="option"[^>]*data-i="(\d+)"[^>]*title="([^"]*)"><b class="rc-1">([^<]*)<\/b>(?:<span class="rc-p">([^<]*)<\/span>)?/g)];
+  assert.equal(rows.length, 4); assert.deepEqual(rows.map(r => +r[1]), [0, 1, 2, 3]);
+  assert.equal(rows[0][3], 'Prima riga'); assert.equal(rows[0][4], 'seconda riga\nterza &lt;b&gt;riga&lt;/b&gt;', 'anteprima: le righe dopo la prima, senza vuote, neutralizzate');
+  assert.match(rows[0][2], /Prima riga\n\nseconda riga/, 'tooltip = messaggio intero'); assert.equal(rows[2][4], undefined, 'una sola riga: niente anteprima');
+  assert.match(h, /class="rc-row sel"[^>]*data-i="0"/, 'la prima voce e selezionata'); assert.match(h, /4 di 4/);
+  // ricerca: senza maiuscole, su tutto il messaggio (anche oltre la prima riga); l'indice e quello dell'elenco intero (e' quello che arriva al backend)
+  assert.deepEqual(U.recentFilter(s.commit.recent, 'IVA').map(x => x.i), [3]);
+  assert.deepEqual(U.recentFilter(s.commit.recent, 'dettaglio').map(x => x.i), [3]);
+  assert.deepEqual(U.recentFilter(s.commit.recent, '  ').map(x => x.i), [0, 1, 2, 3]);
+  const f = H.recentHTML(s, { q: 'totale', sel: 0 }); assert.match(f, /data-i="2"/); assert.doesNotMatch(f, /data-i="0"/); assert.match(f, /1 di 4/);
+  assert.match(H.recentHTML(s, { q: 'zzz', sel: 0 }), /Nessun messaggio corrisponde alla ricerca/);
+  [0, 1, 2, 3].forEach(i => assert.deepEqual(validate(cmds, { name: 'useRecentMessage', args: { i } }), []));
   assert.notDeepEqual(validate(cmds, { name: 'useRecentMessage', args: { i: -1 } }), [], 'indice negativo rifiutato dallo schema');
   delete s.commit.recent;
-  assert.deepEqual(JSON.parse(JSON.stringify(H.recentMenu(s).map(x => [x.label, x.disabled]))), [['Nessun messaggio recente', true]]);
+  assert.match(H.recentHTML(s), /Nessun messaggio recente/); assert.doesNotMatch(H.recentHTML(s), /rc-row/);
+  U.setLang('en');
+  try { assert.match(H.recentHTML(Object.assign(fx(), { commit: Object.assign(fx().commit, { recent: ['a'] }) })), /Search recent messages…[\s\S]*1 of 1/); } finally { U.setLang('it'); }
 });
 
 test('file nuovo o non versionato: azione "Apri il file", non "differenze"', () => {

@@ -23,13 +23,13 @@ internal sealed class RecentMessages
     internal IReadOnlyList<string> Get(string repo)
     {
         lock (_lock)
-            return Read().TryGetValue(repo, out var list) ? list : [];
+            return Read().TryGetValue(repo, out var list) ? Normalize(list) : [];
     }
 
     /// <summary>Ricorda un messaggio committato (testo tagliato ai bordi; vuoto = ignorato).</summary>
     internal void Add(string repo, string message)
     {
-        message = message.Trim();
+        message = AiServiceBase.CleanAnswer(message);
         if (repo.Length == 0 || message.Length == 0)
             return;
         lock (_lock)
@@ -37,7 +37,7 @@ internal sealed class RecentMessages
             try
             {
                 var all = Read();
-                all[repo] = (all.TryGetValue(repo, out var cur) ? cur : []).Where(m => m != message).Prepend(message).Take(Max).ToList();
+                all[repo] = Normalize(all.TryGetValue(repo, out var cur) ? cur : []).Where(m => m != message).Prepend(message).Take(Max).ToList();
                 Directory.CreateDirectory(Path.GetDirectoryName(_file)!);
                 File.WriteAllText(_file, JsonSerializer.Serialize(all));
             }
@@ -47,6 +47,10 @@ internal sealed class RecentMessages
             }
         }
     }
+
+    /// <summary>Ripulisce le voci gia' salvate (es. messaggi AI in un blocco ```): normalizza, scarta le vuote, toglie i doppioni.</summary>
+    private static List<string> Normalize(IEnumerable<string> list)
+        => list.Select(AiServiceBase.CleanAnswer).Where(m => m.Length > 0).Distinct().ToList();
 
     private Dictionary<string, List<string>> Read()
     {

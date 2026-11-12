@@ -462,6 +462,9 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             case "conflictOp":
                 await RunExclusiveAsync(() => ConflictOpAsync(Args.OneOf(args, "op", "edit", "mine", "theirs", "resolved"), Args.Str(args, "key"), ct));
                 break;
+            case "resolveTreeConflicts":
+                await RunExclusiveAsync(() => ResolveTreeConflictsAsync(ct));
+                break;
             case "showLog":
                 if (string.IsNullOrWhiteSpace(WorkingCopyPath))
                     SetStatus(Loc.T("Nessuna working copy configurata."));
@@ -1817,6 +1820,46 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                     await ApplyResolveAsync(entry, SvnConflictChoice.Working, ct);
                 break;
         }
+    }
+
+    /// <summary>
+    /// "Segna tutti come risolti" per i conflitti ad albero (di solito si risolvono sempre tutti): conferma con l'elenco, poi
+    /// <c>resolve --accept working</c> su ognuno. Un errore su uno non ferma gli altri: gli errori vengono riportati in fondo.
+    /// </summary>
+    private async Task ResolveTreeConflictsAsync(CancellationToken ct)
+    {
+        List<ChangeEntry> trees;
+        lock (_stateLock)
+            trees = _entries.Where(e => e.Status == SvnStatusKind.Conflicted && e.IsTreeConflict).ToList();
+        if (trees.Count == 0)
+        {
+            SetStatus(Loc.T("Nessun conflitto ad albero da risolvere."));
+            return;
+        }
+
+        if (!await _dialogs.ConfirmAsync(
+                Loc.T("Segnare come risolti {0} conflitti ad albero (rinomine/cancellazioni)? Sistema prima la struttura a mano: svn non controlla nulla.\n\n{1}",
+                    trees.Count, ListForConfirmation(trees)), ct))
+            return;
+
+        SetStatus(Loc.T("Risoluzione conflitti ad albero in corso..."));
+        var failed = new List<string>();
+        foreach (var entry in trees)
+        {
+            try
+            {
+                await _svnService.ResolveAsync(entry.FullPath, SvnConflictChoice.Working, ct);
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                failed.Add($"{entry.RelativePath}: {FirstLine(ex.Message)}");
+            }
+        }
+
+        var done = trees.Count - failed.Count;
+        await RefreshAsync(ct, reloadBranch: false, failed.Count == 0
+            ? Loc.T("Conflitti ad albero risolti: {0}.", done)
+            : Loc.T("Errore resolve: {0} conflitti ad albero risolti, {1} falliti. {2}", done, failed.Count, string.Join(" | ", failed)));
     }
 
     private async Task OpenMergeEditorAsync(ChangeEntry entry)

@@ -78,6 +78,45 @@ public class AiBugFixTests : IDisposable
         Assert.Contains("vuoto", ex.Message);
     }
 
+    private sealed class FixedAi(string answer) : AiServiceBase
+    {
+        protected override Task<string> CompleteAsync(string systemPrompt, string userMessage, CancellationToken ct) => Task.FromResult(answer);
+    }
+
+    [Theory]
+    [InlineData("```\nfeat: x\n\ncorpo\n```", "feat: x\n\ncorpo")]
+    [InlineData("```text\nfeat: x\n```\n", "feat: x")]
+    [InlineData("  ```markdown\r\nfix: y\r\n```  ", "fix: y")]
+    [InlineData("\"feat: x\"", "feat: x")]
+    [InlineData("```\n\"feat: x\"\n```", "feat: x")]
+    [InlineData("```\nfeat: x", "feat: x")]              // blocco non chiuso
+    [InlineData("feat: x\n```", "feat: x")]              // chiusura senza apertura
+    [InlineData("```", "")]
+    [InlineData("feat: usa \"a\" e \"b\"", "feat: usa \"a\" e \"b\"")]   // virgolette interne: intatte
+    [InlineData("feat: x\n\n```\ncodice\n```\n\nfine", "feat: x\n\n```\ncodice\n```\n\nfine")]   // blocco nel corpo: intatto
+    public void CleanAnswer_TogliBloccoMarkdownEVirgoletteCheAvvolgonoTutto(string raw, string expected)
+        => Assert.Equal(expected, AiServiceBase.CleanAnswer(raw));
+
+    [Fact]
+    public async Task RispostaInBloccoDiCodice_ArrivaPulita_ESoloBloccoVuotoEErrore()
+    {
+        Assert.Equal("feat: x", await new FixedAi("```\nfeat: x\n```").GenerateCommitMessageAsync("diff", "italiano", Ct));
+        Assert.Equal("fix: y", await new FixedAi("```text\nfix: y\n```").ImproveCommitMessageAsync("bozza", "diff", "italiano", Ct));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new FixedAi("```\n```").GenerateCommitMessageAsync("diff", "italiano", Ct));
+    }
+
+    [Fact]
+    public void RecentMessages_VociGiaSalvateConBloccoMarkdown_NormalizzateSenzaVuoteNeDoppioni()
+    {
+        var file = Path.Combine(_dir, "recent.json");
+        File.WriteAllText(file, """{"r":["```","```\nfeat: x\n```","feat: x","\"fix: y\""]}""");
+        var r = new RecentMessages(file);
+
+        Assert.Equal(["feat: x", "fix: y"], r.Get("r"));
+        r.Add("r", "```\nnuovo\n```");
+        Assert.Equal(["nuovo", "feat: x", "fix: y"], r.Get("r"));
+    }
+
     [Fact]
     public async Task ErroreDelProvider_FinisceNellaStatusBar_ETestoInvariato()
     {
