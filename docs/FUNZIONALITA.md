@@ -1,6 +1,6 @@
 # SVNAssist — Funzionalità: cosa c'è, cosa manca
 
-**Versione:** 0.3.0 · **Data:** 2026-11-12
+**Versione:** 0.3.1 · **Data:** 2026-11-12
 
 ## Come usare questo file
 
