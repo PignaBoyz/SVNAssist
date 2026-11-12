@@ -85,7 +85,12 @@ namespace SVNAssist.Host
         protected override string GetToolWindowTitle(Type toolWindowType, int id) =>
             toolWindowType == typeof(LogToolWindow) ? "Log" : "SVN Changes";
 
-        protected override Task<object> InitializeToolWindowAsync(Type toolWindowType, int id, CancellationToken ct) => Task.FromResult<object>(null);
+        // Factory asincrona: VS aspetta InitializeAsync prima di creare le finestre (anche quelle ripristinate all'avvio)
+        // e passa l'HostService al costruttore della finestra.
+        public override IVsAsyncToolWindowFactory GetAsyncToolWindowFactory(Guid toolWindowType) =>
+            toolWindowType == typeof(ChangesToolWindow).GUID || toolWindowType == typeof(LogToolWindow).GUID ? this : null;
+
+        protected override Task<object> InitializeToolWindowAsync(Type toolWindowType, int id, CancellationToken ct) => Task.FromResult<object>(Host);
 
         // ---- comandi (.vsct) ----
 

@@ -13,13 +13,27 @@ namespace SVNAssist.Host
         private WebViewHost _view;
         private readonly string _viewName;
 
-        protected WebToolWindow(string view, string caption) : base(null)
+        protected WebToolWindow(string view, string caption, object host) : base(null)
         {
             _viewName = view;
             Caption = caption;
-            var host = SVNAssistPackage.Instance?.Host ?? throw new InvalidOperationException(Loc.T("Package SVNAssist non inizializzato."));
-            _view = new WebViewHost(_viewName, host);
-            Content = _view; // va impostato nel costruttore: dopo, l'Init del frame fallisce con E_UNEXPECTED
+            // Mai eccezioni qui: VS ricrea la finestra all'avvio e un errore diventa "Failed to find the tool window".
+            try
+            {
+                var h = host as HostService ?? SVNAssistPackage.Instance?.Host ?? throw new InvalidOperationException(Loc.T("Package SVNAssist non inizializzato."));
+                _view = new WebViewHost(_viewName, h);
+                Content = _view; // va impostato nel costruttore: dopo, l'Init del frame fallisce con E_UNEXPECTED
+            }
+            catch (Exception ex)
+            {
+                Log.Write("tool window " + view + ": " + ex);
+                Content = new System.Windows.Controls.TextBlock
+                {
+                    Text = Loc.T("SVNAssist non è riuscito ad aprire questa finestra: chiudila e riaprila da Extensions > SVNAssist. Dettagli in %LOCALAPPDATA%\\SVNAssist\\host-log.txt") + "\n\n" + ex.Message,
+                    TextWrapping = System.Windows.TextWrapping.Wrap,
+                    Margin = new System.Windows.Thickness(12),
+                };
+            }
         }
 
         public override void OnToolWindowCreated()
@@ -59,12 +73,12 @@ namespace SVNAssist.Host
     [Guid(Ids.ChangesWindowGuid)]
     public sealed class ChangesToolWindow : WebToolWindow
     {
-        public ChangesToolWindow() : base("changes", "SVN Changes") { }
+        public ChangesToolWindow(object host) : base("changes", "SVN Changes", host) { }
     }
 
     [Guid(Ids.LogWindowGuid)]
     public sealed class LogToolWindow : WebToolWindow
     {
-        public LogToolWindow() : base("log", "Log") { }
+        public LogToolWindow(object host) : base("log", "Log", host) { }
     }
 }

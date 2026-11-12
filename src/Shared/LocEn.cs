@@ -423,6 +423,7 @@ namespace SVNAssist
             ["Il server SVN richiede l'accesso."] = "The SVN server requires authentication.",
             ["Nessun elemento selezionato in Solution Explorer."] = "No item selected in Solution Explorer.",
             ["Package SVNAssist non inizializzato."] = "SVNAssist package not initialized.",
+            ["SVNAssist non è riuscito ad aprire questa finestra: chiudila e riaprila da Extensions > SVNAssist. Dettagli in %LOCALAPPDATA%\\SVNAssist\\host-log.txt"] = "SVNAssist could not open this window: close it and reopen it from Extensions > SVNAssist. Details in %LOCALAPPDATA%\\SVNAssist\\host-log.txt",
             ["Impossibile avviare WebView2: {0}"] = "Cannot start WebView2: {0}",
             ["SVNAssist richiede il runtime Microsoft Edge WebView2, che non è installato su questo computer. "] = "SVNAssist requires the Microsoft Edge WebView2 runtime, which is not installed on this computer. ",
             ["Scarica il runtime Evergreen"] = "Download the Evergreen runtime",
