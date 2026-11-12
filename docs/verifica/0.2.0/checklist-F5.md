@@ -41,3 +41,12 @@ Segna ✅ / ❌ (+ una riga su cosa vedi).
 21. [ ] Pulsante in alto "SVN Update"; dopo l'update il messaggio in basso ("Aggiornato alla revisione N.") è verde con icona e un breve alone che sfuma.
 22. [ ] Barra in basso: "Prerequisiti" verde se tutto ok; senza svn o senza provider AI è rosso con icona di avviso e, cliccandolo, apre la procedura sui prerequisiti mancanti (con "Configura l'AI" e "Faccio io").
 23. [ ] Repo `file://` senza trunk/branches: l'header mostra "/ (radice)" invece di "unknown".
+
+**Cleanup, Update to revision, Lock e login SVN** (repo `file://` o con server; per il login serve un server che chieda utente/password)
+24. [ ] Changes > ⋯ > "SVN Cleanup": messaggio verde "Cleanup completato." Stesso comando da Extensions > SVNAssist > Cleanup e da Solution Explorer > SVN > SVN Cleanup.
+25. [ ] Blocca la working copy (es. `svn cleanup` interrotto, o una cartella `.svn` con lock): Update dà errore rosso con il pulsante "Esegui Cleanup"; cliccandolo l'errore sparisce e Update funziona.
+26. [ ] Changes > ⋯ > "SVN Update to revision…": scrivi `abc` o `0` e il dialogo ricompare con il messaggio; scrivi un numero valido (es. la revisione precedente) e il messaggio dice "Aggiornato alla revisione N."; con `HEAD` torni all'ultima. Annulla non fa nulla. Idem da Extensions > SVNAssist e da Solution Explorer.
+27. [ ] Su un file modificato: tasto destro > "SVN Lock…" (messaggio facoltativo) > compare il lucchetto accanto al nome; `svn status` da terminale mostra la K. "SVN Unlock" lo toglie. Da Solution Explorer > SVN > Lock/Unlock su un file non modificato: il file compare in Modifiche con la lettera K.
+28. [ ] File bloccato da un altro utente (blocca da un secondo checkout): "SVN Lock…" chiede una conferma esplicita ("già bloccato da…, rubare il lock?"); Annulla non cambia nulla, OK ruba il lock.
+29. [ ] Login SVN: con credenziali non salvate su un server che le richiede, Update mostra il dialogo utente/password (password mascherata, "Ricorda" attivo); inserite le credenziali il comando riesce una volta sola; con credenziali sbagliate compare l'errore normale (nessun secondo dialogo); Annulla = errore normale. Con "Ricorda" i comandi successivi non chiedono più nulla. Nei log (`%LOCALAPPDATA%\SVNAssist`) non compare la password.
+30. [ ] Con l'accesso integrato di Windows (il tuo caso abituale) il dialogo di login non compare mai.

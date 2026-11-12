@@ -44,6 +44,8 @@ Vale per file e cartelle (la cartella ha il percorso della cartella; le catene a
 |---|---|---|
 | `refresh` | – | `svn status` |
 | `update` | – | `svn update` |
+| `updateToRevision` | – | **SVN Update to revision**: l'host chiede la revisione (`IHost.PromptTextAsync`; intero positivo o `HEAD`, altrimenti richiede) e fa `svn update -r N`. Esito come l'update (revisione, conflitti) |
+| `cleanup` | – | **SVN Cleanup** della working copy (`svn cleanup`). Compare anche come pulsante "Esegui Cleanup" accanto a un errore di working copy bloccata (`status.action`) |
 | `commit` | – | commit dei soli file in **Staged**; se ci sono non versionati li aggiunge, i mancanti li elimina; rifiuta i conflitti |
 | `setCommitText` | `text` | aggiorna il messaggio |
 | `genAi` / `improveAi` | – | genera / migliora il messaggio dal diff dei file in Staged |
@@ -56,7 +58,7 @@ Vale per file e cartelle (la cartella ha il percorso della cartella; le catene a
 | `setView` | `view`: `tree|list` | albero per cartelle o elenco piatto |
 | **`showDiff`** | `key` | **l'host apre il diff nell'editor di VS** (BASE ⇄ working copy), come Git Changes |
 | `showFolderDiff` | `key` | diff di tutti i file modificati della cartella |
-| `rowOp` | `op`: `add|ignore|revert|resolve|`**`deleteFile`**`, key` | operazioni sulla riga; le conferme sono dialoghi nativi dell'host |
+| `rowOp` | `op`: `add|ignore|revert|resolve|`**`deleteFile`**`|lock|unlock, key` | operazioni sulla riga; le conferme sono dialoghi nativi dell'host. `lock` (file modificato): chiede un messaggio facoltativo, poi `svn lock`; se il file è già di un altro chiede **conferma esplicita** prima di rubare il lock (`--force`). `unlock`: `svn unlock` |
 | **`setTheme`** | `mode`: `auto|light|dark|blue` | tema della finestra; `auto` segue Visual Studio. L'host lo salva nelle impostazioni e rispedisce `theme` |
 | `prereqToggle` / `prereqRecheck` | – | pannello Prerequisiti |
 | `prereqRun` | `id`, `primary` | azione principale (`true`) o secondaria (`false`) di un prerequisito |
@@ -101,8 +103,9 @@ commit      {text, aiStatus, aiLevel: ""|busy|ok|warn|err|info, aiSeq, busy, lan
 view        "tree" | "list"
 theme       {mode: auto|light|dark|blue, kind: light|dark|blue}
 sections[3] {id: staged|changes|unversioned, title, count, expanded, rows[]}
-  row       {key, kind: file|folder, depth, name, detail, dir, expanded, count, status, statusText, can{…}, tooltip}
-status      {msg, err}
+  row       {key, kind: file|folder, depth, name, detail, dir, expanded, count, status, statusText, can{…, lock?, unlock?}, tooltip, locked?}
+              status "K" = file solo bloccato (lock tenuto da questa working copy, nessuna modifica); `locked:true` = lucchetto accanto al nome
+status      {msg, err, action?{label, cmd:"cleanup"}}
 prereq      {open, summary, ai, feedback, items[{id, group, title, ok, detail, instructions, primary, secondary}]}
 loading     bool
 wizard      {open, mode: ai|prereq, step 1-4, fromGenerate, provider, busy, feedback, providers[{id,title,cost}], items[prereq item],
@@ -171,6 +174,9 @@ Tutto ciò che arriva dalla UI è non fidato: `v`, `type`, `id`, `name`, `args` 
 - **Staged**: insieme in memoria per working copy. I nuovi elementi `M A D R !` partono in Staged; conflitti e non versionati no (un conflitto non si può mettere in Staged; se un file in Staged diventa conflitto il commit si rifiuta).
 - `commit`: aggiunge i non versionati in Staged (con le cartelle padre nuove) e cancella i mancanti, poi `svn commit --depth empty` sui soli percorsi elencati.
 - `rowOp deleteFile` (Canc su file, non cartelle): conferma con `PromptAsync`; versionato → `svn delete --force`; non versionato → cestino (se non disponibile, eliminazione diretta). Mancante → `svn delete`.
+- **Lock**: lo stato dei lock è solo quello **locale** (`<lock>` in `svn status --xml`, la "K" di svn), a costo zero (nessuna rete, nessun `-u`). I lock di altri (O/T/B) non si leggono; si scoprono quando `svn lock` fallisce ("già bloccato da X") e si offre di rubarlo con conferma. Un file bloccato ma non modificato compare in Modifiche con stato `K` (non si può mettere in Staged, né diff/revert). Il `commit` rilascia i lock dei file committati (default di svn).
+- **Login SVN**: il backend esegue sempre svn con `--non-interactive`. Solo per un errore di autenticazione (`E170001`, `E215004`, `Authentication failed`, `No more credentials`…) chiama `IHost.PromptCredentialsAsync` (utente, password mascherata, "Ricorda" di default sì) e **ripete il comando una sola volta** con `--username U --password-from-stdin` (svn ≥ 1.10; con svn più vecchio `--password` e un avviso nel log), senza `--no-auth-cache` se "Ricorda". Annulla = errore normale. Le credenziali non vanno in nessun log né nello stato UI. Con l'accesso integrato di Windows il dialogo non dovrebbe mai comparire.
+- Working copy bloccata (`E155004`/`E155037`, "run 'cleanup'"): il messaggio d'errore ha il pulsante "Esegui Cleanup" (`status.action`).
 - Il log usa `svn log -v` (percorsi toccati) 50 revisioni alla volta; `logSelect` accetta solo revisioni già in elenco.
 - AI: il diff dei soli file in Staged va ai provider elencati; conferma `PromptAsync` una volta per sessione (e per ogni file sospetto). `commit.trace` è ricostruita dalla catena (`FallbackAiService`); `commit.download` è valorizzato (pct 0) durante il download del runtime Copilot.
 

@@ -38,7 +38,9 @@
     const p = s.prereq, bad = !!(p.summary && /da sistemare/.test(p.summary)), m = s.status.msg || '';
     // Esito: icona + colore + semibold (stessa dimensione del testo); i messaggi di sola informazione restano normali.
     const kind = s.status.err ? 'err' : /(completat|aggiornat|annullat|aggiunt|eliminat|risolt|ignorat|salvat)/i.test(m) ? 'ok' : '';
-    return `<span class="msg ${kind}" role="status">${kind ? U.icon(kind === 'err' ? 'x' : 'check') : ''}<span>${esc(m)}</span></span><span class="fill"></span>` +
+    const act = s.status.action;
+    return `<span class="msg ${kind}" role="status">${kind ? U.icon(kind === 'err' ? 'x' : 'check') : ''}<span>${esc(m)}</span></span>` +
+      (act ? `<button type="button" class="btn sm" ${U.cmd(act.cmd)} title="Esegue svn cleanup sulla working copy">${esc(act.label)}</button>` : '') + `<span class="fill"></span>` +
       (bad ? `<button type="button" class="btn sm prq-st bad" ${U.cmd('wizardOpenPrereq')} title="Manca qualcosa: apre la procedura guidata per sistemarlo">${U.icon('warn')}<span>${esc(p.summary)}</span></button>`
         : `<button type="button" class="btn sm prq-st ok" ${U.cmd('prereqToggle')} aria-expanded="${!!p.open}" title="Tutto a posto. Mostra/nasconde la checklist: svn, TortoiseSVN, provider AI">${U.icon('check')}<span>${esc((p.summary || 'Prerequisiti').replace(/\s*✓/, ''))}</span></button>`);
   }
@@ -46,6 +48,9 @@
 
   function moreMenu() {
     return [
+      { header: true, label: 'SVN' },
+      { label: 'SVN Update to revision…', cmd: 'updateToRevision', hint: 'Aggiorna a una revisione precisa (svn update -r)' },
+      { label: 'SVN Cleanup', cmd: 'cleanup', hint: 'Ripulisce la working copy da un\'operazione interrotta (svn cleanup)' }, { sep: true },
       { header: true, label: 'Vista' },
       { label: 'Albero per cartelle', cmd: 'setView', args: { view: 'tree' }, checked: st.view === 'tree' },
       { label: 'Elenco semplice', cmd: 'setView', args: { view: 'list' }, checked: st.view === 'list' },
@@ -73,6 +78,7 @@
       c.unstage || sec === 'staged' ? { label: 'Rimuovi dai file da committare', cmd: 'unstage', args: { key }, disabled: !c.unstage, kbd: 'Spazio' } : { label: 'Aggiungi ai file da committare', cmd: 'stage', args: { key }, disabled: !c.stage, kbd: 'Spazio', hint: c.stage ? '' : 'Risolvi prima il conflitto' },
       { sep: true }, A('add', 'SVN Add (aggiungi al controllo di versione)', c.add), A('ignore', 'Aggiungi alla ignore list', c.ignore),
       A('revert', isF ? 'SVN Revert (annulla le modifiche)…' : 'SVN Revert della cartella (annulla le modifiche)…', c.revert), isF ? A('resolve', 'Risolvi conflitto…', c.resolve) : null,
+      isF && (c.lock || c.unlock) ? { sep: true } : null, isF && c.lock ? A('lock', 'SVN Lock…', true) : null, isF && c.unlock ? A('unlock', 'SVN Unlock', true) : null,
       { sep: true }, isF ? A('deleteFile', 'Elimina file…', c.deleteFile, 'Canc') : { label: 'Espandi tutto', cmd: 'expandAll' }, isF ? null : { label: 'Comprimi tutto', cmd: 'collapseAll' },
     ].filter(Boolean), row);
   }

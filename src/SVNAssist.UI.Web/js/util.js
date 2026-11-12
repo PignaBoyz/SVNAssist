@@ -12,6 +12,6 @@
   // aggiorna innerHTML solo se cambia (evita di perdere focus/selezione)
   U.setHTML = (el, html) => { if (el && el.__h !== html) { el.__h = html; el.innerHTML = html; return true; } return false; };
   U.fmtDate = iso => { const d = new Date(iso); if (isNaN(d)) return String(iso || ''); const p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
-  U.STATUS = { M: 'Modificato', A: 'Aggiunto', D: 'Eliminato', C: 'Conflitto', '?': 'Non versionato', '!': 'Mancante', R: 'Sostituito' };
+  U.STATUS = { M: 'Modificato', A: 'Aggiunto', D: 'Eliminato', C: 'Conflitto', '?': 'Non versionato', '!': 'Mancante', R: 'Sostituito', K: 'Bloccato (lock)' };
   U.stClass = s => 'st-' + (s === '?' ? 'U' : s === '!' ? 'X' : s);
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -42,6 +42,9 @@ public class SvnService : ISvnService
     private readonly string _svnExePath;
     private readonly IProcessRunner _processRunner;
     private readonly TimeSpan _timeout;
+    private readonly ISvnCredentialPrompt? _credentials;
+    private readonly SemaphoreSlim _credentialGate = new(1, 1);
+    private bool? _passwordFromStdin;
 
     /// <summary>
     /// Crea una nuova istanza di <see cref="SvnService"/>.
@@ -58,9 +61,15 @@ public class SvnService : ISvnService
     /// Tempo massimo per singola invocazione di svn (default <see cref="DefaultTimeout"/>).
     /// Scaduto, il processo viene terminato e l'operazione fallisce con un errore chiaro.
     /// </param>
+    /// <param name="credentials">
+    /// Se presente e svn fallisce per autenticazione, si chiedono utente/password e il comando si ripete UNA volta con
+    /// quelle credenziali (<c>--username</c> + <c>--password-from-stdin</c>). Null = nessun dialogo, errore normale.
+    /// </param>
     /// <exception cref="FileNotFoundException">Se svn.exe non viene trovato.</exception>
-    public SvnService(string? svnExePath = null, IProcessRunner? processRunner = null, TimeSpan? timeout = null)
+    public SvnService(string? svnExePath = null, IProcessRunner? processRunner = null, TimeSpan? timeout = null,
+        ISvnCredentialPrompt? credentials = null)
     {
+        _credentials = credentials;
         _svnExePath = svnExePath ?? SvnLocator.FindSvn() ?? throw new FileNotFoundException(
             "svn.exe non trovato. Installa Subversion e assicurati che sia nel PATH, " +
             "oppure installa TortoiseSVN con l'opzione 'command line client tools'.");
@@ -107,7 +116,7 @@ public class SvnService : ISvnService
             if (propsStatus == "conflicted" || isTreeConflict)
                 kind = SvnStatusKind.Conflicted;
 
-            results.Add(new SvnFileStatus(path, kind, isTreeConflict));
+            results.Add(new SvnFileStatus(path, kind, isTreeConflict, IsLocked: wcStatus?.Element("lock") is not null));
         }
 
         return results;
@@ -318,15 +327,78 @@ public class SvnService : ISvnService
     }
 
     /// <inheritdoc />
-    public async Task<UpdateResult> UpdateAsync(string workingCopyPath, CancellationToken ct)
+    public Task<UpdateResult> UpdateAsync(string workingCopyPath, CancellationToken ct)
+        => UpdateCoreAsync(workingCopyPath, null, ct);
+
+    /// <inheritdoc />
+    public Task<UpdateResult> UpdateToRevisionAsync(string workingCopyPath, string revision, CancellationToken ct)
+        => SvnRevision.TryNormalize(revision, out var normalized)
+            ? UpdateCoreAsync(workingCopyPath, normalized, ct)
+            : throw new ArgumentException("Revisione non valida: serve un numero intero positivo oppure HEAD.", nameof(revision));
+
+    private async Task<UpdateResult> UpdateCoreAsync(string workingCopyPath, string? revision, CancellationToken ct)
     {
         // L'update di una working copy grande può durare a lungo: niente timeout, l'utente può annullare.
         // Su un file si aggiorna solo quel file (cwd = la sua cartella); su una cartella, tutta la cartella.
+        IReadOnlyList<string> head = revision is null ? ["update"] : ["update", "-r", revision];
         var isFile = File.Exists(workingCopyPath);
         var output = isFile
-            ? await RunSvnAsync(["update", Peg(workingCopyPath)], Path.GetDirectoryName(workingCopyPath), ct, applyTimeout: false)
-            : await RunSvnAsync(["update"], workingCopyPath, ct, applyTimeout: false);
+            ? await RunSvnAsync([.. head, Peg(workingCopyPath)], Path.GetDirectoryName(workingCopyPath), ct, applyTimeout: false)
+            : await RunSvnAsync(head, workingCopyPath, ct, applyTimeout: false);
         return ParseUpdateOutput(output);
+    }
+
+    /// <inheritdoc />
+    public async Task CleanupAsync(string path, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            throw new ArgumentException("Il percorso non può essere vuoto.", nameof(path));
+
+        // svn cleanup lavora su una cartella: per un file si usa quella che lo contiene. Può durare (rimuove lock, riprende operazioni).
+        var dir = File.Exists(path) ? Path.GetDirectoryName(path) : path;
+        await RunSvnAsync(["cleanup"], dir, ct, applyTimeout: false);
+    }
+
+    /// <inheritdoc />
+    public async Task LockAsync(IEnumerable<string> paths, string? message, bool force, CancellationToken ct)
+    {
+        var pathList = paths.ToList();
+        if (pathList.Count == 0)
+            return;
+
+        List<string> head = force ? ["lock", "--force"] : ["lock"];
+        // Come per il commit: il messaggio passa da un file UTF-8, non dalla riga di comando.
+        string? messageFile = null;
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(message))
+            {
+                messageFile = Path.Combine(Path.GetTempPath(), $"svnassist-lock-{Guid.NewGuid():N}.txt");
+                await File.WriteAllTextAsync(messageFile, message, new UTF8Encoding(false), ct);
+                head.AddRange(["-F", messageFile, "--encoding", "utf-8"]);
+            }
+
+            await RunSvnWithTargetsAsync(head, pathList, workingDirectory: null, ct);
+        }
+        finally
+        {
+            if (messageFile is not null)
+            {
+                try { File.Delete(messageFile); }
+                catch (IOException) { /* best effort */ }
+                catch (UnauthorizedAccessException) { /* idem */ }
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task UnlockAsync(IEnumerable<string> paths, CancellationToken ct)
+    {
+        var pathList = paths.ToList();
+        if (pathList.Count == 0)
+            return;
+
+        await RunSvnWithTargetsAsync(["unlock"], pathList, workingDirectory: null, ct);
     }
 
     /// <summary>
@@ -937,6 +1009,56 @@ public class SvnService : ISvnService
         return result.StandardOutput;
     }
 
+    private async Task<ProcessResult> RunSvnRawAsync(
+        IReadOnlyList<string> arguments, string? workingDirectory, CancellationToken ct, bool applyTimeout = true)
+    {
+        var result = await RunSvnOnceAsync(arguments, workingDirectory, ct, applyTimeout, null);
+        if (result.ExitCode == 0 || _credentials is null || !SvnErrors.IsAuthenticationError(result.StandardError))
+            return result;
+
+        // Errore di autenticazione: si chiede utente/password e si ripete UNA volta (mai in ciclo).
+        var credentials = await AskCredentialsAsync(result.StandardError, ct);
+        return credentials is null ? result : await RunSvnOnceAsync(arguments, workingDirectory, ct, applyTimeout, credentials);
+    }
+
+    private async Task<SvnCredentials?> AskCredentialsAsync(string stderr, CancellationToken ct)
+    {
+        // Un dialogo alla volta: due comandi in parallelo non ne aprono due.
+        await _credentialGate.WaitAsync(ct);
+        try
+        {
+            var firstLine = stderr.Split('\n').FirstOrDefault(l => l.Trim().Length > 0)?.Trim() ?? string.Empty;
+            return await _credentials!.RequestAsync(firstLine, ct);
+        }
+        finally
+        {
+            _credentialGate.Release();
+        }
+    }
+
+    /// <summary>svn >= 1.10 legge la password da stdin (<c>--password-from-stdin</c>): non finisce nella riga di comando.</summary>
+    internal static bool SupportsPasswordFromStdin(string versionOutput)
+        => Version.TryParse(versionOutput.Trim().Split([' ', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault(), out var v)
+           && (v.Major > 1 || (v.Major == 1 && v.Minor >= 10));
+
+    private async Task<bool> PasswordFromStdinAsync(CancellationToken ct)
+    {
+        if (_passwordFromStdin is { } known)
+            return known;
+
+        try
+        {
+            var r = await _processRunner.RunAsync(_svnExePath, ["--version", "--quiet"], null, ct, environment: SvnProcessEnvironment);
+            _passwordFromStdin = r.ExitCode == 0 && SupportsPasswordFromStdin(r.StandardOutput);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _passwordFromStdin = false;
+        }
+
+        return _passwordFromStdin.Value;
+    }
+
     /// <summary>
     /// Unico punto in cui si lancia svn: aggiunge <c>--non-interactive</c> (niente prompt di credenziali
     /// o certificati su un processo senza console, che resterebbe appeso), forza l'output in inglese e
@@ -946,11 +1068,34 @@ public class SvnService : ISvnService
     /// <c>false</c> per le operazioni lunghe avviate dall'utente (update, commit, in futuro switch/merge/checkout):
     /// non hanno un limite fisso, si fermano solo con l'annullamento dell'utente.
     /// </param>
-    private async Task<ProcessResult> RunSvnRawAsync(
-        IReadOnlyList<string> arguments, string? workingDirectory, CancellationToken ct, bool applyTimeout = true)
+    /// <param name="credentials">Solo per il secondo tentativo dopo un errore di autenticazione.</param>
+    private async Task<ProcessResult> RunSvnOnceAsync(
+        IReadOnlyList<string> arguments, string? workingDirectory, CancellationToken ct, bool applyTimeout,
+        SvnCredentials? credentials)
     {
         // L'opzione va subito dopo il sottocomando: gli argomenti seguenti (path, messaggi) restano intatti.
-        List<string> full = [arguments[0], "--non-interactive", .. arguments.Skip(1)];
+        List<string> full = [arguments[0], "--non-interactive"];
+        string? stdin = null;
+        if (credentials is not null)
+        {
+            full.AddRange(["--username", credentials.UserName]);
+            if (await PasswordFromStdinAsync(ct))
+            {
+                full.Add("--password-from-stdin");
+                stdin = credentials.Password + "\n";
+            }
+            else
+            {
+                // svn < 1.10: la password può solo stare sulla riga di comando (visibile ai processi locali per qualche istante).
+                BackendLog.Warn("svn < 1.10: password passata con --password (aggiorna svn per usare --password-from-stdin).");
+                full.AddRange(["--password", credentials.Password]);
+            }
+
+            if (!credentials.Remember)
+                full.Add("--no-auth-cache");
+        }
+
+        full.AddRange(arguments.Skip(1));
 
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         if (applyTimeout)
@@ -959,7 +1104,7 @@ public class SvnService : ISvnService
         try
         {
             return await _processRunner.RunAsync(
-                _svnExePath, full, workingDirectory, timeoutCts.Token, environment: SvnProcessEnvironment);
+                _svnExePath, full, workingDirectory, timeoutCts.Token, stdin, SvnProcessEnvironment);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested && timeoutCts.IsCancellationRequested)
         {
@@ -986,11 +1131,10 @@ public class SvnService : ISvnService
             return "Impossibile collegarsi al server SVN: controlla la rete/VPN e l'indirizzo del repository.";
 
         if (stderr.Contains("E215004", StringComparison.Ordinal) || stderr.Contains("E170001", StringComparison.Ordinal))
-            return "Autenticazione SVN mancante o rifiutata. Autenticati una volta con TortoiseSVN " +
-                   "oppure da terminale con 'svn info <url-del-repository>' per salvare le credenziali, poi riprova.";
+            return "Autenticazione SVN mancante o rifiutata: riprova e inserisci utente e password quando richiesto.";
 
         if (stderr.Contains("E155004", StringComparison.Ordinal))
-            return "La working copy è bloccata da un'operazione interrotta: esegui Cleanup (es. TortoiseSVN > Clean up) e riprova.";
+            return "La working copy è bloccata da un'operazione interrotta: esegui SVN Cleanup e riprova.";
 
         if (stderr.Contains("E155011", StringComparison.Ordinal) || stderr.Contains("E160024", StringComparison.Ordinal)
             || stderr.Contains("out of date", StringComparison.OrdinalIgnoreCase))

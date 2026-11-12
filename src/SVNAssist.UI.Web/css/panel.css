@@ -91,6 +91,7 @@ progress{display:block;width:100%;height:8px;margin:4px 0;accent-color:var(--acc
 .fi.fld{color:var(--st-X)}
 .fi.st-M{color:var(--st-M)}.fi.st-A{color:var(--st-A)}.fi.st-D{color:var(--st-D)}.fi.st-C{color:var(--st-C)}.fi.st-U{color:var(--st-U)}.fi.st-X{color:var(--st-X)}.fi.st-R{color:var(--st-R)}
 .st{font:700 12px var(--mono);width:18px;text-align:center;flex:none}
+.fi.st-K,.st.st-K,.lk{color:var(--st-X)}.lk{width:12px;height:12px;flex:none;margin-left:4px}
 .st.st-M{color:var(--st-M)}.st.st-A{color:var(--st-A)}.st.st-D{color:var(--st-D)}.st.st-C{color:var(--st-C)}.st.st-U{color:var(--st-U)}.st.st-X{color:var(--st-X)}.st.st-R{color:var(--st-R)}
 .acts{display:none;gap:0;flex:none}
 .tr:hover .acts,.tr:focus-within .acts,.tr:focus .acts,.tr[aria-selected=true] .acts{display:flex}

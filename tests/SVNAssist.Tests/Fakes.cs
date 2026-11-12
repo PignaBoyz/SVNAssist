@@ -99,7 +99,34 @@ internal sealed class FakeSvnService : ISvnService
     public Task RevertAsync(IEnumerable<string> paths, CancellationToken ct, bool recursive = true) { Reverted.Add(paths.ToList()); RevertRecursive.Add(recursive); return Task.CompletedTask; }
     public Task ResolveAsync(string path, SvnConflictChoice accept, CancellationToken ct) { Resolved.Add((path, accept)); return Task.CompletedTask; }
     public Task AddToIgnoreListAsync(string path, CancellationToken ct) { Ignored.Add(path); return Task.CompletedTask; }
-    public Task<UpdateResult> UpdateAsync(string workingCopyPath, CancellationToken ct) => Task.FromResult(new UpdateResult(7, []));
+    public Task<UpdateResult> UpdateAsync(string workingCopyPath, CancellationToken ct)
+        => UpdateError is not null ? throw new InvalidOperationException(UpdateError) : Task.FromResult(new UpdateResult(7, []));
+
+    public List<(string Path, string Revision)> UpdatedToRevision { get; } = [];
+    public List<string> CleanedUp { get; } = [];
+    public List<(IReadOnlyList<string> Paths, string? Message, bool Force)> Locked { get; } = [];
+    public List<IReadOnlyList<string>> Unlocked { get; } = [];
+    /// <summary>Se impostato, <see cref="LockAsync"/> fallisce con questo messaggio finché la chiamata non è con force.</summary>
+    public string? LockErrorUnlessForced { get; set; }
+    public string? UpdateError { get; set; }
+
+    public Task<UpdateResult> UpdateToRevisionAsync(string workingCopyPath, string revision, CancellationToken ct)
+    {
+        UpdatedToRevision.Add((workingCopyPath, revision));
+        return Task.FromResult(new UpdateResult(long.TryParse(revision, out var n) ? n : 9, []));
+    }
+
+    public Task CleanupAsync(string path, CancellationToken ct) { CleanedUp.Add(path); return Task.CompletedTask; }
+
+    public Task LockAsync(IEnumerable<string> paths, string? message, bool force, CancellationToken ct)
+    {
+        if (LockErrorUnlessForced is not null && !force)
+            throw new InvalidOperationException(LockErrorUnlessForced);
+        Locked.Add((paths.ToList(), message, force));
+        return Task.CompletedTask;
+    }
+
+    public Task UnlockAsync(IEnumerable<string> paths, CancellationToken ct) { Unlocked.Add(paths.ToList()); return Task.CompletedTask; }
 
     public Task<IReadOnlyList<SvnLogEntry>> GetLogAsync(string targetPath, int maxEntries, CancellationToken ct)
     {
@@ -156,6 +183,16 @@ internal sealed class FakeDialogs : IDialogService
 
     public Task<SvnConflictChoice?> ChooseConflictResolutionAsync(string fileName, CancellationToken ct)
         => Task.FromResult(ConflictResult);
+
+    /// <summary>Testo restituito da <see cref="AskTextAsync"/> (null = annullato).</summary>
+    public string? TextResult { get; set; } = "";
+    public List<string> TextPrompts { get; } = [];
+
+    public Task<string?> AskTextAsync(string message, string label, string defaultValue, CancellationToken ct)
+    {
+        TextPrompts.Add(message);
+        return Task.FromResult(TextResult);
+    }
 }
 
 /// <summary>Factory AI finta che restituisce un servizio che registra le lingue ricevute.</summary>

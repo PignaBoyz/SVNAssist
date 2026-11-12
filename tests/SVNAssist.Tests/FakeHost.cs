@@ -31,6 +31,26 @@ internal sealed class FakeHost : IHost
         return Task.FromResult(PromptAnswers.Count > 0 ? PromptAnswers.Dequeue() : DefaultAnswer);
     }
 
+    /// <summary>Risposte ai dialoghi di testo (revisione, messaggio di lock); coda vuota = <see cref="DefaultText"/>.</summary>
+    public Queue<string?> TextAnswers { get; } = new();
+    public string? DefaultText { get; set; } = "";
+    public List<(string Message, string Label, string Default)> TextPrompts { get; } = [];
+
+    public Task<string?> PromptTextAsync(string message, string label, string defaultValue)
+    {
+        TextPrompts.Add((message, label, defaultValue));
+        return Task.FromResult(TextAnswers.Count > 0 ? TextAnswers.Dequeue() : DefaultText);
+    }
+
+    public string[]? Credentials { get; set; }
+    public int CredentialPrompts { get; private set; }
+
+    public Task<string[]?> PromptCredentialsAsync(string detail, string defaultUser)
+    {
+        CredentialPrompts++;
+        return Task.FromResult(Credentials);
+    }
+
     public Task<Dictionary<string, string>> GetSettingsAsync() => Task.FromResult(new Dictionary<string, string>(Settings));
 
     public Task SetSettingAsync(string key, string value)

@@ -89,6 +89,8 @@ namespace SVNAssist.Host
             Add(Ids.CmdLog, () => ShowViewAsync("log"));
             Add(Ids.CmdUpdate, () => Host.SendCommandAsync("changes", "update", null));
             Add(Ids.CmdAiSetup, () => Host.SendCommandAsync("changes", "wizardOpen", null));
+            Add(Ids.CmdUpdateRev, () => Host.SendCommandAsync("changes", "updateToRevision", null));
+            Add(Ids.CmdCleanup, () => Host.SendCommandAsync("changes", "cleanup", null));
 
             // Solution Explorer: i percorsi selezionati sono un dato dell'host (non vengono dalla pagina) e vanno
             // al backend con IBackend.RunPathCommandAsync(command, paths). Vedi docs/host.md.
@@ -99,6 +101,10 @@ namespace SVNAssist.Host
             Add(Ids.CmdSeIgnore, () => SeAsync("ignore", null));
             Add(Ids.CmdSeCommit, () => SeAsync("commit", "changes"));
             Add(Ids.CmdSeLog, () => SeAsync("log", "log"));
+            Add(Ids.CmdSeUpdateRev, () => SeAsync("updaterev", null));
+            Add(Ids.CmdSeCleanup, () => SeAsync("cleanup", null));
+            Add(Ids.CmdSeLock, () => SeAsync("lock", null));
+            Add(Ids.CmdSeUnlock, () => SeAsync("unlock", null));
         }
 
         private async Task SeAsync(string command, string showView)

@@ -18,8 +18,9 @@ msbuild src/SVNAssist.Host/SVNAssist.Host.csproj -p:Configuration=Release       
 - Tema: `ThemeBridge` manda `theme{kind,vars}` al `ready`, a `VSColorTheme.ThemeChanged`, a cambio `windowTheme`; solo le variabili derivabili da VS (sfondi, testi, bordi, selezione, link, font): colori di stato/diff/sintassi restano quelli di `tokens.css` per il `kind`. Alto contrasto: colori di sistema.
 - Impostazioni: Tools > Options > SVNAssist (chiavi camelCase del contratto; `GetSettingsAsync` ritorna anche gli alias minuscoli della 0.1.0). Le API key sono cifrate con DPAPI nel registro.
 - `IHost.ShowLogAsync(path)` mostra la finestra Log e inoltra `logLoad{path}`.
-- Menu: Extensions > SVNAssist (Changes, Commit..., Update, Log); Solution Explorer > SVN (Update, Commit..., Diff, Log, Add, Revert, Ignore). "Update" del menu Extensions invia il cmd `update` alla vista `changes`.
+- Menu: Extensions > SVNAssist (Changes, Commit..., Update, Update to revision..., Cleanup, Log); Solution Explorer > SVN (Update, Update to revision..., Commit..., Diff, Log, Add, Revert, Ignore, Cleanup, Lock..., Unlock). "Update" del menu Extensions invia il cmd `update` alla vista `changes`.
 
 ## Aggiunte al contratto (rispetto alla prima versione)
 - `IBackend.ThemeChangedAsync(string kind)`.
-- `IBackend.RunPathCommandAsync(string command, string[] paths)`: comandi del menu contestuale di Solution Explorer (`update|add|revert|diff|ignore|log|commit`) sui percorsi selezionati (file, cartelle, .sln/.csproj: la risoluzione a cartella e' del backend, come `SvnTarget`). Per `commit` l'host apre prima Changes, per `log` apre Log.
+- `IHost.PromptTextAsync(message, label, default)`: dialogo con un campo di testo (revisione, messaggio di lock); `null` se annullato. `IHost.PromptCredentialsAsync(detail, defaultUser)`: dialogo utente/password (password mascherata, "Ricorda" attivo di default) → `[utente, password, "1"|"0"]` o `null`; mostrato solo dopo un errore di autenticazione di svn, mai loggato.
+- `IBackend.RunPathCommandAsync(string command, string[] paths)`: comandi del menu contestuale di Solution Explorer (`update|add|revert|diff|ignore|log|commit|updaterev|cleanup|lock|unlock`) sui percorsi selezionati (file, cartelle, .sln/.csproj: la risoluzione a cartella e' del backend, come `SvnTarget`). Per `commit` l'host apre prima Changes, per `log` apre Log.

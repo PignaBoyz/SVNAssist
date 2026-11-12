@@ -225,8 +225,8 @@ public class SvnServiceParsingTests : IDisposable
 
     [Theory]
     [InlineData("svn: E170013: Unable to connect to a repository", "server SVN")]
-    [InlineData("svn: E215004: No more credentials or we tried too many times", "TortoiseSVN")]
-    [InlineData("svn: E170001: Authentication required", "svn info")]
+    [InlineData("svn: E215004: No more credentials or we tried too many times", "utente e password")]
+    [InlineData("svn: E170001: Authentication required", "utente e password")]
     [InlineData("svn: E155004: Working copy locked", "Cleanup")]
     [InlineData("svn: E155011: File 'a' is out of date", "Update")]
     [InlineData("svn: E160024: Transaction is out of date", "Update")]

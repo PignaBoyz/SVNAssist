@@ -21,12 +21,14 @@ internal enum ChangeSection
 /// <param name="Status">Stato SVN.</param>
 /// <param name="IsTreeConflict">Conflitto "ad albero".</param>
 /// <param name="IsDirectory">L'elemento e' una cartella (es. cartella non versionata o con sole proprieta' modificate).</param>
+/// <param name="IsLocked">La working copy tiene un lock (<c>svn lock</c>) su questo file. Un file solo bloccato ha stato <c>Normal</c>.</param>
 internal sealed record ChangeEntry(
     string FullPath,
     string RelativePath,
     SvnStatusKind Status,
     bool IsTreeConflict = false,
-    bool IsDirectory = false)
+    bool IsDirectory = false,
+    bool IsLocked = false)
 {
     /// <summary>Nome dell'elemento (ultimo segmento del percorso).</summary>
     public string Name => ChangesTreeBuilder.SplitPath(RelativePath) is { Length: > 0 } s ? s[^1] : RelativePath;
@@ -232,7 +234,7 @@ internal static class ChangesTreeBuilder
 /// <summary>Come mostrare gli stati SVN: lettera (enum dello schema), descrizione.</summary>
 internal static class StatusPresentation
 {
-    /// <summary>Lettera dello schema UI: M A D C ? ! R. Gli stati anomali (ostruito, incompleto, mancante) sono tutti "!".</summary>
+    /// <summary>Lettera dello schema UI: M A D C ? ! R K (K = solo bloccato). Gli stati anomali (ostruito, incompleto, mancante) sono tutti "!".</summary>
     public static string ShortCode(SvnStatusKind status) => status switch
     {
         SvnStatusKind.Modified => "M",
@@ -242,6 +244,7 @@ internal static class StatusPresentation
         SvnStatusKind.Unversioned => "?",
         SvnStatusKind.Replaced => "R",
         SvnStatusKind.Missing or SvnStatusKind.Obstructed or SvnStatusKind.Incomplete => "!",
+        SvnStatusKind.Normal => "K", // in lista solo se bloccato (lock): vedi ChangeEntry.IsLocked
         _ => "?",
     };
 
@@ -257,7 +260,7 @@ internal static class StatusPresentation
         SvnStatusKind.Replaced => "Sostituito",
         SvnStatusKind.Obstructed => "Ostruito",
         SvnStatusKind.Incomplete => "Incompleto",
-        SvnStatusKind.Normal => "Normale",
+        SvnStatusKind.Normal => "Bloccato (lock)",
         _ => "Sconosciuto",
     };
 

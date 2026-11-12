@@ -233,6 +233,25 @@
         },
         "err": {
           "type": "boolean"
+        },
+        "action": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "label",
+            "cmd"
+          ],
+          "description": "Pulsante accanto al messaggio d'errore (es. \"Esegui Cleanup\" se la working copy e' bloccata). Facoltativo.",
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "cmd": {
+              "enum": [
+                "cleanup"
+              ]
+            }
+          }
         }
       }
     },
@@ -534,9 +553,10 @@
             "?",
             "!",
             "R",
+            "K",
             null
           ],
-          "description": "Lettera svn; null per le cartelle."
+          "description": "Lettera svn; K = file solo bloccato (lock) da te; null per le cartelle."
         },
         "statusText": {
           "type": "string",
@@ -582,11 +602,23 @@
             "deleteFile": {
               "type": "boolean",
               "description": "Canc."
+            },
+            "lock": {
+              "type": "boolean",
+              "description": "SVN Lock (file modificato non ancora bloccato). Facoltativo: assente = false."
+            },
+            "unlock": {
+              "type": "boolean",
+              "description": "SVN Unlock (file bloccato da te). Facoltativo: assente = false."
             }
           }
         },
         "tooltip": {
           "type": "string"
+        },
+        "locked": {
+          "type": "boolean",
+          "description": "La working copy tiene un lock (svn lock) su questo file: la UI mostra un lucchetto. Assente = non bloccato."
         }
       }
     }

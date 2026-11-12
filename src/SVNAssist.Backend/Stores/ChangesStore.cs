@@ -173,7 +173,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 _isTreeView ? "tree" : "list",
                 new ThemeDto(mode, mode == "auto" ? _vsThemeKind : mode),
                 sections,
-                new StatusDto(_statusMessage, _statusMessage.StartsWith("Errore", StringComparison.Ordinal)),
+                BuildStatus(),
                 Prerequisites.GetSnapshot(),
                 _loading,
                 Wizard.GetSnapshot());
@@ -217,6 +217,8 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             var entry = node.Entry!;
             var statusName = StatusPresentation.DisplayName(entry.Status, entry.IsTreeConflict);
             var statusText = statusName;
+            if (entry.IsLocked && entry.Status != SvnStatusKind.Normal)
+                statusText += " — bloccato (lock)";
             if (section == ChangeSection.Staged && entry.Status == SvnStatusKind.Unversioned)
                 statusText += " (verrà aggiunto con il commit)";
             else if (section == ChangeSection.Staged && entry.Status == SvnStatusKind.Missing)
@@ -230,24 +232,27 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 Status: StatusPresentation.ShortCode(entry.Status), StatusText: statusText,
                 Can: new CanDto(
                     Diff: CanDiff(entry),
-                    Stage: section != ChangeSection.Staged && entry.Status != SvnStatusKind.Conflicted,
+                    Stage: section != ChangeSection.Staged && entry.Status is not (SvnStatusKind.Conflicted or SvnStatusKind.Normal),
                     Unstage: section == ChangeSection.Staged,
                     Add: entry.Status == SvnStatusKind.Unversioned,
                     Ignore: entry.Status == SvnStatusKind.Unversioned,
                     Revert: StatusPresentation.IsRevertable(entry.Status),
                     Resolve: entry.Status == SvnStatusKind.Conflicted,
-                    DeleteFile: CanDeleteFile(entry)),
-                Tooltip: $"{entry.RelativePath} — {statusName}"));
+                    DeleteFile: CanDeleteFile(entry),
+                    Lock: !entry.IsDirectory && !entry.IsLocked && entry.Status == SvnStatusKind.Modified,
+                    Unlock: !entry.IsDirectory && entry.IsLocked),
+                Tooltip: $"{entry.RelativePath} — {statusText}",
+                Locked: entry.IsLocked ? true : null));
         }
     }
 
-    private static bool CanDiff(ChangeEntry e) => e.Status != SvnStatusKind.Unversioned && !e.IsDirectory;
+    private static bool CanDiff(ChangeEntry e) => e.Status is not (SvnStatusKind.Unversioned or SvnStatusKind.Normal) && !e.IsDirectory;
 
     private static bool CanDeleteFile(ChangeEntry e) => !e.IsDirectory && e.Status != SvnStatusKind.Deleted;
 
     private static CanDto FolderCan(ChangeSection section, List<ChangeEntry> entries) => new(
         Diff: entries.Any(CanDiff),
-        Stage: section != ChangeSection.Staged && entries.Any(e => e.Status != SvnStatusKind.Conflicted),
+        Stage: section != ChangeSection.Staged && entries.Any(e => e.Status is not (SvnStatusKind.Conflicted or SvnStatusKind.Normal)),
         Unstage: section == ChangeSection.Staged,
         Add: entries.Any(e => e.Status == SvnStatusKind.Unversioned),
         Ignore: entries.Any(e => e.Status == SvnStatusKind.Unversioned),
@@ -270,6 +275,12 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 break;
             case "update":
                 await RunExclusiveAsync(() => UpdateCoreAsync(ct));
+                break;
+            case "updateToRevision":
+                await RunExclusiveAsync(() => UpdateToRevisionCoreAsync(ct));
+                break;
+            case "cleanup":
+                await RunExclusiveAsync(() => CleanupCoreAsync(ct));
                 break;
             case "commit":
                 await RunExclusiveAsync(() => CommitCoreAsync(ct));
@@ -319,7 +330,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 await ShowFolderDiffAsync(Args.Str(args, "key"), ct);
                 break;
             case "rowOp":
-                await RowOpAsync(Args.OneOf(args, "op", "add", "ignore", "revert", "resolve", "deleteFile"), Args.Str(args, "key"), ct);
+                await RowOpAsync(Args.OneOf(args, "op", "add", "ignore", "revert", "resolve", "deleteFile", "lock", "unlock"), Args.Str(args, "key"), ct);
                 break;
             case "setTheme":
                 await SetThemeAsync(Args.OneOf(args, "mode", "auto", "light", "dark", "blue"), ct);
@@ -657,7 +668,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 branch = await branchTask;
 
             var newEntries = statuses
-                .Where(s => s.Status != SvnStatusKind.Normal)
+                .Where(s => s.Status != SvnStatusKind.Normal || s.IsLocked)
                 .Select(s => ToEntry(s, path))
                 .Where(e => e is not null)
                 .Select(e => e!)
@@ -724,7 +735,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             }
         }
 
-        return new ChangeEntry(fullPath, relative, status.Status, status.IsTreeConflict, IsDirectory(fullPath));
+        return new ChangeEntry(fullPath, relative, status.Status, status.IsTreeConflict, IsDirectory(fullPath), status.IsLocked);
     }
 
     /// <summary>I nuovi elementi M/A/D/R/! partono in Staged; gli altri mantengono la scelta dell'utente.</summary>
@@ -756,13 +767,16 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         var parts = new List<string>();
         var conflicts = entries.Count(e => e.Status == SvnStatusKind.Conflicted);
         var unversioned = entries.Count(e => e.Status == SvnStatusKind.Unversioned);
-        var changes = entries.Count - conflicts - unversioned;
+        var lockedOnly = entries.Count(e => e.Status == SvnStatusKind.Normal);
+        var changes = entries.Count - conflicts - unversioned - lockedOnly;
         if (conflicts > 0)
             parts.Add($"{conflicts} in conflitto");
         if (changes > 0)
             parts.Add($"{changes} modificati");
         if (unversioned > 0)
             parts.Add($"{unversioned} non versionati");
+        if (lockedOnly > 0)
+            parts.Add($"{lockedOnly} bloccati");
         return string.Join(", ", parts) + ".";
     }
 
@@ -841,7 +855,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             {
                 if (!staged)
                     staging.Remove(entry.FullPath);
-                else if (entry.Status != SvnStatusKind.Conflicted)
+                else if (entry.Status is not (SvnStatusKind.Conflicted or SvnStatusKind.Normal))
                     staging.Add(entry.FullPath);
             }
         }
@@ -1048,6 +1062,80 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         }
     }
 
+    /// <summary>SVN Update to revision: chiede la revisione (intero positivo o HEAD) e fa <c>svn update -r</c> sulla working copy.</summary>
+    private async Task UpdateToRevisionCoreAsync(CancellationToken ct)
+    {
+        var wc = WorkingCopyPath;
+        if (string.IsNullOrWhiteSpace(wc))
+        {
+            SetStatus("Nessuna working copy configurata.");
+            return;
+        }
+
+        var revision = await AskRevisionAsync(ct);
+        if (revision is null)
+            return;
+
+        try
+        {
+            SetStatus($"Update alla revisione {revision} in corso...");
+            var update = await _svnService.UpdateToRevisionAsync(wc, revision, ct);
+            var updated = update.Revision is { } rev ? $"Aggiornato alla revisione {rev}" : "Update completato";
+            await RefreshAsync(ct, reloadBranch: true, update.ConflictedPaths.Count > 0
+                ? $"{updated}: {update.ConflictedPaths.Count} file in conflitto."
+                : $"{updated}.");
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            SetStatus($"Errore update: {ex.Message}");
+        }
+    }
+
+    /// <summary>Chiede la revisione finché non è valida; <c>null</c> se l'utente annulla.</summary>
+    private async Task<string?> AskRevisionAsync(CancellationToken ct)
+    {
+        var message = "Aggiorna la working copy alla revisione indicata (numero intero positivo oppure HEAD).";
+        while (true)
+        {
+            var typed = await _dialogs.AskTextAsync(message, "Revisione", "HEAD", ct);
+            if (typed is null)
+                return null;
+            if (SvnRevision.TryNormalize(typed, out var revision))
+                return revision;
+            message = $"\"{typed.Trim()}\" non è una revisione valida: scrivi un numero intero positivo (es. 1234) oppure HEAD.";
+        }
+    }
+
+    /// <summary>SVN Cleanup della working copy (rimuove i lock lasciati da operazioni interrotte).</summary>
+    private async Task CleanupCoreAsync(CancellationToken ct)
+    {
+        var wc = WorkingCopyPath;
+        if (string.IsNullOrWhiteSpace(wc))
+        {
+            SetStatus("Nessuna working copy configurata.");
+            return;
+        }
+
+        try
+        {
+            SetStatus("Cleanup in corso...");
+            await _svnService.CleanupAsync(wc, ct);
+            await RefreshAsync(ct, reloadBranch: false, "Cleanup completato.");
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            SetStatus($"Errore cleanup: {ex.Message}");
+        }
+    }
+
+    /// <summary>Messaggio di stato + eventuale pulsante d'azione: working copy bloccata -> "Esegui Cleanup".</summary>
+    private StatusDto BuildStatus()
+    {
+        var isError = _statusMessage.StartsWith("Errore", StringComparison.Ordinal);
+        return new StatusDto(_statusMessage, isError,
+            isError && SvnErrors.IsWorkingCopyLocked(_statusMessage) ? new StatusActionDto("Esegui Cleanup", "cleanup") : null);
+    }
+
     // ── Operazioni su file, cartelle e sezioni ───────────────────────
 
     private Task RowOpAsync(string op, string key, CancellationToken ct)
@@ -1063,6 +1151,8 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 "revert" => RevertCoreAsync(target, ct),
                 "resolve" => ResolveCoreAsync(target, ct),
                 "ignore" => IgnoreCoreAsync(target, ct),
+                "lock" => LockCoreAsync(target, ct),
+                "unlock" => UnlockCoreAsync(target, ct),
                 _ => throw new ArgumentException($"Operazione sconosciuta: {op}"),
             };
         });
@@ -1331,6 +1421,72 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             SetStatus($"Errore ignore list: {ex.Message}");
         }
     }
+
+    /// <summary>
+    /// SVN Lock su un file modificato, con messaggio facoltativo. Se è già bloccato da un altro, chiede una conferma
+    /// esplicita prima di rubare il lock (<c>--force</c>).
+    /// </summary>
+    private async Task LockCoreAsync(KeyTarget target, CancellationToken ct)
+    {
+        if (target.SingleFile is not { IsLocked: false } entry || entry.Status != SvnStatusKind.Modified)
+        {
+            SetStatus("Seleziona un file modificato non ancora bloccato.");
+            return;
+        }
+
+        var message = await _dialogs.AskTextAsync($"Blocca \"{entry.RelativePath}\" (svn lock). Messaggio facoltativo:", "Messaggio", string.Empty, ct);
+        if (message is null)
+            return;
+
+        try
+        {
+            SetStatus("Lock in corso...");
+            try
+            {
+                await _svnService.LockAsync([entry.FullPath], message, force: false, ct);
+            }
+            catch (InvalidOperationException ex) when (SvnErrors.IsLockedByOther(ex.Message))
+            {
+                if (!await _dialogs.ConfirmAsync(
+                        $"\"{entry.RelativePath}\" è già bloccato da un altro utente.\n\n{FirstLine(ex.Message)}\n\n" +
+                        "Rubare il lock lo toglie a lui: potrebbe perdere il diritto di committare il file. Procedere?", ct))
+                {
+                    SetStatus("Lock non preso: il file è bloccato da un altro utente.");
+                    return;
+                }
+
+                await _svnService.LockAsync([entry.FullPath], message, force: true, ct);
+            }
+
+            await RefreshAsync(ct, reloadBranch: false, $"Bloccato (lock): {entry.RelativePath}");
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            SetStatus($"Errore lock: {ex.Message}");
+        }
+    }
+
+    private async Task UnlockCoreAsync(KeyTarget target, CancellationToken ct)
+    {
+        if (target.SingleFile is not { IsLocked: true } entry)
+        {
+            SetStatus("Seleziona un file bloccato da te.");
+            return;
+        }
+
+        try
+        {
+            SetStatus("Unlock in corso...");
+            await _svnService.UnlockAsync([entry.FullPath], ct);
+            await RefreshAsync(ct, reloadBranch: false, $"Sbloccato (unlock) completato: {entry.RelativePath}");
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            SetStatus($"Errore unlock: {ex.Message}");
+        }
+    }
+
+    private static string FirstLine(string text) => text.Split('\n').FirstOrDefault(l => l.Trim().Length > 0)?.Trim() ?? string.Empty;
 
     // ── Diff (si apre nell'editor di Visual Studio) ──────────────────
 

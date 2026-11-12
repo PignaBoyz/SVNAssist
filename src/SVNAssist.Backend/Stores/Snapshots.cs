@@ -18,7 +18,7 @@ internal sealed record CommitDto(string Text, string AiStatus, string AiLevel, i
 
 internal sealed record ThemeDto(string Mode, string Kind);
 
-internal sealed record CanDto(bool Diff, bool Stage, bool Unstage, bool Add, bool Ignore, bool Revert, bool Resolve, bool DeleteFile);
+internal sealed record CanDto(bool Diff, bool Stage, bool Unstage, bool Add, bool Ignore, bool Revert, bool Resolve, bool DeleteFile, bool Lock = false, bool Unlock = false);
 
 internal sealed record RowDto(
     string Key,
@@ -32,11 +32,15 @@ internal sealed record RowDto(
     string? Status,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? StatusText,
     CanDto Can,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tooltip);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tooltip,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Locked = null);
 
 internal sealed record SectionDto(string Id, string Title, int Count, bool Expanded, IReadOnlyList<RowDto> Rows);
 
-internal sealed record StatusDto(string Msg, bool Err);
+/// <summary>Pulsante d'azione accanto al messaggio di stato (es. "Esegui Cleanup" quando la working copy è bloccata).</summary>
+internal sealed record StatusActionDto(string Label, string Cmd);
+
+internal sealed record StatusDto(string Msg, bool Err, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] StatusActionDto? Action = null);
 
 internal sealed record PrereqItemDto(string Id, string Group, string Title, bool Ok, string Detail, string Instructions, string Primary, string Secondary);
 
