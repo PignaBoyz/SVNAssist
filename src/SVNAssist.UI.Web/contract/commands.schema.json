@@ -137,6 +137,96 @@
       }
     },
     {
+      "title": "switchOpen",
+      "description": "SVN Switch: apre il selettore con trunk, branch e tag del repository (svn list sulle cartelle del layout, in cache per sessione).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "switchOpen"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "switchRefresh",
+      "description": "SVN Switch: rilegge l'elenco dal server scartando la cache (\"Aggiorna\").",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "switchRefresh"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "switchCancel",
+      "description": "SVN Switch: chiude il selettore senza cambiare ramo.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "switchCancel"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "switchOk",
+      "description": "SVN Switch: porta la working copy sul ramo scelto (svn switch --accept postpone). name = nome dell'elemento dell'elenco (es. branches/x); l'URL lo ricava il backend dall'elenco, mai dalla UI. Con modifiche locali chiede conferma.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "switchOk"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name"
+          ],
+          "properties": {
+            "name": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
       "title": "showLog",
       "description": "Apre il Log della working copy (come Extensions > SVNAssist > Log).",
       "type": "object",

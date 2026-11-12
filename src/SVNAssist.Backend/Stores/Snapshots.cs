@@ -6,7 +6,8 @@ namespace SVNAssist.Stores;
 // DTO degli snapshot: devono restare conformi a src/SVNAssist.UI.Web/contract/*.schema.json
 // (verificato dai test SnapshotSchemaTests). Proprieta' camelCase; i campi facoltativi null non vengono scritti.
 
-internal sealed record WorkingCopyDto(string Path, bool ShowInput, string Branch, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? Rev = null);
+internal sealed record WorkingCopyDto(string Path, bool ShowInput, string Branch, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? Rev = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? SvnVersion = null);
 
 internal sealed record TraceDto(string Name, string State, string Detail);
 
@@ -76,6 +77,12 @@ internal sealed record RevItemDto(long Rev, string Author, string Date, string M
 /// <summary>Scelta guidata della revisione per "Update to revision": <c>Target</c> e' il percorso da aggiornare, <c>Error</c> un numero non valido.</summary>
 internal sealed record RevPickerDto(bool Open, string Target, bool Loading, string Error, bool CanMore, IReadOnlyList<RevItemDto> Items);
 
+/// <param name="Kind"><c>trunk</c> | <c>branch</c> | <c>tag</c>.</param>
+internal sealed record SwitchItemDto(string Name, string Kind, bool Current);
+
+/// <summary>Selettore di "SVN Switch...": <c>Name</c> degli elementi e' relativo alla base (<c>trunk</c>, <c>branches/x</c>, <c>tags/1.0</c>).</summary>
+internal sealed record SwitchPickerDto(bool Open, bool Loading, string Error, IReadOnlyList<SwitchItemDto> Items);
+
 /// <summary>Snapshot della vista <c>changes</c> (changes-state.schema.json).</summary>
 internal sealed record ChangesState(
     WorkingCopyDto WorkingCopy,
@@ -87,7 +94,8 @@ internal sealed record ChangesState(
     PrereqDto Prereq,
     bool Loading,
     WizardDto Wizard,
-    RevPickerDto RevPicker);
+    RevPickerDto RevPicker,
+    SwitchPickerDto SwitchPicker);
 
 /// <param name="K"><c>dir</c> per le cartelle (non si aprono nel diff); assente altrimenti.</param>
 internal sealed record LogPathDto(string A, string P, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? K = null);

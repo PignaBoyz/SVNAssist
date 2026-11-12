@@ -178,4 +178,19 @@ public interface ISvnService
     /// <param name="ct">Token per annullare l'operazione.</param>
     /// <returns>Il nome del branch (es. "trunk", "branches/feature-x").</returns>
     Task<string> GetBranchNameAsync(string workingCopyPath, CancellationToken ct);
+
+    /// <summary><c>svn info --xml</c> sulla radice della working copy: URL, URL relativo, radice del repository, revisioni.</summary>
+    Task<SvnInfo> GetInfoAsync(string workingCopyPath, CancellationToken ct);
+
+    /// <summary>Versione di svn (<c>svn --version --quiet</c>); <c>null</c> se non si riesce a leggerla. Le funzioni che richiedono svn &lt; 1.8 si nascondono.</summary>
+    Task<Version?> GetSvnVersionAsync(CancellationToken ct);
+
+    /// <summary>
+    /// Nomi delle cartelle direttamente sotto un URL (<c>svn list --xml</c>), per l'elenco di branch/tag.
+    /// Un percorso che non esiste (es. repository senza <c>tags</c>) non e' un errore: elenco vuoto.
+    /// </summary>
+    Task<IReadOnlyList<string>> ListFoldersAsync(string url, CancellationToken ct);
+
+    /// <summary>Porta la working copy su un altro URL (<c>svn switch --accept postpone</c>), dalla sua radice. I conflitti restano da risolvere.</summary>
+    Task<UpdateResult> SwitchAsync(string workingCopyPath, string url, CancellationToken ct);
 }

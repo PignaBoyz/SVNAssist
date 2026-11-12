@@ -60,6 +60,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
     private bool _isTreeView = true;
     private bool _loading = true;
     private string _branchName = string.Empty;
+    private string? _svnVersion;
     private string _themeMode = "auto";
     private string _vsThemeKind = "dark";
     private string? _solutionRoot;
@@ -102,6 +103,8 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         CommitMessage.Changed += NotifyChanged;
         RevPicker = new RevisionPickerStore(svnService);
         RevPicker.Changed += NotifyChanged;
+        Switch = new SwitchPickerStore(svnService, settingsService);
+        Switch.Changed += NotifyChanged;
         _debouncer = new RefreshDebouncer(RefreshQuietPeriod, AutoRefreshAsync);
     }
 
@@ -114,6 +117,9 @@ internal sealed class ChangesStore : ViewStore, IDisposable
 
     /// <summary>Scelta guidata della revisione per "Update to revision".</summary>
     internal RevisionPickerStore RevPicker { get; }
+
+    /// <summary>Selettore di "SVN Switch...".</summary>
+    internal SwitchPickerStore Switch { get; }
 
     /// <summary>Checklist dei prerequisiti.</summary>
     internal PrereqStore Prerequisites { get; }
@@ -174,7 +180,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             var mode = _themeMode;
             var commit = CommitSet();
             return new ChangesState(
-                new WorkingCopyDto(_workingCopyPath, _showWorkingCopyInput, _branchName),
+                new WorkingCopyDto(_workingCopyPath, _showWorkingCopyInput, _branchName, SvnVersion: _svnVersion),
                 CommitMessage.GetSnapshot(download, commit.Entries.Count, commit.All),
                 _isTreeView ? "tree" : "list",
                 new ThemeDto(mode, mode == "auto" ? _vsThemeKind : mode),
@@ -183,7 +189,8 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 Prerequisites.GetSnapshot(),
                 _loading,
                 Wizard.GetSnapshot(),
-                RevPicker.GetSnapshot());
+                RevPicker.GetSnapshot(),
+                Switch.GetSnapshot());
         }
     }
 
@@ -294,6 +301,21 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 break;
             case "revPickerOk":
                 await RevPickerOkAsync(Args.Str(args, "rev"), ct);
+                break;
+            case "switchOpen":
+                if (string.IsNullOrWhiteSpace(WorkingCopyPath))
+                    SetStatus(Loc.T("Nessuna working copy configurata."));
+                else
+                    await Switch.OpenAsync(WorkingCopyPath, ct);
+                break;
+            case "switchRefresh":
+                await Switch.RefreshAsync(ct);
+                break;
+            case "switchCancel":
+                Switch.Close();
+                break;
+            case "switchOk":
+                await SwitchOkAsync(Args.Str(args, "name"), ct);
                 break;
             case "showLog":
                 if (string.IsNullOrWhiteSpace(WorkingCopyPath))
@@ -687,10 +709,10 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             var needBranch = reloadBranch || !string.Equals(_branchLoadedFor, path, StringComparison.OrdinalIgnoreCase);
 
             var statusTask = _svnService.GetStatusAsync(path, ct);
-            var branchTask = needBranch ? _svnService.GetBranchNameAsync(path, ct) : null;
+            var branchTask = needBranch ? LoadBranchAsync(path, ct) : null;
 
             var statuses = await statusTask;
-            string? branch = null;
+            (string Label, string? Version)? branch = null;
             if (branchTask is not null)
                 branch = await branchTask;
 
@@ -703,9 +725,10 @@ internal sealed class ChangesStore : ViewStore, IDisposable
 
             lock (_stateLock)
             {
-                if (branch is not null)
+                if (branch is { } b)
                 {
-                    _branchName = branch;
+                    _branchName = b.Label;
+                    _svnVersion = b.Version;
                     _branchLoadedFor = path;
                 }
 
@@ -1139,6 +1162,70 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
             SetStatus(Loc.T("Errore update: {0}", ex.Message));
+        }
+    }
+
+    /// <summary>Ramo corrente (dall'URL di <c>svn info</c> e dal layout del repository) e versione di svn. Un errore non blocca lo stato: ramo vuoto ("—").</summary>
+    private async Task<(string Label, string? Version)> LoadBranchAsync(string path, CancellationToken ct)
+    {
+        var label = string.Empty;
+        try
+        {
+            var info = await _svnService.GetInfoAsync(path, ct);
+            label = RepoLayout.Parse(await _settingsService.GetRepoLayoutAsync(ct)).Deduce(info.RelativeUrl).Label;
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            BackendLog.Warn("svn info fallito: " + ex.Message);
+        }
+
+        var version = await _svnService.GetSvnVersionAsync(ct);
+        return (label, version?.ToString());
+    }
+
+    /// <summary>OK nel selettore: l'URL viene solo dall'elenco (mai dalla UI); con modifiche locali chiede conferma, poi <c>svn switch</c>.</summary>
+    private async Task SwitchOkAsync(string name, CancellationToken ct)
+    {
+        if (!Switch.IsOpen)
+            return;
+        var target = Switch.Find(name);
+        if (target is null)
+        {
+            Switch.SetError(Loc.T("Elemento non valido: aggiorna l'elenco e riprova."));
+            return;
+        }
+
+        if (target.Current)
+        {
+            Switch.SetError(Loc.T("La working copy è già su {0}.", target.Name));
+            return;
+        }
+
+        int local;
+        lock (_stateLock)
+            local = _entries.Count(e => e.Status is not (SvnStatusKind.Unversioned or SvnStatusKind.Normal or SvnStatusKind.Ignored));
+        if (local > 0 && !await _dialogs.ConfirmAsync(
+                Loc.T("La working copy ha {0} elementi con modifiche locali: lo switch le porta su {1} e può generare conflitti. Continuare?", local, target.Name), ct))
+            return;
+
+        Switch.Close();
+        await RunExclusiveAsync(() => SwitchCoreAsync(target, ct));
+    }
+
+    private async Task SwitchCoreAsync(SwitchPickerStore.Target target, CancellationToken ct)
+    {
+        try
+        {
+            SetStatus(Loc.T("Switch a {0} in corso...", target.Name));
+            var result = await _svnService.SwitchAsync(WorkingCopyPath, target.Url, ct);
+            var done = result.Revision is { } rev ? Loc.T("Switch a {0} completato (revisione {1})", target.Name, rev) : Loc.T("Switch a {0} completato", target.Name);
+            await RefreshAsync(ct, reloadBranch: true, (result.ConflictedPaths.Count > 0
+                ? Loc.T("{0}: {1} file in conflitto.", done, result.ConflictedPaths.Count)
+                : $"{done}.") + " " + Loc.T("Se Visual Studio lo chiede, ricarica la solution."));
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            SetStatus(Loc.T("Errore switch: {0}", ex.Message));
         }
     }
 

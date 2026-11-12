@@ -48,6 +48,10 @@ Vale per file e cartelle (la cartella ha il percorso della cartella; le catene a
 | `revPickerMore` | – | "Carica altre": altre 30 revisioni |
 | `revPickerCancel` | – | chiude la scelta senza aggiornare |
 | `revPickerOk` | `rev` | intero positivo o `HEAD`: chiude ed esegue `svn update -r N` (esito come l'update: revisione, conflitti). Se non valido la scelta resta aperta con `revPicker.error` |
+| `switchOpen` | – | **SVN Switch...**: apre il selettore (`switchPicker.open`) con trunk, branch e tag. Il backend legge `svn info --xml` sulla radice della working copy, deduce la **base** e il **ramo corrente** dall'URL con il layout (`repoLayout`, default `trunk/branches/tags`) e fa `svn list --xml` su `<base>/branches` e `<base>/tags` (e sulla base, per sapere se esiste `trunk`). Un percorso inesistente = elenco vuoto, non errore. Gli elenchi stanno in cache per la sessione. Anche da Extensions > SVNAssist > Switch... |
+| `switchRefresh` | – | "Aggiorna": scarta la cache e rilegge branch e tag dal server |
+| `switchCancel` | – | chiude il selettore |
+| `switchOk` | `name` | `name` = voce dell'elenco (`branches/x`, `tags/1.0`, `trunk`); l'URL lo costruisce il backend dall'elenco (radice del repository + percorso codificato), mai dalla UI: un nome non in elenco = errore nel selettore. Il ramo corrente si rifiuta. Con modifiche locali ai file versionati chiede conferma (dialogo nativo; annullare lascia il selettore aperto). Poi `svn switch --accept postpone --non-interactive <URL>` dalla radice della working copy, refresh dello stato e messaggio "Switch a X completato (revisione N). Se Visual Studio lo chiede, ricarica la solution." I conflitti compaiono in Modifiche come dopo un update |
 | `showLog` | – | apre il Log della working copy (`IHost.ShowLogAsync`, come Extensions > Log) |
 | `cleanup` | – | **SVN Cleanup** della working copy (`svn cleanup`). Compare anche come pulsante "Esegui Cleanup" accanto a un errore di working copy bloccata (`status.action`) |
 | `commit` | – | come Git: se **Staged** ha file, commit dei soli quelli (pulsante "Commit Staged (n)"); se è vuoto, commit di **tutte** le modifiche dei file versionati M/A/D/R/mancanti (pulsante "Commit All", come `git commit -a`; i non versionati non entrano). Gli aggiunti non versionati in Staged si aggiungono, i mancanti si eliminano; i conflitti bloccano |
@@ -116,7 +120,7 @@ Filtri: `svn log --xml -v -l N` con `-r {data}:{data}` per le date e `--search`/
 
 ### `changes` (`changes-state.schema.json`)
 ```
-workingCopy {path, showInput, branch, rev}
+workingCopy {path, showInput, branch, rev?, svnVersion?}   // branch = ramo dedotto dall'URL (trunk, branches/x, tags/y, "/ (radice)"); svnVersion = es. "1.14.2" (la UI nasconde le funzioni che richiedono svn piu' recente)
 commit      {text, aiStatus, aiLevel: ""|busy|ok|warn|err|info, aiSeq, busy, lang, trace[{name,state,detail}], download{pct,label}|null,
              count?, all?}   // count = elementi del prossimo commit; all = Staged vuoto -> "Commit All"
 view        "tree" | "list"
@@ -130,6 +134,7 @@ loading     bool
 wizard      {open, mode: ai|prereq, step 1-4, fromGenerate, provider, busy, feedback, providers[{id,title,cost}], items[prereq item],
              auth: ""|github|claudecode|key|openai, authOk, authDetail, endpoint, models[{value,label}], model, canNext}
 revPicker?  {open, target, loading, error, canMore, items[{rev, author, date (ISO), msg (prima riga)}]}   // modale "Update to revision"
+switchPicker? {open, loading, error, items[{name, kind: trunk|branch|tag, current}]}   // modale "SVN Switch"; name relativo alla base (trunk, branches/x, tags/1.0)
 ```
 `aiLevel` colora il messaggio AI (avviso giallo, errore rosso, esito verde); `aiSeq` cresce a ogni messaggio, cosi' anche uno ripetuto si ridisegna.
 Le righe sono **già piatte e ordinate** (albero calcolato dal backend con `ChangesTreeBuilder`): la UI non ricostruisce nulla.
@@ -225,6 +230,7 @@ L'host le espone in Tools > Options > SVNAssist (categoria "SVNAssist") e le res
 | `aiModel` | enum | `openai/gpt-4o-mini` | `openai/gpt-4o-mini`, `openai/gpt-4o`, `openai/gpt-4.1-mini`, `openai/gpt-4.1` |
 | `defaultLanguage` | enum | `auto` | `auto`, `italiano`, `english` |
 | `workingCopyPath` | string | `` | se valorizzato vince sull'auto-rilevamento dalla solution |
+| `repoLayout` | string | `trunk/branches/tags` | nomi delle cartelle tronco/branch/tag separati da `/` (o `,` `;`); se non sono tre nomi ricade sul default. Funziona anche con il progetto alla radice (base vuota) o sotto un sottopercorso (`^/progetto/trunk` -> branch in `^/progetto/branches`) |
 | `windowTheme` | enum | `auto` | `auto`, `light`, `dark`, `blue` (scritta dal backend con `SetSettingAsync`) |
 | `uiLanguage` | enum | `auto` | `auto`, `it`, `en` — lingua dell'interfaccia (vedi "Lingua dell'interfaccia"); l'host aggiunge `uiLanguageEffective` (`it`/`en`, già risolta, non è un'impostazione) |
 

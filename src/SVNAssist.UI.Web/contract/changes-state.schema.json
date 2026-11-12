@@ -39,6 +39,10 @@
           "type": "integer",
           "minimum": 0,
           "description": "Revisione della working copy."
+        },
+        "svnVersion": {
+          "type": "string",
+          "description": "Versione di svn (es. 1.14.2): la UI nasconde le funzioni che richiedono svn piu' recente."
         }
       }
     },
@@ -560,6 +564,58 @@
               "msg": {
                 "type": "string",
                 "description": "Prima riga del messaggio."
+              }
+            }
+          }
+        }
+      }
+    },
+    "switchPicker": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Selettore di \"SVN Switch...\" (finestra modale): trunk, branch e tag del repository.",
+      "required": [
+        "open",
+        "loading",
+        "error",
+        "items"
+      ],
+      "properties": {
+        "open": {
+          "type": "boolean"
+        },
+        "loading": {
+          "type": "boolean"
+        },
+        "error": {
+          "type": "string",
+          "description": "Es. elenco non leggibile, elemento non valido."
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "kind",
+              "current"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Relativo alla base: trunk, branches/x, tags/1.0."
+              },
+              "kind": {
+                "enum": [
+                  "trunk",
+                  "branch",
+                  "tag"
+                ]
+              },
+              "current": {
+                "type": "boolean",
+                "description": "E' il ramo su cui si trova la working copy."
               }
             }
           }

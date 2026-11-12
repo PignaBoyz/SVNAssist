@@ -880,6 +880,30 @@ async function rpOk(a) {
     await vmRefresh(`Aggiornato alla revisione ${S.wcRev}.`, true);
   } catch (e) { setStatus('Errore update: ' + e.message); render(); }
 }
+// SVN Switch: elenco finto di trunk/branch/tag (come il backend: l'elemento corrente e' marcato, si passa solo a voci dell'elenco).
+const SW_ITEMS = [['trunk', 'trunk'], ['branches/feature-coupon', 'branch'], ['branches/release-2.1', 'branch'], ['tags/v1.0', 'tag'], ['tags/v2.0', 'tag']];
+async function vmSwitchOpen(refresh) {
+  if (!S.vm.wcPath.trim()) { setStatus('Nessuna working copy configurata.'); return render(); }
+  if (refresh) S.swCache = false;
+  S.vm.sw = { loading: true, error: '' }; render();
+  if (!S.swCache) { await svn('info --xml', 200); await svn('list --xml ^/branches', 400); await svn('list --xml ^/tags', 300); S.swCache = true; }   // cache per sessione: la seconda apertura e' immediata
+  if (S.vm.sw) S.vm.sw.loading = false; render();
+}
+async function swOk(a) {
+  const sw = S.vm.sw; if (!sw) return;
+  const name = String(a.name || ''), item = SW_ITEMS.find(([n]) => n === name);
+  if (!item) { sw.error = "Elemento non valido: aggiorna l'elenco e riprova."; return render(); }
+  if (name === S.branch) { sw.error = `La working copy è già su ${name}.`; return render(); }
+  const local = S.files.filter(f => f.st !== 'N' && f.st !== '?').length;
+  if (local && !await confirmBox(`La working copy ha ${local} elementi con modifiche locali: lo switch le porta su ${name} e può generare conflitti. Continuare?`)) return;
+  S.vm.sw = null;
+  try {
+    setStatus(`Switch a ${name} in corso...`); render();
+    await svn(`switch --accept postpone ^/${name}`, 900);
+    S.branch = name; S.wcRev = S.headRev;
+    await vmRefresh(`Switch a ${name} completato (revisione ${S.wcRev}). Se Visual Studio lo chiede, ricarica la solution.`, true);
+  } catch (e) { setStatus('Errore switch: ' + e.message); render(); }
+}
 async function vmCleanup() {
   try {
     setStatus('Cleanup in corso...'); render();
@@ -1587,10 +1611,6 @@ function wizard(title, steps) {
   });
 }
 const SOON = {
-  switch: () => wizard('Switch branch', [
-    { body: `<p>Scegli il branch a cui passare (<code>svn switch</code>). Branch attuale: <b>${esc(S.branch)}</b></p>${['trunk', 'branches/feature-coupon', 'branches/release-2.1', 'tags/v2.0'].map((b, k) => `<label class="tg"><input type="radio" name="br" value="${b}" ${k === 1 ? 'checked' : ''}><span>^/${b}</span></label>`).join('')}`, next: 'Switch' },
-    { body: '<p id="swo" style="font-family:var(--mono);font-size:12px;white-space:pre-wrap"></p>', next: 'Fine', onEnter: async (el, nb) => { nb.disabled = true; const b = 'branches/…'; const o = el.querySelector('#swo'); for (const l of ['$ svn switch ^/' + b, 'U    Core/Services/OrderService.cs', 'U    Web/Controllers/CartController.cs', 'Updated to revision 126.']) { o.textContent += l + '\n'; await sleep(450); } nb.disabled = false; } },
-  ]),
   merge: () => wizard('Merge con risoluzione conflitti', [
     { body: '<p>Esegui il merge di <b>branches/feature-coupon</b> in <b>trunk</b> (<code>svn merge</code>).</p><label class="tg"><input type="checkbox" checked><span>Esegui prima un dry-run</span></label>', next: 'Avvia merge' },
     { body: '<p id="mo" style="font-family:var(--mono);font-size:12px;white-space:pre-wrap"></p>', onEnter: async (el, nb) => { nb.disabled = true; const o = el.querySelector('#mo'); for (const l of ['--- Merging r126 through r131 into \'.\':', 'U    Core/Models/Coupon.cs', 'U    Core/Services/OrderService.cs', 'C    Web/Controllers/CheckoutController.cs', 'Summary of conflicts: Text conflicts: 1']) { o.textContent += l + '\n'; await sleep(420); } nb.disabled = false; nb.textContent = 'Risolvi il conflitto'; } },
@@ -1634,7 +1654,6 @@ const SOON = {
     } }),
 };
 const SOON_CARDS = [
-  ['switch', 'Switch branch', 'Passa da trunk a un branch o a un tag direttamente dall\'IDE (svn switch), con aggiornamento della working copy.', ['Elenco branch/tag del repository', 'Avviso se ci sono modifiche locali']],
   ['merge', 'Merge con risoluzione dei conflitti', 'Merge tra branch con riepilogo e un risolutore dei conflitti a tre pannelli (mia / loro / risultato).', ['Dry-run prima del merge', 'Risoluzione guidata di ogni conflitto']],
   ['branchtag', 'Creazione di Branch e Tag', 'Crea branch e tag (svn copy) con un modulo, con switch automatico opzionale.', ['Anteprima del comando', 'Messaggio di commit predefinito']],
   ['blame', 'Blame / Annotate', 'Chi ha scritto ogni riga e in quale revisione, con il messaggio al passaggio del mouse.', ['Vista affiancata all\'editor']],

@@ -42,6 +42,9 @@ internal static class SettingDefinitions
     internal const string WorkingCopyPath = "workingCopyPath";
     internal const string WindowTheme = "windowTheme";
 
+    /// <summary>Nomi delle cartelle trunk/branches/tags (separati da /), per elencare i rami di SVN Switch.</summary>
+    internal const string RepoLayout = "repoLayout";
+
     /// <summary>Lingua dell'interfaccia: auto | it | en (l'host manda anche <c>uiLanguageEffective</c>, gia' risolta).</summary>
     internal const string UiLanguage = "uiLanguage";
     internal const string UiLanguageEffective = "uiLanguageEffective";
@@ -59,6 +62,7 @@ internal static class SettingDefinitions
         [DefaultLanguage] = "auto",
         [WorkingCopyPath] = "",
         [WindowTheme] = "auto",
+        [RepoLayout] = SVNAssist.Models.RepoLayout.Default,
         // UiLanguage non ha default qui: senza il valore dell'host (es. nei test) l'interfaccia resta in italiano.
     };
 }
@@ -95,6 +99,9 @@ internal interface ISvnAssistSettings
 
     /// <summary>Percorso della working copy SVN (vuoto se auto-rilevato).</summary>
     Task<string> GetWorkingCopyPathAsync(CancellationToken ct);
+
+    /// <summary>Layout del repository: "trunk/branches/tags" o i nomi scelti dall'utente.</summary>
+    Task<string> GetRepoLayoutAsync(CancellationToken ct) => Task.FromResult(SVNAssist.Models.RepoLayout.Default);
 
     /// <summary>Tema della finestra (auto/light/dark/blue).</summary>
     Task<string> GetWindowThemeAsync(CancellationToken ct);
@@ -174,6 +181,7 @@ internal sealed class HostSettings : ISvnAssistSettings
     public Task<string> GetDefaultLanguageAsync(CancellationToken ct) => GetAsync(SettingDefinitions.DefaultLanguage, ct);
     public Task<string> GetWorkingCopyPathAsync(CancellationToken ct) => GetAsync(SettingDefinitions.WorkingCopyPath, ct);
     public Task<string> GetWindowThemeAsync(CancellationToken ct) => GetAsync(SettingDefinitions.WindowTheme, ct);
+    public Task<string> GetRepoLayoutAsync(CancellationToken ct) => GetAsync(SettingDefinitions.RepoLayout, ct);
 
     /// <summary>Legge l'endpoint AI. Chi aveva salvato il vecchio endpoint (dismesso) passa in automatico al nuovo.</summary>
     public async Task<string> GetAiEndpointAsync(CancellationToken ct)

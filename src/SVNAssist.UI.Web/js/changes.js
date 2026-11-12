@@ -9,7 +9,7 @@
 
   function header(s) {
     const wc = s.workingCopy, rev = wc.rev ? `<span class="muted">r${wc.rev}</span>` : '';
-    return `<div class="branch" title="${esc(t('Branch della working copy: {0}', wc.path))}">${U.icon('branch')}<b>${esc(wc.branch || '—')}</b>${rev}</div><span class="fill"></span>` +
+    return `<button type="button" class="branch" ${U.cmd('switchOpen')} title="${esc(t('SVN Switch…: cambia branch o tag (ramo attuale: {0})', wc.branch || '—'))}" aria-label="${esc(t('SVN Switch…: cambia branch o tag (ramo attuale: {0})', wc.branch || '—'))}">${U.icon('branch')}<b>${esc(wc.branch || '—')}</b>${rev}${U.icon('chev-d')}</button><span class="fill"></span>` +
       U.btn('btn', 'SVN Update', 'down', 'update', null, t('Scarica le modifiche dal server (svn update)')) +
       U.btn('btn', 'Show Log', 'file', 'showLog', null, t('Apre il Log della working copy (cronologia delle revisioni)')) +
       U.btn('ib', '', 'refresh', 'refresh', null, t("Ricarica l'elenco delle modifiche (svn status)")) +
@@ -56,6 +56,7 @@
   function moreMenu() {
     return [
       { header: true, label: 'SVN' },
+      { label: 'SVN Switch…', cmd: 'switchOpen', hint: t('Porta la working copy su un altro branch o tag (svn switch)') },
       { label: 'SVN Update to revision…', cmd: 'updateToRevision', hint: t('Aggiorna a una revisione precisa (svn update -r)') },
       { label: 'SVN Cleanup', cmd: 'cleanup', hint: t("Ripulisce la working copy da un'operazione interrotta (svn cleanup)") }, { sep: true },
       { header: true, label: t('Vista') },
@@ -109,9 +110,10 @@
     if (changed) { list.scrollTop = top; if (had) { const r = list.querySelector(`.tr[data-key="${CSS.escape(cursor)}"]`); if (r) r.focus(); } }
     list.setAttribute('aria-busy', !!st.loading);
     U.setHTML(root.querySelector('#foot'), foot(st));
-    const anyModal = !!(st.wizard && st.wizard.open) || !!(st.revPicker && st.revPicker.open);
+    const anyModal = !!(st.wizard && st.wizard.open) || !!(st.revPicker && st.revPicker.open) || !!(st.switchPicker && st.switchPicker.open);
     renderWizard(root, anyModal);
     renderRev(root, anyModal);
+    renderSw(root, anyModal);
   }
 
   // Procedura guidata: dialogo modale (il resto e' inert), il testo digitato e il focus sopravvivono ai ridisegni.
@@ -192,6 +194,65 @@
     if (e.shiftKey && (a === first || !box.contains(a))) { e.preventDefault(); last.focus(); }
     else if (!e.shiftKey && (a === last || !box.contains(a))) { e.preventDefault(); first.focus(); }
   }
+  // SVN Switch: modale con ricerca e elenco di trunk/branch/tag (l'elenco arriva dal backend; la ricerca e' solo della UI).
+  let swSel = '', swQ = '';
+  const swVisible = s => { const q = swQ.trim().toLowerCase(); return s.items.filter(i => !q || i.name.toLowerCase().includes(q)); };
+  const swSelOk = s => s.items.some(i => i.name === swSel && !i.current);
+  function switchHTML(s) {
+    if (!s || !s.open) return '';
+    const vis = swVisible(s);
+    const row = i => `<div class="rp-row sw-row${swSel === i.name ? ' sel' : ''}" role="option" tabindex="${swSel === i.name ? 0 : -1}" aria-selected="${swSel === i.name}" data-sw="${esc(i.name)}"><b class="rv">${esc(i.kind)}</b><span class="m" title="${esc(i.name)}">${esc(i.name)}</span>${i.current ? `<span class="muted">${esc(t('(corrente)'))}</span>` : ''}</div>`;
+    const note = s.loading ? `<div class="rp-note muted"><span class="spin"></span> ${t('Caricamento di branch e tag…')}</div>`
+      : vis.length ? '' : `<div class="rp-note muted">${s.items.length ? t('Nessun elemento corrisponde alla ricerca.') : t('Nessun branch o tag trovato. Controlla il layout del repository in Tools > Options > SVNAssist.')}</div>`;
+    return `<div class="wiz-scrim"><div class="wiz rp" role="dialog" aria-modal="true" aria-labelledby="sw-t"><div class="wiz-h"><h3 id="sw-t" tabindex="-1">SVN Switch</h3><span class="fill"></span>${U.btn('ib', '', 'x', 'switchCancel', null, t('Annulla (Esc)'))}</div>` +
+      `<div class="wiz-b"><p class="muted">${t('Scegli il branch o il tag su cui portare la working copy.')}</p>` +
+      `<input id="sw-q" type="text" autocomplete="off" spellcheck="false" placeholder="${esc(t('Cerca…'))}" aria-label="${esc(t('Cerca un branch o un tag'))}" value="${esc(swQ)}">` +
+      `<div class="rp-list" id="sw-list" role="listbox" aria-label="${esc(t('Branch e tag del repository'))}">${vis.map(row).join('')}${note}</div>` +
+      (s.error ? `<div class="rp-err" role="alert">${U.icon('warn')}<span>${esc(s.error)}</span></div>` : '') + `</div>` +
+      `<div class="wiz-f">${U.btn('btn ghost', t('Annulla'), null, 'switchCancel', null, t('Chiude senza cambiare ramo'))}${U.btn('btn sm', t('Aggiorna'), 'refresh', 'switchRefresh', null, t("Rilegge l'elenco di branch e tag dal server"))}<span class="fill"></span>` +
+      `<button type="button" class="btn primary" data-sw-ok ${swSelOk(s) && !s.loading ? '' : 'disabled'} title="${esc(t('Porta la working copy sul ramo scelto (svn switch)'))}">${U.icon('branch')}<span>Switch</span></button></div></div></div>`;
+  }
+  function renderSw(app, anyModal) {
+    const box = document.getElementById('sw'), s = st.switchPicker; if (!box) return;
+    const open = !!(s && s.open), was = !!box.__open, a = document.activeElement;
+    if (open && !was) { swSel = ''; swQ = ''; box.__prev = a; }
+    if (open && swSel && !s.items.some(i => i.name === swSel)) swSel = '';
+    const inQ = box.contains(a) && a.id === 'sw-q', inRow = box.contains(a) && a.classList && a.classList.contains('sw-row');
+    const caret = inQ ? a.selectionStart : 0, top = box.querySelector('#sw-list') ? box.querySelector('#sw-list').scrollTop : 0;
+    const changed = U.setHTML(box, switchHTML(s));
+    app.classList.toggle('modal-open', anyModal); app.inert = anyModal;
+    if (open && changed) {
+      const list = box.querySelector('#sw-list'); if (list) list.scrollTop = top;
+      if (!was || !box.contains(document.activeElement) || inRow) { const f = !was || !swSel ? box.querySelector('#sw-q') : box.querySelector('.sw-row[tabindex="0"]') || box.querySelector('#sw-q'); if (f) f.focus(); }
+      else if (inQ) { const n = box.querySelector('#sw-q'); n.focus(); n.setSelectionRange(caret, caret); }
+    }
+    if (!open && was && box.__prev && box.__prev.isConnected) box.__prev.focus();
+    box.__open = open;
+  }
+  const swOk = () => { if (st.switchPicker && swSelOk(st.switchPicker)) U.bridge.send('switchOk', { name: swSel }); };
+  function swKeys(e) {
+    const box = document.getElementById('sw'); if (!box || !box.__open) return;
+    const a = document.activeElement;
+    if (e.key === 'Escape') { e.preventDefault(); U.bridge.send('switchCancel'); return; }
+    const rows = [...box.querySelectorAll('.sw-row')], i = rows.indexOf(a);
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      const to = i < 0 ? (e.key === 'ArrowDown' ? 0 : rows.length - 1) : i + (e.key === 'ArrowDown' ? 1 : -1);
+      if (rows[to]) { e.preventDefault(); swSel = rows[to].dataset.sw; renderSw(document.querySelector('.app'), true); const f = [...box.querySelectorAll('.sw-row')].find(x => x.dataset.sw === swSel); if (f) { f.focus(); f.scrollIntoView({ block: 'nearest' }); } }
+      return;
+    }
+    if (e.key === 'Enter' && a && (a.id === 'sw-q' || a.classList.contains('sw-row'))) {
+      e.preventDefault();
+      if (a.classList.contains('sw-row')) swSel = a.dataset.sw;
+      else if (!swVisible(st.switchPicker).some(x => x.name === swSel) && rows[0]) swSel = rows[0].dataset.sw;
+      if (swSelOk(st.switchPicker)) swOk(); else renderSw(document.querySelector('.app'), true);
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    const f = [...box.querySelectorAll('button:not(:disabled),input,.sw-row[tabindex="0"]')]; if (!f.length) return;
+    const first = f[0], last = f[f.length - 1];
+    if (e.shiftKey && (a === first || !box.contains(a))) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && (a === last || !box.contains(a))) { e.preventDefault(); first.focus(); }
+  }
   function wizKeys(e) {
     const box = document.getElementById('wiz'); if (!box || !box.__open) return;
     if (e.key === 'Escape') { e.preventDefault(); U.bridge.send('wizardCancel'); return; }
@@ -202,7 +263,7 @@
     else if (!e.shiftKey && (a === last || !box.contains(a))) { e.preventDefault(); first.focus(); }
   }
 
-  U.changesHTML = { header, commitBar, foot, revHTML };   // parti pure, provate senza DOM (tests/ui-web)
+  U.changesHTML = { header, commitBar, foot, revHTML, switchHTML };   // parti pure, provate senza DOM (tests/ui-web)
 
   U.views.changes = {
     mount(root) {
@@ -211,13 +272,21 @@
         <div class="bar" id="cbar"></div><div id="aist"></div></section><div id="prq"></div>
         <div class="flt"><input id="flt" type="search" spellcheck="false" autocomplete="off"></div>
         <div class="list" id="list" role="tree"></div>
-        <footer class="foot" id="foot"></footer></div><div id="wiz"></div><div id="rev"></div>`;
+        <footer class="foot" id="foot"></footer></div><div id="wiz"></div><div id="rev"></div><div id="sw"></div>`;
       U.views.changes.relang(root);
       const ta = root.querySelector('#msg');
       ta.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => U.bridge.send('setCommitText', { text: ta.value }), 150); });
       ta.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); clearTimeout(timer); U.bridge.send('setCommitText', { text: ta.value }); U.bridge.send('commit'); } });
       root.addEventListener('keydown', wizKeys);
       root.addEventListener('keydown', revKeys);
+      root.addEventListener('keydown', swKeys);
+      root.addEventListener('click', e => {
+        const row = e.target.closest('.sw-row');
+        if (row) { swSel = row.dataset.sw; renderSw(root.querySelector('.app'), true); const f = [...root.querySelectorAll('#sw .sw-row')].find(x => x.dataset.sw === swSel); if (f) f.focus(); return; }
+        if (e.target.closest('[data-sw-ok]')) swOk();
+      });
+      root.addEventListener('dblclick', e => { const row = e.target.closest('.sw-row'); if (row) { swSel = row.dataset.sw; swOk(); } });
+      root.addEventListener('input', e => { if (e.target.id === 'sw-q') { swQ = e.target.value; renderSw(root.querySelector('.app'), true); } });
       root.addEventListener('click', e => {
         const box = document.getElementById('rev'), row = e.target.closest('.rp-row');
         if (row && box && box.contains(row)) { revPick(box, row.dataset.rev, true); return; }

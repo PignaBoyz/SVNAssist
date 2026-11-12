@@ -103,7 +103,7 @@ namespace SVNAssist.Host
 
         // chiave del setting (come in SettingsService, camelCase) -> proprieta'
         internal static readonly string[] Keys =
-            { "aiProvider", "claudeModel", "anthropicApiKey", "copilotModel", "aiEndpoint", "aiApiKey", "aiModel", "defaultLanguage", "workingCopyPath", "windowTheme", "uiLanguage" };
+            { "aiProvider", "claudeModel", "anthropicApiKey", "copilotModel", "aiEndpoint", "aiApiKey", "aiModel", "defaultLanguage", "workingCopyPath", "repoLayout", "windowTheme", "uiLanguage" };
 
         [LCategory("Commit message AI"), LDisplayName("Provider AI per i commit message"), DefaultValue("auto"), TypeConverter(typeof(AiProviderConverter))]
         [LDescription("Automatico prova Copilot, Claude Code, Claude API e OpenAI-compatibile in quest'ordine.")]
@@ -137,6 +137,10 @@ namespace SVNAssist.Host
         [LCategory("Generale"), LDisplayName("Working Copy Path")]
         [LDescription("Se impostato ha la precedenza sull'auto-rilevamento dalla solution aperta.")]
         public string WorkingCopyPath { get; set; } = "";
+
+        [LCategory("Generale"), LDisplayName("Layout del repository"), DefaultValue("trunk/branches/tags")]
+        [LDescription("Nomi delle cartelle del tronco, dei branch e dei tag, separati da / (default trunk/branches/tags). Servono a SVN Switch per trovare i rami.")]
+        public string RepoLayout { get; set; } = "trunk/branches/tags";
 
         [LCategory("Generale"), LDisplayName("Tema delle finestre SVNAssist"), DefaultValue("auto"), TypeConverter(typeof(WindowThemeConverter))]
         [LDescription("Automatico usa i colori del tema di Visual Studio (chiaro, scuro, blu, alto contrasto).")]
@@ -214,6 +218,7 @@ namespace SVNAssist.Host
                 ["aiModel"] = Pick(AiModel, new AiModelConverter(), "openai/gpt-4o-mini"),
                 ["defaultLanguage"] = Pick(DefaultLanguage, new LanguageConverter(), "auto"),
                 ["workingCopyPath"] = WorkingCopyPath ?? "",
+                ["repoLayout"] = string.IsNullOrWhiteSpace(RepoLayout) ? "trunk/branches/tags" : RepoLayout,
                 ["windowTheme"] = Pick(WindowTheme, new WindowThemeConverter(), "auto"),
                 ["uiLanguage"] = Pick(UiLanguage, new UiLanguageConverter(), "auto"),
                 ["uiLanguageEffective"] = EffectiveLanguage,
@@ -243,6 +248,7 @@ namespace SVNAssist.Host
                 case "aiModel": AiModel = value; break;
                 case "defaultLanguage": DefaultLanguage = value; break;
                 case "workingCopyPath": WorkingCopyPath = value; break;
+                case "repoLayout": RepoLayout = value; break;
                 case "windowTheme": WindowTheme = value; break;
                 case "uiLanguage": UiLanguage = value; break;
                 default: return false;

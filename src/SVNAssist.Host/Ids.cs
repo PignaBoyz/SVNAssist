@@ -16,7 +16,7 @@ namespace SVNAssist.Host
         public const int CmdChanges = 0x0100, CmdCommit = 0x0101, CmdUpdate = 0x0102, CmdLog = 0x0103, CmdAiSetup = 0x0104;
         public const int CmdSeUpdate = 0x0110, CmdSeCommit = 0x0111, CmdSeDiff = 0x0112, CmdSeLog = 0x0113,
             CmdSeAdd = 0x0114, CmdSeRevert = 0x0115, CmdSeIgnore = 0x0116;
-        public const int CmdUpdateRev = 0x0105, CmdCleanup = 0x0106,
+        public const int CmdUpdateRev = 0x0105, CmdCleanup = 0x0106, CmdSwitch = 0x0107,
             CmdSeUpdateRev = 0x0117, CmdSeCleanup = 0x0118, CmdSeLock = 0x0119, CmdSeUnlock = 0x011A;
         public const int CmdLangAuto = 0x011B, CmdLangIt = 0x011C, CmdLangEn = 0x011D;
     }

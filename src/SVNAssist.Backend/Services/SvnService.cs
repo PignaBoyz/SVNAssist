@@ -835,6 +835,88 @@ public class SvnService : ISvnService
         }
     }
 
+    /// <inheritdoc />
+    public async Task<SvnInfo> GetInfoAsync(string workingCopyPath, CancellationToken ct)
+        => ParseInfoXml(await RunSvnAsync(["info", "--xml"], workingCopyPath, ct));
+
+    /// <summary>
+    /// Converte l'XML di <c>svn info --xml</c>. <c>relative-url</c> esiste da svn 1.8: con una versione piu' vecchia
+    /// si ricava dall'URL e dalla radice.
+    /// </summary>
+    internal static SvnInfo ParseInfoXml(string xml)
+    {
+        var e = XDocument.Parse(xml).Descendants("entry").FirstOrDefault()
+                ?? throw new InvalidOperationException("svn info: risposta senza <entry>.");
+        var url = e.Element("url")?.Value ?? string.Empty;
+        var root = e.Element("repository")?.Element("root")?.Value ?? string.Empty;
+        var rel = e.Element("relative-url")?.Value;
+        if (string.IsNullOrEmpty(rel))
+            rel = root.Length > 0 && url.StartsWith(root, StringComparison.OrdinalIgnoreCase) ? "^" + url[root.Length..] : url;
+
+        static long? Num(string? s) => long.TryParse(s, NumberStyles.None, CultureInfo.InvariantCulture, out var n) ? n : null;
+        var commit = e.Element("commit");
+        DateTimeOffset? date = DateTimeOffset.TryParse(commit?.Element("date")?.Value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var d) ? d : null;
+        return new SvnInfo(url, rel, root, Num(e.Attribute("revision")?.Value) ?? 0, Num(commit?.Attribute("revision")?.Value),
+            commit?.Element("author")?.Value, date);
+    }
+
+    private Version? _version;
+
+    /// <inheritdoc />
+    public async Task<Version?> GetSvnVersionAsync(CancellationToken ct)
+    {
+        if (_version is not null)
+            return _version;
+        try
+        {
+            var r = await _processRunner.RunAsync(_svnExePath, ["--version", "--quiet"], null, ct, environment: SvnProcessEnvironment);
+            if (r.ExitCode == 0 && Version.TryParse(r.StandardOutput.Trim().Split([' ', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault(), out var v))
+                _version = v;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // svn assente: versione sconosciuta, le altre operazioni falliranno con il loro errore.
+        }
+
+        return _version;
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<string>> ListFoldersAsync(string url, CancellationToken ct)
+    {
+        try
+        {
+            var xml = await RunSvnAsync(["list", "--xml", Peg(url)], workingDirectory: null, ct);
+            return ParseListXml(xml);
+        }
+        catch (InvalidOperationException ex) when (IsPathNotFound(ex.Message))
+        {
+            return [];
+        }
+    }
+
+    /// <summary>E170000 (URL inesistente), E200009 (alcuni target non esistono), "non-existent", "path not found".</summary>
+    internal static bool IsPathNotFound(string? text)
+        => !string.IsNullOrEmpty(text)
+           && (text.Contains("E170000", StringComparison.Ordinal) || text.Contains("E200009", StringComparison.Ordinal)
+               || text.Contains("non-existent", StringComparison.OrdinalIgnoreCase)
+               || text.Contains("path not found", StringComparison.OrdinalIgnoreCase)
+               || text.Contains("doesn't exist", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Nomi delle sole cartelle di <c>svn list --xml</c>, in ordine alfabetico.</summary>
+    internal static IReadOnlyList<string> ParseListXml(string xml)
+        => XDocument.Parse(xml).Descendants("entry").Where(e => e.Attribute("kind")?.Value == "dir")
+            .Select(e => e.Element("name")?.Value ?? string.Empty).Where(n => n.Length > 0)
+            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
+
+    /// <inheritdoc />
+    public async Task<UpdateResult> SwitchAsync(string workingCopyPath, string url, CancellationToken ct)
+        // Come l'update: puo' durare a lungo, niente timeout (l'utente puo' annullare).
+        => ParseUpdateOutput(await RunSvnAsync(BuildSwitchArgs(url), workingCopyPath, ct, applyTimeout: false));
+
+    /// <summary><c>--accept postpone</c>: i conflitti non aprono nulla, restano nel pannello Changes. <c>--non-interactive</c> lo aggiunge RunSvnOnceAsync.</summary>
+    internal static List<string> BuildSwitchArgs(string url) => ["switch", "--accept", "postpone", Peg(url)];
+
     /// <summary>Nome da mostrare per l'URL relativo (<c>^/trunk</c> -> <c>trunk</c>); la radice del repository (repo senza trunk/branches) e' "/ (radice)".</summary>
     internal static string BranchLabel(string relativeUrl)
     {

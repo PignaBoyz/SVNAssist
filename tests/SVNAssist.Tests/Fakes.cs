@@ -191,6 +191,39 @@ internal sealed class FakeSvnService : ISvnService
         BranchCalls++;
         return Task.FromResult("trunk");
     }
+
+    public string InfoRelativeUrl { get; set; } = "^/trunk";
+    public string RepoRoot { get; set; } = "file:///repo";
+    public Version? SvnVersion { get; set; } = new(1, 14, 2);
+
+    public Task<SvnInfo> GetInfoAsync(string workingCopyPath, CancellationToken ct)
+    {
+        BranchCalls++;
+        return Task.FromResult(new SvnInfo(RepoRoot + InfoRelativeUrl[1..], InfoRelativeUrl, RepoRoot, 7, 7, "u", null));
+    }
+
+    public Task<Version?> GetSvnVersionAsync(CancellationToken ct) => Task.FromResult(SvnVersion);
+
+    /// <summary>Cartelle per URL (come le restituirebbe svn list); un URL assente = elenco vuoto.</summary>
+    public Dictionary<string, string[]> Folders { get; } = [];
+    public List<string> Listed { get; } = [];
+
+    public Task<IReadOnlyList<string>> ListFoldersAsync(string url, CancellationToken ct)
+    {
+        Listed.Add(url);
+        return Task.FromResult<IReadOnlyList<string>>(Folders.GetValueOrDefault(url) ?? []);
+    }
+
+    public List<(string Path, string Url)> Switched { get; } = [];
+    public string? SwitchError { get; set; }
+
+    public Task<UpdateResult> SwitchAsync(string workingCopyPath, string url, CancellationToken ct)
+    {
+        if (SwitchError is not null)
+            throw new InvalidOperationException(SwitchError);
+        Switched.Add((workingCopyPath, url));
+        return Task.FromResult(new UpdateResult(9, []));
+    }
 }
 
 /// <summary>Dialoghi finti: risposta preimpostata e registro dei messaggi mostrati.</summary>

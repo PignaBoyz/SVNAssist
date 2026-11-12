@@ -41,6 +41,9 @@ textarea{resize:vertical;min-height:62px;max-height:40vh;font-family:var(--font)
 .bar{display:flex;align-items:center;gap:6px;padding:6px 8px;flex:none;flex-wrap:wrap}
 .branch{display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .branch b{overflow:hidden;text-overflow:ellipsis}
+button.branch{background:none;border:0;border-radius:4px;color:inherit;font:inherit;padding:2px 6px;cursor:pointer}
+button.branch:hover{background:var(--bg3)}
+button.branch:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .wc{display:flex;gap:6px;align-items:center;padding:0 8px 6px}
 .wc label{font-weight:600;white-space:nowrap}
 .commit{padding:0 8px 4px;flex:none;display:flex;flex-direction:column;gap:2px}

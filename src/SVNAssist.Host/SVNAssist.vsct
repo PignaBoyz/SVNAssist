@@ -56,6 +56,7 @@
       <Button guid="guidSVNAssistCmdSet" id="CmdSeRevert" priority="0x0010" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeEdit" /><Strings><CommandName>SVNAssist.SeRevert</CommandName><ButtonText>SVN Revert</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdSeIgnore" priority="0x0020" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeEdit" /><Strings><CommandName>SVNAssist.SeIgnore</CommandName><ButtonText>Add to Ignore List</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdUpdateRev" priority="0x0005" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainSecondary" /><Strings><CommandName>SVNAssist.UpdateToRevision</CommandName><ButtonText>Update to revision...</ButtonText></Strings></Button>
+      <Button guid="guidSVNAssistCmdSet" id="CmdSwitch" priority="0x0006" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainSecondary" /><Strings><CommandName>SVNAssist.Switch</CommandName><ButtonText>Switch...</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdCleanup" priority="0x0030" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainSecondary" /><Strings><CommandName>SVNAssist.Cleanup</CommandName><ButtonText>Cleanup</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdSeUpdateRev" priority="0x0005" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeSync" /><Strings><CommandName>SVNAssist.SeUpdateToRevision</CommandName><ButtonText>SVN Update to revision...</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdSeCleanup" priority="0x0030" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeEdit" /><Strings><CommandName>SVNAssist.SeCleanup</CommandName><ButtonText>SVN Cleanup</ButtonText></Strings></Button>
@@ -105,6 +106,7 @@
       <IDSymbol name="CmdSeRevert" value="0x0115" />
       <IDSymbol name="CmdSeIgnore" value="0x0116" />
       <IDSymbol name="CmdUpdateRev" value="0x0105" />
+      <IDSymbol name="CmdSwitch" value="0x0107" />
       <IDSymbol name="CmdCleanup" value="0x0106" />
       <IDSymbol name="CmdSeUpdateRev" value="0x0117" />
       <IDSymbol name="CmdSeCleanup" value="0x0118" />
