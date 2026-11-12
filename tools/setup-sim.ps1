@@ -44,6 +44,7 @@ W "$wc\src\Shop\Core\Customer.cs" @('namespace Shop.Core;', '', 'public record C
 W "$wc\src\Shop\UI\MainWindow.cs" @('namespace Shop.UI;', '', 'public class MainWindow', '{', '    public string Title => "Shop";', '}')
 W "$wc\.github\copilot-instructions.md" @('# Regole del progetto', '', 'Messaggi di commit in formato Conventional Commits: `tipo(ambito): descrizione` (feat, fix, refactor, docs, chore), poi elenco puntato.')
 W "$wc\docs\old-setup.md" @('# Vecchio setup', '', 'Passi obsoleti.')
+W "$wc\docs\old-faq.md" @('# Vecchie FAQ', '', 'Domande obsolete.')
 $big = @('namespace Shop.Core;', '', '// File lungo per provare diff, Alt+Giu'' e undo delle singole righe', 'public static class Catalog', '{')
 for ($i = 1; $i -le 400; $i++) { $big += "    public const string Item$($i.ToString('000')) = ""Articolo $i"";" }
 $big += '}'
@@ -64,7 +65,7 @@ W "$bw\src\Shop\Core\Coupon.cs" @('namespace Shop.Core;', '', 'public record Cou
 Edit "$bw\src\Shop\Core\Order.cs" { param($l) $l[$l.IndexOf('    public decimal Discount() => 0m;')] = '    public decimal Discount(Coupon? c = null) => c is null ? 0m : Total * c.Percent / 100m;' }
 Ci 'Coupon: sconto percentuale sull''ordine' $bw
 As 'lbianchi'; Edit "$bw\README.txt" { param($l) $l[1] = 'Versione: 1.1-coupon' }; Ci 'README: versione coupon (andra'' in conflitto)' $bw
-As 'mrossi';   Svn delete -q "$bw\docs\old-setup.md"; Ci 'Rimossa documentazione obsoleta (tree conflict)' $bw
+As 'mrossi';   Svn delete -q "$bw\docs\old-setup.md" "$bw\docs\old-faq.md"; Ci 'Rimossa documentazione obsoleta (tree conflict)' $bw
 Remove-Item -Recurse -Force $bw
 $hw = Join-Path $Root '_hotfix'; Svn checkout -q "$repo/branches/hotfix-login" $hw
 As 'gverdi'; Edit "$hw\src\Shop\Core\Customer.cs" { param($l) $l[2] = 'public record Customer(string Name, string Email, bool Locked = false);' }; Ci 'Login: utente bloccabile' $hw
@@ -73,7 +74,7 @@ Remove-Item -Recurse -Force $hw
 # ---- trunk prosegue: conflitti con il branch ----
 Svn update -q $wc
 As 'gverdi'; Edit "$wc\README.txt" { param($l) $l[1] = 'Versione: 1.0.1' }; Ci 'README: versione 1.0.1' $wc
-As 'lbianchi'; Edit "$wc\docs\old-setup.md" { param($l) $l.Add('Aggiunta nota.') }; Ci 'Docs: nota sul setup' $wc
+As 'lbianchi'; Edit "$wc\docs\old-setup.md" { param($l) $l.Add('Aggiunta nota.') }; Edit "$wc\docs\old-faq.md" { param($l) $l.Add('Nuova FAQ.') }; Ci 'Docs: nota sul setup' $wc
 
 # ---- molti branch e tag ----
 Write-Host '[..] Creazione di 150 branch e 20 tag (qualche minuto)...'
