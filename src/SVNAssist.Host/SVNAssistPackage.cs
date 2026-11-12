@@ -74,6 +74,12 @@ namespace SVNAssist.Host
             var type = view == "log" ? typeof(LogToolWindow) : typeof(ChangesToolWindow);
             var pane = await ShowToolWindowAsync(type, 0, true, DisposalToken);
             if (title != null && pane != null) pane.Caption = title; // una sola finestra Log: il titolo segue l'ultimo percorso
+            // VS ricorda la posizione: se il Log e' stato agganciato tra i tool window lo riportiamo nell'area documenti, accanto ai diff
+            if (view == "log" && pane?.Frame is IVsWindowFrame frame)
+            {
+                frame.SetProperty((int)__VSFPROPID.VSFPROPID_FrameMode, VSFRAMEMODE.VSFM_MdiChild);
+                frame.Show();
+            }
         }
 
         protected override string GetToolWindowTitle(Type toolWindowType, int id) =>
