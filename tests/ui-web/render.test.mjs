@@ -39,3 +39,19 @@ test('CSP: nessuno script o stile inline, nessuna risorsa esterna in index.html'
     assert.ok(!/\beval\s*\(|new Function|\sstyle="|\.innerHTML\s*=\s*[^;]*\bstyle=/.test(js), f + ': eval/style inline');
   }
 });
+test('filtro: tiene i file che corrispondono e le loro cartelle, aria-checked su Staged', () => {
+  const f = st.sections.flatMap(s => s.rows).filter(r => r.kind === 'file')[0], q = f.name.toUpperCase();
+  const sec = st.sections.find(s => s.rows.includes(f));
+  const rows = U.filterRows(sec.rows, q);
+  assert.ok(rows.some(r => r.key === f.key));
+  assert.ok(rows.every(r => r.kind === 'folder' || (r.key + r.name).toLowerCase().includes(q.toLowerCase())));
+  assert.equal(U.filterRows(sec.rows, 'zzz-nessuno').length, 0);
+  assert.match(U.treeHTML(st.sections, null, 'zzz-nessuno'), /Nessun risultato/);
+  assert.match(U.treeHTML(st.sections, null), /aria-checked="true"/);
+});
+test('contatore Commit (n) e tastiera: Canc/Spazio/Invio inviano i comandi giusti', () => {
+  const js = read('src/SVNAssist.UI.Web/js/changes.js') + read('src/SVNAssist.UI.Web/js/tree.js');
+  assert.match(js, /<span class="pill">\$\{n\}<\/span>/);
+  for (const k of ["'Delete'", "' '", "'Enter'", "'ArrowLeft'", "'ArrowRight'", "'ArrowDown'", "'ArrowUp'"]) assert.ok(js.includes(`case ${k}`), k);
+  assert.match(js, /op: 'deleteFile'/);
+});

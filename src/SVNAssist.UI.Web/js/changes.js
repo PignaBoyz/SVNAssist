@@ -4,7 +4,7 @@
   const U = w.SVNUI, esc = U.esc;
   const LANGS = [['auto', 'Auto (lingua del codice)'], ['italiano', 'Italiano'], ['english', 'English']];
   const THEMES = [['auto', 'Auto (segue Visual Studio)'], ['light', 'Chiaro'], ['dark', 'Scuro'], ['blue', 'Blu']];
-  let st = null, forceInput = false, timer = 0;
+  let st = null, forceInput = false, timer = 0, filter = '';
 
   function header(s) {
     const wc = s.workingCopy, rev = wc.rev ? `<span class="muted">r${wc.rev}</span>` : '';
@@ -86,7 +86,7 @@
     const keys = []; st.sections.forEach(s => { keys.push('section:' + s.id); s.rows.forEach(r => keys.push(r.key)); });
     const cursor = keys.includes(cur) ? cur : keys[0];
     const html = isEmpty(st) && !st.loading ? `<div class="empty-state">${U.icon('check', 'big')}<b>Nessuna modifica</b><span class="muted">La working copy è pulita.</span></div>` + '' : '';
-    const changed = U.setHTML(list, (html ? html : '') + U.treeHTML(st.sections.filter(s => s.id === 'staged' || s.count), cursor));
+    const changed = U.setHTML(list, (html ? html : '') + U.treeHTML(st.sections.filter(s => s.id === 'staged' || s.count), cursor, filter));
     if (changed) { list.scrollTop = top; if (had) { const r = list.querySelector(`.tr[data-key="${CSS.escape(cursor)}"]`); if (r) r.focus(); } }
     list.setAttribute('aria-busy', !!st.loading);
     U.setHTML(root.querySelector('#foot'), foot(st));
@@ -97,6 +97,7 @@
       root.innerHTML = `<div class="app"><div class="prog" aria-hidden="true"></div><header class="bar" id="hdr"></header><div id="wcbox"></div>
         <section class="commit"><textarea id="msg" rows="3" aria-label="Messaggio di commit" placeholder="Messaggio di commit (Ctrl+Invio per committare)"></textarea>
         <div class="bar" id="cbar"></div><div id="aist"></div></section><div id="prq"></div>
+        <div class="flt"><input id="flt" type="search" placeholder="Filtra i file…" aria-label="Filtra i file per nome" spellcheck="false" autocomplete="off"></div>
         <div class="list" id="list" role="tree" aria-label="Modifiche della working copy"></div>
         <footer class="foot" id="foot"></footer></div>`;
       const ta = root.querySelector('#msg');
@@ -107,6 +108,9 @@
         const b = e.target.closest('[data-menu]'); if (!b || b.disabled) return;
         const r = b.getBoundingClientRect(); U.menu.open(Math.max(0, r.right - 220), r.bottom + 2, b.dataset.menu === 'ai' ? aiMenu() : moreMenu(), b);
       });
+      const fl = root.querySelector('#flt');
+      fl.addEventListener('input', () => { filter = fl.value; render(); });
+      fl.addEventListener('keydown', e => { if (e.key === 'Escape' && fl.value) { e.preventDefault(); fl.value = filter = ''; render(); } else if (e.key === 'ArrowDown') { e.preventDefault(); const r = root.querySelector('#list .tr[tabindex="0"]'); if (r) r.focus(); } });
       U.bindTree(root.querySelector('#list'), { rowMenu });
     },
     update(root, state) { st = state; render(); },
