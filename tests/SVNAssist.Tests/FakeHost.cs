@@ -93,6 +93,15 @@ internal sealed class FakeHost : IHost
 
     public Task ShowLogWindowAsync(string title) { LogWindowTitles.Add(title); return Task.CompletedTask; }
 
+    /// <summary>Se non nullo, simula un documento aperto: ApplyDocumentTextAsync registra (percorso, testo) e risponde true.</summary>
+    public List<(string Path, string Text)>? AppliedTexts { get; set; }
+
+    public Task<bool> ApplyDocumentTextAsync(string path, string text)
+    {
+        AppliedTexts?.Add((path, text));
+        return Task.FromResult(AppliedTexts is not null);
+    }
+
     public int ChangesShown { get; private set; }
 
     public Task ShowChangesWindowAsync() { ChangesShown++; return Task.CompletedTask; }

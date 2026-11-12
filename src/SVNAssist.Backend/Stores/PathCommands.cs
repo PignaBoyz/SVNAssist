@@ -258,7 +258,9 @@ internal sealed class PathCommands
             var (text, count) = LineRevert.Apply(work, baseText, hunks, from, to);
             if (count == 0) { await ToastAsync(Loc.T("Nessuna modifica nelle righe selezionate.")); return; }
 
-            await File.WriteAllBytesAsync(t.Path, [.. bom, .. enc.GetBytes(text)], ct);
+            // documento aperto: l'host applica il testo al buffer (una sola modifica, Ctrl+Z) e salva; altrimenti si scrive su disco
+            if (!await _host.ApplyDocumentTextAsync(t.Path, text))
+                await File.WriteAllBytesAsync(t.Path, [.. bom, .. enc.GetBytes(text)], ct);
             await ToastAsync(Loc.T("Annullate {0} righe", count));
             await _refresh();
         }

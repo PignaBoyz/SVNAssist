@@ -289,6 +289,45 @@ namespace SVNAssist.Host
 
         public Task ShowChangesWindowAsync() => _pkg.ShowViewAsync("changes");
 
+        public async Task OnIdeActiveAsync(bool active)
+        {
+            if (!_backend.IsRunning) return;
+            try { await (await _backend.GetAsync().ConfigureAwait(false)).IdeActiveChangedAsync(active).ConfigureAwait(false); }
+            catch (Exception ex) { Log.Write("ide attivo: " + ex.Message); }
+        }
+
+        public async Task<bool> ApplyDocumentTextAsync(string path, string text)
+        {
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            try
+            {
+                if (!VsShellUtilities.IsDocumentOpen(_pkg, path, Guid.Empty, out _, out _, out var frame)) return false;
+                var tv = VsShellUtilities.GetTextView(frame);
+                if (tv == null || tv.GetBuffer(out var vsBuf) != VSConstants.S_OK || vsBuf == null) return false;
+                var cm = (Microsoft.VisualStudio.ComponentModelHost.IComponentModel)await _pkg.GetServiceAsync(typeof(Microsoft.VisualStudio.ComponentModelHost.SComponentModel));
+                var buf = cm.GetService<Microsoft.VisualStudio.Editor.IVsEditorAdaptersFactoryService>().GetDocumentBuffer(vsBuf);
+                if (buf == null) return false;
+                var old = buf.CurrentSnapshot.GetText();
+                if (old != text)
+                {
+                    // un'unica Replace sul tratto che cambia (prefisso e suffisso comuni restano): una sola voce di undo, cursore e scorrimento al loro posto
+                    int pre = 0, max = Math.Min(old.Length, text.Length);
+                    while (pre < max && old[pre] == text[pre]) pre++;
+                    int suf = 0;
+                    while (suf < max - pre && old[old.Length - 1 - suf] == text[text.Length - 1 - suf]) suf++;
+                    using (var edit = buf.CreateEdit())
+                    {
+                        edit.Replace(pre, old.Length - pre - suf, text.Substring(pre, text.Length - pre - suf));
+                        edit.Apply();
+                    }
+                }
+                if (vsBuf is IVsPersistDocData pd)
+                    pd.SaveDocData(VSSAVEFLAGS.VSSAVE_SilentSave, out _, out _);
+                return true;
+            }
+            catch (Exception ex) { Log.Write("ApplyDocumentText: " + ex.Message); return false; }
+        }
+
         public async Task ShowFolderDiffAsync(string path)
         {
             await SendCommandAsync("log", "logFolder", new JObject { ["path"] = path }, LogTitle(path)).ConfigureAwait(false);

@@ -6,7 +6,7 @@ using Newtonsoft.Json.Linq;
 namespace SVNAssist.Host
 {
     /// <summary>Solo per la verifica end-to-end: attivo con SVNASSIST_SELFTEST=1 (spento di default).
-    /// Al primo state di "changes" con un non versionato: stage, messaggio "selftest", commit; esito nel host-log.</summary>
+    /// Al primo state di "changes" con un non versionato: stage, messaggio "selftest", commit; esito nel log host.</summary>
     internal static class SelfTest
     {
         public static readonly bool Enabled = Environment.GetEnvironmentVariable("SVNASSIST_SELFTEST") == "1";

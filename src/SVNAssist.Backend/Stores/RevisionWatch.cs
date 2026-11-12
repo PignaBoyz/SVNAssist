@@ -34,6 +34,10 @@ internal sealed class HeadWatcher
     private readonly Func<CancellationToken, Task<int>> _minutes;
     private readonly Func<TimeSpan, CancellationToken, Task> _delay;
     private readonly Action _changed;
+    private readonly Func<DateTime> _now;
+    private DateTime? _last;
+    private int _interval;
+    private volatile bool _active = true;
     private readonly SemaphoreSlim _nudge = new(0, 1);
     private int _checking;
     private readonly object _sync = new();
@@ -46,8 +50,9 @@ internal sealed class HeadWatcher
     /// <param name="changed">L'esito e' cambiato (si rimanda lo snapshot).</param>
     /// <param name="delay">Attesa (iniettabile nei test; default <see cref="Task.Delay(TimeSpan, CancellationToken)"/>).</param>
     public HeadWatcher(Func<CancellationToken, Task<long?>> fetch, Func<bool> busy, Func<CancellationToken, Task<int>> minutes, Action changed,
-        Func<TimeSpan, CancellationToken, Task>? delay = null)
+        Func<TimeSpan, CancellationToken, Task>? delay = null, Func<DateTime>? now = null)
     {
+        _now = now ?? (() => DateTime.UtcNow);
         _fetch = fetch;
         _busy = busy;
         _minutes = minutes;
@@ -63,6 +68,17 @@ internal sealed class HeadWatcher
 
     /// <summary>L'ultimo giro ha trovato l'impostazione a 0 (controllo spento).</summary>
     internal bool Disabled { get; private set; }
+
+    /// <summary>
+    /// Visual Studio e' (o non e') l'applicazione attiva: in secondo piano non si controlla; al ritorno in primo piano si controlla
+    /// subito se l'ultimo controllo e' piu' vecchio dell'intervallo.
+    /// </summary>
+    internal void SetActive(bool active)
+    {
+        _active = active;
+        if (active && _interval > 0 && (_last is null || _now() - _last >= TimeSpan.FromMinutes(_interval)))
+            Nudge();
+    }
 
     /// <summary>Dimentica l'esito (working copy o ramo cambiati).</summary>
     internal void Reset()
@@ -92,12 +108,13 @@ internal sealed class HeadWatcher
     /// <summary>Un controllo. <c>false</c> = saltato (occupati o gia' in corso); un errore non si propaga: diventa <see cref="Error"/>.</summary>
     internal async Task<bool> CheckAsync(CancellationToken ct)
     {
-        if (_busy() || Interlocked.CompareExchange(ref _checking, 1, 0) != 0)
+        if (!_active || _busy() || Interlocked.CompareExchange(ref _checking, 1, 0) != 0)
             return false;
         try
         {
             var head = await _fetch(ct);
             Set(head, null);
+            _last = _now();
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -148,7 +165,8 @@ internal sealed class HeadWatcher
             else
             {
                 Disabled = false;
-                wait = await CheckAsync(ct) ? TimeSpan.FromMinutes(minutes) : RetryBusy;
+                _interval = minutes;
+                wait = !_active ? PollDisabled : await CheckAsync(ct) ? TimeSpan.FromMinutes(minutes) : RetryBusy;
             }
 
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);

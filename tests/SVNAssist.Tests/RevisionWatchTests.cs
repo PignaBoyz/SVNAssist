@@ -140,6 +140,23 @@ public class RevisionWatchTests
     }
 
     [Fact]
+    public async Task Watcher_VsInSecondoPiano_NonControlla_Ciclo_AspettaSenzaRichieste_AlRitornoControlla()
+    {
+        var p = new Probe { StopAfterWaits = 2 };
+        var w = p.Watcher;
+        w.SetActive(false);
+
+        Assert.False(await w.CheckAsync(Ct));
+        await w.RunAsync(p.Stop.Token);
+        Assert.Equal(0, p.Fetches);
+        Assert.All(p.Waits, t => Assert.Equal(HeadWatcher.PollDisabled, t));
+
+        w.SetActive(true);
+        Assert.True(await w.CheckAsync(Ct));
+        Assert.Equal(1, p.Fetches);
+    }
+
+    [Fact]
     public async Task Watcher_Ciclo_OccupatoRiprovaPresto_NonFraNMinuti()
     {
         var p = new Probe { Busy = true, StopAfterWaits = 1 };

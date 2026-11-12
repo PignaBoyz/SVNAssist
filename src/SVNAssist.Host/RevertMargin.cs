@@ -65,8 +65,8 @@ namespace SVNAssist.Host
             Dispatcher.BeginInvoke(new Action(Refresh), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
         }
 
-        private bool _logged;
-        private void LogOnce(string msg) { if (_logged) return; _logged = true; Log.Write("RevertMargin: " + msg); }
+        private string _lastLog;
+        private void LogOnce(string msg) { if (msg == _lastLog) return; _lastLog = msg; Log.Write("RevertMargin: " + msg); } // solo se cambia: niente spam a ogni layout
 
         private void OnLayout(object sender, TextViewLayoutChangedEventArgs e) => Refresh();
 
@@ -79,9 +79,13 @@ namespace SVNAssist.Host
             IDifferenceViewer viewer;
             try { viewer = _p.Viewers.TryGetViewerForTextView(_view); } catch (Exception ex) { LogOnce("TryGetViewerForTextView: " + ex.Message); return; }
             // solo il pannello destro (in modalita' inline non c'e' una vista "destra" da annullare riga per riga)
-            if (viewer == null || viewer.RightView != _view || viewer.DifferenceBuffer == null) { Visibility = Visibility.Collapsed; return; }
+            var roles = string.Join(",", _view.Roles);
+            if (viewer == null || viewer.RightView != _view || viewer.DifferenceBuffer == null)
+            {
+                LogOnce("nessun pulsante: viewer " + (viewer == null ? "NON trovato" : "trovato ma questa non e' la vista destra (destra=" + (viewer.RightView == _view) + ", buffer=" + (viewer.DifferenceBuffer != null) + ")") + "; ruoli: " + roles);
+                Visibility = Visibility.Collapsed; return;
+            }
             Visibility = Visibility.Visible;
-            LogOnce("attivo sul pannello destro del diff (ruoli: " + string.Join(",", _view.Roles) + ")");
             if (_buffer != viewer.DifferenceBuffer)
             {
                 if (_buffer != null) _buffer.SnapshotDifferenceChanged -= OnDiffChanged;
@@ -89,8 +93,10 @@ namespace SVNAssist.Host
                 _buffer.SnapshotDifferenceChanged += OnDiffChanged;
             }
             var diff = _buffer.CurrentSnapshotDifference;
-            if (diff == null) return;
+            if (diff == null) { LogOnce("viewer trovato (vista destra), ma CurrentSnapshotDifference nullo; ruoli: " + roles); return; }
             var right = diff.RightBufferSnapshot;
+            int nDiffs = 0;
+            try { nDiffs = System.Linq.Enumerable.Count(diff.LineDifferences); } catch { }
 
             foreach (var d in diff.LineDifferences)
             {
@@ -117,6 +123,7 @@ namespace SVNAssist.Host
                 SetTop(btn, line.Top - _view.ViewportTop);
                 Children.Add(btn);
             }
+            LogOnce("viewer trovato, vista destra, differenze " + nDiffs + ", pulsanti creati " + Children.Count + "; ruoli: " + roles);
         }
 
         private void Revert(int from, int to)

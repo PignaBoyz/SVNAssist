@@ -34,6 +34,9 @@ namespace SVNAssist.Rpc
 
         /// <summary>Righe iniziali (1-based, nel file di lavoro) dei blocchi modificati rispetto a BASE, per "prossima/precedente modifica" nell'editor. Vuoto se il file non e' versionato o non e' modificato.</summary>
         Task<int[]> GetChangedBlocksAsync(string file);
+
+        /// <summary>Visual Studio e' diventata l'applicazione attiva (true) o ha perso il primo piano (false): il controllo delle nuove revisioni si ferma in secondo piano.</summary>
+        Task IdeActiveChangedAsync(bool active);
     }
 
     /// <summary>Metodi esposti dall'HOST, chiamati dal backend.</summary>
@@ -91,5 +94,11 @@ namespace SVNAssist.Rpc
 
         /// <summary>Apre un terminale con un comando (es. "gh auth login --web").</summary>
         Task RunInTerminalAsync(string command, string workingDir);
+
+        /// <summary>
+        /// Se il file e' aperto in un editor (anche il pannello destro di un diff) sostituisce il testo del buffer con una sola modifica
+        /// annullabile (Ctrl+Z) e lo salva: true. File non aperto: false e non fa nulla (il backend scrive su disco).
+        /// </summary>
+        Task<bool> ApplyDocumentTextAsync(string path, string text);
     }
 }

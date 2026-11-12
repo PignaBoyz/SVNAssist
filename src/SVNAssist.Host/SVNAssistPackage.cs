@@ -20,7 +20,7 @@ using Task = System.Threading.Tasks.Task;
 namespace SVNAssist.Host
 {
     [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
-    [InstalledProductRegistration("SVNAssist", "SVN integration with AI commit messages", "0.3.0")]
+    [InstalledProductRegistration("SVNAssist", "SVN integration with AI commit messages", "0.3.1")]
     [Guid(Ids.PackageGuid)]
     [ProvideMenuResource("Menus.ctmenu", 1)]
     [ProvideToolWindow(typeof(ChangesToolWindow), Style = VsDockStyle.Tabbed, Window = ToolWindowGuids80.SolutionExplorer, Orientation = ToolWindowOrientation.Left)]
@@ -53,6 +53,12 @@ namespace SVNAssist.Host
             Microsoft.VisualStudio.Shell.Events.SolutionEvents.OnAfterOpenSolution += (s, e) => NotifySolution();
             Microsoft.VisualStudio.Shell.Events.SolutionEvents.OnAfterCloseSolution += (s, e) => NotifySolution();
             NotifySolution();
+            // il controllo delle nuove revisioni lavora solo con VS in primo piano
+            if (System.Windows.Application.Current is System.Windows.Application app)
+            {
+                app.Activated += (s, e) => Host.OnIdeActiveAsync(true).FileAndForget("SVNAssist/ideActive");
+                app.Deactivated += (s, e) => Host.OnIdeActiveAsync(false).FileAndForget("SVNAssist/ideActive");
+            }
             SvnAssistOptions.Changed += ApplyShortcuts;
             ApplyShortcuts();
             // Verifica end-to-end: apre la finestra Changes a package caricato (spento di default).

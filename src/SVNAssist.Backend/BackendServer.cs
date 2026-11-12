@@ -294,6 +294,12 @@ internal sealed class BackendServer : IBackend, IDisposable
         }
     }
 
+    public Task IdeActiveChangedAsync(bool active)
+    {
+        Changes.HeadCheck.SetActive(active);
+        return Task.CompletedTask;
+    }
+
     public async Task<int[]> GetChangedBlocksAsync(string file)
     {
         try { return await _pathCommands.ChangedBlocksAsync(file, _lifetime.Token); }

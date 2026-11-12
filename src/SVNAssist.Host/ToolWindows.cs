@@ -29,7 +29,7 @@ namespace SVNAssist.Host
                 Log.Write("tool window " + view + ": " + ex);
                 Content = new System.Windows.Controls.TextBlock
                 {
-                    Text = Loc.T("SVNAssist non è riuscito ad aprire questa finestra: chiudila e riaprila da Extensions > SVNAssist. Dettagli in %LOCALAPPDATA%\\SVNAssist\\host-log.txt") + "\n\n" + ex.Message,
+                    Text = Loc.T("SVNAssist non è riuscito ad aprire questa finestra: chiudila e riaprila da Extensions > SVNAssist. Dettagli in %LOCALAPPDATA%\\SVNAssist\\logs") + "\n\n" + ex.Message,
                     TextWrapping = System.Windows.TextWrapping.Wrap,
                     Margin = new System.Windows.Thickness(12),
                 };

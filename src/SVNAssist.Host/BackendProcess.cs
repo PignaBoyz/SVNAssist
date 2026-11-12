@@ -209,8 +209,11 @@ namespace SVNAssist.Host
     internal static class Log
     {
         private static readonly object Gate = new object();
-        public static readonly string Path = System.IO.Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SVNAssist", "host-log.txt");
+        /// <summary>Un file al giorno in logs\host-aaaammgg.log, come il backend. Nome e pid: piu' istanze di VS (normale + Exp) scrivono nello stesso file.</summary>
+        public static string Path => System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SVNAssist", "logs", "host-" + DateTime.Now.ToString("yyyyMMdd") + ".log");
+
+        private static readonly int Pid = Process.GetCurrentProcess().Id;
 
         public static void Write(string msg)
         {
@@ -219,12 +222,18 @@ namespace SVNAssist.Host
             {
                 lock (Gate)
                 {
-                    Directory.CreateDirectory(System.IO.Path.GetDirectoryName(Path));
-                    if (File.Exists(Path) && new FileInfo(Path).Length > 1_000_000) File.Delete(Path);
-                    File.AppendAllText(Path, DateTime.Now.ToString("HH:mm:ss.fff ") + msg + Environment.NewLine);
+                    var path = Path;
+                    Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path));
+                    // Causa del log "fermo": File.AppendAllText apre con FileShare.Read, quindi se un'altra istanza di VS (o un lettore) tiene
+                    // il file aperto la scrittura falliva e l'eccezione era inghiottita. Qui si condivide in lettura E scrittura.
+                    using (var fs = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete))
+                    {
+                        var bytes = new System.Text.UTF8Encoding(false).GetBytes(DateTime.Now.ToString("HH:mm:ss.fff ") + "[" + Pid + "] " + msg + Environment.NewLine);
+                        fs.Write(bytes, 0, bytes.Length);
+                    }
                 }
             }
-            catch { }
+            catch (Exception ex) { Debug.WriteLine("[SVNAssist] scrittura log host non riuscita: " + ex.Message); }
         }
     }
 
