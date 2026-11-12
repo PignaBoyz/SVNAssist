@@ -28,9 +28,9 @@
     'La solution corrente non è una working copy SVN.': 'The current solution is not an SVN working copy.',
     'Working copy SVN rilevata automaticamente, aggiornamento...': 'SVN working copy detected automatically, updating...',
     'Nessuna modifica.': 'No changes.', 'Nessuna working copy configurata.': 'No working copy configured.',
-    'Seleziona almeno un file per il commit.': 'Select at least one file for the commit.', 'Scrivi un messaggio di commit.': 'Write a commit message.',
+    'Nessuna modifica da committare.': 'No changes to commit.', 'Scrivi un messaggio di commit.': 'Write a commit message.',
     'Commit in corso...': 'Commit in progress...', 'Update in corso...': 'Update in progress...', 'Cleanup in corso...': 'Cleanup in progress...',
-    'Update alla revisione HEAD in corso...': 'Updating to revision HEAD...', 'Cleanup completato.': 'Cleanup completed.',
+    'Cleanup completato.': 'Cleanup completed.',
     'Aggiunta a SVN in corso...': 'Adding to SVN...', 'Eliminazione in corso...': 'Deleting...', 'Lock in corso...': 'Locking...', 'Unlock in corso...': 'Unlocking...', 'Revert in corso...': 'Revert in progress...',
     'Risoluzione conflitto in corso...': 'Resolving the conflict...', 'Aggiornamento ignore list in corso...': 'Updating the ignore list...',
     'Nessun elemento non versionato da aggiungere.': 'No unversioned item to add.', 'Seleziona un file da eliminare.': 'Select a file to delete.',
@@ -50,7 +50,8 @@
     [/^Errore update: /, 'Error during update: '], [/^Errore cleanup: /, 'Error during cleanup: '], [/^Errore diff: /, 'Error showing diff: '], [/^Errore commit: /, 'Error during commit: '], [/^Errore: /, 'Error: '], [/^Errore (\w+): /, 'Error during $1: '],
     [/^Commit completato: revisione (\d+) \((\d+) elementi\)\.$/, 'Commit completed: revision $1 ($2 items).'], [/^Aggiornato alla revisione (\d+)\.?$/, 'Updated to revision $1.'], [/^Update completato\.?$/, 'Update completed.'],
     [/^(\d+) revisioni caricate( \(filtro attivo\))?\.$/, '$1 revisions loaded$2.'], [/^Diff revisione (\d+) caricato\.$/, 'Diff of revision $1 loaded.'], [/^Caricamento diff per revisione (\d+)\.\.\.$/, 'Loading diff for revision $1...'],
-    [/^Risolvi prima i conflitti \((\d+) file\) o deselezionali: .*$/, 'Resolve the conflicts first ($1 files) or deselect them: svn does not commit conflicted files.'],
+    [/^Risolvi prima i conflitti \((\d+) file\): .*$/, 'Resolve the conflicts first ($1 files): svn does not commit conflicted files.'],
+    [/^Update alla revisione (\w+) in corso\.\.\.$/, 'Updating to revision $1...'], [/^"(.*)" non è una revisione valida: .*$/, '"$1" is not a valid revision: type a positive integer (e.g. 1234) or HEAD.'],
     [/^(\d+) file cambiati tra r(\d+) e r(\d+)\.$/, '$1 files changed between r$2 and r$3.'], [/^(\d+) file modificati\.$/, '$1 files modified.'],
   ];
   const tr = s => {
@@ -101,6 +102,12 @@
     const m = v.aiMsg || '';
     return v.aiBusy ? 'busy' : !m ? '' : /^Errore/.test(m) ? 'err' : /^(Nessun|Metti almeno|Scrivi prima|Operazione)/.test(m) ? 'warn' : /^Messaggio/.test(m) ? 'ok' : 'info';
   }
+  function rpSnap() {   // scelta della revisione: stesse regole del backend (ultime N revisioni dal log)
+    const r = S.vm.rp;
+    if (!r) return { open: false, target: '', loading: false, error: '', canMore: false, items: [] };
+    return { open: true, target: WC, loading: !!r.loading, error: tr(r.error || ''), canMore: S.log.length > r.limit,
+      items: S.log.slice(0, r.limit).map(e => ({ rev: e.rev, author: e.author, date: e.date.toISOString(), msg: String(e.msg).split('\n')[0] })) };
+  }
   function snapshotChanges() {
     const v = S.vm;
     const sections = SECS.map(([id, title]) => { const items = secItems(id); return { id, title: tr(title), count: items.length, expanded: !v.collapsed['sec:' + id], rows: rowsOf(id, items) }; });
@@ -108,8 +115,9 @@
     return {
       workingCopy: { path: v.wcPath || '', showInput: !!v.showInput, branch: v.branch || '', rev: S.wcRev || 0 },
       commit: { text: v.commitMsg || '', aiStatus: tr(v.aiMsg || ''), aiLevel: aiLevel(v), aiSeq: v.aiSeq || 0, busy: !!v.aiBusy, lang: String(v.lang || S.settings.defaultlanguage || 'auto').toLowerCase(),
-        trace: (v.trace || []).map(t => ({ name: t.name, state: t.state, detail: t.detail || '' })), download: v.dl ? { pct: v.dl.pct, label: v.dl.label } : null },
-      view: v.view, theme: { mode: theme.mode, kind: kindOf() }, sections, status: { msg: tr(msg), err: !!v.err || /^Errore/.test(msg), ...(/E155004/.test(msg) ? { action: { label: tr('Esegui Cleanup'), cmd: 'cleanup' } } : {}) }, prereq: prereq(), loading: !!v.loading, wizard: wizardSnap(),
+        trace: (v.trace || []).map(t => ({ name: t.name, state: t.state, detail: t.detail || '' })), download: v.dl ? { pct: v.dl.pct, label: v.dl.label } : null,
+        count: commitSet().files.length, all: commitSet().all },
+      view: v.view, theme: { mode: theme.mode, kind: kindOf() }, sections, status: { msg: tr(msg), err: !!v.err || /^Errore/.test(msg), ...(/E155004/.test(msg) ? { action: { label: tr('Esegui Cleanup'), cmd: 'cleanup' } } : {}) }, prereq: prereq(), loading: !!v.loading, wizard: wizardSnap(), revPicker: rpSnap(),
     };
   }
   function logMatch(e) {   // stessi filtri del backend: sottostringhe senza maiuscole, date incluse
@@ -181,6 +189,13 @@
     refresh: () => { S.vm.statusAuto = true; return vmRefresh(undefined, true); },
     update: () => vmUpdate(),
     updateToRevision: () => vmUpdateRev(),
+    revPickerMore: () => rpMore(),
+    revPickerCancel: () => { S.vm.rp = null; render(); },
+    revPickerOk: a => rpOk(a),
+    showLog: () => {
+      if (!S.vm.wcPath.trim()) { setStatus('Nessuna working copy configurata.'); return render(); }
+      return openLog().then(() => { if (!S.lvm.entries.length) { S.lvm.path = S.vm.wcPath; return lvmLoad(50); } });
+    },
     cleanup: () => vmCleanup(),
     commit: () => vmCommit(),
     setCommitText: a => { S.vm.commitMsg = String(a.text || ''); },   // niente render: e' la UI a tenere il testo

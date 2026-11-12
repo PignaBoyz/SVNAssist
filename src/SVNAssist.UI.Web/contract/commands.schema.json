@@ -48,7 +48,7 @@
     },
     {
       "title": "updateToRevision",
-      "description": "SVN Update to revision: l'host chiede la revisione (intero positivo o HEAD) e fa svn update -r.",
+      "description": "SVN Update to revision: apre nella finestra Changes la scelta guidata della revisione (elenco delle ultime revisioni, HEAD, numero).",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -58,6 +58,96 @@
       "properties": {
         "name": {
           "const": "updateToRevision"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "revPickerMore",
+      "description": "Scelta revisione: carica altre revisioni (\"Carica altre\").",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "revPickerMore"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "revPickerCancel",
+      "description": "Scelta revisione: chiude senza aggiornare.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "revPickerCancel"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "revPickerOk",
+      "description": "Scelta revisione: esegue svn update -r. rev = numero intero positivo oppure HEAD; se non valido la finestra resta aperta con revPicker.error.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "revPickerOk"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "rev"
+          ],
+          "properties": {
+            "rev": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "showLog",
+      "description": "Apre il Log della working copy (come Extensions > SVNAssist > Log).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "showLog"
         },
         "args": {
           "type": "object",

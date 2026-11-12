@@ -12,16 +12,16 @@ Estensione VSIX per Visual Studio 2022 / VS 18 che integra **Subversion (SVN)** 
 
 - **Pannello SVN Changes** — Tool window dockabile, stile Git Changes:
   - Branch corrente, Refresh e Update in alto
-  - Messaggio di commit multiriga con **Commit**, **Genera con AI**, **Migliora** e scelta della lingua (Italiano / English / Auto)
+  - Messaggio di commit multiriga con **Commit All** (Staged vuoto: tutte le modifiche dei file versionati, come `git commit -a`) / **Commit Staged (n)**, **Genera con AI**, **Migliora** e scelta della lingua (Italiano / English / Auto)
   - Sezioni comprimibili **Conflitti**, **Modifiche** e **Non versionati**, con conteggio; vista **Albero** (cartelle compattate, come Git) o **Lista**
   - Checkbox tri-state su file, cartelle e sezioni: ciò che è spuntato è ciò che viene committato (nessuno "staging")
   - Menu contestuali: Add, Revert, Delete, Ignore, Risolvi conflitto, Diff (file e cartella) — Revert e Delete chiedono conferma elencando cosa cambia
-  - **SVN Update to revision…** (revisione intera o HEAD, dal menu ⋯ e da Solution Explorer), **SVN Cleanup** (menu ⋯, Extensions, Solution Explorer; se un'operazione fallisce per working copy bloccata compare il pulsante **Esegui Cleanup**)
+  - **SVN Update to revision…** (scelta guidata: elenco delle ultime revisioni con "Carica altre", HEAD in cima o numero; dal menu ⋯, da Extensions e da Solution Explorer), **SVN Cleanup** (menu ⋯, Extensions, Solution Explorer; se un'operazione fallisce per working copy bloccata compare il pulsante **Esegui Cleanup**)
   - **SVN Lock / Unlock** (menu del file e Solution Explorer, messaggio facoltativo; per rubare il lock di un altro serve una conferma esplicita) con lucchetto sui file bloccati da te
   - **Login SVN** solo se serve: dopo un errore di autenticazione compare un dialogo utente/password (con "Ricorda") e il comando viene ripetuto una volta; con l'accesso integrato di Windows non compare mai
   - Pannello diff inline (o TortoiseSVN se installato)
   - **Checklist dei prerequisiti** in-panel: svn, TortoiseSVN, provider AI, con pulsanti di installazione/login a un clic
-- **Commit message con AI** — Genera dal diff **minimo** dei soli file selezionati, o migliora la bozza; multi-provider con fallback
+- **Commit message con AI** — Genera dal diff **minimo** degli stessi file del commit (Staged, o tutte le modifiche versionate), o migliora la bozza; multi-provider con fallback
 - **Auto-detect SVN** — Rileva la working copy dalla solution aperta; refresh automatico (FileSystemWatcher con debounce)
 - **Log / History** — Cronologia con diff per revisione e "Carica altre 50"
 - **Comportamento fedele a svn/TortoiseSVN** — i non versionati spuntati vengono aggiunti prima del commit, i mancanti cancellati, i conflitti bloccano il commit
@@ -193,10 +193,10 @@ Si apre da **Extensions → SVNAssist → SVN Changes** e si ancora di solito a 
 
 ```
 ┌─ SVN Changes ─────────────────────────┐
-│ trunk                  [Refresh][Update]│
+│ trunk        [Update][Show Log][Refresh]│
 │ ┌ Messaggio di commit ───────────────┐ │
 │ └────────────────────────────────────┘ │
-│ [Commit] [Genera con AI] [Migliora] [Italiano ▾]
+│ [Commit All] [Genera con AI] [Migliora] [Italiano ▾]
 │ Seleziona tutto  Deseleziona   [Albero][Lista]
 │ ▾ ☑ Modifiche (3)                      │
 │   ▾ ☑ src                          2   │
@@ -213,7 +213,7 @@ Si apre da **Extensions → SVNAssist → SVN Changes** e si ancora di solito a 
 1. Apri il pannello: la working copy viene rilevata dalla solution e le modifiche appaiono raggruppate per sezione e cartella
 2. Spunta ciò che vuoi committare (una checkbox su una cartella o sezione spunta tutti i discendenti; lo stato parziale è indeterminato)
 3. Scrivi il messaggio o premi **Genera con AI** (la lingua si sceglie nel menu accanto ai bottoni; vale per la sessione, il default viene da *Default Language*)
-4. **Commit**: i non versionati spuntati vengono aggiunti, i mancanti cancellati; con un conflitto selezionato il commit viene rifiutato
+4. **Commit All / Commit Staged**: con file in Staged committa solo quelli, altrimenti tutte le modifiche dei file versionati; i non versionati in Staged vengono aggiunti, i mancanti cancellati; con un conflitto selezionato il commit viene rifiutato
 5. **Update** aggiorna la working copy e segnala eventuali conflitti (sezione *Conflitti*, menu *Risolvi conflitto...*)
 
 Stati: **M** modificato, **A** aggiunto, **D** eliminato, **R** sostituito, **C** conflitto (anche ad albero), **?** non versionato, **!** mancante/incompleto, **~** ostruito.

@@ -111,7 +111,8 @@ internal sealed class BackendServer : IBackend, IDisposable
         };
         Changes.CommitMessage.OpenAiWizard = ct => Changes.Wizard.OpenAsync(fromGenerate: true, ct);
         Log = new LogStore(services.Svn, services.Settings, host, Changes.TempRoot);
-        _pathCommands = new PathCommands(services.Svn, host, () => Changes.RefreshAsync(_lifetime.Token), Changes.TempRoot);
+        _pathCommands = new PathCommands(services.Svn, host, () => Changes.RefreshAsync(_lifetime.Token), Changes.TempRoot,
+            (targets, ct) => Changes.OpenRevisionPickerAsync(targets, ct));
         _channels = new Dictionary<string, Channel>
         {
             ["changes"] = new Channel { View = "changes", Store = Changes },

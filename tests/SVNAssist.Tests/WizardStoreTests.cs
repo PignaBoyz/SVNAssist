@@ -285,7 +285,7 @@ public class WizardStoreTests
     [Theory]
     [InlineData("", false, "")]
     [InlineData("Errore AI: boom", false, "err")]
-    [InlineData("Metti almeno un file in Staged per generare il messaggio.", false, "warn")]
+    [InlineData("Nessuna modifica da committare.", false, "warn")]
     [InlineData("Nessun provider AI configurato", false, "warn")]
     [InlineData("Messaggio generato con AI (Claude).", false, "ok")]
     [InlineData("Generazione in corso...", true, "busy")]

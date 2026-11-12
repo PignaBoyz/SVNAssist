@@ -96,10 +96,12 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         Wizard.Changed += NotifyChanged;
         CommitMessage = new CommitStore(
             settingsService, svnService, aiServiceFactory, aiSetupPrompt,
-            stagedPaths: () => StagedEntries().Select(e => e.FullPath).ToList(),
+            stagedPaths: () => CommitSet().Entries.Select(e => e.FullPath).ToList(),
             workingCopyPath: () => WorkingCopyPath,
             dialogs: dialogs);
         CommitMessage.Changed += NotifyChanged;
+        RevPicker = new RevisionPickerStore(svnService);
+        RevPicker.Changed += NotifyChanged;
         _debouncer = new RefreshDebouncer(RefreshQuietPeriod, AutoRefreshAsync);
     }
 
@@ -109,6 +111,9 @@ internal sealed class ChangesStore : ViewStore, IDisposable
 
     /// <summary>Messaggio di commit e azioni AI.</summary>
     internal CommitStore CommitMessage { get; }
+
+    /// <summary>Scelta guidata della revisione per "Update to revision".</summary>
+    internal RevisionPickerStore RevPicker { get; }
 
     /// <summary>Checklist dei prerequisiti.</summary>
     internal PrereqStore Prerequisites { get; }
@@ -167,16 +172,18 @@ internal sealed class ChangesStore : ViewStore, IDisposable
 
             var download = Prerequisites.Download;
             var mode = _themeMode;
+            var commit = CommitSet();
             return new ChangesState(
                 new WorkingCopyDto(_workingCopyPath, _showWorkingCopyInput, _branchName),
-                CommitMessage.GetSnapshot(download),
+                CommitMessage.GetSnapshot(download, commit.Entries.Count, commit.All),
                 _isTreeView ? "tree" : "list",
                 new ThemeDto(mode, mode == "auto" ? _vsThemeKind : mode),
                 sections,
                 BuildStatus(),
                 Prerequisites.GetSnapshot(),
                 _loading,
-                Wizard.GetSnapshot());
+                Wizard.GetSnapshot(),
+                RevPicker.GetSnapshot());
         }
     }
 
@@ -277,7 +284,22 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 await RunExclusiveAsync(() => UpdateCoreAsync(ct));
                 break;
             case "updateToRevision":
-                await RunExclusiveAsync(() => UpdateToRevisionCoreAsync(ct));
+                await OpenRevisionPickerAsync([WorkingCopyPath], ct);
+                break;
+            case "revPickerMore":
+                await RevPicker.MoreAsync(ct);
+                break;
+            case "revPickerCancel":
+                RevPicker.Close();
+                break;
+            case "revPickerOk":
+                await RevPickerOkAsync(Args.Str(args, "rev"), ct);
+                break;
+            case "showLog":
+                if (string.IsNullOrWhiteSpace(WorkingCopyPath))
+                    SetStatus(Loc.T("Nessuna working copy configurata."));
+                else
+                    await _host.ShowLogAsync(WorkingCopyPath);
                 break;
             case "cleanup":
                 await RunExclusiveAsync(() => CleanupCoreAsync(ct));
@@ -844,12 +866,6 @@ internal sealed class ChangesStore : ViewStore, IDisposable
 
     // ── Staged ───────────────────────────────────────────────────────
 
-    private List<ChangeEntry> StagedEntries()
-    {
-        lock (_stateLock)
-            return _entries.Where(e => SectionOf(e) == ChangeSection.Staged).ToList();
-    }
-
     private void SetStaged(string key, bool staged)
     {
         lock (_stateLock)
@@ -943,23 +959,37 @@ internal sealed class ChangesStore : ViewStore, IDisposable
     // ── Commit e update ──────────────────────────────────────────────
 
     /// <summary>
-    /// Commit dei soli elementi in Staged. Come TortoiseSVN: i non versionati in Staged vengono prima
+    /// Elementi del prossimo commit, come Git: quelli in Staged; se Staged e' vuoto tutte le modifiche dei file
+    /// versionati (M, A, D, R, mancanti, conflitti che poi bloccano), mai i non versionati (come <c>git commit -a</c>).
+    /// </summary>
+    private (List<ChangeEntry> Entries, bool All) CommitSet()
+    {
+        lock (_stateLock)
+        {
+            var staged = _entries.Where(e => Wc.Staged.Contains(e.FullPath)).ToList();
+            if (staged.Count > 0)
+                return (staged, false);
+
+            var versioned = _entries.Where(e => e.Status is SvnStatusKind.Modified or SvnStatusKind.Added or SvnStatusKind.Deleted
+                or SvnStatusKind.Replaced or SvnStatusKind.Missing or SvnStatusKind.Conflicted).ToList();
+            return (versioned, versioned.Count > 0);
+        }
+    }
+
+    /// <summary>
+    /// Commit degli elementi di <see cref="CommitSet"/>. Come TortoiseSVN: i non versionati in Staged vengono prima
     /// aggiunti e i mancanti prima cancellati (svn commit da solo li rifiuterebbe).
     /// </summary>
     private async Task CommitCoreAsync(CancellationToken ct)
     {
-        List<ChangeEntry> selected;
+        var (selected, _) = CommitSet();
         List<ChangeEntry> all;
         lock (_stateLock)
-        {
             all = _entries;
-            var staged = Wc.Staged;
-            selected = _entries.Where(e => staged.Contains(e.FullPath)).ToList();
-        }
 
         if (selected.Count == 0)
         {
-            SetStatus(Loc.T("Metti almeno un file in Staged per il commit."));
+            SetStatus(Loc.T("Nessuna modifica da committare."));
             return;
         }
 
@@ -972,7 +1002,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         var conflicted = selected.Where(e => e.Status == SvnStatusKind.Conflicted).ToList();
         if (conflicted.Count > 0)
         {
-            SetStatus(Loc.T("Risolvi prima i conflitti ({0} file) o toglili da Staged: svn non committa file in conflitto.", conflicted.Count));
+            SetStatus(Loc.T("Risolvi prima i conflitti ({0} file): svn non committa file in conflitto.", conflicted.Count));
             return;
         }
 
@@ -1067,47 +1097,56 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         }
     }
 
-    /// <summary>SVN Update to revision: chiede la revisione (intero positivo o HEAD) e fa <c>svn update -r</c> sulla working copy.</summary>
-    private async Task UpdateToRevisionCoreAsync(CancellationToken ct)
+    /// <summary>Apre la scelta guidata della revisione per i percorsi indicati (working copy corrente o selezione di Solution Explorer).</summary>
+    internal async Task OpenRevisionPickerAsync(IReadOnlyList<string> targets, CancellationToken ct)
     {
-        var wc = WorkingCopyPath;
-        if (string.IsNullOrWhiteSpace(wc))
+        if (targets.Count == 0 || string.IsNullOrWhiteSpace(targets[0]))
         {
             SetStatus(Loc.T("Nessuna working copy configurata."));
             return;
         }
 
-        var revision = await AskRevisionAsync(ct);
-        if (revision is null)
-            return;
+        await RevPicker.OpenAsync(targets, ct);
+    }
 
+    /// <summary>OK nella scelta: revisione non valida = errore nella finestra (resta aperta), altrimenti chiude ed esegue <c>svn update -r</c>.</summary>
+    private async Task RevPickerOkAsync(string typed, CancellationToken ct)
+    {
+        if (!RevPicker.IsOpen)
+            return;
+        if (!SvnRevision.TryNormalize(typed, out var revision))
+        {
+            RevPicker.SetError(Loc.T("\"{0}\" non è una revisione valida: scrivi un numero intero positivo (es. 1234) oppure HEAD.", typed.Trim()));
+            return;
+        }
+
+        var targets = RevPicker.Targets;
+        RevPicker.Close();
+        await RunExclusiveAsync(() => UpdateToRevisionCoreAsync(targets, revision, ct));
+    }
+
+    /// <summary><c>svn update -r</c> sui percorsi scelti.</summary>
+    private async Task UpdateToRevisionCoreAsync(IReadOnlyList<string> targets, string revision, CancellationToken ct)
+    {
         try
         {
             SetStatus(Loc.T("Update alla revisione {0} in corso...", revision));
-            var update = await _svnService.UpdateToRevisionAsync(wc, revision, ct);
-            var updated = update.Revision is { } rev ? Loc.T("Aggiornato alla revisione {0}", rev) : Loc.T("Update completato");
-            await RefreshAsync(ct, reloadBranch: true, update.ConflictedPaths.Count > 0
-                ? Loc.T("{0}: {1} file in conflitto.", updated, update.ConflictedPaths.Count)
+            UpdateResult? last = null;
+            var conflicts = 0;
+            foreach (var target in targets)
+            {
+                last = await _svnService.UpdateToRevisionAsync(target, revision, ct);
+                conflicts += last.ConflictedPaths.Count;
+            }
+
+            var updated = last?.Revision is { } rev ? Loc.T("Aggiornato alla revisione {0}", rev) : Loc.T("Update completato");
+            await RefreshAsync(ct, reloadBranch: true, conflicts > 0
+                ? Loc.T("{0}: {1} file in conflitto.", updated, conflicts)
                 : $"{updated}.");
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
             SetStatus(Loc.T("Errore update: {0}", ex.Message));
-        }
-    }
-
-    /// <summary>Chiede la revisione finché non è valida; <c>null</c> se l'utente annulla.</summary>
-    private async Task<string?> AskRevisionAsync(CancellationToken ct)
-    {
-        var message = Loc.T("Aggiorna la working copy alla revisione indicata (numero intero positivo oppure HEAD).");
-        while (true)
-        {
-            var typed = await _dialogs.AskTextAsync(message, Loc.T("Revisione"), "HEAD", ct);
-            if (typed is null)
-                return null;
-            if (SvnRevision.TryNormalize(typed, out var revision))
-                return revision;
-            message = Loc.T("\"{0}\" non è una revisione valida: scrivi un numero intero positivo (es. 1234) oppure HEAD.", typed.Trim());
         }
     }
 

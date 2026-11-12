@@ -86,7 +86,8 @@ internal sealed class FakeHost : IHost
         return Task.CompletedTask;
     }
 
-    public Task ShowLogAsync(string path) => Task.CompletedTask;
+    public List<string> LogShown { get; } = [];
+    public Task ShowLogAsync(string path) { LogShown.Add(path); return Task.CompletedTask; }
 
     public List<string> FolderDiffs { get; } = [];
 

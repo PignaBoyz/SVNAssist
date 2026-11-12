@@ -16,8 +16,12 @@ internal sealed class PathCommands
     private readonly Func<Task> _refresh;
     private readonly DiffOpener _diffs;
 
-    public PathCommands(ISvnService svn, IHost host, Func<Task> refresh, string tempRoot)
+    private readonly Func<IReadOnlyList<string>, CancellationToken, Task> _openRevisionPicker;
+
+    public PathCommands(ISvnService svn, IHost host, Func<Task> refresh, string tempRoot,
+        Func<IReadOnlyList<string>, CancellationToken, Task>? openRevisionPicker = null)
     {
+        _openRevisionPicker = openRevisionPicker ?? ((_, _) => Task.CompletedTask);
         _svn = svn;
         _host = host;
         _refresh = refresh;
@@ -84,23 +88,9 @@ internal sealed class PathCommands
 
     private Task UpdateAsync(List<SvnTarget> targets, CancellationToken ct) => UpdateAsync(targets, null, ct);
 
-    private async Task UpdateToRevisionAsync(List<SvnTarget> targets, CancellationToken ct)
-    {
-        var message = Loc.T("Aggiorna alla revisione indicata (numero intero positivo oppure HEAD).");
-        while (true)
-        {
-            var typed = await _host.PromptTextAsync(message, Loc.T("Revisione"), "HEAD");
-            if (typed is null)
-                return;
-            if (SvnRevision.TryNormalize(typed, out var revision))
-            {
-                await UpdateAsync(targets, revision, ct);
-                return;
-            }
-
-            message = Loc.T("\"{0}\" non è una revisione valida: scrivi un numero intero positivo (es. 1234) oppure HEAD.", typed.Trim());
-        }
-    }
+    /// <summary>La scelta della revisione e' la modale della finestra Changes (che l'host ha gia' aperto): qui la si apre sui percorsi selezionati.</summary>
+    private Task UpdateToRevisionAsync(List<SvnTarget> targets, CancellationToken ct)
+        => _openRevisionPicker(targets.Select(t => t.Path).ToList(), ct);
 
     private async Task CleanupAsync(List<SvnTarget> targets, CancellationToken ct)
     {

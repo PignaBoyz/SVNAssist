@@ -89,7 +89,7 @@ test('changes.js: etichette SVN, footer prerequisiti rosso/verde, focus trap, Es
   const js = read('src/SVNAssist.UI.Web/js/changes.js');
   assert.match(js, /'SVN Update'/);
   assert.match(js, /wizardOpenPrereq/); assert.match(js, /prq-st bad/); assert.match(js, /prq-st ok/);
-  assert.match(js, /e\.key === 'Escape'/); assert.match(js, /e\.key !== 'Tab'/); assert.match(js, /\.inert = open/);
+  assert.match(js, /e\.key === 'Escape'/); assert.match(js, /e\.key !== 'Tab'/); assert.match(js, /.inert = anyModal/);
   assert.match(js, /addEventListener\('focus'/);
   assert.match(js, /Generazione in corso…/);
   assert.match(js, /lv-\$\{lv\}/);

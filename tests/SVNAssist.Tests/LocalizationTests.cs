@@ -175,7 +175,7 @@ public sealed partial class LocalizationTests : IDisposable
             Loc.Lang = lang;
             Assert.Equal("err", CommitStore.LevelOf(Loc.T("Errore AI: {0}", "x"), busy: false));
             Assert.Equal("warn", CommitStore.LevelOf(Loc.T("Nessun diff disponibile."), busy: false));
-            Assert.Equal("warn", CommitStore.LevelOf(Loc.T("Metti almeno un file in Staged per generare il messaggio."), busy: false));
+            Assert.Equal("warn", CommitStore.LevelOf(Loc.T("Nessuna modifica da committare."), busy: false));
             Assert.Equal("warn", CommitStore.LevelOf(Loc.T("Scrivi prima una bozza del messaggio da migliorare."), busy: false));
             Assert.Equal("warn", CommitStore.LevelOf(Loc.T("Operazione annullata: nessun dato è stato inviato."), busy: false));
             Assert.Equal("ok", CommitStore.LevelOf(Loc.T("Messaggio generato con AI") + ".", busy: false));
