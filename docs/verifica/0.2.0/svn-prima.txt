@@ -1,0 +1,6 @@
+M       Demo.sln
+A       aggiunto.txt
+?       nuovo.txt
+M       src\Demo\Program.cs
+---
+------------------------------------------------------------------------

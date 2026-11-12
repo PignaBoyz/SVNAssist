@@ -1,0 +1,39 @@
+08:35:04.767 WebView2 changes pronta, runtime 157.0.4341.46
+08:35:04.984 backend avviato pid 11640
+08:35:05.453 SELFTEST state loading=True sections=staged=0,changes=0,unversioned=0 status={
+  "msg": "Caricamento in corso...",
+  "err": false
+}
+08:35:05.524 SELFTEST state loading=True sections=staged=0,changes=0,unversioned=0 status={
+  "msg": "Working copy SVN rilevata automaticamente, aggiornamento...",
+  "err": false
+}
+08:35:05.639 SELFTEST state loading=False sections=staged=2,changes=0,unversioned=4 status={
+  "msg": "2 modificati, 4 non versionati.",
+  "err": false
+}
+08:35:05.643 SELFTEST stage unversioned:src/Demo/bin
+08:35:05.664 SELFTEST state loading=False sections=staged=3,changes=0,unversioned=3 status={
+  "msg": "2 modificati, 4 non versionati.",
+  "err": false
+}
+08:35:05.670 SELFTEST reply {"v":1,"type":"reply","id":1000001,"ok":true,"result":null}
+08:35:05.675 SELFTEST state loading=False sections=staged=3,changes=0,unversioned=3 status={
+  "msg": "2 modificati, 4 non versionati.",
+  "err": false
+}
+08:35:05.676 SELFTEST reply {"v":1,"type":"reply","id":1000002,"ok":true,"result":null}
+08:35:07.182 SELFTEST commit
+08:35:07.215 SELFTEST state loading=False sections=staged=3,changes=0,unversioned=3 status={
+  "msg": "Commit in corso...",
+  "err": false
+}
+08:35:07.868 SELFTEST state loading=False sections=staged=3,changes=0,unversioned=3 status={
+  "msg": "Commit in corso...",
+  "err": false
+}
+08:35:07.915 SELFTEST state loading=False sections=staged=0,changes=0,unversioned=3 status={
+  "msg": "Commit completato: revisione 2 (3 elementi).",
+  "err": false
+}
+08:35:07.916 SELFTEST reply {"v":1,"type":"reply","id":1000003,"ok":true,"result":null}

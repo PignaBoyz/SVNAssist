@@ -188,6 +188,7 @@ namespace SVNAssist.Host
 
         public async Task PushAsync(string view, string messageJson)
         {
+            if (SelfTest.Enabled) SelfTest.OnPush(this, view, messageJson);
             var h = Find(view);
             if (h == null) return; // finestra non aperta: al prossimo "ready" il backend rimanda lo stato
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();

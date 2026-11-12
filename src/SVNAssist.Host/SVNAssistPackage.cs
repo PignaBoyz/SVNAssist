@@ -44,6 +44,9 @@ namespace SVNAssist.Host
             Microsoft.VisualStudio.Shell.Events.SolutionEvents.OnAfterOpenSolution += (s, e) => NotifySolution();
             Microsoft.VisualStudio.Shell.Events.SolutionEvents.OnAfterCloseSolution += (s, e) => NotifySolution();
             NotifySolution();
+            // Verifica end-to-end: apre la finestra Changes a package caricato (spento di default).
+            if (Environment.GetEnvironmentVariable("SVNASSIST_AUTO_OPEN") == "1")
+                JoinableTaskFactory.RunAsync(async () => { await Task.Delay(5000); await ShowViewAsync("changes"); }).FileAndForget("SVNAssist/autoopen");
         }
 
         // ---- solution ----

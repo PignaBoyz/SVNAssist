@@ -1,0 +1,14 @@
+08:30:40.450 WebView2 changes pronta, runtime 157.0.4341.46
+08:30:40.758 backend avviato pid 22184
+08:30:41.673 SELFTEST state loading=True sections=staged=0,changes=0,unversioned=0 status={
+  "msg": "Caricamento in corso...",
+  "err": false
+}
+08:30:41.726 SELFTEST state loading=True sections=staged=0,changes=0,unversioned=0 status={
+  "msg": "Caricamento in corso...",
+  "err": false
+}
+08:30:41.771 SELFTEST state loading=False sections=staged=0,changes=0,unversioned=0 status={
+  "msg": "Errore durante il caricamento: An item with the same key has already been added. Key: aiprovider",
+  "err": true
+}

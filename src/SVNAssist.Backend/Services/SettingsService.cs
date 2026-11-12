@@ -135,7 +135,10 @@ internal sealed class HostSettings : ISvnAssistSettings
                         BackendLog.Warn("GetSettingsAsync fallita: " + ex.Message);
                     }
 
-                    cache = new Dictionary<string, string>(fromHost ?? [], StringComparer.OrdinalIgnoreCase);
+                    // L'host manda camelCase e alias minuscoli: chiavi uguali ignorando le maiuscole, quindi si assegna (il costruttore a copia lancia).
+                    cache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var kv in fromHost ?? [])
+                        cache[kv.Key] = kv.Value;
                     if (fromHost is not null)
                         Volatile.Write(ref _cache, cache);
                 }
