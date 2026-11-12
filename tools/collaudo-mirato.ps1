@@ -27,7 +27,7 @@ Start-Process "$ide\devenv.exe" -ArgumentList '/rootsuffix', 'SvnHost', "`"$sln`
 Write-Host ''
 if ($Parte -eq 'A') {
     Write-Host 'PARTE A — wc (Extensions > SVNAssist > Changes):'
-    Write-Host ' 1. Doppio clic su Catalog.cs: Ctrl+Alt+Giu/Su saltano tra le 4 modifiche.'
+    Write-Host ' 1. Doppio clic su Catalog.cs: Alt+F8 / Shift+Alt+F8 saltano tra le 4 modifiche (anche da tasto destro).'
     Write-Host ' 2. Accanto a ogni blocco modificato c''e'' il pulsante Annulla: un clic annulla solo quel blocco, nessun dialogo.'
     Write-Host ' 3. Genera con AI: messaggio Conventional Commits senza ``` ; Commit All; tendina Recenti larga, con anteprima e ricerca.'
     Write-Host 'Poi chiudi VS e lancia: .\tools\collaudo-mirato.ps1 -Parte B'
