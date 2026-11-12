@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
+using Microsoft.VisualStudio.TextManager.Interop;
 using Microsoft.VisualStudio.Threading;
 using Newtonsoft.Json.Linq;
 using Task = System.Threading.Tasks.Task;
@@ -107,6 +108,9 @@ namespace SVNAssist.Host
             Add(Ids.CmdCleanup, () => Host.SendCommandAsync("changes", "cleanup", null));
             Add(Ids.CmdSwitch, () => Host.SendCommandAsync("changes", "switchOpen", null));
             Add(Ids.CmdMerge, () => Host.SendCommandAsync("changes", "mergeOpen", null));
+            Add(Ids.CmdRevertSel, RevertSelectedAsync);
+            Add(Ids.CmdNextChange, () => DiffNavigateAsync("Diff.NextDifference"));
+            Add(Ids.CmdPrevChange, () => DiffNavigateAsync("Diff.PreviousDifference"));
 
             // Sottomenu Lingua: tre voci a scelta esclusiva, la spunta segue l'impostazione.
             void AddLang(int id, string value)
@@ -119,19 +123,41 @@ namespace SVNAssist.Host
             AddLang(Ids.CmdLangIt, "it");
             AddLang(Ids.CmdLangEn, "en");
 
-            // Solution Explorer: i percorsi selezionati sono un dato dell'host (non vengono dalla pagina) e vanno
-            // al backend con IBackend.RunPathCommandAsync(command, paths). Vedi docs/host.md.
-            Add(Ids.CmdSeUpdate, () => SeAsync("update", null));
-            Add(Ids.CmdSeDiff, () => SeAsync("diff", null));
-            Add(Ids.CmdSeAdd, () => SeAsync("add", null));
-            Add(Ids.CmdSeRevert, () => SeAsync("revert", null));
-            Add(Ids.CmdSeIgnore, () => SeAsync("ignore", null));
-            Add(Ids.CmdSeCommit, () => SeAsync("commit", "changes"));
-            Add(Ids.CmdSeLog, () => SeAsync("log", "log"));
-            Add(Ids.CmdSeUpdateRev, () => SeAsync("updaterev", "changes"));
-            Add(Ids.CmdSeCleanup, () => SeAsync("cleanup", null));
-            Add(Ids.CmdSeLock, () => SeAsync("lock", null));
-            Add(Ids.CmdSeUnlock, () => SeAsync("unlock", null));
+        }
+
+        /// <summary>
+        /// "SVN: Revert Selected Changes": file e righe selezionate (o la riga del cursore) della vista di testo attiva, che e' anche
+        /// il pannello destro del diff nativo. Salva il documento se modificato (non c'e' Ctrl+Z: il backend riscrive il file su disco
+        /// e VS lo ricarica) e passa al backend [file, "da-a"].
+        /// </summary>
+        private async Task RevertSelectedAsync()
+        {
+            await JoinableTaskFactory.SwitchToMainThreadAsync();
+            string file = null; int from = 0, to = 0;
+            if (await GetServiceAsync(typeof(SVsTextManager)) is IVsTextManager tm
+                && tm.GetActiveView(1, null, out var view) == VSConstants.S_OK && view != null
+                && view.GetBuffer(out var lines) == VSConstants.S_OK)
+            {
+                if (lines is IPersistFileFormat pff) { pff.GetCurFile(out file, out _); }
+                view.GetSelection(out int sl, out _, out int el, out int ec);
+                from = sl + 1; to = el + 1;
+                if (el > sl && ec == 0) to = el; // selezione che finisce a inizio riga: quella riga non e' inclusa
+                if (lines is IVsPersistDocData pdd && pdd.IsDocDataDirty(out int dirty) == VSConstants.S_OK && dirty != 0)
+                {
+                    if (pdd.SaveDocData(VSSAVEFLAGS.VSSAVE_SilentSave, out _, out _) != VSConstants.S_OK)
+                    { await MessageAsync(Loc.T("Impossibile salvare il file prima di annullare le righe.")); return; }
+                }
+            }
+            if (string.IsNullOrEmpty(file)) { await MessageAsync(Loc.T("Nessun file aperto nell'editor.")); return; }
+            await Host.RunPathCommandAsync("revertlines", new[] { file, from + "-" + to });
+        }
+
+        /// <summary>Prossima/precedente differenza nel diff nativo di VS (comandi VS esistenti); fuori da un diff non fa nulla.</summary>
+        private async Task DiffNavigateAsync(string vsCommand)
+        {
+            await JoinableTaskFactory.SwitchToMainThreadAsync();
+            try { ((EnvDTE.DTE)await GetServiceAsync(typeof(EnvDTE.DTE))).ExecuteCommand(vsCommand); }
+            catch (Exception ex) { Log.Write("diff navigate: " + ex.Message); }
         }
 
         private async Task SetLanguageAsync(string value)
@@ -142,13 +168,6 @@ namespace SVNAssist.Host
             Host.OnLanguageChanged();
         }
 
-        private async Task SeAsync(string command, string showView)
-        {
-            var paths = await SelectedPathsAsync();
-            if (paths.Length == 0) { await MessageAsync(Loc.T("Nessun elemento selezionato in Solution Explorer.")); return; }
-            if (showView != null) await ShowViewAsync(showView);
-            await Host.RunPathCommandAsync(command, paths);
-        }
         private void Run(Func<Task> action) => JoinableTaskFactory.RunAsync(async () =>
         {
             try { await action(); }
@@ -162,36 +181,6 @@ namespace SVNAssist.Host
                 Microsoft.VisualStudio.Shell.Interop.OLEMSGBUTTON.OLEMSGBUTTON_OK, Microsoft.VisualStudio.Shell.Interop.OLEMSGDEFBUTTON.OLEMSGDEFBUTTON_FIRST);
         }
 
-        /// <summary>Percorsi degli elementi selezionati in Solution Explorer (file, cartelle, progetti, solution).</summary>
-        private async Task<string[]> SelectedPathsAsync()
-        {
-            await JoinableTaskFactory.SwitchToMainThreadAsync();
-            var result = new System.Collections.Generic.List<string>();
-            var sel = (IVsMonitorSelection)await GetServiceAsync(typeof(SVsShellMonitorSelection));
-            IntPtr hierPtr = IntPtr.Zero, contPtr = IntPtr.Zero;
-            try
-            {
-                sel.GetCurrentSelection(out hierPtr, out uint itemId, out var multi, out contPtr);
-                IVsHierarchy hier = hierPtr != IntPtr.Zero ? (IVsHierarchy)Marshal.GetObjectForIUnknown(hierPtr) : null;
-                var items = new System.Collections.Generic.List<(IVsHierarchy, uint)>();
-                if (itemId == VSConstants.VSITEMID_SELECTION && multi != null)
-                {
-                    multi.GetSelectionInfo(out uint count, out _);
-                    var arr = new VSITEMSELECTION[count];
-                    if (count > 0) multi.GetSelectedItems(0, count, arr);
-                    foreach (var x in arr) items.Add((x.pHier, x.itemid));
-                }
-                else if (hier != null) items.Add((hier, itemId));
-                foreach (var (h, id) in items)
-                    if (h != null && h.GetCanonicalName(id, out var name) == VSConstants.S_OK && !string.IsNullOrWhiteSpace(name)) result.Add(name);
-            }
-            finally
-            {
-                if (hierPtr != IntPtr.Zero) Marshal.Release(hierPtr);
-                if (contPtr != IntPtr.Zero) Marshal.Release(contPtr);
-            }
-            return result.ToArray();
-        }
         protected override void Dispose(bool disposing)
         {
             if (disposing) Host?.Dispose();

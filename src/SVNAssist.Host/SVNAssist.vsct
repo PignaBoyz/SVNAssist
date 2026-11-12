@@ -15,11 +15,6 @@
         <Parent guid="guidSVNAssistCmdSet" id="GroupLangHost" />
         <Strings><ButtonText>Language / Lingua</ButtonText></Strings>
       </Menu>
-      <!-- Menu contestuale di Solution Explorer: sottomenu "SVN" -->
-      <Menu guid="guidSVNAssistCmdSet" id="MenuSe" priority="0x0100" type="Menu">
-        <Parent guid="guidSVNAssistCmdSet" id="GroupSeHost" />
-        <Strings><ButtonText>SVN</ButtonText></Strings>
-      </Menu>
     </Menus>
 
     <Groups>
@@ -32,13 +27,8 @@
       <Group guid="guidSVNAssistCmdSet" id="GroupLangHost" priority="0x0200"><Parent guid="guidSVNAssistCmdSet" id="MenuMain" /></Group>
       <Group guid="guidSVNAssistCmdSet" id="GroupLang" priority="0x0000"><Parent guid="guidSVNAssistCmdSet" id="MenuLang" /></Group>
 
-      <!-- Gruppo che contiene il sottomenu SE; agganciato (CommandPlacements) ai 4 menu contestuali. -->
-      <Group guid="guidSVNAssistCmdSet" id="GroupSeHost" priority="0x0F00">
-        <Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_ITEMNODE" />
-      </Group>
-      <Group guid="guidSVNAssistCmdSet" id="GroupSeSync" priority="0x0000"><Parent guid="guidSVNAssistCmdSet" id="MenuSe" /></Group>
-      <Group guid="guidSVNAssistCmdSet" id="GroupSeInspect" priority="0x0100"><Parent guid="guidSVNAssistCmdSet" id="MenuSe" /></Group>
-      <Group guid="guidSVNAssistCmdSet" id="GroupSeEdit" priority="0x0200"><Parent guid="guidSVNAssistCmdSet" id="MenuSe" /></Group>
+      <!-- Menu contestuale dell'editor di codice (anche il pannello destro del diff): "SVN: Revert Selected Changes" -->
+      <Group guid="guidSVNAssistCmdSet" id="GroupCode" priority="0x0F00" />
     </Groups>
 
     <Buttons>
@@ -48,21 +38,13 @@
       <Button guid="guidSVNAssistCmdSet" id="CmdLog" priority="0x0010" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainSecondary" /><Strings><CommandName>SVNAssist.Log</CommandName><ButtonText>Log / History</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdAiSetup" priority="0x0020" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainSecondary" /><Strings><CommandName>SVNAssist.AiSetup</CommandName><ButtonText>Change AI Provider...</ButtonText></Strings></Button>
 
-      <Button guid="guidSVNAssistCmdSet" id="CmdSeUpdate" priority="0x0000" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeSync" /><Strings><CommandName>SVNAssist.SeUpdate</CommandName><ButtonText>SVN Update</ButtonText></Strings></Button>
-      <Button guid="guidSVNAssistCmdSet" id="CmdSeCommit" priority="0x0010" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeSync" /><Strings><CommandName>SVNAssist.SeCommit</CommandName><ButtonText>SVN Commit...</ButtonText></Strings></Button>
-      <Button guid="guidSVNAssistCmdSet" id="CmdSeDiff" priority="0x0000" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeInspect" /><Strings><CommandName>SVNAssist.SeDiff</CommandName><ButtonText>Diff with BASE</ButtonText></Strings></Button>
-      <Button guid="guidSVNAssistCmdSet" id="CmdSeLog" priority="0x0010" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeInspect" /><Strings><CommandName>SVNAssist.SeLog</CommandName><ButtonText>Show Log</ButtonText></Strings></Button>
-      <Button guid="guidSVNAssistCmdSet" id="CmdSeAdd" priority="0x0000" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeEdit" /><Strings><CommandName>SVNAssist.SeAdd</CommandName><ButtonText>SVN Add</ButtonText></Strings></Button>
-      <Button guid="guidSVNAssistCmdSet" id="CmdSeRevert" priority="0x0010" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeEdit" /><Strings><CommandName>SVNAssist.SeRevert</CommandName><ButtonText>SVN Revert</ButtonText></Strings></Button>
-      <Button guid="guidSVNAssistCmdSet" id="CmdSeIgnore" priority="0x0020" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeEdit" /><Strings><CommandName>SVNAssist.SeIgnore</CommandName><ButtonText>Add to Ignore List</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdUpdateRev" priority="0x0005" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainSecondary" /><Strings><CommandName>SVNAssist.UpdateToRevision</CommandName><ButtonText>Update to revision...</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdSwitch" priority="0x0006" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainSecondary" /><Strings><CommandName>SVNAssist.Switch</CommandName><ButtonText>Switch...</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdMerge" priority="0x0007" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainSecondary" /><Strings><CommandName>SVNAssist.Merge</CommandName><ButtonText>Merge...</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdCleanup" priority="0x0030" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainSecondary" /><Strings><CommandName>SVNAssist.Cleanup</CommandName><ButtonText>Cleanup</ButtonText></Strings></Button>
-      <Button guid="guidSVNAssistCmdSet" id="CmdSeUpdateRev" priority="0x0005" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeSync" /><Strings><CommandName>SVNAssist.SeUpdateToRevision</CommandName><ButtonText>SVN Update to revision...</ButtonText></Strings></Button>
-      <Button guid="guidSVNAssistCmdSet" id="CmdSeCleanup" priority="0x0030" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeEdit" /><Strings><CommandName>SVNAssist.SeCleanup</CommandName><ButtonText>SVN Cleanup</ButtonText></Strings></Button>
-      <Button guid="guidSVNAssistCmdSet" id="CmdSeLock" priority="0x0040" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeEdit" /><Strings><CommandName>SVNAssist.SeLock</CommandName><ButtonText>SVN Lock...</ButtonText></Strings></Button>
-      <Button guid="guidSVNAssistCmdSet" id="CmdSeUnlock" priority="0x0050" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeEdit" /><Strings><CommandName>SVNAssist.SeUnlock</CommandName><ButtonText>SVN Unlock</ButtonText></Strings></Button>
+      <Button guid="guidSVNAssistCmdSet" id="CmdNextChange" priority="0x0040" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainSecondary" /><Strings><CommandName>SVNAssist.NextChange</CommandName><ButtonText>Next Change in Diff</ButtonText></Strings></Button>
+      <Button guid="guidSVNAssistCmdSet" id="CmdPrevChange" priority="0x0041" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainSecondary" /><Strings><CommandName>SVNAssist.PreviousChange</CommandName><ButtonText>Previous Change in Diff</ButtonText></Strings></Button>
+      <Button guid="guidSVNAssistCmdSet" id="CmdRevertSel" priority="0x0000" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupCode" /><Strings><CommandName>SVNAssist.RevertSelected</CommandName><ButtonText>SVN: Revert Selected Changes</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdLangAuto" priority="0x0000" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupLang" /><Strings><CommandName>SVNAssist.LanguageAuto</CommandName><ButtonText>Automatica / Automatic (lingua di Visual Studio)</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdLangIt" priority="0x0010" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupLang" /><Strings><CommandName>SVNAssist.LanguageItalian</CommandName><ButtonText>Italiano</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdLangEn" priority="0x0020" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupLang" /><Strings><CommandName>SVNAssist.LanguageEnglish</CommandName><ButtonText>English</ButtonText></Strings></Button>
@@ -70,50 +52,42 @@
   </Commands>
 
   <CommandPlacements>
-    <CommandPlacement guid="guidSVNAssistCmdSet" id="GroupSeHost" priority="0x0F00"><Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_FOLDERNODE" /></CommandPlacement>
-    <CommandPlacement guid="guidSVNAssistCmdSet" id="GroupSeHost" priority="0x0F00"><Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_PROJNODE" /></CommandPlacement>
-    <CommandPlacement guid="guidSVNAssistCmdSet" id="GroupSeHost" priority="0x0F00"><Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_SOLNNODE" /></CommandPlacement>
+    <CommandPlacement guid="guidSVNAssistCmdSet" id="GroupCode" priority="0x0F00"><Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_CODEWIN" /></CommandPlacement>
   </CommandPlacements>
+
+  <KeyBindings>
+    <!-- Scope globale (il Difference Viewer non ha uno scope documentato): fuori da un diff il comando non fa nulla. -->
+    <KeyBinding guid="guidSVNAssistCmdSet" id="CmdNextChange" editor="guidVSStd97" mod1="Control Alt" key1="VK_DOWN" />
+    <KeyBinding guid="guidSVNAssistCmdSet" id="CmdPrevChange" editor="guidVSStd97" mod1="Control Alt" key1="VK_UP" />
+  </KeyBindings>
 
   <Symbols>
     <GuidSymbol name="guidVSMainMenu" value="{D309F791-903F-11D0-9EFC-00A0C911004F}"><IDSymbol name="Extensions" value="0x0091" /></GuidSymbol>
     <GuidSymbol name="guidSVNAssistPackage" value="{7a3b2c1d-4e5f-4a60-8b71-9c0d1e2f3a41}" />
     <GuidSymbol name="guidSVNAssistCmdSet" value="{4d6e8f0a-3c5e-4071-9c9d-2e3f4a5b6c74}">
       <IDSymbol name="MenuMain" value="0x1000" />
-      <IDSymbol name="MenuSe" value="0x1001" />
       <IDSymbol name="MenuLang" value="0x1002" />
       <IDSymbol name="GroupLangHost" value="0x1114" />
       <IDSymbol name="GroupLang" value="0x1115" />
       <IDSymbol name="CmdLangAuto" value="0x011B" />
+      <IDSymbol name="GroupCode" value="0x1116" />
+      <IDSymbol name="CmdRevertSel" value="0x011E" />
+      <IDSymbol name="CmdNextChange" value="0x011F" />
+      <IDSymbol name="CmdPrevChange" value="0x0120" />
       <IDSymbol name="CmdLangIt" value="0x011C" />
       <IDSymbol name="CmdLangEn" value="0x011D" />
       <IDSymbol name="GroupExtensions" value="0x1100" />
       <IDSymbol name="GroupMainPrimary" value="0x1101" />
       <IDSymbol name="GroupMainSecondary" value="0x1102" />
-      <IDSymbol name="GroupSeHost" value="0x1110" />
-      <IDSymbol name="GroupSeSync" value="0x1111" />
-      <IDSymbol name="GroupSeInspect" value="0x1112" />
-      <IDSymbol name="GroupSeEdit" value="0x1113" />
       <IDSymbol name="CmdChanges" value="0x0100" />
       <IDSymbol name="CmdCommit" value="0x0101" />
       <IDSymbol name="CmdUpdate" value="0x0102" />
       <IDSymbol name="CmdLog" value="0x0103" />
       <IDSymbol name="CmdAiSetup" value="0x0104" />
-      <IDSymbol name="CmdSeUpdate" value="0x0110" />
-      <IDSymbol name="CmdSeCommit" value="0x0111" />
-      <IDSymbol name="CmdSeDiff" value="0x0112" />
-      <IDSymbol name="CmdSeLog" value="0x0113" />
-      <IDSymbol name="CmdSeAdd" value="0x0114" />
-      <IDSymbol name="CmdSeRevert" value="0x0115" />
-      <IDSymbol name="CmdSeIgnore" value="0x0116" />
       <IDSymbol name="CmdUpdateRev" value="0x0105" />
       <IDSymbol name="CmdSwitch" value="0x0107" />
       <IDSymbol name="CmdMerge" value="0x0108" />
       <IDSymbol name="CmdCleanup" value="0x0106" />
-      <IDSymbol name="CmdSeUpdateRev" value="0x0117" />
-      <IDSymbol name="CmdSeCleanup" value="0x0118" />
-      <IDSymbol name="CmdSeLock" value="0x0119" />
-      <IDSymbol name="CmdSeUnlock" value="0x011A" />
     </GuidSymbol>
   </Symbols>
 </CommandTable>

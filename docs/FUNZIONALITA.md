@@ -37,7 +37,9 @@ Questo file è pensato per essere **modificato da te** e restituito per pianific
 - **Diff nativo di VS** ovunque (WC, revisioni, cartelle); TortoiseSVN non serve più.
 
 ### Esplora soluzioni
-- Sottomenu **SVN** su file, cartella, progetto e solution: Update, Update to revision, Commit, Diff with BASE, Show Log, Add, Revert, Add to Ignore List, Cleanup, Lock/Unlock. Limite: selezione singola.
+- Nessun menu SVN in Solution Explorer (tolto perche' ridondante con la finestra Changes).
+- **SVN: Revert Selected Changes** nel menu contestuale dell'editor (anche nel pannello destro del diff): annulla solo le righe selezionate (o la riga del cursore) riportandole a BASE, come "Revert selected changes" di Git; il documento viene salvato prima, niente Ctrl+Z.
+- **Next/Previous Change in Diff** (Ctrl+Alt+Giu'/Su' nell'editor di testo, anche da Extensions > SVNAssist): salta alla differenza successiva/precedente del diff nativo di VS.
 
 ### AI per i commit
 - **Procedura guidata** (provider, prerequisiti, login, modello) riapribile da "Change AI Provider...": GitHub Copilot, Claude Code, Claude API, GitHub Models.
