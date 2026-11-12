@@ -6,7 +6,7 @@ Package VSSDK classico (`AsyncPackage`) con due tool window ("SVN Changes", "SVN
 ```
 dotnet publish src/SVNAssist.Backend -c Release -o src/SVNAssist.Backend/bin/publish   # framework-dependent
 dotnet restore src/SVNAssist.Host
-msbuild src/SVNAssist.Host/SVNAssist.Host.csproj -p:Configuration=Release              # -> bin/Release/net472/SVNAssist.Host.vsix
+msbuild src/SVNAssist.Host/SVNAssist.Host.csproj -p:Configuration=Release              # -> bin/Release/net472/SVNAssist.vsix
 ```
 - Il VSIX contiene `ui/` (= `src/SVNAssist.UI.Web` senza `contract/`) e `backend/` (= `BackendPublishDir`, default `src/SVNAssist.Backend/bin/publish`; si cambia con `-p:BackendPublishDir=C:\dir\`). Senza backend la build avvisa e il VSIX non lo contiene.
 - Con il MSBuild di VS 18 senza `MSBuild.exe.config` usare il launcher `tools/msb.cs` (compilarlo con `csc`: esegue MSBuild in un AppDomain con la config presa dal template; vedi `webview2-spike.md`). La versione del manifest deve coincidere con `Directory.Build.props` (la build fallisce se no).
