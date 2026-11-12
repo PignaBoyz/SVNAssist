@@ -42,12 +42,13 @@ W "$wc\README.txt" @('Shop - progetto di prova SVNAssist', 'Versione: 1.0', '', 
 W "$wc\src\Shop\Core\Order.cs" @('namespace Shop.Core;', '', 'public class Order', '{', '    public decimal Total { get; set; }', '', '    public decimal Discount() => 0m;', '}')
 W "$wc\src\Shop\Core\Customer.cs" @('namespace Shop.Core;', '', 'public record Customer(string Name, string Email);')
 W "$wc\src\Shop\UI\MainWindow.cs" @('namespace Shop.UI;', '', 'public class MainWindow', '{', '    public string Title => "Shop";', '}')
+W "$wc\.github\copilot-instructions.md" @('# Regole del progetto', '', 'Messaggi di commit in formato Conventional Commits: `tipo(ambito): descrizione` (feat, fix, refactor, docs, chore), poi elenco puntato.')
 W "$wc\docs\old-setup.md" @('# Vecchio setup', '', 'Passi obsoleti.')
 $big = @('namespace Shop.Core;', '', '// File lungo per provare diff, Alt+Giu'' e undo delle singole righe', 'public static class Catalog', '{')
 for ($i = 1; $i -le 400; $i++) { $big += "    public const string Item$($i.ToString('000')) = ""Articolo $i"";" }
 $big += '}'
 W "$wc\src\Shop\Core\Catalog.cs" $big
-Svn add -q "$wc\Shop.sln" "$wc\README.txt" "$wc\src" "$wc\docs"
+Svn add -q "$wc\Shop.sln" "$wc\README.txt" "$wc\src" "$wc\docs" "$wc\.github"
 Ci 'Prima versione del negozio' $wc
 
 As 'lbianchi'; Edit "$wc\src\Shop\Core\Order.cs" { param($l) $l.Insert(5, '    public string Code { get; set; } = "";') }; Ci 'Order: aggiunto il codice ordine' $wc

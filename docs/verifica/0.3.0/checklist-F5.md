@@ -35,7 +35,7 @@ Segna ✅ / ❌ (+ una riga su cosa vedi).
 
 **SVN Update e commit**
 10. [ ] Clic sull'indicatore arancio (o SVN Update): arriva il commit del collega (`MainWindow.cs`), l'indicatore diventa **verde**; il messaggio verde di esito sparisce dopo ~5 s.
-11. [ ] Genera con AI (Copilot): durante la generazione vedi l'avanzamento; il messaggio ha un titolo e un elenco puntato che descrive **davvero** le modifiche (Order.cs TODO, Payment.cs, Invoice.cs rimosso).
+11. [ ] Genera con AI (Copilot): durante la generazione vedi l'avanzamento; il messaggio ha un titolo e un elenco puntato che descrive **davvero** le modifiche (Order.cs TODO, Payment.cs, Invoice.cs rimosso) e segue le regole di `.github/copilot-instructions.md` della simulazione: formato **Conventional Commits** (`feat(core): ...`). Vale anche per `CLAUDE.md`/`AGENTS.md` e per i file globali `~/.copilot/copilot-instructions.md`, `~/.claude/CLAUDE.md`.
 12. [ ] **Commit All**: va a buon fine; il messaggio di esito sparisce da solo; con la WC pulita lo stato vuoto "Nessuna modifica" sta **sotto** la sezione Staged.
 13. [ ] Tendina **Recenti** accanto al messaggio: c'è il messaggio appena committato; un clic lo reinserisce.
 
