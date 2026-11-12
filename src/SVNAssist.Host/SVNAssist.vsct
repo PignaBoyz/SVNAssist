@@ -53,12 +53,16 @@
 
   <CommandPlacements>
     <CommandPlacement guid="guidSVNAssistCmdSet" id="GroupCode" priority="0x0F00"><Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_CODEWIN" /></CommandPlacement>
+    <!-- Anche nel menu contestuale dell'editor/diff, accanto a "Revert Selected Changes". -->
+    <CommandPlacement guid="guidSVNAssistCmdSet" id="CmdNextChange" priority="0x0010"><Parent guid="guidSVNAssistCmdSet" id="GroupCode" /></CommandPlacement>
+    <CommandPlacement guid="guidSVNAssistCmdSet" id="CmdPrevChange" priority="0x0011"><Parent guid="guidSVNAssistCmdSet" id="GroupCode" /></CommandPlacement>
   </CommandPlacements>
 
   <KeyBindings>
     <!-- Scope globale (il Difference Viewer non ha uno scope documentato): fuori da un diff il comando non fa nulla. -->
-    <KeyBinding guid="guidSVNAssistCmdSet" id="CmdNextChange" editor="guidVSStd97" mod1="Control Alt" key1="VK_DOWN" />
-    <KeyBinding guid="guidSVNAssistCmdSet" id="CmdPrevChange" editor="guidVSStd97" mod1="Control Alt" key1="VK_UP" />
+    <!-- Alt+F8 / Shift+Alt+F8: Ctrl+Alt+Giu'/Su' e' gia' di VS (Window.ShowEzMDIFileList, elenco dei documenti aperti). -->
+    <KeyBinding guid="guidSVNAssistCmdSet" id="CmdNextChange" editor="guidVSStd97" mod1="Alt" key1="VK_F8" />
+    <KeyBinding guid="guidSVNAssistCmdSet" id="CmdPrevChange" editor="guidVSStd97" mod1="Alt Shift" key1="VK_F8" />
   </KeyBindings>
 
   <Symbols>

@@ -27,9 +27,9 @@ Segna ✅ / ❌ (+ una riga su cosa vedi).
 4. [ ] Doppio clic su `Payment.cs` (A) e su `Note.txt` (?): si apre il **file intero** nell'editor. Su `Invoice.cs` (D): diff con il contenuto BASE a sinistra. Su `Order.cs` (M): diff.
 
 **Diff, navigazione e annulla righe**
-5. [ ] Doppio clic su `Catalog.cs`: diff nell'area documenti (non sopra la finestra Changes). **Ctrl+Alt+Giù / Ctrl+Alt+Su** saltano tra le 4 modifiche; Alt+Su/Giù nell'editor normale spostano ancora la riga.
-6. [ ] Nel pannello destro seleziona le 2 righe aggiunte (`Nuovo1`, `Nuovo2`) > clic destro > **SVN: Revert Selected Changes**: "Annullate 2 righe", spariscono solo quelle; le altre 3 modifiche restano.
-7. [ ] Metti il cursore sulla riga `Item016 (modificato)` senza selezione > stesso comando: la riga torna `Articolo 16`. Ripeti sulla riga cancellata (dove era `Item296`): ricompare.
+5. [ ] Doppio clic su `Catalog.cs`: diff nell'area documenti (non sopra la finestra Changes). **Alt+F8 / Shift+Alt+F8** (anche le voci "Next/Previous Change in Diff" nel menu contestuale e in Extensions > SVNAssist) spostano il cursore e centrano la modifica successiva/precedente nel pannello attivo, con giro tra le 4 modifiche. In un editor normale di un file modificato saltano al blocco successivo/precedente del `svn diff`. (Ctrl+Alt+Giù/Su non va più: è di VS per l'elenco dei documenti.)
+6. [ ] Nel pannello destro, a sinistra di ogni blocco modificato c'è un pulsante con l'icona annulla (come Git): clic su quello delle 2 righe aggiunte (`Nuovo1`, `Nuovo2`) = spariscono solo quelle, **nessuna message box**, in Changes il messaggio "Annullate 2 righe"; le altre 3 modifiche restano e i pulsanti si riallineano. In alternativa: seleziona le righe > clic destro > **SVN: Revert Selected Changes**.
+7. [ ] Pulsante annulla sulla riga `Item016 (modificato)`: torna `Articolo 16`. Ripeti sulla riga cancellata (dove era `Item296`): ricompare. Stesso risultato col cursore sulla riga + menu contestuale, sempre senza dialoghi.
 8. [ ] Annulla anche l'ultima modifica: `Catalog.cs` sparisce da Changes (nessuna modifica rimasta).
 9. [ ] Clic destro su file/cartella in Solution Explorer: **nessun** sottomenu "SVN".
 

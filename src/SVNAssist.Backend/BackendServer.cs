@@ -294,6 +294,12 @@ internal sealed class BackendServer : IBackend, IDisposable
         }
     }
 
+    public async Task<int[]> GetChangedBlocksAsync(string file)
+    {
+        try { return await _pathCommands.ChangedBlocksAsync(file, _lifetime.Token); }
+        catch (Exception ex) { BackendLog.Error("GetChangedBlocksAsync", ex); return []; }
+    }
+
     // ── Invio all'host ───────────────────────────────────────────────
 
     private sealed record ReplyDto(

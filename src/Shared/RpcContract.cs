@@ -31,6 +31,9 @@ namespace SVNAssist.Rpc
         /// (Changes per commit, Log per log); l'esito si mostra con IHost.PromptAsync / toast.
         /// </summary>
         Task RunPathCommandAsync(string command, string[] paths);
+
+        /// <summary>Righe iniziali (1-based, nel file di lavoro) dei blocchi modificati rispetto a BASE, per "prossima/precedente modifica" nell'editor. Vuoto se il file non e' versionato o non e' modificato.</summary>
+        Task<int[]> GetChangedBlocksAsync(string file);
     }
 
     /// <summary>Metodi esposti dall'HOST, chiamati dal backend.</summary>

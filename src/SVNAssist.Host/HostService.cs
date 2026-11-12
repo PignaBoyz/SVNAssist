@@ -104,6 +104,12 @@ namespace SVNAssist.Host
             await FromViewAsync(view, msg.ToString(Newtonsoft.Json.Formatting.None)).ConfigureAwait(false);
         }
 
+        public async Task<int[]> GetChangedBlocksAsync(string file)
+        {
+            var b = await _backend.GetAsync().ConfigureAwait(false);
+            return await b.GetChangedBlocksAsync(file).ConfigureAwait(false) ?? new int[0];
+        }
+
         public async Task RunPathCommandAsync(string command, string[] paths)
         {
             var b = await _backend.GetAsync().ConfigureAwait(false);

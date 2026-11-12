@@ -442,6 +442,7 @@ namespace SVNAssist
             ["Il file non ha modifiche locali da annullare."] = "The file has no local changes to revert.",
             ["Nessuna modifica nelle righe selezionate."] = "No changes in the selected lines.",
             ["Annullate {0} righe"] = "Reverted {0} lines",
+            ["Annulla questa modifica (riporta a BASE)"] = "Revert this change (back to BASE)",
             ["Nessun file aperto nell'editor."] = "No file is open in the editor.",
             ["Impossibile salvare il file prima di annullare le righe."] = "Cannot save the file before reverting the lines.",
         };
