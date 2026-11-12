@@ -286,9 +286,9 @@ internal sealed class CommitStore
             return;
         }
 
-        // Tetto ai dati inviati: un file enorme in Staged per errore non deve diventare centinaia di KB e decine di richieste.
-        var limited = DiffLimiter.Limit(diff);
-        diff = limited.Diff;
+        // Nessun troncamento: i diff grandi vengono analizzati a blocchi (map-reduce) dal servizio AI, con avanzamento nello stato.
+        if (ai is AiServiceBase directAi) directAi.Progress = m => AiStatus = m;
+        else if (ai is FallbackAiService chainAi) chainAi.Progress = m => AiStatus = m;
 
         await InitializeAsync(ct);
         var language = Language;
@@ -313,8 +313,6 @@ internal sealed class CommitStore
         AiStatus = provider is null ? $"{done}." : $"{done} ({provider}).";
         if (rules is not null)
             AiStatus += Loc.T(" Regole di commit del progetto applicate.");
-        if (limited.WasTruncated)
-            AiStatus += Loc.T(" Attenzione: diff molto grande, inviata solo una parte (max {0} KB, {1} KB per file).", DiffLimiter.MaxTotalChars / 1000, DiffLimiter.MaxFileChars / 1000);
     }
 
     /// <summary>

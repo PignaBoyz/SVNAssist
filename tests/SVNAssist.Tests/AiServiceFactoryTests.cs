@@ -60,6 +60,14 @@ public class AiServiceFactoryTests
     }
 
     [Fact]
+    public async Task CreateAsync_OpenAi_EndpointVuoto_NonConfigurato_RestituisceNull()
+    {
+        var factory = Create(new FakeSettings { Provider = "auto", Endpoint = "  ", ApiKey = "sk-x" }, new FakeTokenResolver(null));
+
+        Assert.Null(await factory.CreateAsync(CancellationToken.None));
+    }
+
+    [Fact]
     public async Task CreateAsync_OpenAi_ApiKeyEsplicita_VinceSulResolver()
     {
         var resolver = new FakeTokenResolver("token-dal-resolver");

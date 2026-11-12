@@ -123,7 +123,32 @@ public class AiService : AiServiceBase
                 $"AI API error {(int)response.StatusCode} {response.StatusCode}: {RedactSecret(responseJson)}{hint}");
         }
 
-        return ParseCompletionResponse(responseJson);
+        var contentType = response.Content.Headers.ContentType?.MediaType;
+        var notJson = contentType is not null && !contentType.Contains("json", StringComparison.OrdinalIgnoreCase);
+        if (!notJson)
+        {
+            try
+            {
+                return ParseCompletionResponse(responseJson);
+            }
+            catch (Exception ex) when (ex is JsonException or KeyNotFoundException)
+            {
+                notJson = true; // risposta vuota/troncata ("0", testo, HTML): spesso richiesta troppo grande
+            }
+        }
+
+        // Prima causa probabile: contesto/dimensione della richiesta. Un solo nuovo tentativo con il messaggio dimezzato.
+        if (allowRetryOnLimit)
+            return await CallChatCompletionsAsync(systemPrompt, TrimToMaxChars(userMessage, Math.Max(2000, userMessage.Length / 2)), ct, allowRetryOnLimit: false);
+
+        throw NotJson(response.StatusCode, responseJson);
+    }
+
+    private HttpRequestException NotJson(HttpStatusCode status, string body)
+    {
+        var clean = RedactSecret(body).Replace('\n', ' ').Replace('\r', ' ').Trim();
+        var snippet = clean.Length > 200 ? clean[..200] + "..." : clean;
+        return new HttpRequestException(Loc.T("L'endpoint AI ha risposto (HTTP {0}) con una risposta vuota o troncata (di solito richiesta troppo grande per il modello): riprova o scegli un modello con più contesto. Inizio della risposta: \"{1}\"", (int)status, snippet));
     }
 
     private string RedactSecret(string text)
@@ -133,7 +158,8 @@ public class AiService : AiServiceBase
     private static string ParseCompletionResponse(string responseJson)
     {
         using var doc = JsonDocument.Parse(responseJson);
-        var choices = doc.RootElement.GetProperty("choices");
+        if (doc.RootElement.ValueKind != JsonValueKind.Object || !doc.RootElement.TryGetProperty("choices", out var choices) || choices.ValueKind != JsonValueKind.Array)
+            throw new JsonException("not a chat completion");
         if (choices.GetArrayLength() == 0)
             throw new InvalidOperationException(Loc.T("La risposta AI non contiene alcun messaggio."));
 

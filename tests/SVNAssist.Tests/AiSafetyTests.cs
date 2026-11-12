@@ -43,9 +43,10 @@ public class AiSafetyTests
         var result = DiffLimiter.Limit(diff);
 
         Assert.True(result.WasTruncated);
-        Assert.True(result.OmittedFiles > 0);
+        // Quota equa: con 100 file nessuno sparisce, tutti tagliati.
+        Assert.Equal(0, result.OmittedFiles);
         Assert.True(result.Diff.Length <= DiffLimiter.MaxTotalChars + 500);
-        Assert.Contains("file omessi", result.Diff);
+        Assert.Contains("Index: f99.cs", result.Diff);
     }
 
     private sealed class CountingAi : AiServiceBase
@@ -221,8 +222,9 @@ public class AiSafetyTests
 
         await f.Vm.CommitMessage.GenerateAsync(Ct);
 
-        Assert.True(f.Ai.Service.Diffs[0].Length < 25_000);
-        Assert.Contains("diff molto grande", f.Vm.CommitMessage.AiStatus);
+        // Nessun troncamento in CommitStore: il diff arriva intero al servizio AI, che lo analizza a blocchi.
+        Assert.True(f.Ai.Service.Diffs[0].Length > 390_000);
+        Assert.DoesNotContain("diff molto grande", f.Vm.CommitMessage.AiStatus);
     }
 
     [Fact]
