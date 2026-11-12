@@ -63,6 +63,12 @@ namespace SVNAssist.Rpc
         /// <summary>Apre il Log come documento nell'area editor (titolo "Log: nome") su un percorso.</summary>
         Task ShowLogAsync(string path);
 
+        /// <summary>
+        /// Apre il Log come documento con il titolo dato ("Merge da branches/x", "Log: nome") senza caricare nulla:
+        /// il contenuto (merge o log) lo ha gia' impostato il backend.
+        /// </summary>
+        Task ShowLogWindowAsync(string title);
+
         /// <summary>Apre Tools > Options > SVNAssist ("Faccio io").</summary>
         Task OpenSettingsAsync();
 

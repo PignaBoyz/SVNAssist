@@ -576,6 +576,7 @@
       "description": "Selettore di \"SVN Switch...\" (finestra modale): trunk, branch e tag del repository.",
       "required": [
         "open",
+        "mode",
         "loading",
         "error",
         "items"
@@ -583,6 +584,13 @@
       "properties": {
         "open": {
           "type": "boolean"
+        },
+        "mode": {
+          "enum": [
+            "switch",
+            "merge"
+          ],
+          "description": "switch = SVN Switch; merge = sorgente di SVN Merge (senza il ramo corrente)."
         },
         "loading": {
           "type": "boolean"
@@ -619,6 +627,25 @@
               }
             }
           }
+        }
+      }
+    },
+    "merge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "text",
+        "conflicts"
+      ],
+      "description": "Banner dopo un merge non ancora committato: azioni Annulla merge (mergeUndo) e Nascondi (mergeDismiss). Assente se non c'e.",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "conflicts": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Elementi rimasti in conflitto."
         }
       }
     }

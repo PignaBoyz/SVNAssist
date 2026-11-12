@@ -110,7 +110,9 @@ internal sealed class BackendServer : IBackend, IDisposable
             EnableWatcher = services.EnableWatcher,
         };
         Changes.CommitMessage.OpenAiWizard = ct => Changes.Wizard.OpenAsync(fromGenerate: true, ct);
-        Log = new LogStore(services.Svn, services.Settings, host, Changes.TempRoot);
+        Log = new LogStore(services.Svn, services.Settings, host, Changes.TempRoot, Changes);
+        Changes.StartMerge = Log.StartMergeAsync;
+        Changes.MergeUndone = ct => Log.Merge?.RefreshAsync(ct) ?? Task.CompletedTask;
         _pathCommands = new PathCommands(services.Svn, host, () => Changes.RefreshAsync(_lifetime.Token), Changes.TempRoot,
             (targets, ct) => Changes.OpenRevisionPickerAsync(targets, ct));
         _channels = new Dictionary<string, Channel>

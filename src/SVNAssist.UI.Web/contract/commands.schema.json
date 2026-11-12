@@ -227,6 +227,202 @@
       }
     },
     {
+      "title": "mergeOpen",
+      "description": "SVN Merge: apre il selettore della sorgente (trunk, branch o tag, escluso il ramo corrente). Con OK il Log si apre in modalita merge sul sorgente scelto (switchOk).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "mergeOpen"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "mergeUndo",
+      "description": "Annulla merge: revert ricorsivo della working copy (svn revert -R), con conferma che elenca i file.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "mergeUndo"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "mergeDismiss",
+      "description": "Nasconde il banner del merge senza annullarlo.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "mergeDismiss"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "mergeToggle",
+      "description": "Log in modalita merge: sceglie o toglie la revisione (cherry-pick).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "mergeToggle"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "rev"
+          ],
+          "properties": {
+            "rev": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "mergeClear",
+      "description": "Log in modalita merge: toglie la scelta a tutte le revisioni.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "mergeClear"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "mergePreview",
+      "description": "Log in modalita merge: anteprima (svn merge --dry-run) delle revisioni scelte, o di tutte se nessuna e scelta.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "mergePreview"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "mergeAll",
+      "description": "Log in modalita merge: unisce tutto quello che e da unire (svn merge SRC), non committa. Richiede una working copy senza modifiche locali.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "mergeAll"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "mergeSelected",
+      "description": "Log in modalita merge: cherry-pick delle revisioni scelte (svn merge -c N,M SRC), non committa. Richiede una working copy senza modifiche locali.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "mergeSelected"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "mergeClose",
+      "description": "Log in modalita merge: torna al log normale della working copy.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "mergeClose"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
       "title": "showLog",
       "description": "Apre il Log della working copy (come Extensions > SVNAssist > Log).",
       "type": "object",

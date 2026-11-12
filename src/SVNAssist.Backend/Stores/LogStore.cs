@@ -53,14 +53,24 @@ internal sealed class LogStore : ViewStore
     private readonly DiffOpener? _diffs;
 
     /// <param name="host">Serve ad aprire i diff nell'editor di VS; senza host (test) i comandi di diff falliscono con un messaggio.</param>
-    public LogStore(ISvnService svnService, ISvnAssistSettings settings, IHost? host = null, string? tempRoot = null)
+    /// <param name="changes">Serve alla modalita' merge (working copy, messaggio di commit, "Annulla merge"); senza, il Log non ha il merge.</param>
+    public LogStore(ISvnService svnService, ISvnAssistSettings settings, IHost? host = null, string? tempRoot = null, ChangesStore? changes = null)
     {
+        if (changes is not null)
+        {
+            Merge = new MergeStore(svnService, changes);
+            Merge.Changed += NotifyChanged;
+        }
+
         _svnService = svnService;
         _settings = settings;
         _host = host;
         if (host is not null)
             _diffs = new DiffOpener(svnService, host, tempRoot);
     }
+
+    /// <summary>Modalita' merge del Log (revisioni da unire, anteprima, merge, cherry-pick).</summary>
+    internal MergeStore? Merge { get; }
 
     /// <summary>Cancella i file temporanei dei diff aperti (chiusura del backend).</summary>
     internal void CleanTemp() => _diffs?.Dispose();
@@ -74,6 +84,13 @@ internal sealed class LogStore : ViewStore
     /// <inheritdoc />
     internal override object GetSnapshot()
     {
+        if (Merge?.GetSnapshot() is { } merge)
+        {
+            var (text, err) = Merge.Status;
+            lock (_lock)
+                return new LogState(_path, text, err, merge.Loading || merge.Busy, false, null, Merge.Entries, string.Empty, _filterText, null, merge);
+        }
+
         lock (_lock)
             return new LogState(_path, _msgInitial ? Loc.T("Inserisci il percorso della working copy e premi Carica log.") : _msg, _err, _loading, _canMore, _sel, _entries, _diff, _filterText, FilesDto());
     }
@@ -92,7 +109,7 @@ internal sealed class LogStore : ViewStore
     /// <summary>All'apertura della vista: se c'e' una working copy (solution o impostazioni) e non e' ancora stata caricata, parte da sola.</summary>
     internal override async Task OnReadyAsync(CancellationToken ct)
     {
-        if (!_initialized)
+        if (!_initialized && Merge?.Active != true)
         {
             _initialized = true;
             string? root;
@@ -128,6 +145,27 @@ internal sealed class LogStore : ViewStore
     {
         switch (name)
         {
+            case "mergeToggle":
+                Merge?.Toggle(Args.Long(args, "rev"));
+                break;
+            case "mergeClear":
+                Merge?.ClearSelection();
+                break;
+            case "mergePreview":
+                if (Merge is not null)
+                    await Merge.PreviewAsync(ct);
+                break;
+            case "mergeAll":
+                if (Merge is not null)
+                    await Merge.RunAsync(all: true, ct);
+                break;
+            case "mergeSelected":
+                if (Merge is not null)
+                    await Merge.RunAsync(all: false, ct);
+                break;
+            case "mergeClose":
+                await CloseMergeAsync(ct);
+                break;
             case "logLoad":
                 await LoadFromUserPathAsync(Args.Str(args, "path"), ct);
                 break;
@@ -182,8 +220,39 @@ internal sealed class LogStore : ViewStore
         if (string.IsNullOrWhiteSpace(svnRoot) || string.Equals(CurrentPath, svnRoot, StringComparison.OrdinalIgnoreCase))
             return;
 
+        Merge?.Close(); // il merge riguardava un'altra working copy
         lock (_lock)
             _path = svnRoot;
+        await LoadAsync(PageSize, ct);
+    }
+
+    /// <summary>
+    /// "SVN Merge...": il Log (documento nell'area editor, titolo "Merge da branches/x") mostra le revisioni di <paramref name="source"/> ancora da unire.
+    /// Lo stato passa subito in modalita' merge, cosi' il <c>ready</c> di una finestra appena aperta non carica il log normale.
+    /// </summary>
+    internal async Task StartMergeAsync(string workingCopy, SwitchPickerStore.Target source, CancellationToken ct)
+    {
+        if (Merge is null)
+            return;
+        lock (_lock)
+            _path = workingCopy;
+        Merge.Begin(workingCopy, source);
+        if (_host is not null)
+            await _host.ShowLogWindowAsync(Merge.Title(source));
+        await Merge.LoadAsync(ct);
+    }
+
+    /// <summary>Chiude il merge e torna al log normale della working copy.</summary>
+    private async Task CloseMergeAsync(CancellationToken ct)
+    {
+        Merge?.Close();
+        var path = CurrentPath;
+        if (_host is not null && path.Length > 0)
+        {
+            var leaf = System.IO.Path.GetFileName(path.TrimEnd('\\', '/'));
+            await _host.ShowLogWindowAsync(Loc.T("Log: {0}", leaf.Length > 0 ? leaf : path));
+        }
+
         await LoadAsync(PageSize, ct);
     }
 
@@ -222,6 +291,7 @@ internal sealed class LogStore : ViewStore
             path = full;
         }
 
+        Merge?.Close();
         lock (_lock)
             _path = path;
         await LoadAsync(PageSize, ct);
@@ -258,9 +328,7 @@ internal sealed class LogStore : ViewStore
             Set(Loc.T("Caricamento log..."), err: false, loading: true);
             var entries = await _svnService.GetLogAsync(path, limit, _filter, ct);
 
-            var dtos = entries.Select(e => new LogEntryDto(
-                e.Revision, e.Author, e.Date.ToString("o"), e.Message,
-                (e.Paths ?? []).Select(p => new LogPathDto(NormalizeAction(p.Action), p.Path, p.Kind == "dir" ? "dir" : null)).ToList())).ToList();
+            var dtos = entries.Select(ToDto).ToList();
 
             lock (_lock)
             {
@@ -414,6 +482,7 @@ internal sealed class LogStore : ViewStore
         if (!Directory.Exists(folder) || SvnService.FindSvnRoot(folder) is not { } root)
             throw new ArgumentException(Loc.T("non è una working copy SVN."));
 
+        Merge?.Close();
         if (CurrentPath.Length == 0)
         {
             lock (_lock)
@@ -494,6 +563,10 @@ internal sealed class LogStore : ViewStore
         var file = await _diffs!.WriteTempAsync($"Diff {System.IO.Path.GetFileName(folder.TrimEnd('\\', '/'))}.diff", text, ct);
         await _host!.OpenFileAsync(file);
     }
+
+    internal static LogEntryDto ToDto(SvnLogEntry e) => new(
+        e.Revision, e.Author, e.Date.ToString("o"), e.Message,
+        (e.Paths ?? []).Select(p => new LogPathDto(NormalizeAction(p.Action), p.Path, p.Kind == "dir" ? "dir" : null)).ToList());
 
     private static string NormalizeAction(string action) => action is "A" or "M" or "D" or "R" ? action : "M";
 

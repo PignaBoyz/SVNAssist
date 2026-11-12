@@ -13,8 +13,11 @@
     return to == null ? null : revs[Math.max(0, Math.min(revs.length - 1, to))];
   };
   const fld =(name, label, val, ph, type) => `<label for="lf-${name}">${label}</label><input id="lf-${name}" name="${name}" type="${type || 'text'}" value="${esc(val)}"${ph ? ` placeholder="${esc(ph)}"` : ''} spellcheck="false">`;
+  let mcur = null;   // revisione col focus nella tabella del merge (roving tabindex): sopravvive ai ridisegni
   U.logHTML = {
     top(s) {
+      if (s.merge) return `<div class="mh"><b>${esc(s.merge.title)}</b><span class="muted">· ${t('{0} revisioni da unire', s.merge.eligible)}</span><span class="fill"></span>` +
+        U.btn('btn sm', t('Chiudi merge'), 'x', 'mergeClose', null, t('Torna al log della working copy')) + `</div>`;
       return `<form class="wc" id="logform"><label for="logp">Working copy</label><input id="logp" type="text" value="${esc(s.path)}" placeholder="${esc(t('C:\\percorso\\della\\working copy'))}" spellcheck="false">` +
         `<button class="btn" type="submit" title="${esc(t('Carica le ultime revisioni (svn log)'))}">${U.icon('refresh')}<span>${t('Carica log')}</span></button>` +
         `</form>` + U.logHTML.filter(s);
@@ -42,14 +45,40 @@
     },
     // tabella (ARIA grid): intestazioni fisse e ridimensionabili, una riga per revisione, "Carica altre" in fondo
     list(s) {
+      if (s.merge && !s.entries.length) return `<div class="empty-state"><b>${s.merge.loading ? t('Lettura delle revisioni da unire…') : t('Nessuna revisione da unire')}</b><span class="muted">${s.merge.loading ? '' : t('Il ramo scelto non ha modifiche che la working copy non abbia già.')}</span></div>`;
       if (!s.entries.length) return `<div class="empty-state"><b>${t('Nessuna revisione caricata')}</b><span class="muted">${t('Inserisci il percorso e premi Carica log.')}</span></div>`;
       const h = (c, label) => `<span role="columnheader">${label}<i class="rz" data-c="${c}" aria-hidden="true"></i></span>`;
+      const picked = s.merge ? new Set(s.merge.selected) : null, cur = s.merge ? (s.entries.some(e => e.rev === mcur) ? mcur : s.entries[0].rev) : (s.sel == null ? s.entries[0].rev : s.sel);
       return `<div class="lh" role="row">${h(1, t('Rev.'))}${h(2, t('Autore'))}${h(3, t('Data'))}<span role="columnheader">${t('Messaggio')}</span></div>` +
-        s.entries.map(e => `<div class="lr${s.sel === e.rev ? ' sel' : ''}" role="row" aria-selected="${s.sel === e.rev}" tabindex="${(s.sel == null ? s.entries[0].rev : s.sel) === e.rev ? 0 : -1}" data-rev="${e.rev}">` +
-          `<b class="rv" role="gridcell">r${e.rev}</b><span class="au" role="gridcell" title="${esc(e.author)}">${esc(e.author)}</span><span class="dtm muted" role="gridcell">${U.fmtDate(e.date)}</span><span class="m" role="gridcell" title="${esc(e.msg)}">${esc((e.msg || '').split('\n')[0])}</span></div>`).join('') +
+        s.entries.map(e => { const on = picked ? picked.has(e.rev) : s.sel === e.rev; return `<div class="lr${on ? ' sel' : ''}" role="row" aria-selected="${on}" tabindex="${cur === e.rev ? 0 : -1}" data-rev="${e.rev}">` +
+          `<b class="rv" role="gridcell">${picked ? `<span class="ck${on ? ' on' : ''}" aria-hidden="true">${on ? U.icon('check') : ''}</span>` : ''}r${e.rev}</b><span class="au" role="gridcell" title="${esc(e.author)}">${esc(e.author)}</span><span class="dtm muted" role="gridcell">${U.fmtDate(e.date)}</span><span class="m" role="gridcell" title="${esc(e.msg)}">${esc((e.msg || '').split('\n')[0])}</span></div>`; }).join('') +
         (s.canMore ? `<div class="lmore">${U.btn('btn', t('Carica altre 50'), null, 'logMore', null, t('Carica altre 50 revisioni più vecchie'))}</div>` : '');
     },
+    // riga di un file dell'anteprima/merge (azione + percorso, senza diff: il merge non e' ancora committato)
+    mergeRow(p) { return `<li><span class="st ${U.stClass(p.a)}" title="${esc(U.statusName(p.a))}">${esc(p.a)}</span><span class="sn">${esc(U.statusName(p.a))}</span><span class="pt">${esc(p.p)}</span></li>`; },
+    mergeResult(r) {
+      const c = r.counts;
+      return `<div class="mres"><b>${r.mode === 'preview' ? t('Anteprima del merge di {0}', r.revs) : t('Merge di {0} eseguito', r.revs)}</b> ` +
+        `<span class="muted">· ${t('{0} aggiornati · {1} aggiunti · {2} eliminati · {3} uniti · {4} in conflitto', c.updated, c.added, c.deleted, c.merged, c.conflicted)}</span>` +
+        `<p class="muted">${r.mode === 'preview' ? t("L'anteprima non prevede sempre i conflitti ad albero e di proprietà: possono comparire solo con il merge vero.") : t('Le modifiche sono nella working copy, non ancora committate: rivedile in Changes (i conflitti compaiono lì).')}</p>` +
+        (r.skipped ? `<p class="muted">${t('{0} percorsi saltati da svn.', r.skipped)}</p>` : '') +
+        (r.items.length ? `<div class="pth">${t('Azione')} / ${t('Percorso')} · ${t('{0} file', r.items.length)}</div><ul class="paths">${r.items.map(U.logHTML.mergeRow).join('')}</ul>` : `<p class="muted">${t('Nessun file da mostrare.')}</p>`) + `</div>`;
+    },
+    mergePanel(s) {
+      const m = s.merge, n = m.selected.length, off = m.busy || m.loading || !m.eligible ? 'disabled' : '';
+      return `<div class="ld-h mp"><b>${esc(m.title)}</b> <span class="muted">· ${t('{0} revisioni da unire', m.eligible)}${n ? ' · ' + t('{0} scelte', n) : ''}</span>` +
+        `<p class="muted">${t('Clic su una revisione per sceglierla (cherry-pick). Senza scelta, Anteprima e Merge tutto valgono per tutte le revisioni da unire.')}</p>` +
+        (m.blocked ? `<div class="mb warn" role="alert">${U.icon('warn')}<span>${esc(m.blocked)}</span></div>` : '') +
+        (m.error ? `<div class="rp-err" role="alert">${U.icon('x')}<span>${esc(m.error)}</span></div>` : '') +
+        `<div class="mact">` +
+        U.btn('btn', t('Anteprima'), 'refresh', 'mergePreview', null, n ? t('Simula il merge delle {0} revisioni scelte (svn merge --dry-run)', n) : t('Simula il merge di tutte le revisioni da unire (svn merge --dry-run)'), off) +
+        U.btn('btn primary', t('Merge tutto'), 'branch', 'mergeAll', null, t('Unisce tutte le revisioni da unire nella working copy (svn merge); non committa'), off) +
+        U.btn('btn', t('Merge selezionate ({0})', n), 'branch', 'mergeSelected', null, t('Cherry-pick: unisce solo le revisioni scelte (svn merge -c)'), n ? off : 'disabled') +
+        (n ? U.btn('btn ghost', t('Deseleziona'), null, 'mergeClear', null, t('Toglie la scelta a tutte le revisioni'), m.busy ? 'disabled' : '') : '') + `</div></div>` +
+        (m.result ? U.logHTML.mergeResult(m.result) : '');
+    },
     detail(s) {
+      if (s.merge) return U.logHTML.mergePanel(s);
       if (s.files) return U.logHTML.files(s);
       const e = s.entries.find(x => x.rev === s.sel);
       if (!e) return `<div class="empty-state"><span class="muted">${t("Seleziona una revisione per vederne le modifiche. Ctrl+clic su un'altra revisione per confrontarle.")}</span></div>`;
@@ -59,6 +88,8 @@
   };
   function render(root) {
     root.classList.toggle('loading', !!st.loading);
+    root.querySelector('#llist').classList.toggle('mrg', !!st.merge);
+    root.querySelector('#llist').setAttribute('aria-multiselectable', !!st.merge);
     U.setHTML(root.querySelector('#ltop'), U.logHTML.top(st));
     const list = root.querySelector('#llist'), had = list.contains(document.activeElement), top = list.scrollTop;
     if (U.setHTML(list, U.logHTML.list(st))) { list.scrollTop = top; if (had) { const f = list.querySelector('[tabindex="0"]'); if (f) f.focus(); } }
@@ -73,7 +104,7 @@
         else if (e.target.id === 'logfilter') { e.preventDefault(); const a = {}; for (const i of e.target.querySelectorAll('input')) a[i.name] = i.value; U.bridge.send('logFilter', a); }
       });
       const list = root.querySelector('#llist');
-      list.addEventListener('click', e => { const r = e.target.closest('.lr'); if (r) { const c = U.logClick(st && st.sel, +r.dataset.rev, e.ctrlKey || e.shiftKey || e.metaKey); U.bridge.send(c.cmd, c.args); } });
+      list.addEventListener('click', e => { const r = e.target.closest('.lr'); if (r && st && st.merge) { mcur = +r.dataset.rev; U.bridge.send('mergeToggle', { rev: mcur }); } else if (r) { const c = U.logClick(st && st.sel, +r.dataset.rev, e.ctrlKey || e.shiftKey || e.metaKey); U.bridge.send(c.cmd, c.args); } });
       list.addEventListener('pointerdown', e => {   // trascina il bordo dell'intestazione per cambiare la larghezza della colonna
         const g = e.target.closest('.rz'); if (!g) return; e.preventDefault(); e.stopPropagation();
         const cell = g.parentElement, x0 = e.clientX, w0 = cell.getBoundingClientRect().width;
@@ -84,7 +115,12 @@
       list.addEventListener('keydown', e => {
         const rs = [...list.querySelectorAll('.lr')], i = rs.indexOf(document.activeElement); if (i < 0) return;
         const rev = U.logKey(e.key, rs.map(r => +r.dataset.rev), +rs[i].dataset.rev); if (rev == null) return;
-        e.preventDefault(); U.bridge.send('logSelect', { rev }); rs.find(r => +r.dataset.rev === rev).focus();
+        e.preventDefault();
+        if (st && st.merge) {   // nel merge le frecce spostano il focus, Spazio/Invio scelgono o tolgono la revisione
+          mcur = rev; if (e.key === 'Enter' || e.key === ' ') U.bridge.send('mergeToggle', { rev }); else { rs.forEach(r => r.tabIndex = +r.dataset.rev === rev ? 0 : -1); }
+          rs.find(r => +r.dataset.rev === rev).focus(); return;
+        }
+        U.bridge.send('logSelect', { rev }); rs.find(r => +r.dataset.rev === rev).focus();
       });
     },
     update(root, state) { st = state; render(root); },

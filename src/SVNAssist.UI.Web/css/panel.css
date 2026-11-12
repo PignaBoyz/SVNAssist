@@ -41,6 +41,8 @@ textarea{resize:vertical;min-height:62px;max-height:40vh;font-family:var(--font)
 .bar{display:flex;align-items:center;gap:6px;padding:6px 8px;flex:none;flex-wrap:wrap}
 .branch{display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .branch b{overflow:hidden;text-overflow:ellipsis}
+.mb{display:flex;align-items:center;gap:8px;margin:0 8px 6px;padding:6px 8px;border:1px solid var(--bd2);border-left:3px solid var(--acc);border-radius:4px;background:var(--acc-bg)}
+.mb.warn{border-left-color:var(--warn);background:var(--warn-bg);color:var(--warn-fg)}
 button.branch{background:none;border:0;border-radius:4px;color:inherit;font:inherit;padding:2px 6px;cursor:pointer}
 button.branch:hover{background:var(--bg3)}
 button.branch:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
@@ -127,6 +129,13 @@ pre.cmd{background:var(--bg0);border:1px solid var(--bd);padding:6px 8px;font:12
 
 /* log */
 .app.log .wc{padding-top:6px}
+.mh{display:flex;align-items:center;gap:8px;padding:6px 8px;flex:none}
+.llist.mrg{--c1:96px}
+.ck{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;margin-right:6px;vertical-align:-2px;border:1px solid var(--bd2);border-radius:3px;background:var(--bg1)}
+.ck.on{background:var(--acc);border-color:var(--acc);color:var(--acc-fg)}
+.ck .ic{width:10px;height:10px}
+.mact{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 2px}
+.mres{padding:8px 12px}
 .lbody{flex:1;min-height:0;display:flex;flex-direction:column}
 .llist{--c1:64px;--c2:120px;--c3:140px;flex:none;height:45%;min-height:120px;overflow:auto;resize:vertical;background:var(--bg1);border-top:1px solid var(--bd)}
 .lh,.lr{display:grid;grid-template-columns:var(--c1) var(--c2) var(--c3) minmax(0,1fr);gap:0;min-width:520px}

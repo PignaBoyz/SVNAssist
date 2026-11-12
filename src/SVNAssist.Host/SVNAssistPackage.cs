@@ -95,6 +95,7 @@ namespace SVNAssist.Host
             Add(Ids.CmdUpdateRev, () => Host.SendCommandAsync("changes", "updateToRevision", null));
             Add(Ids.CmdCleanup, () => Host.SendCommandAsync("changes", "cleanup", null));
             Add(Ids.CmdSwitch, () => Host.SendCommandAsync("changes", "switchOpen", null));
+            Add(Ids.CmdMerge, () => Host.SendCommandAsync("changes", "mergeOpen", null));
 
             // Sottomenu Lingua: tre voci a scelta esclusiva, la spunta segue l'impostazione.
             void AddLang(int id, string value)

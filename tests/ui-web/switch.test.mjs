@@ -7,7 +7,7 @@ const U = loadUi(['i18n', 'util', 'diff', 'tree', 'prereq', 'changes']);
 const H = U.changesHTML;
 const fx = () => structuredClone(readJson('src/SVNAssist.UI.Web/contract/fixtures/changes.json'));
 const SW = o => Object.assign({
-  open: true, loading: false, error: '',
+  open: true, mode: 'switch', loading: false, error: '',
   items: [{ name: 'trunk', kind: 'trunk', current: true }, { name: 'branches/feature-x', kind: 'branch', current: false }, { name: 'tags/1.0', kind: 'tag', current: false }],
 }, o);
 

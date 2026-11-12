@@ -392,7 +392,7 @@ function freshVM() {
   return { statusAuto: true, autoDetected: false, lang: null, view: 'tree', collapsed: {}, wcPath: '', showInput: true, statusMsg: 'Caricamento in corso...', err: false, aiMsg: '', branch: '', files: [], header: 'Changes', diffVisible: false, diffTitle: '', diffContent: '', commitMsg: '', aiBusy: false, trace: [], dl: null, loading: false };
 }
 function freshLVM() {
-  return { path: '', limit: 50, canMore: false, msg: 'Inserisci il percorso della working copy e premi Carica log.', entries: [], sel: null, diff: '' };
+  return { path: '', limit: 50, canMore: false, msg: 'Inserisci il percorso della working copy e premi Carica log.', entries: [], sel: null, diff: '', merge: null };
 }
 function freshState(mode) {
   const free = mode !== 'first';
@@ -882,17 +882,18 @@ async function rpOk(a) {
 }
 // SVN Switch: elenco finto di trunk/branch/tag (come il backend: l'elemento corrente e' marcato, si passa solo a voci dell'elenco).
 const SW_ITEMS = [['trunk', 'trunk'], ['branches/feature-coupon', 'branch'], ['branches/release-2.1', 'branch'], ['tags/v1.0', 'tag'], ['tags/v2.0', 'tag']];
-async function vmSwitchOpen(refresh) {
+async function vmSwitchOpen(refresh, mode) {
   if (!S.vm.wcPath.trim()) { setStatus('Nessuna working copy configurata.'); return render(); }
   if (refresh) S.swCache = false;
-  S.vm.sw = { loading: true, error: '' }; render();
+  S.vm.sw = { loading: true, error: '', mode: mode || 'switch' }; render();
   if (!S.swCache) { await svn('info --xml', 200); await svn('list --xml ^/branches', 400); await svn('list --xml ^/tags', 300); S.swCache = true; }   // cache per sessione: la seconda apertura e' immediata
   if (S.vm.sw) S.vm.sw.loading = false; render();
 }
 async function swOk(a) {
   const sw = S.vm.sw; if (!sw) return;
   const name = String(a.name || ''), item = SW_ITEMS.find(([n]) => n === name);
-  if (!item) { sw.error = "Elemento non valido: aggiorna l'elenco e riprova."; return render(); }
+  if (!item || (sw.mode === 'merge' && name === S.branch)) { sw.error = "Elemento non valido: aggiorna l'elenco e riprova."; return render(); }
+  if (sw.mode === 'merge') return mgStart(name);
   if (name === S.branch) { sw.error = `La working copy è già su ${name}.`; return render(); }
   const local = S.files.filter(f => f.st !== 'N' && f.st !== '?').length;
   if (local && !await confirmBox(`La working copy ha ${local} elementi con modifiche locali: lo switch le porta su ${name} e può generare conflitti. Continuare?`)) return;
@@ -903,6 +904,80 @@ async function swOk(a) {
     S.branch = name; S.wcRev = S.headRev;
     await vmRefresh(`Switch a ${name} completato (revisione ${S.wcRev}). Se Visual Studio lo chiede, ricarica la solution.`, true);
   } catch (e) { setStatus('Errore switch: ' + e.message); render(); }
+}
+// SVN Merge: revisioni finte per sorgente (come mergeinfo + log); U aggiorna, A aggiunge, D elimina, C va in conflitto. Il merge parte solo da una working copy pulita.
+const MG = {
+  'branches/feature-coupon': [
+    { rev: 126, author: 'lbianchi', days: 6, msg: 'Coupon: modello e regole di scadenza', files: [['U', 'Core\\Models\\Order.cs'], ['A', 'Core\\Models\\CouponRule.cs']] },
+    { rev: 128, author: 'mrossi', days: 5, msg: 'OrderService applica il coupon al totale', files: [['U', 'Core\\Services\\OrderService.cs']] },
+    { rev: 129, author: 'lbianchi', days: 4, msg: 'Checkout: mostra lo sconto sul riepilogo', files: [['C', 'Web\\Controllers\\CheckoutController.cs'], ['U', 'Web\\Views\\Cart\\Index.cshtml']] },
+    { rev: 131, author: 'gverdi', days: 2, msg: 'Rimuove il vecchio calcolatore prezzi', files: [['D', 'Core\\Services\\LegacyPriceCalculator.cs']] },
+  ],
+  'branches/release-2.1': [{ rev: 125, author: 'mrossi', days: 8, msg: 'Release 2.1: corregge arrotondamento IVA', files: [['U', 'Core\\Services\\OrderService.cs']] }],
+};
+const mgBlocked = () => { const n = S.files.filter(f => ['M', 'A', 'D', 'R', '!', 'C'].includes(f.st)).length; return n ? `La working copy ha ${n} elementi con modifiche locali. Per unire serve una working copy pulita (così "Annulla merge" non tocca altro lavoro): fai prima Commit oppure Revert, poi riprova.` : ''; };
+const mgEligible = name => (MG[name] || []).filter(r => !(S.mgDone || []).some(d => d.name === name && d.revs.includes(r.rev)));
+const mgRevs = m => m.sel.length ? m.sel.slice().sort((a, b) => a - b) : mgEligible(m.name).map(r => r.rev).sort((a, b) => a - b);
+const mgLabel = (m, revs) => !m.sel.length ? (revs.length > 1 ? `r${revs[0]}-r${revs[revs.length - 1]}` : `r${revs[0]}`) : revs.length <= 6 ? revs.map(r => 'r' + r).join(', ') : `r${revs[0]}-r${revs[revs.length - 1]} (selezione di ${revs.length} revisioni)`;
+function mgResult(m, mode, revs) {
+  const fl = new Map();
+  for (const r of MG[m.name] || []) if (revs.includes(r.rev)) for (const [k, p] of r.files) fl.set(p, k);
+  const items = [...fl].map(([p, k]) => ({ a: k === 'U' ? 'M' : k, p: fwd(p) })), n = k => items.filter(i => i.a === k).length;
+  return { mode, revs: mgLabel(m, revs), counts: { updated: n('M'), added: n('A'), deleted: n('D'), merged: 0, conflicted: n('C') }, items, skipped: 0 };
+}
+async function mgStart(name) {
+  S.vm.sw = null; const m = S.lvm.merge = { name, loading: true, busy: false, error: '', blocked: '', sel: [], result: null, msg: 'Lettura delle revisioni da unire...' };
+  S.ui.logOpen = true; S.ui.active = '__log'; S.ui.view = 'doc'; S.ui.seOpen = false; S.ui.menu = null; render();
+  try {
+    await svn(`mergeinfo --show-revs eligible ^/${name}`, 700);
+    const el = mgEligible(name); if (el.length) await svn(`log --xml -v -r ${el[el.length - 1].rev}:${el[0].rev} ^/${name}`, 400);
+    m.blocked = mgBlocked(); m.msg = el.length ? `${el.length} revisioni da unire.` : `Nessuna revisione da unire: ${name} è già allineato.`;
+  } catch (e) { m.error = 'Errore: ' + e.message; }
+  m.loading = false; render();
+}
+async function mgPreview() {
+  const m = S.lvm.merge; if (!m || m.busy || m.loading) return;
+  m.busy = true; m.error = ''; m.result = null; render();
+  try { m.blocked = mgBlocked(); const revs = mgRevs(m); await svn(`merge --dry-run --accept postpone ${m.sel.length ? '-c ' + revs.join(',') + ' ' : ''}^/${m.name}`, 700); m.result = mgResult(m, 'preview', revs); m.msg = 'Anteprima completata.'; }
+  catch (e) { m.error = 'Errore: ' + e.message; }
+  m.busy = false; render();
+}
+async function mgRun(all) {
+  const m = S.lvm.merge; if (!m || m.busy || m.loading) return;
+  if (!all && !m.sel.length) { m.error = 'Seleziona almeno una revisione da unire.'; return render(); }
+  m.busy = true; m.error = ''; render();
+  try {
+    m.blocked = mgBlocked(); if (m.blocked) { m.busy = false; return render(); }
+    const pick = all ? [] : m.sel.slice(), revs = all ? mgEligible(m.name).map(r => r.rev).sort((a, b) => a - b) : pick.sort((a, b) => a - b);
+    const probe = { name: m.name, sel: pick }, label = mgLabel(probe, revs);
+    await svn(`merge --accept postpone ${all ? '' : '-c ' + revs.join(',') + ' '}^/${m.name}`, 900);
+    const res = mgResult(probe, 'merge', revs); m.result = res;
+    for (const r of MG[m.name]) if (revs.includes(r.rev)) for (const [k, p] of r.files) {
+      let f = fileBy(p);
+      if (k === 'A') { if (!f) S.files.push(F(p, 'A', null, `// ${base(p)}: aggiunto dal merge di ${m.name}\n`)); else f.st = 'A'; }
+      else if (f && k === 'D') { f.st = 'D'; f.text = null; }
+      else if (f && k === 'C') { f.st = 'C'; f.text = T.checkoutConf; }
+      else if (f && f.st !== 'C') { f.st = 'M'; f.text = (f.base || '') + `\n// unito da ${m.name}`; }
+    }
+    (S.mgDone = S.mgDone || []).push({ name: m.name, revs });
+    const text = `Merge ${label} da ^/${m.name}`;
+    S.vm.mergeBanner = { text: `${text}: rivedi le modifiche e committa, oppure annulla il merge.`, conflicts: res.counts.conflicted, commit: text };
+    if (!S.vm.commitMsg.trim()) S.vm.commitMsg = text;
+    m.sel = []; m.msg = 'Merge completato.';
+    await vmRefresh(res.counts.conflicted ? `Merge completato: ${res.counts.conflicted} file in conflitto da risolvere.` : 'Merge completato: rivedi le modifiche e committa.', false);
+  } catch (e) { m.error = 'Errore: ' + e.message; }
+  m.busy = false; render();
+}
+async function mgUndo() {
+  const t = S.files.filter(f => IS_REV.includes(f.st));
+  if (!t.length || !S.vm.mergeBanner) { S.vm.mergeBanner = null; setStatus('Nessun elemento idoneo per SVN Revert.'); return render(); }
+  if (!await confirmBox(`Annullare il merge? Tutte le modifiche locali della working copy (${t.length} elementi) tornano allo stato di BASE.\n\n${listForConfirm(t)}\n\nL'operazione non è annullabile.`)) return;
+  setStatus('Annullamento del merge in corso...'); render();
+  await svn('revert --depth infinity .', 600); t.forEach(f => svnRevert(f.path));
+  if (S.vm.commitMsg === S.vm.mergeBanner.commit) S.vm.commitMsg = '';
+  S.vm.mergeBanner = null; S.mgDone = (S.mgDone || []).slice(0, -1);
+  const m = S.lvm.merge; if (m) { m.result = null; m.sel = []; m.blocked = mgBlocked(); }
+  await vmRefresh(`Merge annullato: ${t.length} elementi ripristinati.`, false);
 }
 async function vmCleanup() {
   try {
@@ -1038,7 +1113,7 @@ function renderDoc() {
   S.ui.open = open;
   const x = id => `<span data-act="closeTab" data-arg="${esc(id)}" title="Chiudi" style="margin-left:6px;color:var(--fg3)">&#10005;</span>`;
   const tab = (id, label) => `<button role="tab" aria-selected="${S.ui.active === id}" data-act="activate" data-arg="${esc(id)}">${esc(label)} ${x(id)}</button>`;
-  $('#docTabs').innerHTML = open.map(p => tab(p, base(p))).join('') + (S.ui.logOpen ? tab('__log', 'SVN Log') : '') + S.ui.diffs.map(d => tab(d.id, d.title)).join('');
+  $('#docTabs').innerHTML = open.map(p => tab(p, base(p))).join('') + (S.ui.logOpen ? tab('__log', S.lvm.merge ? 'Merge da ' + S.lvm.merge.name : 'SVN Log') : '') + S.ui.diffs.map(d => tab(d.id, d.title)).join('');
   const body = $('#docBody');
   if (!body.firstChild) body.innerHTML = '<div id="docText" style="flex:1;display:flex;flex-direction:column;min-height:0"></div><div class="doc-frames" id="docFrames" hidden></div>';
   const fr = (S.ui.logOpen ? [['__log', 'log']] : []).concat(S.ui.diffs.map(d => [d.id, 'diff']));
@@ -1547,7 +1622,7 @@ async function vsixFlow() {
 async function restartVS() {
   S.restarting = true; render(); await sleep(1400); S.restarting = false;
   S.sess.svnPrompted = false; S.sess.aiPrompted = false;
-  S.ui.statusOpen = false; S.ui.menu = null; S.vm = freshVM(); S.lvm = freshLVM(); S.prq = { snap: null, feedback: '', init: false, busy: false }; S.watch.pending = false;
+  S.ui.statusOpen = false; S.ui.menu = null; S.vm = freshVM(); S.lvm = freshLVM(); S.mgDone = []; S.prq = { snap: null, feedback: '', init: false, busy: false }; S.watch.pending = false;
   render();
 }
 async function openSolDlg() {
@@ -1611,7 +1686,7 @@ function wizard(title, steps) {
   });
 }
 const SOON = {
-  merge: () => wizard('Merge con risoluzione conflitti', [
+  mergeConflicts: () => wizard('Risoluzione dei conflitti di merge', [
     { body: '<p>Esegui il merge di <b>branches/feature-coupon</b> in <b>trunk</b> (<code>svn merge</code>).</p><label class="tg"><input type="checkbox" checked><span>Esegui prima un dry-run</span></label>', next: 'Avvia merge' },
     { body: '<p id="mo" style="font-family:var(--mono);font-size:12px;white-space:pre-wrap"></p>', onEnter: async (el, nb) => { nb.disabled = true; const o = el.querySelector('#mo'); for (const l of ['--- Merging r126 through r131 into \'.\':', 'U    Core/Models/Coupon.cs', 'U    Core/Services/OrderService.cs', 'C    Web/Controllers/CheckoutController.cs', 'Summary of conflicts: Text conflicts: 1']) { o.textContent += l + '\n'; await sleep(420); } nb.disabled = false; nb.textContent = 'Risolvi il conflitto'; } },
     { body: `<p>Conflitto in <b>Web/Controllers/CheckoutController.cs</b>: scegli come risolvere.</p><div class="three"><div><h5>Mia (trunk)</h5><pre id="c1">var result = _gateway.Charge(request, retries: 3);\n_log.Info(...);</pre></div><div><h5>Loro (feature-coupon)</h5><pre id="c2">var result = _gateway.ChargeAsync(request)\n   .GetAwaiter().GetResult();</pre></div><div><h5>Risultato</h5><pre id="c3" contenteditable="true">var result = _gateway.ChargeAsync(request, retries: 3)\n   .GetAwaiter().GetResult();\n_log.Info(...);</pre></div></div><p style="margin-top:8px"><button class="btn sm" data-r="1">Usa mia</button> <button class="btn sm" data-r="2">Usa loro</button> <button class="btn sm" data-r="3">Unisci entrambe</button></p>`, next: 'Segna come risolto',
@@ -1654,7 +1729,7 @@ const SOON = {
     } }),
 };
 const SOON_CARDS = [
-  ['merge', 'Merge con risoluzione dei conflitti', 'Merge tra branch con riepilogo e un risolutore dei conflitti a tre pannelli (mia / loro / risultato).', ['Dry-run prima del merge', 'Risoluzione guidata di ogni conflitto']],
+  ['mergeConflicts', 'Risoluzione guidata dei conflitti di merge', 'Un risolutore dei conflitti a tre pannelli (mia / loro / risultato). Il merge da un branch, con anteprima e cherry-pick, c\'e\' gia\': SVN Merge...', ['Risoluzione guidata di ogni conflitto']],
   ['branchtag', 'Creazione di Branch e Tag', 'Crea branch e tag (svn copy) con un modulo, con switch automatico opzionale.', ['Anteprima del comando', 'Messaggio di commit predefinito']],
   ['blame', 'Blame / Annotate', 'Chi ha scritto ogni riga e in quale revisione, con il messaggio al passaggio del mouse.', ['Vista affiancata all\'editor']],
   ['cleanup', 'Cleanup', 'Pulizia della working copy: lock, file non versionati e ignorati, file mancanti.', ['Opzioni selezionabili', 'Output del comando']],

@@ -186,6 +186,154 @@
           }
         }
       }
+    },
+    "merge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "title",
+        "loading",
+        "busy",
+        "error",
+        "blocked",
+        "selected",
+        "eligible",
+        "result"
+      ],
+      "description": "Presente solo nel Log in modalita merge: entries = revisioni ancora da unire (svn mergeinfo --show-revs eligible + svn log sul sorgente); sel e sempre null, la scelta e merge.selected.",
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "Voce scelta: trunk, branches/x, tags/1.0."
+        },
+        "title": {
+          "type": "string",
+          "description": "Es. Merge da branches/x."
+        },
+        "loading": {
+          "type": "boolean"
+        },
+        "busy": {
+          "type": "boolean",
+          "description": "Anteprima o merge in corso."
+        },
+        "error": {
+          "type": "string"
+        },
+        "blocked": {
+          "type": "string",
+          "description": "Perche non si puo unire (working copy con modifiche locali); vuoto se si puo."
+        },
+        "selected": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "description": "Revisioni scelte per il cherry-pick."
+        },
+        "eligible": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Numero di revisioni da unire."
+        },
+        "result": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "revs",
+            "counts",
+            "items",
+            "skipped"
+          ],
+          "description": "Esito dell'ultima anteprima (preview) o dell'ultimo merge (merge).",
+          "properties": {
+            "mode": {
+              "enum": [
+                "preview",
+                "merge"
+              ]
+            },
+            "revs": {
+              "type": "string",
+              "description": "Es. r120-r135 oppure r120, r124."
+            },
+            "counts": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "updated",
+                "added",
+                "deleted",
+                "merged",
+                "conflicted"
+              ],
+              "properties": {
+                "updated": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "added": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "deleted": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "merged": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "conflicted": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "a",
+                  "p"
+                ],
+                "properties": {
+                  "a": {
+                    "enum": [
+                      "A",
+                      "M",
+                      "D",
+                      "R",
+                      "C"
+                    ]
+                  },
+                  "p": {
+                    "type": "string"
+                  },
+                  "k": {
+                    "enum": [
+                      "dir",
+                      "file"
+                    ]
+                  }
+                }
+              }
+            },
+            "skipped": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
     }
   }
 }

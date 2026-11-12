@@ -53,10 +53,18 @@
   }
   const isEmpty = s => s.sections.every(x => !x.count);
 
+  // l'unione automatica e il mergeinfo server-side richiedono svn 1.8+ (versione sconosciuta = si prova)
+  const mergeOk = () => { const v = (st.workingCopy.svnVersion || '').split('.').map(Number); return !v[0] || v[0] > 1 || (v[0] === 1 && v[1] >= 8); };
+  function mergeBanner(s) {
+    const m = s.merge; if (!m) return '';
+    return `<div class="mb${m.conflicts ? ' warn' : ''}" role="status">${U.icon(m.conflicts ? 'warn' : 'branch')}<span>${esc(m.text)}${m.conflicts ? ' ' + esc(t('{0} elementi in conflitto: risolvili prima di committare.', m.conflicts)) : ''}</span><span class="fill"></span>` +
+      U.btn('btn sm', t('Annulla merge'), null, 'mergeUndo', null, t("Annulla il merge: ripristina la working copy com'era (svn revert)")) + U.btn('ib', '', 'x', 'mergeDismiss', null, t('Nascondi questo avviso')) + `</div>`;
+  }
   function moreMenu() {
     return [
       { header: true, label: 'SVN' },
       { label: 'SVN Switch…', cmd: 'switchOpen', hint: t('Porta la working copy su un altro branch o tag (svn switch)') },
+      { label: 'SVN Merge…', cmd: 'mergeOpen', hint: t('Unisce nella working copy le modifiche di un altro branch (svn merge)'), disabled: !mergeOk() },
       { label: 'SVN Update to revision…', cmd: 'updateToRevision', hint: t('Aggiorna a una revisione precisa (svn update -r)') },
       { label: 'SVN Cleanup', cmd: 'cleanup', hint: t("Ripulisce la working copy da un'operazione interrotta (svn cleanup)") }, { sep: true },
       { header: true, label: t('Vista') },
@@ -100,6 +108,7 @@
     U.setHTML(root.querySelector('#cbar'), commitBar(st));
     U.setHTML(root.querySelector('#aist'), aiStat(st.commit));
     U.setHTML(root.querySelector('#prq'), U.prereqHTML(st.prereq));
+    U.setHTML(root.querySelector('#mrg'), mergeBanner(st));
     const ta = root.querySelector('#msg');
     if (ta.value !== st.commit.text && document.activeElement !== ta) ta.value = st.commit.text;
     const list = root.querySelector('#list'), had = list.contains(document.activeElement), cur = list.__cursor, top = list.scrollTop;
@@ -200,17 +209,17 @@
   const swSelOk = s => s.items.some(i => i.name === swSel && !i.current);
   function switchHTML(s) {
     if (!s || !s.open) return '';
-    const vis = swVisible(s);
+    const vis = swVisible(s), merge = s.mode === 'merge';
     const row = i => `<div class="rp-row sw-row${swSel === i.name ? ' sel' : ''}" role="option" tabindex="${swSel === i.name ? 0 : -1}" aria-selected="${swSel === i.name}" data-sw="${esc(i.name)}"><b class="rv">${esc(i.kind)}</b><span class="m" title="${esc(i.name)}">${esc(i.name)}</span>${i.current ? `<span class="muted">${esc(t('(corrente)'))}</span>` : ''}</div>`;
     const note = s.loading ? `<div class="rp-note muted"><span class="spin"></span> ${t('Caricamento di branch e tag…')}</div>`
       : vis.length ? '' : `<div class="rp-note muted">${s.items.length ? t('Nessun elemento corrisponde alla ricerca.') : t('Nessun branch o tag trovato. Controlla il layout del repository in Tools > Options > SVNAssist.')}</div>`;
-    return `<div class="wiz-scrim"><div class="wiz rp" role="dialog" aria-modal="true" aria-labelledby="sw-t"><div class="wiz-h"><h3 id="sw-t" tabindex="-1">SVN Switch</h3><span class="fill"></span>${U.btn('ib', '', 'x', 'switchCancel', null, t('Annulla (Esc)'))}</div>` +
-      `<div class="wiz-b"><p class="muted">${t('Scegli il branch o il tag su cui portare la working copy.')}</p>` +
+    return `<div class="wiz-scrim"><div class="wiz rp" role="dialog" aria-modal="true" aria-labelledby="sw-t"><div class="wiz-h"><h3 id="sw-t" tabindex="-1">${merge ? 'SVN Merge' : 'SVN Switch'}</h3><span class="fill"></span>${U.btn('ib', '', 'x', 'switchCancel', null, t('Annulla (Esc)'))}</div>` +
+      `<div class="wiz-b"><p class="muted">${merge ? t('Scegli il branch, il trunk o il tag da cui unire le modifiche nella working copy.') : t('Scegli il branch o il tag su cui portare la working copy.')}</p>` +
       `<input id="sw-q" type="text" autocomplete="off" spellcheck="false" placeholder="${esc(t('Cerca…'))}" aria-label="${esc(t('Cerca un branch o un tag'))}" value="${esc(swQ)}">` +
       `<div class="rp-list" id="sw-list" role="listbox" aria-label="${esc(t('Branch e tag del repository'))}">${vis.map(row).join('')}${note}</div>` +
       (s.error ? `<div class="rp-err" role="alert">${U.icon('warn')}<span>${esc(s.error)}</span></div>` : '') + `</div>` +
-      `<div class="wiz-f">${U.btn('btn ghost', t('Annulla'), null, 'switchCancel', null, t('Chiude senza cambiare ramo'))}${U.btn('btn sm', t('Aggiorna'), 'refresh', 'switchRefresh', null, t("Rilegge l'elenco di branch e tag dal server"))}<span class="fill"></span>` +
-      `<button type="button" class="btn primary" data-sw-ok ${swSelOk(s) && !s.loading ? '' : 'disabled'} title="${esc(t('Porta la working copy sul ramo scelto (svn switch)'))}">${U.icon('branch')}<span>Switch</span></button></div></div></div>`;
+      `<div class="wiz-f">${U.btn('btn ghost', t('Annulla'), null, 'switchCancel', null, merge ? t('Chiude senza unire nulla') : t('Chiude senza cambiare ramo'))}${U.btn('btn sm', t('Aggiorna'), 'refresh', 'switchRefresh', null, t("Rilegge l'elenco di branch e tag dal server"))}<span class="fill"></span>` +
+      `<button type="button" class="btn primary" data-sw-ok ${swSelOk(s) && !s.loading ? '' : 'disabled'} title="${esc(merge ? t('Mostra le revisioni di questo ramo ancora da unire (svn mergeinfo)') : t('Porta la working copy sul ramo scelto (svn switch)'))}">${U.icon('branch')}<span>${merge ? 'Merge…' : 'Switch'}</span></button></div></div></div>`;
   }
   function renderSw(app, anyModal) {
     const box = document.getElementById('sw'), s = st.switchPicker; if (!box) return;
@@ -263,13 +272,13 @@
     else if (!e.shiftKey && (a === last || !box.contains(a))) { e.preventDefault(); first.focus(); }
   }
 
-  U.changesHTML = { header, commitBar, foot, revHTML, switchHTML };   // parti pure, provate senza DOM (tests/ui-web)
+  U.changesHTML = { header, commitBar, foot, revHTML, switchHTML, mergeBanner };   // parti pure, provate senza DOM (tests/ui-web)
 
   U.views.changes = {
     mount(root) {
       root.innerHTML = `<div class="app"><div class="prog" aria-hidden="true"></div><header class="bar" id="hdr"></header><div id="wcbox"></div>
         <section class="commit"><textarea id="msg" rows="3"></textarea>
-        <div class="bar" id="cbar"></div><div id="aist"></div></section><div id="prq"></div>
+        <div class="bar" id="cbar"></div><div id="aist"></div></section><div id="prq"></div><div id="mrg"></div>
         <div class="flt"><input id="flt" type="search" spellcheck="false" autocomplete="off"></div>
         <div class="list" id="list" role="tree"></div>
         <footer class="foot" id="foot"></footer></div><div id="wiz"></div><div id="rev"></div><div id="sw"></div>`;

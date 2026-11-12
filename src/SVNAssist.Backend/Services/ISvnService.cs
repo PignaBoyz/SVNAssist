@@ -193,4 +193,16 @@ public interface ISvnService
 
     /// <summary>Porta la working copy su un altro URL (<c>svn switch --accept postpone</c>), dalla sua radice. I conflitti restano da risolvere.</summary>
     Task<UpdateResult> SwitchAsync(string workingCopyPath, string url, CancellationToken ct);
+
+    /// <summary>Revisioni del sorgente ancora da unire nella working copy (<c>svn mergeinfo --show-revs eligible SRC .</c>), in ordine crescente. Richiede svn 1.5+ (l'unione automatica 1.8+).</summary>
+    Task<IReadOnlyList<long>> GetEligibleRevisionsAsync(string workingCopyPath, string sourceUrl, CancellationToken ct);
+
+    /// <summary>Autore, data e messaggio delle revisioni del sorgente comprese tra <paramref name="min"/> e <paramref name="max"/> (<c>svn log --xml -v -r max:min URL</c>), dalla piu' recente.</summary>
+    Task<IReadOnlyList<SvnLogEntry>> GetLogRangeAsync(string url, long min, long max, CancellationToken ct);
+
+    /// <summary>
+    /// <c>svn merge [--dry-run] --accept postpone [-c N,M] SRC</c> dalla radice della working copy. Senza <paramref name="revisions"/> unisce tutto quello che e' da unire
+    /// (merge automatico, svn 1.8+); con le revisioni fa il cherry-pick. Non committa.
+    /// </summary>
+    Task<MergeOutput> MergeAsync(string workingCopyPath, string sourceUrl, IReadOnlyList<long>? revisions, bool dryRun, CancellationToken ct);
 }

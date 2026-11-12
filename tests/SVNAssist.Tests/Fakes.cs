@@ -224,6 +224,35 @@ internal sealed class FakeSvnService : ISvnService
         Switched.Add((workingCopyPath, url));
         return Task.FromResult(new UpdateResult(9, []));
     }
+
+    public IReadOnlyList<long> Eligible { get; set; } = [];
+    public IReadOnlyList<SvnLogEntry> RangeLog { get; set; } = [];
+    public string? MergeError { get; set; }
+    public MergeOutput MergeResult { get; set; } = new([], 0, 0);
+    public List<(string Path, string Url, long[]? Revs, bool DryRun)> Merges { get; } = [];
+    /// <summary>Stati che un merge vero lascia nella working copy.</summary>
+    public List<SvnFileStatus> OnMerge { get; } = [];
+    /// <summary>Revisioni ancora da unire dopo un merge vero (null = invariate).</summary>
+    public IReadOnlyList<long>? EligibleAfterMerge { get; set; }
+
+    public Task<IReadOnlyList<long>> GetEligibleRevisionsAsync(string workingCopyPath, string sourceUrl, CancellationToken ct) => Task.FromResult(Eligible);
+
+    public Task<IReadOnlyList<SvnLogEntry>> GetLogRangeAsync(string url, long min, long max, CancellationToken ct)
+        => Task.FromResult<IReadOnlyList<SvnLogEntry>>(RangeLog.Where(e => e.Revision >= min && e.Revision <= max).OrderByDescending(e => e.Revision).ToList());
+
+    public Task<MergeOutput> MergeAsync(string workingCopyPath, string sourceUrl, IReadOnlyList<long>? revisions, bool dryRun, CancellationToken ct)
+    {
+        if (MergeError is not null)
+            throw new InvalidOperationException(MergeError);
+        Merges.Add((workingCopyPath, sourceUrl, revisions?.ToArray(), dryRun));
+        if (!dryRun)
+        {
+            Statuses.AddRange(OnMerge);
+            Eligible = EligibleAfterMerge ?? Eligible;
+        }
+
+        return Task.FromResult(MergeResult);
+    }
 }
 
 /// <summary>Dialoghi finti: risposta preimpostata e registro dei messaggi mostrati.</summary>

@@ -6,11 +6,12 @@ namespace SVNAssist.Stores;
 /// <summary>
 /// Selettore di "SVN Switch...": elenco di trunk, branch e tag del repository (<c>svn list</c> sulle cartelle del layout,
 /// dedotte dall'URL della working copy). Gli elenchi stanno in cache per la sessione; "Aggiorna" li rilegge.
-/// Tiene solo l'elenco; lo switch lo esegue <see cref="ChangesStore"/>.
+/// Tiene solo l'elenco; lo switch lo esegue <see cref="ChangesStore"/>. Lo stesso selettore serve a "SVN Merge...": in modo <c>merge</c> il ramo corrente non e' tra le voci.
 /// </summary>
 internal sealed class SwitchPickerStore
 {
-    internal sealed record Target(string Name, string Kind, string Url, bool Current);
+    /// <param name="Path">Percorso dalla radice del repository (<c>progetto/branches/x</c>, senza <c>^/</c>).</param>
+    internal sealed record Target(string Name, string Kind, string Url, bool Current, string Path);
 
     private readonly ISvnService _svn;
     private readonly ISvnAssistSettings _settings;
@@ -19,6 +20,7 @@ internal sealed class SwitchPickerStore
     private bool _open, _loading;
     private string _error = string.Empty;
     private string _workingCopy = string.Empty;
+    private string _mode = "switch";
     private IReadOnlyList<Target> _items = [];
 
     public SwitchPickerStore(ISvnService svn, ISvnAssistSettings settings)
@@ -34,7 +36,7 @@ internal sealed class SwitchPickerStore
     internal SwitchPickerDto GetSnapshot()
     {
         lock (_lock)
-            return new SwitchPickerDto(_open, _loading, _error, _items.Select(i => new SwitchItemDto(i.Name, i.Kind, i.Current)).ToList());
+            return new SwitchPickerDto(_open, _mode, _loading, _error, _items.Select(i => new SwitchItemDto(i.Name, i.Kind, i.Current)).ToList());
     }
 
     /// <summary>Elemento dell'elenco con quel nome (<c>branches/x</c>), <c>null</c> se non c'e': e' l'unica via per ottenere l'URL di uno switch.</summary>
@@ -45,7 +47,7 @@ internal sealed class SwitchPickerStore
     }
 
     /// <summary>Apre il selettore (o lo ricarica con <paramref name="refresh"/>, scartando la cache).</summary>
-    internal async Task OpenAsync(string workingCopy, CancellationToken ct, bool refresh = false)
+    internal async Task OpenAsync(string workingCopy, CancellationToken ct, bool refresh = false, string mode = "switch")
     {
         lock (_lock)
         {
@@ -53,6 +55,7 @@ internal sealed class SwitchPickerStore
             _loading = true;
             _error = string.Empty;
             _workingCopy = workingCopy;
+            _mode = mode;
             if (!refresh)
                 _items = [];
             if (refresh)
@@ -75,13 +78,13 @@ internal sealed class SwitchPickerStore
 
             var items = new List<Target>();
             if ((await top).Contains(layout.Trunk))
-                items.Add(new Target(layout.Trunk, "trunk", UrlOf(root, Join(layout.Trunk)), pos.Kind == "trunk"));
+                items.Add(new Target(layout.Trunk, "trunk", UrlOf(root, Join(layout.Trunk)), pos.Kind == "trunk", Join(layout.Trunk)));
             foreach (var b in await branches)
-                items.Add(new Target(layout.Branches + "/" + b, "branch", UrlOf(root, Join(layout.Branches + "/" + b)), pos.Kind == "branch" && pos.Name == b));
+                items.Add(new Target(layout.Branches + "/" + b, "branch", UrlOf(root, Join(layout.Branches + "/" + b)), pos.Kind == "branch" && pos.Name == b, Join(layout.Branches + "/" + b)));
             foreach (var t in await tags)
-                items.Add(new Target(layout.Tags + "/" + t, "tag", UrlOf(root, Join(layout.Tags + "/" + t)), pos.Kind == "tag" && pos.Name == t));
+                items.Add(new Target(layout.Tags + "/" + t, "tag", UrlOf(root, Join(layout.Tags + "/" + t)), pos.Kind == "tag" && pos.Name == t, Join(layout.Tags + "/" + t)));
             lock (_lock)
-                _items = items;
+                _items = mode == "merge" ? items.Where(i => !i.Current).ToList() : items; // non si unisce un ramo in se stesso
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
@@ -96,7 +99,9 @@ internal sealed class SwitchPickerStore
         }
     }
 
-    internal Task RefreshAsync(CancellationToken ct) => IsOpen ? OpenAsync(_workingCopy, ct, refresh: true) : Task.CompletedTask;
+    internal Task RefreshAsync(CancellationToken ct) => IsOpen ? OpenAsync(_workingCopy, ct, refresh: true, mode: _mode) : Task.CompletedTask;
+
+    internal string Mode { get { lock (_lock) return _mode; } }
 
     internal void Close()
     {

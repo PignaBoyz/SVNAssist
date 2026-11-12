@@ -279,6 +279,8 @@ namespace SVNAssist.Host
             await SendCommandAsync("log", "logLoad", new JObject { ["path"] = path }, LogTitle(path)).ConfigureAwait(false);
         }
 
+        public Task ShowLogWindowAsync(string title) => _pkg.ShowViewAsync("log", title);
+
         public async Task ShowFolderDiffAsync(string path)
         {
             await SendCommandAsync("log", "logFolder", new JObject { ["path"] = path }, LogTitle(path)).ConfigureAwait(false);

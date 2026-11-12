@@ -118,8 +118,43 @@ internal sealed class ChangesStore : ViewStore, IDisposable
     /// <summary>Scelta guidata della revisione per "Update to revision".</summary>
     internal RevisionPickerStore RevPicker { get; }
 
-    /// <summary>Selettore di "SVN Switch...".</summary>
+    /// <summary>Selettore di "SVN Switch..." (e della sorgente di "SVN Merge...").</summary>
     internal SwitchPickerStore Switch { get; }
+
+    /// <summary>Dopo "Annulla merge": il Log in modalita' merge rilegge le revisioni da unire (tornano tutte da unire).</summary>
+    internal Func<CancellationToken, Task>? MergeUndone { get; set; }
+
+    /// <summary>Apre il Log in modalita' merge sulla sorgente scelta (la imposta il backend: il Log e' un'altra vista).</summary>
+    internal Func<string, SwitchPickerStore.Target, CancellationToken, Task>? StartMerge { get; set; }
+
+    // Merge eseguito e non ancora committato: banner con "Annulla merge" e testo del messaggio precompilato.
+    private string? _mergeBanner, _mergeCommitText;
+    private int _mergeConflicts;
+
+    /// <summary>Dopo un merge: messaggio di commit precompilato (se vuoto, senza auto-stage) e banner con "Annulla merge".</summary>
+    internal void AfterMerge(string commitText, string bannerText, int conflicts)
+    {
+        lock (_stateLock)
+        {
+            _mergeBanner = bannerText;
+            _mergeConflicts = conflicts;
+            _mergeCommitText = commitText;
+        }
+
+        if (string.IsNullOrWhiteSpace(CommitMessage.Text))
+            CommitMessage.Text = commitText;
+        else
+            NotifyChanged();
+    }
+
+    private void ClearMergeBanner()
+    {
+        lock (_stateLock)
+        {
+            _mergeBanner = null;
+            _mergeCommitText = null;
+        }
+    }
 
     /// <summary>Checklist dei prerequisiti.</summary>
     internal PrereqStore Prerequisites { get; }
@@ -143,7 +178,15 @@ internal sealed class ChangesStore : ViewStore, IDisposable
     internal string WorkingCopyPath
     {
         get { lock (_stateLock) return _workingCopyPath; }
-        set { lock (_stateLock) _workingCopyPath = value; }
+        set
+        {
+            lock (_stateLock)
+            {
+                if (!string.Equals(_workingCopyPath, value, StringComparison.OrdinalIgnoreCase))
+                    _mergeBanner = _mergeCommitText = null; // il merge riguardava un'altra working copy
+                _workingCopyPath = value;
+            }
+        }
     }
 
     private bool OperationRunning => Volatile.Read(ref _operationRunning) != 0;
@@ -190,7 +233,9 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 _loading,
                 Wizard.GetSnapshot(),
                 RevPicker.GetSnapshot(),
-                Switch.GetSnapshot());
+                Switch.GetSnapshot(),
+                // Il banner sparisce da solo se non resta nessuna modifica (annullata a mano, committata altrove).
+                _mergeBanner is not null && commit.Entries.Count > 0 ? new MergeBannerDto(_mergeBanner, _mergeConflicts) : null);
         }
     }
 
@@ -307,6 +352,19 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                     SetStatus(Loc.T("Nessuna working copy configurata."));
                 else
                     await Switch.OpenAsync(WorkingCopyPath, ct);
+                break;
+            case "mergeOpen":
+                if (string.IsNullOrWhiteSpace(WorkingCopyPath))
+                    SetStatus(Loc.T("Nessuna working copy configurata."));
+                else
+                    await Switch.OpenAsync(WorkingCopyPath, ct, mode: "merge");
+                break;
+            case "mergeUndo":
+                await RunExclusiveAsync(() => UndoMergeCoreAsync(ct));
+                break;
+            case "mergeDismiss":
+                ClearMergeBanner();
+                NotifyChanged();
                 break;
             case "switchRefresh":
                 await Switch.RefreshAsync(ct);
@@ -951,7 +1009,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
     /// Esegue <paramref name="body"/> solo se nessun'altra operazione e' in corso (altrimenti ignora la richiesta:
     /// doppio click). Aspetta un eventuale refresh gia' avviato, per non sovrapporre status e comando svn.
     /// </summary>
-    private async Task RunExclusiveAsync(Func<Task> body)
+    internal async Task RunExclusiveAsync(Func<Task> body)
     {
         if (Interlocked.CompareExchange(ref _operationRunning, 1, 0) != 0)
         {
@@ -1048,6 +1106,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             var revision = await _svnService.CommitAsync(paths, CommitMessage.Text.Trim(), ct, wholeFolders);
 
             CommitMessage.Clear();
+            ClearMergeBanner();
 
             await RefreshAsync(ct, reloadBranch: true, revision is { } rev
                 ? Loc.T("Commit completato: revisione {0} ({1} elementi).", rev, selected.Count)
@@ -1195,6 +1254,15 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             return;
         }
 
+        if (Switch.Mode == "merge")
+        {
+            // Sorgente scelta: il resto (revisioni, anteprima, merge) sta nel Log in modalita' merge.
+            Switch.Close();
+            if (StartMerge is not null)
+                await StartMerge(WorkingCopyPath, target, ct);
+            return;
+        }
+
         if (target.Current)
         {
             Switch.SetError(Loc.T("La working copy è già su {0}.", target.Name));
@@ -1226,6 +1294,47 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
             SetStatus(Loc.T("Errore switch: {0}", ex.Message));
+        }
+    }
+
+    /// <summary>
+    /// "Annulla merge": revert ricorsivo della working copy (era pulita quando il merge e' partito, quindi non porta via altro lavoro).
+    /// Conferma elencando i file. I file aggiunti dal merge (con storia) li rimuove svn stesso; gli altri aggiunti restano su disco non versionati.
+    /// </summary>
+    private async Task UndoMergeCoreAsync(CancellationToken ct)
+    {
+        var wc = WorkingCopyPath;
+        List<ChangeEntry> entries;
+        lock (_stateLock)
+            entries = _entries.Where(e => StatusPresentation.IsRevertable(e.Status)).ToList();
+        if (string.IsNullOrWhiteSpace(wc) || entries.Count == 0)
+        {
+            ClearMergeBanner();
+            SetStatus(Loc.T("Nessun elemento idoneo per SVN Revert."));
+            return;
+        }
+
+        if (!await _dialogs.ConfirmAsync(Loc.T("Annullare il merge? Tutte le modifiche locali della working copy ({0} elementi) tornano allo stato di BASE.\n\n{1}\n\nL'operazione non è annullabile.",
+                entries.Count, ListForConfirmation(entries)), ct))
+            return;
+
+        try
+        {
+            SetStatus(Loc.T("Annullamento del merge in corso..."));
+            await _svnService.RevertAsync([wc], ct, recursive: true);
+            string? prefilled;
+            lock (_stateLock)
+                prefilled = _mergeCommitText;
+            if (prefilled is not null && CommitMessage.Text == prefilled)
+                CommitMessage.Clear();
+            ClearMergeBanner();
+            await RefreshAsync(ct, reloadBranch: false, Loc.T("Merge annullato: {0} elementi ripristinati.", entries.Count));
+            if (MergeUndone is not null)
+                await MergeUndone(ct);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            SetStatus(Loc.T("Errore revert: {0}", ex.Message));
         }
     }
 

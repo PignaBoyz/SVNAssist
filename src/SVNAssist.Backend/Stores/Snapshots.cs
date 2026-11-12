@@ -81,7 +81,11 @@ internal sealed record RevPickerDto(bool Open, string Target, bool Loading, stri
 internal sealed record SwitchItemDto(string Name, string Kind, bool Current);
 
 /// <summary>Selettore di "SVN Switch...": <c>Name</c> degli elementi e' relativo alla base (<c>trunk</c>, <c>branches/x</c>, <c>tags/1.0</c>).</summary>
-internal sealed record SwitchPickerDto(bool Open, bool Loading, string Error, IReadOnlyList<SwitchItemDto> Items);
+/// <param name="Mode"><c>switch</c> (SVN Switch) o <c>merge</c> (SVN Merge: sorgente da cui unire, senza il ramo corrente).</param>
+internal sealed record SwitchPickerDto(bool Open, string Mode, bool Loading, string Error, IReadOnlyList<SwitchItemDto> Items);
+
+/// <summary>Banner dopo un merge non ancora committato (con "Annulla merge").</summary>
+internal sealed record MergeBannerDto(string Text, int Conflicts);
 
 /// <summary>Snapshot della vista <c>changes</c> (changes-state.schema.json).</summary>
 internal sealed record ChangesState(
@@ -95,7 +99,8 @@ internal sealed record ChangesState(
     bool Loading,
     WizardDto Wizard,
     RevPickerDto RevPicker,
-    SwitchPickerDto SwitchPicker);
+    SwitchPickerDto SwitchPicker,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] MergeBannerDto? Merge = null);
 
 /// <param name="K"><c>dir</c> per le cartelle (non si aprono nel diff); assente altrimenti.</param>
 internal sealed record LogPathDto(string A, string P, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? K = null);
@@ -108,6 +113,23 @@ internal sealed record LogFilesDto(string Kind, string Title, IReadOnlyList<LogP
 
 internal sealed record LogEntryDto(long Rev, string Author, string Date, string Msg, IReadOnlyList<LogPathDto> Paths);
 
+internal sealed record MergeCountsDto(int Updated, int Added, int Deleted, int Merged, int Conflicted);
+
+/// <summary>Esito dell'anteprima (<c>preview</c>) o del merge (<c>merge</c>): conteggi, file e conflitti. <c>Revs</c> = "r120-r135" o "r120, r124".</summary>
+internal sealed record MergeResultDto(string Mode, string Revs, MergeCountsDto Counts, IReadOnlyList<LogPathDto> Items, int Skipped);
+
+/// <summary>Il Log in modalita' merge: <c>Selected</c> = revisioni scelte per il cherry-pick; <c>Blocked</c> = perche' non si puo' fare il merge (working copy sporca), vuoto se si puo'.</summary>
+internal sealed record MergeDto(
+    string Source,
+    string Title,
+    bool Loading,
+    bool Busy,
+    string Error,
+    string Blocked,
+    IReadOnlyList<long> Selected,
+    int Eligible,
+    MergeResultDto? Result);
+
 /// <summary>Snapshot della vista <c>log</c> (log-state.schema.json).</summary>
 internal sealed record LogState(
     string Path,
@@ -119,7 +141,8 @@ internal sealed record LogState(
     IReadOnlyList<LogEntryDto> Entries,
     string Diff,
     LogFilterDto Filter,
-    LogFilesDto? Files);
+    LogFilesDto? Files,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] MergeDto? Merge = null);
 
 /// <summary>Snapshot della vista <c>diff</c> (diff-state.schema.json).</summary>
 internal sealed record DiffState(string Title, string Subtitle, string Diff);

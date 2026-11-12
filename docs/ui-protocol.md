@@ -52,6 +52,9 @@ Vale per file e cartelle (la cartella ha il percorso della cartella; le catene a
 | `switchRefresh` | – | "Aggiorna": scarta la cache e rilegge branch e tag dal server |
 | `switchCancel` | – | chiude il selettore |
 | `switchOk` | `name` | `name` = voce dell'elenco (`branches/x`, `tags/1.0`, `trunk`); l'URL lo costruisce il backend dall'elenco (radice del repository + percorso codificato), mai dalla UI: un nome non in elenco = errore nel selettore. Il ramo corrente si rifiuta. Con modifiche locali ai file versionati chiede conferma (dialogo nativo; annullare lascia il selettore aperto). Poi `svn switch --accept postpone --non-interactive <URL>` dalla radice della working copy, refresh dello stato e messaggio "Switch a X completato (revisione N). Se Visual Studio lo chiede, ricarica la solution." I conflitti compaiono in Modifiche come dopo un update |
+| `mergeOpen` | – | **SVN Merge...**: apre lo stesso selettore di Switch in modo `merge` (`switchPicker.mode = "merge"`), con trunk, branch e tag **escluso il ramo corrente**. `switchOk{name}` in questo modo non fa uno switch: chiude il selettore, passa il **Log** in modalita' merge sulla sorgente scelta (vedi "Log: modalita' merge") e lo apre come documento (`IHost.ShowLogWindowAsync`, titolo "Merge da branches/x"). Anche da Extensions > SVNAssist > Merge... e dal menu "Altre azioni" (nascosto con svn < 1.8) |
+| `mergeUndo` | – | **Annulla merge** (pulsante del banner): `svn revert --depth infinity` della radice della working copy, con conferma che elenca i file. Poi il messaggio precompilato viene ritirato (se non e' stato modificato), il banner sparisce e il Log in modalita' merge rilegge le revisioni da unire |
+| `mergeDismiss` | – | nasconde il banner del merge senza annullarlo |
 | `showLog` | – | apre il Log della working copy (`IHost.ShowLogAsync`, come Extensions > Log) |
 | `cleanup` | – | **SVN Cleanup** della working copy (`svn cleanup`). Compare anche come pulsante "Esegui Cleanup" accanto a un errore di working copy bloccata (`status.action`) |
 | `commit` | – | come Git: se **Staged** ha file, commit dei soli quelli (pulsante "Commit Staged (n)"); se è vuoto, commit di **tutte** le modifiche dei file versionati M/A/D/R/mancanti (pulsante "Commit All", come `git commit -a`; i non versionati non entrano). Gli aggiunti non versionati in Staged si aggiungono, i mancanti si eliminano; i conflitti bloccano |
@@ -105,6 +108,22 @@ Filtri e diff nativo (tutti i diff si aprono nell'editor di VS, a due pannelli, 
 
 Filtri: `svn log --xml -v -l N` con `-r {data}:{data}` per le date e `--search`/`--search-and` (svn ≥ 1.8, glob con `*` e `\` `?` `[` protetti) per autore, testo e percorso; poi il backend applica comunque il filtro esatto (sottostringa senza maiuscole) sulle revisioni lette, quindi `--search` è solo una riduzione. `-l` conta le revisioni già filtrate: "Altre 50" funziona anche con i filtri.
 
+### Log: modalita' merge
+`merge` nello snapshot del Log (`log-state.schema.json`) c'e' solo in modalita' merge (assente nel log normale). Il Log mostra le revisioni **ancora da unire** nella working copy: `svn mergeinfo --show-revs eligible SRC .` (testo, una `rNNN` per riga) + `svn log --xml -v -r max:min SRC` per autore, data e messaggio, filtrato sulle eligible. `entries` = quelle revisioni (piu' recente in alto), `sel` e' sempre `null`, la scelta multipla e' `merge.selected`. Al posto della working copy e dei filtri la UI mostra "Merge da branches/x" e **Chiudi merge**; clic su una riga (o Spazio/Invio) sceglie/toglie la revisione; il pannello sotto ha le azioni e l'esito. Richiede svn >= 1.8 (altrimenti `merge.error`).
+
+| Comando | Args | Effetto |
+|---|---|---|
+| `mergeToggle` | `rev` | sceglie/toglie la revisione (solo se e' in elenco; azzera l'esito mostrato) |
+| `mergeClear` | – | toglie la scelta a tutte |
+| `mergePreview` | – | **Anteprima**: `svn merge --dry-run --accept postpone [-c N,M] SRC` (le scelte, o tutto se non c'e' scelta) dalla radice della working copy; `merge.result` con `mode:"preview"`: conteggi U/A/D/G/C e file. Non modifica nulla. La UI avverte che i conflitti ad albero e di proprieta' possono non essere previsti |
+| `mergeAll` | – | **Merge tutto**: `svn merge --accept postpone SRC` (merge automatico, 1.8+) |
+| `mergeSelected` | – | **Merge selezionate** (cherry-pick): `svn merge --accept postpone -c N,M SRC` |
+| `mergeClose` | – | esce dal merge e ricarica il log della working copy (titolo del documento "Log: cartella") |
+
+Regole: il merge parte **solo da una working copy senza modifiche locali** (non versionati esclusi): altrimenti `merge.blocked` spiega "fai prima Commit oppure Revert" e il merge non parte (la condizione si ricontrolla a ogni azione, i pulsanti restano attivi). Cosi' "Annulla merge" (revert ricorsivo) non porta via lavoro non correlato. Se la working copy e' a revisioni miste svn rifiuta (`E195020`) e l'errore compare in chiaro con il suggerimento di fare SVN Update. Il merge non committa e non usa Staged.
+Dopo il merge: refresh di Changes (i conflitti compaiono nella sezione Conflitti e bloccano il commit), messaggio di commit **precompilato solo se vuoto** ("Merge r120-r135 da ^/branches/x" per tutto; "Merge r120, r124 da ^/..." per le scelte, oltre 6 "r120-r135 (selezione di N revisioni)") e **banner** in Changes (`merge {text, conflicts}`) con Annulla merge / Nascondi. Il banner sparisce da solo dopo un commit, un cambio di working copy o se non restano modifiche. Le righe `--- Recording mergeinfo` / `Eliding` di svn non sono file e non si contano.
+Parser (`MergeParser`, `tests/SVNAssist.Tests/MergeTests.cs`): righe d'azione = 4 colonne (file `U A D C G E R`, proprieta' `U C G`, lock, albero `C`) + spazio + percorso; riepilogo `Summary of conflicts` (Text/Property/Tree/Skipped); `Skipped '...'`.
+
 ### Novità rispetto al piano (`webview2-plan.md` §3)
 - **Staged** (stile Git Changes): SVN non ha uno staging, è un insieme tenuto dall'estensione. Sostituisce le caselle di selezione:
   `toggleFile`, `toggleGroup`, `selectAll`, `unselectAll` → `stage` / `unstage` (anche su cartella e su sezione intera).
@@ -134,7 +153,8 @@ loading     bool
 wizard      {open, mode: ai|prereq, step 1-4, fromGenerate, provider, busy, feedback, providers[{id,title,cost}], items[prereq item],
              auth: ""|github|claudecode|key|openai, authOk, authDetail, endpoint, models[{value,label}], model, canNext}
 revPicker?  {open, target, loading, error, canMore, items[{rev, author, date (ISO), msg (prima riga)}]}   // modale "Update to revision"
-switchPicker? {open, loading, error, items[{name, kind: trunk|branch|tag, current}]}   // modale "SVN Switch"; name relativo alla base (trunk, branches/x, tags/1.0)
+switchPicker? {open, mode: switch|merge, loading, error, items[{name, kind: trunk|branch|tag, current}]}   // modale "SVN Switch" / sorgente di "SVN Merge" (senza il ramo corrente); name relativo alla base (trunk, branches/x, tags/1.0)
+merge?      {text, conflicts}   // banner dopo un merge non committato (Annulla merge); assente se non c'e'
 ```
 `aiLevel` colora il messaggio AI (avviso giallo, errore rosso, esito verde); `aiSeq` cresce a ogni messaggio, cosi' anche uno ripetuto si ridisegna.
 Le righe sono **già piatte e ordinate** (albero calcolato dal backend con `ChangesTreeBuilder`): la UI non ricostruisce nulla.
@@ -142,7 +162,8 @@ Le righe sono **già piatte e ordinate** (albero calcolato dal backend con `Chan
 `sections` contiene sempre le tre sezioni; la UI nasconde quelle vuote tranne Staged.
 
 ### `log` (`log-state.schema.json`)
-`{path, msg, err, loading, canMore, sel, entries[{rev, author, date (ISO 8601), msg, paths[{a,p,k?}]}], diff, filter{author,text,path,from,to}, files}`
+`{path, msg, err, loading, canMore, sel, entries[{rev, author, date (ISO 8601), msg, paths[{a,p,k?}]}], diff, filter{author,text,path,from,to}, files, merge?}`
+`merge?` (solo in modalita' merge, vedi sopra): `{source, title, loading, busy, error, blocked, selected[rev], eligible, result: null | {mode: preview|merge, revs, counts{updated,added,deleted,merged,conflicted}, items[{a: A|M|D|R|C, p}], skipped}}`.
 Layout (solo UI, il contratto non cambia): filtri in alto; tabella ARIA `grid` (Rev. | Autore | Data | Messaggio = prima riga, intestazioni sticky, colonne ridimensionabili, `ArrowUp/Down/Home/End` selezionano via `logSelect`, `Enter` conferma, Ctrl/Maiusc+clic = `logCompare`) con "Carica altre 50" (`logMore`) in fondo; dettaglio sotto, o a destra se il contenitore e' largo >= 1100px, con messaggio completo e file (azione + percorso, clic = `logOpenFile`). Nell'host la vista e' un documento dell'area editor.
 (`paths[].k = "dir"` per le cartelle; `files` = `null` oppure `{kind: "folder"|"compare", title, items[{a,p}]}`: elenco di file con diff a due pannelli, al posto del dettaglio revisione. `filter`/`files` sono facoltativi nello schema: una UI li tratta come assenti.)
 

@@ -914,6 +914,32 @@ public class SvnService : ISvnService
         // Come l'update: puo' durare a lungo, niente timeout (l'utente puo' annullare).
         => ParseUpdateOutput(await RunSvnAsync(BuildSwitchArgs(url), workingCopyPath, ct, applyTimeout: false));
 
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<long>> GetEligibleRevisionsAsync(string workingCopyPath, string sourceUrl, CancellationToken ct)
+        => MergeParser.ParseRevisions(await RunSvnAsync(["mergeinfo", "--show-revs", "eligible", Peg(sourceUrl)], workingCopyPath, ct));
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<SvnLogEntry>> GetLogRangeAsync(string url, long min, long max, CancellationToken ct)
+        => ParseLogXml(await RunSvnAsync(["log", "--xml", "-v", "-r", $"{max}:{min}", Peg(url)], workingDirectory: null, ct));
+
+    /// <inheritdoc />
+    public async Task<MergeOutput> MergeAsync(string workingCopyPath, string sourceUrl, IReadOnlyList<long>? revisions, bool dryRun, CancellationToken ct)
+        // Puo' durare a lungo su repository lenti: niente timeout (l'utente puo' annullare).
+        => MergeParser.ParseMerge(await RunSvnAsync(BuildMergeArgs(sourceUrl, revisions, dryRun), workingCopyPath, ct, applyTimeout: false));
+
+    /// <summary><c>--accept postpone</c>: nessun editor, i conflitti restano nel pannello Changes. <c>--non-interactive</c> lo aggiunge RunSvnOnceAsync.</summary>
+    internal static List<string> BuildMergeArgs(string sourceUrl, IReadOnlyList<long>? revisions, bool dryRun)
+    {
+        var args = new List<string> { "merge" };
+        if (dryRun)
+            args.Add("--dry-run");
+        args.AddRange(["--accept", "postpone"]);
+        if (revisions is { Count: > 0 })
+            args.AddRange(["-c", string.Join(",", revisions.Select(r => r.ToString(CultureInfo.InvariantCulture)))]);
+        args.Add(Peg(sourceUrl));
+        return args;
+    }
+
     /// <summary><c>--accept postpone</c>: i conflitti non aprono nulla, restano nel pannello Changes. <c>--non-interactive</c> lo aggiunge RunSvnOnceAsync.</summary>
     internal static List<string> BuildSwitchArgs(string url) => ["switch", "--accept", "postpone", Peg(url)];
 
@@ -1276,6 +1302,9 @@ public class SvnService : ISvnService
         if (stderr.Contains("E155011", StringComparison.Ordinal) || stderr.Contains("E160024", StringComparison.Ordinal)
             || stderr.Contains("out of date", StringComparison.OrdinalIgnoreCase))
             return Loc.T("Alcuni file sono più recenti sul server: fai prima Update, poi riprova il commit.");
+
+        if (stderr.Contains("E195020", StringComparison.Ordinal) || stderr.Contains("mixed-revision", StringComparison.OrdinalIgnoreCase))
+            return Loc.T("La working copy è a revisioni miste: esegui SVN Update e riprova.");
 
         return null;
     }

@@ -69,4 +69,7 @@ internal sealed class ReloadableSvnService : ISvnService
     public Task<Version?> GetSvnVersionAsync(CancellationToken ct) => Current.GetSvnVersionAsync(ct);
     public Task<IReadOnlyList<string>> ListFoldersAsync(string url, CancellationToken ct) => Current.ListFoldersAsync(url, ct);
     public Task<UpdateResult> SwitchAsync(string workingCopyPath, string url, CancellationToken ct) => Current.SwitchAsync(workingCopyPath, url, ct);
+    public Task<IReadOnlyList<long>> GetEligibleRevisionsAsync(string workingCopyPath, string sourceUrl, CancellationToken ct) => Current.GetEligibleRevisionsAsync(workingCopyPath, sourceUrl, ct);
+    public Task<IReadOnlyList<SvnLogEntry>> GetLogRangeAsync(string url, long min, long max, CancellationToken ct) => Current.GetLogRangeAsync(url, min, max, ct);
+    public Task<MergeOutput> MergeAsync(string workingCopyPath, string sourceUrl, IReadOnlyList<long>? revisions, bool dryRun, CancellationToken ct) => Current.MergeAsync(workingCopyPath, sourceUrl, revisions, dryRun, ct);
 }

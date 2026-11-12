@@ -54,6 +54,13 @@
     [/^Update alla revisione (\w+) in corso\.\.\.$/, 'Updating to revision $1...'], [/^Switch a (.+) in corso\.\.\.$/, 'Switching to $1...'],
     [/^Switch a (.+) completato \(revisione (\d+)\)\. Se Visual Studio lo chiede, ricarica la solution\.$/, 'Switched to $1 (revision $2). If Visual Studio asks, reload the solution.'], [/^La working copy è già su (.+)\.$/, 'The working copy is already on $1.'],
     [/^Elemento non valido: .*$/, 'Invalid item: refresh the list and try again.'], [/^"(.*)" non è una revisione valida: .*$/, '"$1" is not a valid revision: type a positive integer (e.g. 1234) or HEAD.'],
+    [/^Merge da (.+)$/, 'Merge from $1'], [/^Lettura delle revisioni da unire\.\.\.$/, 'Reading the revisions to merge...'], [/^(\d+) revisioni da unire\.$/, '$1 revisions to merge.'],
+    [/^Nessuna revisione da unire: (.+) è già allineato\.$/, 'No revisions to merge: $1 is already up to date.'], [/^Anteprima completata\.$/, 'Preview completed.'], [/^Merge completato\.$/, 'Merge completed.'],
+    [/^Seleziona almeno una revisione da unire\.$/, 'Select at least one revision to merge.'], [/^Merge completato: rivedi le modifiche e committa\.$/, 'Merge completed: review the changes and commit.'],
+    [/^Merge completato: (\d+) file in conflitto da risolvere\.$/, 'Merge completed: $1 conflicted files to resolve.'], [/^Merge annullato: (\d+) elementi ripristinati\.$/, 'Merge undone: $1 items restored.'],
+    [/^Annullamento del merge in corso\.\.\.$/, 'Undoing the merge...'], [/^Merge (.+) da (\^\/.+): rivedi le modifiche e committa, oppure annulla il merge\.$/, 'Merge $1 from $2: review the changes and commit, or undo the merge.'],
+    [/^Merge (r[\d, r-]+?)( \(selezione di (\d+) revisioni\))? da (\^\/.+)$/, 'Merge $1$2 from $4'],
+    [/^La working copy ha (\d+) elementi con modifiche locali\. Per unire .*$/, 'The working copy has $1 items with local changes. Merging needs a clean working copy (so "Undo merge" does not touch other work): Commit or Revert first, then try again.'],
     [/^(\d+) file cambiati tra r(\d+) e r(\d+)\.$/, '$1 files changed between r$2 and r$3.'], [/^(\d+) file modificati\.$/, '$1 files modified.'],
   ];
   const tr = s => {
@@ -112,8 +119,9 @@
   }
   function swSnap() {   // selettore di SVN Switch (stesse regole del backend)
     const s = S.vm.sw;
-    if (!s) return { open: false, loading: false, error: '', items: [] };
-    return { open: true, loading: !!s.loading, error: tr(s.error || ''), items: s.loading ? [] : SW_ITEMS.map(([name, kind]) => ({ name, kind, current: name === S.branch })) };
+    if (!s) return { open: false, mode: 'switch', loading: false, error: '', items: [] };
+    const merge = s.mode === 'merge';   // in modo merge il ramo corrente non e' tra le voci
+    return { open: true, mode: s.mode || 'switch', loading: !!s.loading, error: tr(s.error || ''), items: s.loading ? [] : SW_ITEMS.filter(([name]) => !merge || name !== S.branch).map(([name, kind]) => ({ name, kind, current: name === S.branch })) };
   }
   function snapshotChanges() {
     const v = S.vm;
@@ -125,6 +133,7 @@
         trace: (v.trace || []).map(t => ({ name: t.name, state: t.state, detail: t.detail || '' })), download: v.dl ? { pct: v.dl.pct, label: v.dl.label } : null,
         count: commitSet().files.length, all: commitSet().all },
       view: v.view, theme: { mode: theme.mode, kind: kindOf() }, sections, status: { msg: tr(msg), err: !!v.err || /^Errore/.test(msg), ...(/E155004/.test(msg) ? { action: { label: tr('Esegui Cleanup'), cmd: 'cleanup' } } : {}) }, prereq: prereq(), loading: !!v.loading, wizard: wizardSnap(), revPicker: rpSnap(), switchPicker: swSnap(),
+      ...(v.mergeBanner && commitSet().files.length ? { merge: { text: tr(v.mergeBanner.text), conflicts: v.mergeBanner.conflicts } } : {}),
     };
   }
   function logMatch(e) {   // stessi filtri del backend: sottostringhe senza maiuscole, date incluse
@@ -132,8 +141,18 @@
     const has = (h, n) => !n || String(h).toLowerCase().includes(String(n).toLowerCase()), day = e.date.toISOString().slice(0, 10);
     return has(e.author, f.author) && has(e.msg, f.text) && (!f.path || e.paths.some(p => has(p.p, f.path.replace(/\\/g, '/')))) && (!f.from || day >= f.from) && (!f.to || day <= f.to);
   }
+  function mergeSnap(m) {   // il Log in modalita merge (come MergeStore)
+    const el = mgEligible(m.name);
+    return { source: m.name, title: tr('Merge da ' + m.name), loading: !!m.loading, busy: !!m.busy, error: tr(m.error || ''), blocked: tr(m.blocked || ''), selected: m.sel.slice().sort((a, b) => a - b), eligible: el.length, result: m.result || null };
+  }
   function snapshotLog() {
     const l = S.lvm;
+    if (l.merge) {
+      const m = l.merge, d = r => { const x = new Date(); x.setDate(x.getDate() - r.days); x.setHours(10, 30, 0, 0); return x.toISOString(); };
+      return { path: l.path || '', msg: tr(m.error || m.msg || ''), err: !!m.error, loading: !!(m.loading || m.busy), canMore: false, sel: null,
+        entries: mgEligible(m.name).slice().reverse().map(r => ({ rev: r.rev, author: r.author, date: d(r), msg: r.msg, paths: r.files.map(([k, p]) => ({ a: k === 'U' || k === 'C' ? 'M' : k, p: '/' + m.name + '/' + fwd(p) })) })), diff: '',
+        filter: l.filter || { author: '', text: '', path: '', from: '', to: '' }, files: null, merge: mergeSnap(m) };
+    }
     return { path: l.path || '', msg: tr(l.msg || ''), err: /^Errore/.test(l.msg || ''), loading: /^Caricamento/.test(l.msg || ''), canMore: !!l.canMore, sel: l.sel == null ? null : l.sel,
       entries: l.entries.filter(logMatch).map(e => ({ rev: e.rev, author: e.author, date: e.date.toISOString(), msg: e.msg, paths: e.paths.map(p => ({ a: p.a, p: p.p })) })), diff: tr(l.diff || ''),
       filter: l.filter || { author: '', text: '', path: '', from: '', to: '' }, files: l.files || null };
@@ -200,7 +219,16 @@
     revPickerCancel: () => { S.vm.rp = null; render(); },
     revPickerOk: a => rpOk(a),
     switchOpen: () => vmSwitchOpen(false),
-    switchRefresh: () => vmSwitchOpen(true),
+    switchRefresh: () => vmSwitchOpen(true, S.vm.sw && S.vm.sw.mode),
+    mergeOpen: () => vmSwitchOpen(false, 'merge'),
+    mergeUndo: () => mgUndo(),
+    mergeDismiss: () => { S.vm.mergeBanner = null; render(); },
+    mergeToggle: a => { const m = S.lvm.merge; if (m && !m.busy && mgEligible(m.name).some(r => r.rev === +a.rev)) { m.sel = m.sel.includes(+a.rev) ? m.sel.filter(x => x !== +a.rev) : m.sel.concat(+a.rev); m.result = null; render(); } },
+    mergeClear: () => { const m = S.lvm.merge; if (m) { m.sel = []; m.result = null; render(); } },
+    mergePreview: () => mgPreview(),
+    mergeAll: () => mgRun(true),
+    mergeSelected: () => mgRun(false),
+    mergeClose: () => { S.lvm.merge = null; return lvmLoad(50); },
     switchCancel: () => { S.vm.sw = null; render(); },
     switchOk: a => swOk(a),
     showLog: () => {
@@ -229,7 +257,7 @@
     prereqRecheck: () => prqRecheck(),
     prereqRun: a => prqRun(a.id + '|' + (a.primary ? 1 : 2)),
     ...Object.fromEntries(['wizardOpen', 'wizardOpenPrereq', 'wizardCancel', 'wizardPick', 'wizardBack', 'wizardNext', 'wizardRecheck', 'wizardRun', 'wizardLogin', 'wizardSetAuth', 'wizardFinish', 'openOptions'].map(n => [n, a => WIZ[n](a)])),   // WIZ e' definito in demo.js (caricato dopo)
-    logLoad: a => { S.lvm.path = String(a.path || ''); return lvmLoad(50); },
+    logLoad: a => { S.lvm.merge = null; S.lvm.path = String(a.path || ''); return lvmLoad(50); },
     logMore: () => lvmMore(),
     logSelect: a => { S.lvm.files = null; return lvmSelect(+a.rev); },
     logFilter: a => {
