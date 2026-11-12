@@ -39,7 +39,7 @@
       h += `<div class="tr ${isF ? 'fol' : 'fil'}" role="treeitem" aria-level="${lvl}" ${isF ? `aria-expanded="${!!r.expanded}"` : ''} aria-selected="${cursor === r.key}" aria-checked="${s.id === 'staged'}" data-key="${U.esc(r.key)}" data-kind="${r.kind}" data-sec="${s.id}" tabindex="${cursor === r.key ? 0 : -1}" title="${U.esc(r.tooltip || r.name)}">` +
         guides(r.depth + 1) + `<span class="chev">${isF ? U.icon(r.expanded ? 'chev-d' : 'chev-r') : ''}</span>` +
         U.icon(isF || r.dir ? (r.expanded ? 'folder-open' : 'folder') : 'file', 'fi ' + (isF || r.dir ? 'fld' : (st ? U.stClass(st) : ''))) +
-        `<span class="nm">${U.esc(r.name)}</span>${r.detail ? `<span class="dt">${U.esc(r.detail)}</span>` : ''}${isF ? `<span class="cnt">${r.count}</span>` : ''}<span class="fill"></span>` +
+        `<span class="nm">${U.esc(r.name)}</span>${r.locked && st !== 'K' ? U.icon('lock', 'lk') : ''}${r.detail ? `<span class="dt">${U.esc(r.detail)}</span>` : ''}${isF ? `<span class="cnt">${r.count}</span>` : ''}<span class="fill"></span>` +
         `<span class="acts">${rowActs(s.id, r)}</span>${st ? `<span class="st ${U.stClass(st)}" title="${U.esc(r.statusText || U.STATUS[st] || st)}" aria-label="${U.esc(r.statusText || U.STATUS[st] || st)}">${U.esc(st)}</span>` : ''}</div>`;
     }
     return h;

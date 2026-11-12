@@ -20,6 +20,10 @@ internal sealed class HostDialogs : IDialogService
         => await _host.PromptAsync(message, OkCancel) == 0;
 
     /// <inheritdoc />
+    public Task<string?> AskTextAsync(string message, string label, string defaultValue, CancellationToken ct)
+        => _host.PromptTextAsync(message, label, defaultValue);
+
+    /// <inheritdoc />
     public async Task<SvnConflictChoice?> ChooseConflictResolutionAsync(string fileName, CancellationToken ct)
     {
         // Una scelta per pulsante, con il significato dell'opzione di svn resolve --accept.
@@ -39,6 +43,26 @@ internal sealed class HostDialogs : IDialogService
             3 => SvnConflictChoice.Base,
             _ => null,
         };
+    }
+}
+
+/// <summary>
+/// <see cref="ISvnCredentialPrompt"/> basato sull'host: dialogo utente/password nativo. Le credenziali passano solo da
+/// qui al processo svn: nessun log, nessuno stato UI.
+/// </summary>
+internal sealed class HostCredentialPrompt : ISvnCredentialPrompt
+{
+    private readonly IHost _host;
+
+    public HostCredentialPrompt(IHost host) => _host = host;
+
+    public async Task<SvnCredentials?> RequestAsync(string detail, CancellationToken ct)
+    {
+        BackendLog.Info("Autenticazione SVN richiesta all'utente.");
+        var r = await _host.PromptCredentialsAsync(detail, Environment.UserName);
+        return r is { Length: >= 3 } && !string.IsNullOrEmpty(r[0])
+            ? new SvnCredentials(r[0], r[1] ?? string.Empty, r[2] == "1")
+            : null;
     }
 }
 

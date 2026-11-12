@@ -764,10 +764,11 @@ const vmAiUi = () => ({
 
 // ---------- view model: SVN Changes (specchio di SvnStatusToolWindowData) ----------
 const DEFAULT_SEL = ['M', 'A', 'D', 'R', '!'];   // i nuovi elementi: modificati/aggiunti/eliminati/sostituiti/mancanti spuntati; conflitti e non versionati no
+const LOCKS = new Set();   // file bloccati (svn lock) nella demo
 function mkItem(e, old) {
   const st = e.st;
   return { path: e.path, st, action: STNAME[st] || 'Sconosciuto', sel: old && old.has(e.path) ? old.get(e.path) : DEFAULT_SEL.includes(st), dir: e.dir, prop: e.prop,
-    canAdd: st === '?', canIgn: st === '?', canDel: st !== '?', canRev: ['M', 'A', 'D', 'C', '!', 'R'].includes(st), canRes: st === 'C', canDiff: st !== '?' };
+    canAdd: st === '?', canIgn: st === '?', canDel: st !== '?', canRev: ['M', 'A', 'D', 'C', '!', 'R'].includes(st), canRes: st === 'C', canDiff: st !== '?', locked: LOCKS.has(e.path) };
 }
 function setStatus(m) { S.vm.statusAuto = false; S.vm.statusMsg = m; S.vm.err = false; }
 function vmSummary() {
@@ -848,6 +849,23 @@ async function vmUpdate() {
     toast('svn update (output demo): ' + out.join(' | '), 5500);
     await vmRefresh(updMsg(), true);
   } catch (e) { setStatus('Errore update: ' + e.message); render(); }
+}
+
+async function vmUpdateRev() {
+  if (!S.vm.wcPath.trim()) { setStatus('Nessuna working copy configurata.'); return render(); }
+  if (!await confirmBox('Aggiorna alla revisione HEAD? (nel prodotto un dialogo chiede il numero di revisione: intero positivo oppure HEAD)')) return;
+  try {
+    setStatus('Update alla revisione HEAD in corso...'); render();
+    await svn('update -r HEAD', 900);
+    await vmRefresh(updMsg(), true);
+  } catch (e) { setStatus('Errore update: ' + e.message); render(); }
+}
+async function vmCleanup() {
+  try {
+    setStatus('Cleanup in corso...'); render();
+    await svn('cleanup', 700);
+    await vmRefresh('Cleanup completato.');
+  } catch (e) { setStatus('Errore cleanup: ' + e.message); render(); }
 }
 
 // ---------- view model: Log / History (specchio di SvnLogToolWindowData) ----------
@@ -1326,7 +1344,7 @@ const confirmBox = text => modal({ title: 'SVNAssist', icon: '&#10067;', cancel:
 const listForConfirm = es => es.slice(0, 8).map(e => `• ${e.path} (${STNAME[e.st]})`).join('\n') + (es.length > 8 ? `\n… e altri ${es.length - 8}` : '');
 const IS_REV = ['M', 'A', 'D', 'C', '!', 'R'];
 async function rowOp(op0, key) {
-  const op = { add: 'add', deleteFile: 'del', revert: 'rev', resolve: 'res', ignore: 'ign' }[op0];
+  const op = { add: 'add', deleteFile: 'del', revert: 'rev', resolve: 'res', ignore: 'ign', lock: 'lock', unlock: 'unlock' }[op0];
   const vm = S.vm, row = getRow(key); if (!row || !op) return;
   const done = async msg => { await vmRefresh(msg); };
   try {
@@ -1348,6 +1366,16 @@ async function rowOp(op0, key) {
       else if (f.st === '!') { await svn(`delete "${fwd(f.path)}"`, 400); svnDelete(f.path); }
       else { await svn(force ? `delete --force "${fwd(f.path)}"` : `delete "${fwd(f.path)}"`, 500); svnDelete(f.path); }
       await done(`Eliminato: ${f.path}.`);
+    } else if (op === 'lock') {
+      const f = row.file; if (!f || f.dir || f.locked || f.st !== 'M') { setStatus('Seleziona un file modificato non ancora bloccato.'); return render(); }
+      setStatus('Lock in corso...'); render();
+      await svn(`lock "${fwd(f.path)}"`, 400); LOCKS.add(f.path);
+      await done(`Bloccato (lock): ${f.path}`);
+    } else if (op === 'unlock') {
+      const f = row.file; if (!f || !f.locked) { setStatus('Seleziona un file bloccato da te.'); return render(); }
+      setStatus('Unlock in corso...'); render();
+      await svn(`unlock "${fwd(f.path)}"`, 400); LOCKS.delete(f.path);
+      await done(`Sbloccato (unlock) completato: ${f.path}`);
     } else if (op === 'rev') {
       const t = row.entries.filter(f => IS_REV.includes(f.st));
       if (!t.length) { setStatus('Nessun elemento idoneo per SVN Revert.'); return render(); }

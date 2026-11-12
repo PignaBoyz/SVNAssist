@@ -13,12 +13,12 @@
   const SECS = [['staged', 'Staged'], ['changes', 'Modifiche'], ['unversioned', 'Non versionati']];
   const key = (sec, p) => sec + ':' + fwd(p);
   function can(sec, it) {
-    return { diff: !!it.canDiff, stage: sec !== 'staged' && it.st !== 'C', unstage: sec === 'staged', add: !!it.canAdd, ignore: !!it.canIgn, revert: !!it.canRev, resolve: !!it.canRes, deleteFile: !it.dir };
+    return { diff: !!it.canDiff, stage: sec !== 'staged' && it.st !== 'C', unstage: sec === 'staged', add: !!it.canAdd, ignore: !!it.canIgn, revert: !!it.canRev, resolve: !!it.canRes, deleteFile: !it.dir, lock: !it.dir && !it.locked && it.st === 'M', unlock: !!it.locked };
   }
   function fileRow(sec, it, depth, list) {
     const par = parentDir(it.path);
     return { key: key(sec, it.path), kind: 'file', depth, name: it.path === '.' ? '. (cartella radice)' : base(it.path), detail: list && par !== '.' ? fwd(par) : '', dir: !!it.dir,
-      status: it.st, statusText: STNAME[it.st] + (sec === 'staged' && it.st === '?' ? ' (verrà aggiunto con il commit)' : ''), can: can(sec, it), tooltip: fwd(it.path) + ' — ' + STNAME[it.st] };
+      status: it.st, statusText: STNAME[it.st] + (sec === 'staged' && it.st === '?' ? ' (verrà aggiunto con il commit)' : ''), can: can(sec, it), tooltip: fwd(it.path) + ' — ' + STNAME[it.st], ...(it.locked ? { locked: true } : {}) };
   }
   function rowsOf(sec, items) {
     const rows = [], v = S.vm;
@@ -56,7 +56,7 @@
       workingCopy: { path: v.wcPath || '', showInput: !!v.showInput, branch: v.branch || '', rev: S.wcRev || 0 },
       commit: { text: v.commitMsg || '', aiStatus: v.aiMsg || '', aiLevel: aiLevel(v), aiSeq: v.aiSeq || 0, busy: !!v.aiBusy, lang: String(v.lang || S.settings.defaultlanguage || 'auto').toLowerCase(),
         trace: (v.trace || []).map(t => ({ name: t.name, state: t.state, detail: t.detail || '' })), download: v.dl ? { pct: v.dl.pct, label: v.dl.label } : null },
-      view: v.view, theme: { mode: theme.mode, kind: kindOf() }, sections, status: { msg, err: !!v.err || /^Errore/.test(msg) }, prereq: prereq(), loading: !!v.loading, wizard: wizardSnap(),
+      view: v.view, theme: { mode: theme.mode, kind: kindOf() }, sections, status: { msg, err: !!v.err || /^Errore/.test(msg), ...(/E155004/.test(msg) ? { action: { label: 'Esegui Cleanup', cmd: 'cleanup' } } : {}) }, prereq: prereq(), loading: !!v.loading, wizard: wizardSnap(),
     };
   }
   function logMatch(e) {   // stessi filtri del backend: sottostringhe senza maiuscole, date incluse
@@ -126,6 +126,8 @@
   const C = {
     refresh: () => { S.vm.statusAuto = true; return vmRefresh(undefined, true); },
     update: () => vmUpdate(),
+    updateToRevision: () => vmUpdateRev(),
+    cleanup: () => vmCleanup(),
     commit: () => vmCommit(),
     setCommitText: a => { S.vm.commitMsg = String(a.text || ''); },   // niente render: e' la UI a tenere il testo
     genAi: () => vmAi('gen'),

@@ -27,7 +27,7 @@ namespace SVNAssist.Rpc
 
         /// <summary>
         /// Comando del menu contestuale di Solution Explorer sui percorsi selezionati.
-        /// command: update | add | revert | diff | ignore | log | commit. L'host apre prima la finestra
+        /// command: update | add | revert | diff | ignore | log | commit | cleanup | updaterev | lock | unlock. L'host apre prima la finestra
         /// (Changes per commit, Log per log); l'esito si mostra con IHost.PromptAsync / toast.
         /// </summary>
         Task RunPathCommandAsync(string command, string[] paths);
@@ -65,6 +65,17 @@ namespace SVNAssist.Rpc
 
         /// <summary>Apre Tools > Options > SVNAssist ("Faccio io").</summary>
         Task OpenSettingsAsync();
+
+        /// <summary>
+        /// Dialogo con un campo di testo (revisione, messaggio di lock). Ritorna il testo digitato, null se annullato.
+        /// </summary>
+        Task<string?> PromptTextAsync(string message, string label, string defaultValue);
+
+        /// <summary>
+        /// Dialogo utente/password (password mascherata, "Ricorda" di default attivo), mostrato SOLO dopo un errore di
+        /// autenticazione di svn. Ritorna [utente, password, "1"|"0" (ricorda)], null se annullato. Non va mai loggato.
+        /// </summary>
+        Task<string[]?> PromptCredentialsAsync(string detail, string defaultUser);
 
         /// <summary>Apre un terminale con un comando (es. "gh auth login --web").</summary>
         Task RunInTerminalAsync(string command, string workingDir);

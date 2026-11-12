@@ -18,10 +18,10 @@ internal sealed class ReloadableSvnService : ISvnService
     private ISvnService? _inner;
     private bool _located;
 
-    public ReloadableSvnService(Func<string?>? locate = null, Func<string, ISvnService>? create = null)
+    public ReloadableSvnService(Func<string?>? locate = null, Func<string, ISvnService>? create = null, ISvnCredentialPrompt? credentials = null)
     {
         _locate = locate ?? SvnLocator.FindSvn;
-        _create = create ?? (path => new SvnService(path, new ProcessRunner()));
+        _create = create ?? (path => new SvnService(path, new ProcessRunner(), credentials: credentials));
     }
 
     private ISvnService Current
@@ -50,6 +50,10 @@ internal sealed class ReloadableSvnService : ISvnService
     public Task ResolveAsync(string path, SvnConflictChoice accept, CancellationToken ct) => Current.ResolveAsync(path, accept, ct);
     public Task AddToIgnoreListAsync(string path, CancellationToken ct) => Current.AddToIgnoreListAsync(path, ct);
     public Task<UpdateResult> UpdateAsync(string workingCopyPath, CancellationToken ct) => Current.UpdateAsync(workingCopyPath, ct);
+    public Task<UpdateResult> UpdateToRevisionAsync(string workingCopyPath, string revision, CancellationToken ct) => Current.UpdateToRevisionAsync(workingCopyPath, revision, ct);
+    public Task CleanupAsync(string path, CancellationToken ct) => Current.CleanupAsync(path, ct);
+    public Task LockAsync(IEnumerable<string> paths, string? message, bool force, CancellationToken ct) => Current.LockAsync(paths, message, force, ct);
+    public Task UnlockAsync(IEnumerable<string> paths, CancellationToken ct) => Current.UnlockAsync(paths, ct);
     public Task<IReadOnlyList<SvnLogEntry>> GetLogAsync(string targetPath, int maxEntries, CancellationToken ct) => Current.GetLogAsync(targetPath, maxEntries, ct);
     public Task<IReadOnlyList<SvnLogEntry>> GetLogAsync(string targetPath, int maxEntries, SvnLogFilter filter, CancellationToken ct) => Current.GetLogAsync(targetPath, maxEntries, filter, ct);
     public Task<string> GetRepositoryRootAsync(string target, CancellationToken ct) => Current.GetRepositoryRootAsync(target, ct);

@@ -55,6 +55,10 @@ internal sealed class PathCommands
             switch (command)
             {
                 case "update": await UpdateAsync(targets, ct); break;
+                case "updaterev": await UpdateToRevisionAsync(targets, ct); break;
+                case "cleanup": await CleanupAsync(targets, ct); break;
+                case "lock": await LockAsync(targets, ct); break;
+                case "unlock": await UnlockAsync(targets, ct); break;
                 case "add": await AddAsync(targets, ct); break;
                 case "revert": await RevertAsync(targets, ct); break;
                 case "diff": await DiffAsync(targets[0], ct); break;
@@ -78,13 +82,83 @@ internal sealed class PathCommands
 
     private async Task<bool> ConfirmAsync(string message) => await _host.PromptAsync(message, ["OK", "Annulla"]) == 0;
 
-    private async Task UpdateAsync(List<SvnTarget> targets, CancellationToken ct)
+    private Task UpdateAsync(List<SvnTarget> targets, CancellationToken ct) => UpdateAsync(targets, null, ct);
+
+    private async Task UpdateToRevisionAsync(List<SvnTarget> targets, CancellationToken ct)
+    {
+        var message = "Aggiorna alla revisione indicata (numero intero positivo oppure HEAD).";
+        while (true)
+        {
+            var typed = await _host.PromptTextAsync(message, "Revisione", "HEAD");
+            if (typed is null)
+                return;
+            if (SvnRevision.TryNormalize(typed, out var revision))
+            {
+                await UpdateAsync(targets, revision, ct);
+                return;
+            }
+
+            message = $"\"{typed.Trim()}\" non è una revisione valida: scrivi un numero intero positivo (es. 1234) oppure HEAD.";
+        }
+    }
+
+    private async Task CleanupAsync(List<SvnTarget> targets, CancellationToken ct)
+    {
+        foreach (var t in targets)
+            await _svn.CleanupAsync(t.Path, ct);
+        await InfoAsync("Cleanup completato.");
+        await _refresh();
+    }
+
+    private async Task LockAsync(List<SvnTarget> targets, CancellationToken ct)
+    {
+        if (targets.Any(t => t.IsDirectory))
+        {
+            await InfoAsync("Il lock si applica ai singoli file: seleziona uno o più file.");
+            return;
+        }
+
+        var paths = targets.Select(t => t.Path).ToList();
+        var message = await _host.PromptTextAsync("Blocca (svn lock):\n" + SvnTarget.FormatList(paths) + "\n\nMessaggio facoltativo:", "Messaggio", string.Empty);
+        if (message is null)
+            return;
+
+        try
+        {
+            await _svn.LockAsync(paths, message, force: false, ct);
+        }
+        catch (InvalidOperationException ex) when (SvnErrors.IsLockedByOther(ex.Message))
+        {
+            if (!await ConfirmAsync("Almeno un file è già bloccato da un altro utente.\n\n" + ex.Message
+                    + "\n\nRubare il lock lo toglie a lui: potrebbe perdere il diritto di committare il file. Procedere?"))
+                return;
+            await _svn.LockAsync(paths, message, force: true, ct);
+        }
+
+        await InfoAsync($"Bloccati (lock) {paths.Count} file.");
+        await _refresh();
+    }
+
+    private async Task UnlockAsync(List<SvnTarget> targets, CancellationToken ct)
+    {
+        if (targets.Any(t => t.IsDirectory))
+        {
+            await InfoAsync("L'unlock si applica ai singoli file: seleziona uno o più file.");
+            return;
+        }
+
+        await _svn.UnlockAsync(targets.Select(t => t.Path).ToList(), ct);
+        await InfoAsync("Sbloccati (unlock).");
+        await _refresh();
+    }
+
+    private async Task UpdateAsync(List<SvnTarget> targets, string? revision, CancellationToken ct)
     {
         var last = string.Empty;
         var conflicts = new List<string>();
         foreach (var t in targets)
         {
-            var r = await _svn.UpdateAsync(t.Path, ct);
+            var r = revision is null ? await _svn.UpdateAsync(t.Path, ct) : await _svn.UpdateToRevisionAsync(t.Path, revision, ct);
             last = r.Revision is { } rev ? $"Aggiornato alla revisione {rev}." : "Update completato.";
             conflicts.AddRange(r.ConflictedPaths);
         }

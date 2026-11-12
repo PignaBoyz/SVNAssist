@@ -31,7 +31,7 @@ internal sealed class BackendServices
         {
             Settings = settings,
             // Se svn.exe manca all'avvio, ReloadableSvnService lo ritrova appena viene installato.
-            Svn = new ReloadableSvnService(),
+            Svn = new ReloadableSvnService(credentials: new HostCredentialPrompt(host)),
             Ai = new AiServiceFactory(settings, tokenResolver, processRunner),
             AiSetupPrompt = new HostAiSetupPrompt(host, settings),
             Dialogs = new HostDialogs(host),

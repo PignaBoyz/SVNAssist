@@ -10,7 +10,11 @@ namespace SVNAssist.Models;
 /// <c>true</c> se il conflitto è "ad albero" (rinomina/cancellazione in conflitto): non ha
 /// marcatori nel file e non si risolve con <c>--accept working</c> come un conflitto di testo.
 /// </param>
-public sealed record SvnFileStatus(string Path, SvnStatusKind Status, bool IsTreeConflict = false);
+/// <param name="IsLocked">
+/// <c>true</c> se la working copy tiene un lock (<c>svn lock</c>) su questo file (elemento <c>&lt;lock&gt;</c> in
+/// <c>wc-status</c>, "K" di svn): è un dato locale, non serve la rete. I lock di altri richiedono <c>status -u</c> e non sono letti.
+/// </param>
+public sealed record SvnFileStatus(string Path, SvnStatusKind Status, bool IsTreeConflict = false, bool IsLocked = false);
 
 /// <summary>
 /// Enumerazione degli stati possibili di un file in SVN.

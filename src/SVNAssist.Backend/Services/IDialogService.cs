@@ -24,4 +24,7 @@ internal interface IDialogService
     /// <param name="ct">Token per annullare l'operazione.</param>
     /// <returns>La scelta, oppure <c>null</c> se l'utente annulla.</returns>
     Task<SvnConflictChoice?> ChooseConflictResolutionAsync(string fileName, CancellationToken ct);
+
+    /// <summary>Chiede una riga di testo (es. revisione, messaggio di lock). <c>null</c> se l'utente annulla.</summary>
+    Task<string?> AskTextAsync(string message, string label, string defaultValue, CancellationToken ct);
 }

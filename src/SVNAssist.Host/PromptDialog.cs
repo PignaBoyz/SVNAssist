@@ -44,6 +44,66 @@ namespace SVNAssist.Host
             KeyDown += (s, e) => { if (e.Key == Key.Escape) { _result = -1; DialogResult = false; } };
         }
 
+        /// <summary>Dialogo con un campo di testo; ritorna il testo (OK/Invio) o null (Annulla/Esc). Thread UI.</summary>
+        public static string ShowText(string message, string label, string defaultValue)
+        {
+            var box = new TextBox { Text = defaultValue, MinWidth = 280 };
+            var fields = Field(label, box);
+            return ShowFields(message, fields, new Control[] { box }) ? box.Text : null;
+        }
+
+        /// <summary>Dialogo utente/password (password mascherata, "Ricorda" attivo): [utente, password, "1"/"0"] o null. Thread UI.</summary>
+        public static string[] ShowCredentials(string detail, string defaultUser)
+        {
+            var user = new TextBox { Text = defaultUser, MinWidth = 280 };
+            var pwd = new PasswordBox { MinWidth = 280 };
+            var remember = new CheckBox { Content = "Ricorda", IsChecked = true, Margin = new Thickness(0, 8, 0, 0) };
+            remember.SetResourceReference(Control.ForegroundProperty, EnvironmentColors.ToolWindowTextBrushKey);
+            var panel = new StackPanel();
+            panel.Children.Add(Field("Utente", user));
+            panel.Children.Add(Field("Password", pwd));
+            panel.Children.Add(remember);
+            var msg = "Il server SVN richiede l'accesso." + (string.IsNullOrWhiteSpace(detail) ? "" : "\n" + detail);
+            return ShowFields(msg, panel, new Control[] { user, pwd })
+                ? new[] { user.Text, pwd.Password, remember.IsChecked == true ? "1" : "0" }
+                : null;
+        }
+
+        private static FrameworkElement Field(string label, Control input)
+        {
+            var row = new StackPanel { Margin = new Thickness(0, 4, 0, 0) };
+            var l = new TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 2) };
+            l.SetResourceReference(TextBlock.ForegroundProperty, EnvironmentColors.ToolWindowTextBrushKey);
+            row.Children.Add(l);
+            row.Children.Add(input);
+            return row;
+        }
+
+        private static bool ShowFields(string message, UIElement fields, Control[] focusOrder)
+        {
+            var d = new PromptDialog(message, new[] { "OK", "Annulla" });
+            d._inputs = fields;
+            d.AddInputs();
+            d.Loaded += (s, e) => { focusOrder[0].Focus(); (focusOrder[0] as TextBox)?.SelectAll(); };
+            d.ShowModal();
+            return d._result == 0;
+        }
+
+        private UIElement _inputs;
+        private void AddInputs()
+        {
+            // il contenuto e' un DockPanel (bottoni in basso, testo che riempie): si inserisce il campo tra testo e bottoni
+            var panel = (DockPanel)Content;
+            var scroll = (ScrollViewer)panel.Children[1];
+            var stack = new StackPanel();
+            panel.Children.Remove(scroll);
+            stack.Children.Add(scroll);
+            stack.Children.Add(_inputs);
+            panel.Children.Add(stack);
+            // Invio = OK
+            KeyDown += (s, e) => { if (e.Key == Key.Enter && !(e.OriginalSource is Button)) { _result = 0; DialogResult = true; } };
+        }
+
         /// <summary>Indice del pulsante scelto, -1 se chiuso con Esc/X. Thread UI.</summary>
         public static int Show(string message, string[] buttons)
         {

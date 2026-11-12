@@ -25,6 +25,8 @@ public sealed class BackendProcessTests
         }
 
         public Task<int> PromptAsync(string message, string[] buttons) => Task.FromResult(-1);
+        public Task<string?> PromptTextAsync(string message, string label, string defaultValue) => Task.FromResult<string?>(null);
+        public Task<string[]?> PromptCredentialsAsync(string detail, string defaultUser) => Task.FromResult<string[]?>(null);
         public Task<Dictionary<string, string>> GetSettingsAsync() => Task.FromResult(Settings);
         public Task SetSettingAsync(string key, string value) => Task.CompletedTask;
         public Task OpenUrlAsync(string url) => Task.CompletedTask;

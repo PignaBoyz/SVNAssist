@@ -94,6 +94,24 @@ public interface ISvnService
     Task<UpdateResult> UpdateAsync(string workingCopyPath, CancellationToken ct);
 
     /// <summary>
+    /// Aggiorna a una revisione precisa (<c>svn update -r N</c>).
+    /// </summary>
+    /// <param name="workingCopyPath">Root della working copy, una cartella o un file.</param>
+    /// <param name="revision">Intero positivo o <c>HEAD</c> (vedi <see cref="SvnRevision.TryNormalize"/>).</param>
+    /// <param name="ct">Token per annullare l'operazione.</param>
+    /// <exception cref="ArgumentException">Se la revisione non è valida.</exception>
+    Task<UpdateResult> UpdateToRevisionAsync(string workingCopyPath, string revision, CancellationToken ct);
+
+    /// <summary>Ripulisce la working copy da un'operazione interrotta (<c>svn cleanup</c>); su un file agisce sulla sua cartella.</summary>
+    Task CleanupAsync(string path, CancellationToken ct);
+
+    /// <summary>Blocca i file (<c>svn lock</c>) con un messaggio facoltativo; <paramref name="force"/> = <c>--force</c> ruba il lock di un altro.</summary>
+    Task LockAsync(IEnumerable<string> paths, string? message, bool force, CancellationToken ct);
+
+    /// <summary>Sblocca i file bloccati da questa working copy (<c>svn unlock</c>).</summary>
+    Task UnlockAsync(IEnumerable<string> paths, CancellationToken ct);
+
+    /// <summary>
     /// Restituisce le ultime N voci del log SVN per il percorso dato.
     /// </summary>
     /// <param name="targetPath">Percorso o URL del target SVN.</param>

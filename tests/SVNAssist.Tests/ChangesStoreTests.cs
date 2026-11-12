@@ -714,20 +714,16 @@ public class ChangesStoreTests
     }
 
     [Fact]
-    public async Task ShowFolderDiff_UnisceIDiffDeiSoliFileModificati_InUnFileDiff()
+    public async Task ShowFolderDiff_Cartella_ApreLElencoFileNelLog()
     {
-        using var f = new Fixture().With(("src/a.cs", SvnStatusKind.Modified), ("src/b.cs", SvnStatusKind.Added), ("src/n.txt", SvnStatusKind.Unversioned));
+        using var f = new Fixture().With(("src/a.cs", SvnStatusKind.Modified), ("src/b.cs", SvnStatusKind.Added));
         await f.Refresh();
 
         await f.Cmd("showFolderDiff", new { key = "staged:src" });
 
-        var opened = Assert.Single(f.Host.OpenedFiles);
-        Assert.EndsWith(".diff", opened);
-        var text = File.ReadAllText(opened);
-        Assert.Contains("diff of a.cs", text);
-        Assert.Contains("diff of b.cs", text);
-        Assert.DoesNotContain("n.txt", text);
-        Assert.Equal(2, f.Svn.FileDiffs.Count);
+        var path = Assert.Single(f.Host.FolderDiffs);
+        Assert.EndsWith("src", path);
+        Assert.Empty(f.Host.OpenedFiles);
     }
 
     // ── Working copy, solution, impostazioni ─────────────────────────

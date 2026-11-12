@@ -201,6 +201,19 @@ namespace SVNAssist.Host
             return PromptDialog.Show(message, buttons ?? new[] { "OK" });
         }
 
+        public async Task<string> PromptTextAsync(string message, string label, string defaultValue)
+        {
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            return PromptDialog.ShowText(message ?? "", label ?? "", defaultValue ?? "");
+        }
+
+        // Le credenziali non si loggano mai (nemmeno la lunghezza).
+        public async Task<string[]> PromptCredentialsAsync(string detail, string defaultUser)
+        {
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            return PromptDialog.ShowCredentials(detail ?? "", defaultUser ?? "");
+        }
+
         public async Task<Dictionary<string, string>> GetSettingsAsync()
         {
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();

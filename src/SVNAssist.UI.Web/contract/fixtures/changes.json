@@ -18,25 +18,25 @@
       "id": "staged", "title": "Staged", "count": 2, "expanded": true,
       "rows": [
         { "key": "staged:Core/Services", "kind": "folder", "depth": 0, "name": "Core/Services", "expanded": true, "count": 2, "status": null, "statusText": "",
-          "can": { "diff": true, "stage": false, "unstage": true, "add": false, "ignore": false, "revert": false, "resolve": false, "deleteFile": false }, "tooltip": "Core/Services" },
+          "can": { "diff": true, "stage": false, "unstage": true, "add": false, "ignore": false, "revert": false, "resolve": false, "deleteFile": false, "lock": false, "unlock": false }, "tooltip": "Core/Services" },
         { "key": "staged:Core/Services/OrderService.cs", "kind": "file", "depth": 1, "name": "OrderService.cs", "detail": "", "dir": false, "status": "M", "statusText": "Modificato",
-          "can": { "diff": true, "stage": false, "unstage": true, "add": false, "ignore": false, "revert": true, "resolve": false, "deleteFile": true }, "tooltip": "Core/Services/OrderService.cs — Modificato" },
+          "can": { "diff": true, "stage": false, "unstage": true, "add": false, "ignore": false, "revert": true, "resolve": false, "deleteFile": true, "lock": false, "unlock": false }, "tooltip": "Core/Services/OrderService.cs — Modificato" },
         { "key": "staged:Core/Services/Coupon.cs", "kind": "file", "depth": 1, "name": "Coupon.cs", "detail": "", "dir": false, "status": "A", "statusText": "Aggiunto",
-          "can": { "diff": true, "stage": false, "unstage": true, "add": false, "ignore": false, "revert": true, "resolve": false, "deleteFile": true }, "tooltip": "Core/Services/Coupon.cs — Aggiunto" }
+          "can": { "diff": true, "stage": false, "unstage": true, "add": false, "ignore": false, "revert": true, "resolve": false, "deleteFile": true, "lock": false, "unlock": false }, "tooltip": "Core/Services/Coupon.cs — Aggiunto" }
       ]
     },
     {
       "id": "changes", "title": "Modifiche", "count": 1, "expanded": true,
       "rows": [
         { "key": "changes:Web/CheckoutController.cs", "kind": "file", "depth": 0, "name": "CheckoutController.cs", "detail": "Web", "dir": false, "status": "C", "statusText": "Conflitto",
-          "can": { "diff": true, "stage": false, "unstage": false, "add": false, "ignore": false, "revert": true, "resolve": true, "deleteFile": true }, "tooltip": "Web/CheckoutController.cs — Conflitto" }
+          "can": { "diff": true, "stage": false, "unstage": false, "add": false, "ignore": false, "revert": true, "resolve": true, "deleteFile": true, "lock": false, "unlock": false }, "tooltip": "Web/CheckoutController.cs — Conflitto" }
       ]
     },
     {
       "id": "unversioned", "title": "Non versionati", "count": 1, "expanded": true,
       "rows": [
         { "key": "unversioned:docs/notes.txt", "kind": "file", "depth": 0, "name": "notes.txt", "detail": "docs", "dir": false, "status": "?", "statusText": "Non versionato",
-          "can": { "diff": false, "stage": true, "unstage": false, "add": true, "ignore": true, "revert": false, "resolve": false, "deleteFile": true }, "tooltip": "docs/notes.txt — Non versionato" }
+          "can": { "diff": false, "stage": true, "unstage": false, "add": true, "ignore": true, "revert": false, "resolve": false, "deleteFile": true, "lock": false, "unlock": false }, "tooltip": "docs/notes.txt — Non versionato" }
       ]
     }
   ],

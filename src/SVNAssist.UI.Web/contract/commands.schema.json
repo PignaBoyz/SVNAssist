@@ -47,6 +47,48 @@
       }
     },
     {
+      "title": "updateToRevision",
+      "description": "SVN Update to revision: l'host chiede la revisione (intero positivo o HEAD) e fa svn update -r.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "updateToRevision"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "cleanup",
+      "description": "SVN Cleanup della working copy (svn cleanup).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "cleanup"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
       "title": "commit",
       "description": "Commit dei file in Staged con il messaggio corrente.",
       "type": "object",
@@ -466,9 +508,11 @@
                 "ignore",
                 "revert",
                 "resolve",
-                "deleteFile"
+                "deleteFile",
+                "lock",
+                "unlock"
               ],
-              "description": "deleteFile = tasto Canc: elimina dal filesystem (svn delete se versionato). L'host chiede conferma."
+              "description": "deleteFile = tasto Canc: elimina dal filesystem (svn delete se versionato). L'host chiede conferma. lock = svn lock con messaggio facoltativo (se e' di un altro l'host chiede conferma esplicita per rubarlo, --force); unlock = svn unlock."
             },
             "key": {
               "type": "string",

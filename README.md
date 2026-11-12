@@ -16,6 +16,9 @@ Estensione VSIX per Visual Studio 2022 / VS 18 che integra **Subversion (SVN)** 
   - Sezioni comprimibili **Conflitti**, **Modifiche** e **Non versionati**, con conteggio; vista **Albero** (cartelle compattate, come Git) o **Lista**
   - Checkbox tri-state su file, cartelle e sezioni: ciò che è spuntato è ciò che viene committato (nessuno "staging")
   - Menu contestuali: Add, Revert, Delete, Ignore, Risolvi conflitto, Diff (file e cartella) — Revert e Delete chiedono conferma elencando cosa cambia
+  - **SVN Update to revision…** (revisione intera o HEAD, dal menu ⋯ e da Solution Explorer), **SVN Cleanup** (menu ⋯, Extensions, Solution Explorer; se un'operazione fallisce per working copy bloccata compare il pulsante **Esegui Cleanup**)
+  - **SVN Lock / Unlock** (menu del file e Solution Explorer, messaggio facoltativo; per rubare il lock di un altro serve una conferma esplicita) con lucchetto sui file bloccati da te
+  - **Login SVN** solo se serve: dopo un errore di autenticazione compare un dialogo utente/password (con "Ricorda") e il comando viene ripetuto una volta; con l'accesso integrato di Windows non compare mai
   - Pannello diff inline (o TortoiseSVN se installato)
   - **Checklist dei prerequisiti** in-panel: svn, TortoiseSVN, provider AI, con pulsanti di installazione/login a un clic
 - **Commit message con AI** — Genera dal diff **minimo** dei soli file selezionati, o migliora la bozza; multi-provider con fallback
