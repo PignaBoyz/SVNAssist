@@ -4,6 +4,12 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio;
+using Microsoft.VisualStudio.ComponentModelHost;
+using Microsoft.VisualStudio.Editor;
+using Microsoft.VisualStudio.Text;
+using Microsoft.VisualStudio.Text.Differencing;
+using Microsoft.VisualStudio.Text.Editor;
+using SVNAssist.Navigation;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
 using Microsoft.VisualStudio.TextManager.Interop;
@@ -109,8 +115,8 @@ namespace SVNAssist.Host
             Add(Ids.CmdSwitch, () => Host.SendCommandAsync("changes", "switchOpen", null));
             Add(Ids.CmdMerge, () => Host.SendCommandAsync("changes", "mergeOpen", null));
             Add(Ids.CmdRevertSel, RevertSelectedAsync);
-            Add(Ids.CmdNextChange, () => DiffNavigateAsync("Diff.NextDifference"));
-            Add(Ids.CmdPrevChange, () => DiffNavigateAsync("Diff.PreviousDifference"));
+            Add(Ids.CmdNextChange, () => DiffNavigateAsync(true));
+            Add(Ids.CmdPrevChange, () => DiffNavigateAsync(false));
 
             // Sottomenu Lingua: tre voci a scelta esclusiva, la spunta segue l'impostazione.
             void AddLang(int id, string value)
@@ -134,30 +140,66 @@ namespace SVNAssist.Host
         {
             await JoinableTaskFactory.SwitchToMainThreadAsync();
             string file = null; int from = 0, to = 0;
+            IVsTextLines lines = null;
             if (await GetServiceAsync(typeof(SVsTextManager)) is IVsTextManager tm
                 && tm.GetActiveView(1, null, out var view) == VSConstants.S_OK && view != null
-                && view.GetBuffer(out var lines) == VSConstants.S_OK)
+                && view.GetBuffer(out lines) == VSConstants.S_OK)
             {
                 if (lines is IPersistFileFormat pff) { pff.GetCurFile(out file, out _); }
                 view.GetSelection(out int sl, out _, out int el, out int ec);
                 from = sl + 1; to = el + 1;
                 if (el > sl && ec == 0) to = el; // selezione che finisce a inizio riga: quella riga non e' inclusa
-                if (lines is IVsPersistDocData pdd && pdd.IsDocDataDirty(out int dirty) == VSConstants.S_OK && dirty != 0)
-                {
-                    if (pdd.SaveDocData(VSSAVEFLAGS.VSSAVE_SilentSave, out _, out _) != VSConstants.S_OK)
-                    { await MessageAsync(Loc.T("Impossibile salvare il file prima di annullare le righe.")); return; }
-                }
             }
             if (string.IsNullOrEmpty(file)) { await MessageAsync(Loc.T("Nessun file aperto nell'editor.")); return; }
+            await RevertRangeAsync(file, from, to, lines as IVsPersistDocData);
+        }
+
+        /// <summary>
+        /// Annulla le righe from..to (1-based) del file: salva prima il documento se modificato (non c'e' Ctrl+Z: il backend riscrive
+        /// il file su disco e VS lo ricarica). L'esito lo mostra il backend come messaggio di stato in Changes, senza dialoghi.
+        /// </summary>
+        internal async Task RevertRangeAsync(string file, int from, int to, IVsPersistDocData doc)
+        {
+            await JoinableTaskFactory.SwitchToMainThreadAsync();
+            if (doc != null && doc.IsDocDataDirty(out int dirty) == VSConstants.S_OK && dirty != 0
+                && doc.SaveDocData(VSSAVEFLAGS.VSSAVE_SilentSave, out _, out _) != VSConstants.S_OK)
+            { await MessageAsync(Loc.T("Impossibile salvare il file prima di annullare le righe.")); return; }
             await Host.RunPathCommandAsync("revertlines", new[] { file, from + "-" + to });
         }
 
-        /// <summary>Prossima/precedente differenza nel diff nativo di VS (comandi VS esistenti); fuori da un diff non fa nulla.</summary>
-        private async Task DiffNavigateAsync(string vsCommand)
+        /// <summary>
+        /// Prossima/precedente modifica, con giro. In un diff usa il viewer nativo (ScrollToNext/PreviousChange: sposta il cursore nel
+        /// pannello attivo); in un editor normale usa i blocchi del svn diff (backend) e la riga del cursore. Nessun nome di comando VS.
+        /// </summary>
+        private async Task DiffNavigateAsync(bool next)
         {
             await JoinableTaskFactory.SwitchToMainThreadAsync();
-            try { ((EnvDTE.DTE)await GetServiceAsync(typeof(EnvDTE.DTE))).ExecuteCommand(vsCommand); }
-            catch (Exception ex) { Log.Write("diff navigate: " + ex.Message); }
+            if (!(await GetServiceAsync(typeof(SVsTextManager)) is IVsTextManager tm) || tm.GetActiveView(1, null, out var vsView) != VSConstants.S_OK || vsView == null) return;
+            var cm = (IComponentModel)await GetServiceAsync(typeof(SComponentModel));
+            var view = cm.GetService<IVsEditorAdaptersFactoryService>().GetWpfTextView(vsView);
+            if (view == null) return;
+
+            bool moved;
+            var viewer = cm.GetService<IWpfDifferenceViewerFactoryService>().TryGetViewerForTextView(view);
+            if (viewer != null)
+                moved = next ? viewer.ScrollToNextChange(true) : viewer.ScrollToPreviousChange(true);
+            else
+            {
+                string file = null;
+                if (cm.GetService<ITextDocumentFactoryService>().TryGetTextDocument(view.TextBuffer, out var doc)) file = doc.FilePath;
+                if (string.IsNullOrEmpty(file)) return;
+                // shortcut: i blocchi vengono dal file su disco; con modifiche non salvate le righe possono slittare, upgrade se serve salvare prima.
+                var starts = await Host.GetChangedBlocksAsync(file);
+                await JoinableTaskFactory.SwitchToMainThreadAsync();
+                var snap = view.TextSnapshot;
+                int cur = snap.GetLineNumberFromPosition(view.Caret.Position.BufferPosition.Position) + 1;
+                int line = next ? DiffNav.Next(starts, cur) : DiffNav.Previous(starts, cur);
+                if (line < 1 || line > snap.LineCount) return;
+                view.Caret.MoveTo(new SnapshotPoint(snap, snap.GetLineFromLineNumber(line - 1).Start));
+                moved = true;
+            }
+            if (moved)
+                view.ViewScroller.EnsureSpanVisible(new SnapshotSpan(view.Caret.Position.BufferPosition, 0), EnsureSpanVisibleOptions.AlwaysCenter);
         }
 
         private async Task SetLanguageAsync(string value)

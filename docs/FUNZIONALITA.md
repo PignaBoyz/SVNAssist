@@ -40,8 +40,8 @@ Questo file è pensato per essere **modificato da te** e restituito per pianific
 
 ### Esplora soluzioni
 - Nessun menu SVN in Solution Explorer (tolto perche' ridondante con la finestra Changes).
-- **SVN: Revert Selected Changes** nel menu contestuale dell'editor (anche nel pannello destro del diff): annulla solo le righe selezionate (o la riga del cursore) riportandole a BASE, come "Revert selected changes" di Git; il documento viene salvato prima, niente Ctrl+Z.
-- **Next/Previous Change in Diff** (Ctrl+Alt+Giu'/Su' nell'editor di testo, anche da Extensions > SVNAssist): salta alla differenza successiva/precedente del diff nativo di VS.
+- **Annulla il blocco** dal pannello destro del diff: pulsante con icona annulla (KnownMonikers.Undo) a sinistra di ogni blocco modificato, come Git; clic = riporta a BASE solo quel blocco, senza dialoghi (messaggio di stato in Changes). Resta **SVN: Revert Selected Changes** nel menu contestuale (righe selezionate o riga del cursore). Il documento viene salvato prima, niente Ctrl+Z. Mancante: il pulsante nell'editor normale e nel diff inline.
+- **Next/Previous Change in Diff** (Alt+F8 / Shift+Alt+F8, menu contestuale, Extensions > SVNAssist): nel diff sposta il cursore e centra la modifica successiva/precedente (viewer nativo, con giro); in un editor normale di un file modificato salta al blocco successivo/precedente del svn diff (letto da disco: righe non salvate possono slittare). Ctrl+Alt+Giù/Su e' di VS (elenco documenti).
 
 ### AI per i commit
 - **Procedura guidata** (provider, prerequisiti, login, modello) riapribile da "Change AI Provider...": GitHub Copilot, Claude Code, Claude API, GitHub Models.
