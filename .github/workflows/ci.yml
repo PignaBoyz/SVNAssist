@@ -48,21 +48,9 @@ jobs:
       - name: Test UI web
         run: node --test "tests/ui-web/*.test.mjs"
 
-      # Backend pubblicato (framework-dependent): lo includera' il VSIX dell'host.
-      - name: Publish backend
-        run: dotnet publish src/SVNAssist.Backend/SVNAssist.Backend.csproj -c Release -o out/backend --no-build
-
-      - name: Upload backend
+      - name: Upload VSIX
         uses: actions/upload-artifact@v4
         with:
           name: SVNAssist-vsix
-          path: src/SVNAssist.Host/bin/Release/**/*.vsix
+          path: src/SVNAssist.Host/bin/Release/net472/SVNAssist.vsix
           if-no-files-found: error
-
-      # TODO integrazione host: il VSIX lo produrra' src/SVNAssist.Host (msbuild, vedi spike/); src/SVNAssist e' stato rimosso.
-      # - name: Upload VSIX
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: SVNAssist-vsix
-      #     path: src/SVNAssist.Host/bin/Release/**/*.vsix
-      #     if-no-files-found: error
