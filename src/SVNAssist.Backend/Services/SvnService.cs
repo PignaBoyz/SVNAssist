@@ -700,13 +700,19 @@ public class SvnService : ISvnService
             var relativeUrl = await RunSvnAsync(
                 ["info", "--show-item", "relative-url"], workingCopyPath, ct);
 
-            var url = relativeUrl.Trim().TrimStart('^', '/');
-            return string.IsNullOrWhiteSpace(url) ? "unknown" : url;
+            return BranchLabel(relativeUrl);
         }
         catch
         {
-            return "unknown";
+            return string.Empty; // la UI mostra "—"
         }
+    }
+
+    /// <summary>Nome da mostrare per l'URL relativo (<c>^/trunk</c> -> <c>trunk</c>); la radice del repository (repo senza trunk/branches) e' "/ (radice)".</summary>
+    internal static string BranchLabel(string relativeUrl)
+    {
+        var url = Uri.UnescapeDataString(relativeUrl.Trim()).TrimStart('^', '/').TrimEnd('/');
+        return url.Length == 0 ? "/ (radice)" : url;
     }
 
     /// <summary>

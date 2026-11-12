@@ -51,6 +51,19 @@ internal sealed class PrereqStore
         _actions = actions ?? new PrerequisiteActions();
     }
 
+    /// <summary>Il servizio dei controlli (condiviso con la procedura guidata).</summary>
+    internal PrerequisitesService Service => _service;
+
+    internal static PrereqItemDto ToDto(PrerequisiteItem item) => new(
+        item.Id,
+        item.Group,
+        item.Title,
+        item.IsOk,
+        item.Detail,
+        item.IsOk ? string.Empty : item.Instructions,
+        item.PrimaryAction ?? string.Empty,
+        item.SecondaryAction ?? string.Empty);
+
     /// <summary>Qualcosa e' cambiato (per rimandare lo snapshot).</summary>
     public event Action? Changed;
 
@@ -118,15 +131,7 @@ internal sealed class PrereqStore
         var snapshot = await _service.CheckAsync(ct);
         Snapshot = snapshot;
 
-        var items = snapshot.Items.Select(item => new PrereqItemDto(
-            item.Id,
-            item.Group,
-            item.Title,
-            item.IsOk,
-            item.Detail,
-            item.IsOk ? string.Empty : item.Instructions,
-            item.PrimaryAction ?? string.Empty,
-            item.SecondaryAction ?? string.Empty)).ToList();
+        var items = snapshot.Items.Select(ToDto).ToList();
 
         var ai = snapshot.HasAiProvider
             ? $"AI Provider: {snapshot.ConfiguredProvider}. Utilizzabili: {string.Join(" → ", snapshot.UsableProviders)}"
@@ -153,13 +158,13 @@ internal sealed class PrereqStore
 
     /// <summary>
     /// Esegue l'azione del pulsante principale o secondario dell'elemento <paramref name="id"/>
-    /// (che deve esistere nell'ultimo controllo: l'id arriva dalla UI e viene rivalidato).
+    /// (che deve esistere nell'ultimo controllo, o in <paramref name="rows"/> per la procedura guidata: l'id arriva dalla UI e viene rivalidato).
     /// </summary>
-    internal async Task RunActionAsync(string id, bool primary, CancellationToken ct)
+    internal async Task RunActionAsync(string id, bool primary, CancellationToken ct, IReadOnlyList<PrereqItemDto>? rows = null)
     {
         PrereqItemDto? row;
         lock (_lock)
-            row = _items.FirstOrDefault(i => string.Equals(i.Id, id, StringComparison.Ordinal));
+            row = (rows ?? _items).FirstOrDefault(i => string.Equals(i.Id, id, StringComparison.Ordinal));
         if (row is null)
             throw new ArgumentException($"Prerequisito sconosciuto: {id}");
 
@@ -228,7 +233,7 @@ internal sealed class PrereqStore
         }
     }
 
-    private async Task LaunchAsync(ConsoleCommand command, string successMessage)
+    internal async Task LaunchAsync(ConsoleCommand command, string successMessage)
     {
         var claude = command == ConsoleCommand.ClaudeLogin ? _actions.FindClaude() : null;
         Feedback = await _actions.LaunchConsole(command, claude)

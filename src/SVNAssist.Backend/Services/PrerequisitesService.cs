@@ -209,10 +209,10 @@ internal sealed class PrerequisitesService
         _probes = probes;
     }
 
-    /// <summary>Esegue tutte le verifiche.</summary>
-    public async Task<PrerequisitesSnapshot> CheckAsync(CancellationToken ct)
+    /// <summary>Esegue tutte le verifiche (<paramref name="providerOverride"/>: provider scelto nella procedura guidata, non ancora salvato).</summary>
+    public async Task<PrerequisitesSnapshot> CheckAsync(CancellationToken ct, string? providerOverride = null)
     {
-        var provider = AiProviderGuide.Normalize(await _settings.GetAiProviderAsync(ct));
+        var provider = AiProviderGuide.Normalize(providerOverride ?? await _settings.GetAiProviderAsync(ct));
 
         var svn = _probes.FindSvn();
         var tortoise = _probes.FindTortoise();

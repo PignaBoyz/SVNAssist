@@ -26,6 +26,23 @@ internal sealed class StubSettings : ISvnAssistSettings
     public Task<string> GetWorkingCopyPathAsync(CancellationToken ct) => Task.FromResult(WorkingCopy);
     public Task<string> GetWindowThemeAsync(CancellationToken ct) => Task.FromResult(Theme);
     public Task SetWindowThemeAsync(string mode, CancellationToken ct) { Theme = mode; return Task.CompletedTask; }
+
+    /// <summary>Impostazioni salvate con SetSettingAsync (le chiavi AI aggiornano anche i valori letti).</summary>
+    public Dictionary<string, string> Saved { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public Task SetSettingAsync(string key, string value, CancellationToken ct)
+    {
+        Saved[key] = value;
+        switch (key)
+        {
+            case SettingDefinitions.AiProvider: Provider = value; break;
+            case SettingDefinitions.AnthropicApiKey: AnthropicKey = value; break;
+            case SettingDefinitions.AiApiKey: ApiKey = value; break;
+            case SettingDefinitions.AiEndpoint: Endpoint = value; break;
+        }
+
+        return Task.CompletedTask;
+    }
 }
 
 /// <summary>Servizio SVN finto: restituisce stati preimpostati e registra le chiamate.</summary>

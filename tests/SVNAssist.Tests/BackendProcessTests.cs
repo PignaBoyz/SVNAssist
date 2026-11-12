@@ -28,6 +28,7 @@ public sealed class BackendProcessTests
         public Task<Dictionary<string, string>> GetSettingsAsync() => Task.FromResult(Settings);
         public Task SetSettingAsync(string key, string value) => Task.CompletedTask;
         public Task OpenUrlAsync(string url) => Task.CompletedTask;
+        public Task OpenSettingsAsync() => Task.CompletedTask;
         public Task OpenDiffAsync(string l, string r, string ll, string rl, string c) => Task.CompletedTask;
         public Task OpenFileAsync(string path) => Task.CompletedTask;
         public Task ShowLogAsync(string path) => Task.CompletedTask;

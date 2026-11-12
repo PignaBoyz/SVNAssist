@@ -73,7 +73,24 @@ internal sealed class CommitStore
     internal string AiStatus
     {
         get { lock (_lock) return _aiStatus; }
-        set { lock (_lock) _aiStatus = value; Changed?.Invoke(); }
+        set { lock (_lock) { _aiStatus = value; _aiSeq++; } Changed?.Invoke(); }
+    }
+
+    private int _aiSeq;
+
+    /// <summary>Gravita' del messaggio per la UI (colore/icona): i messaggi "mancano i presupposti" sono avvisi, "Errore..." e' un errore.</summary>
+    internal static string LevelOf(string status, bool busy)
+    {
+        if (busy)
+            return "busy";
+        if (status.Length == 0)
+            return string.Empty;
+        if (status.StartsWith("Errore", StringComparison.Ordinal))
+            return "err";
+        if (status.StartsWith("Nessun", StringComparison.Ordinal) || status.StartsWith("Metti almeno", StringComparison.Ordinal)
+            || status.StartsWith("Scrivi prima", StringComparison.Ordinal) || status.StartsWith("Operazione", StringComparison.Ordinal))
+            return "warn";
+        return status.StartsWith("Messaggio", StringComparison.Ordinal) ? "ok" : "info";
     }
 
     /// <summary>Un'operazione AI e' in corso.</summary>
@@ -93,7 +110,7 @@ internal sealed class CommitStore
     internal CommitDto GetSnapshot(DownloadDto? download)
     {
         lock (_lock)
-            return new CommitDto(_text, _aiStatus, _busy, _lang, _trace, download);
+            return new CommitDto(_text, _aiStatus, LevelOf(_aiStatus, _busy), _aiSeq, _busy, _lang, _trace, download);
     }
 
     /// <summary>Cambia la lingua del messaggio AI (valori: auto, italiano, english).</summary>
@@ -130,6 +147,9 @@ internal sealed class CommitStore
 
         Changed?.Invoke();
     }
+
+    /// <summary>Se impostato, "Genera con AI" senza provider utilizzabile apre la procedura guidata invece del prompt <see cref="IAiSetupPrompt"/>.</summary>
+    internal Func<CancellationToken, Task>? OpenAiWizard { get; set; }
 
     internal Task GenerateAsync(CancellationToken ct) => RunAiAsync(improve: false, ct);
 
@@ -181,6 +201,7 @@ internal sealed class CommitStore
         try
         {
             IsBusy = true;
+            AiStatus = improve ? "Miglioramento in corso..." : "Generazione in corso..."; // riscontro immediato a ogni clic
             await RunAiCoreAsync(improve, ct);
         }
         catch (OperationCanceledException)
@@ -203,6 +224,13 @@ internal sealed class CommitStore
     {
         SetTrace(null, null, finished: true);
         var ai = await _aiServiceFactory.CreateAsync(ct);
+        if (ai is null && OpenAiWizard is { } openWizard)
+        {
+            AiStatus = "Nessun provider AI configurato: completa la procedura guidata.";
+            await openWizard(ct);
+            return;
+        }
+
         if (ai is null)
         {
             AiStatus = "Nessun provider AI disponibile (Copilot, Claude o token GitHub).";

@@ -96,6 +96,9 @@ internal interface ISvnAssistSettings
 
     /// <summary>Salva il tema della finestra (scrive nelle impostazioni dell'host).</summary>
     Task SetWindowThemeAsync(string mode, CancellationToken ct);
+
+    /// <summary>Salva un'impostazione (chiavi di <see cref="SettingDefinitions"/>) nelle impostazioni dell'host: la usa la procedura guidata dell'AI.</summary>
+    Task SetSettingAsync(string key, string value, CancellationToken ct) => throw new NotSupportedException();
 }
 
 /// <summary>
@@ -176,9 +179,11 @@ internal sealed class HostSettings : ISvnAssistSettings
             : endpoint;
     }
 
-    public async Task SetWindowThemeAsync(string mode, CancellationToken ct)
+    public Task SetWindowThemeAsync(string mode, CancellationToken ct) => SetSettingAsync(SettingDefinitions.WindowTheme, mode, ct);
+
+    public async Task SetSettingAsync(string key, string value, CancellationToken ct)
     {
-        await _host.SetSettingAsync(SettingDefinitions.WindowTheme, mode);
+        await _host.SetSettingAsync(key, value);
         Invalidate();
     }
 }

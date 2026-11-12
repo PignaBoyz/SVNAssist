@@ -13,7 +13,7 @@ const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
 
 // [testo, sfondi]
 const PAIRS = [
-  ['fg', ['bg0', 'bg1', 'bg2', 'bg3', 'bg4', 'acc-bg']], ['fg2', ['bg0', 'bg1', 'bg2', 'bg3']], ['fg3', ['bg0', 'bg1', 'bg2', 'bg3']],
+  ['fg', ['bg0', 'bg1', 'bg2', 'bg3', 'bg4', 'acc-bg']], ['fg2', ['bg0', 'bg1', 'bg2', 'bg3', 'acc-bg']], ['fg3', ['bg0', 'bg1', 'bg2', 'bg3']],
   ['acc-fg', ['acc', 'acc-h']], ['acc2', ['bg0', 'bg1', 'bg2', 'bg3']], ['ok', ['bg1', 'bg2']], ['warn', ['bg1', 'bg2']], ['err', ['bg1', 'bg2', 'bg3']],
   ['st-M', ['bg1', 'bg2', 'bg4']], ['st-A', ['bg1', 'bg2', 'bg4']], ['st-D', ['bg1', 'bg2', 'bg4']], ['st-C', ['bg1', 'bg2', 'bg4']],
   ['st-U', ['bg1', 'bg2', 'bg4']], ['st-X', ['bg1', 'bg2', 'bg4']], ['st-R', ['bg1', 'bg2', 'bg4']],

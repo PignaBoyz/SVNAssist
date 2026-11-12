@@ -61,6 +61,23 @@ Vale per file e cartelle (la cartella ha il percorso della cartella; le catene a
 | `prereqToggle` / `prereqRecheck` | – | pannello Prerequisiti |
 | `prereqRun` | `id`, `primary` | azione principale (`true`) o secondaria (`false`) di un prerequisito |
 
+### Procedura guidata (AI e prerequisiti)
+Stato e logica nel backend (`WizardStore`); la UI mostra `wizard` e invia solo questi comandi.
+| Comando | Args | Effetto |
+|---|---|---|
+| `wizardOpen` | – | apre la procedura AI (passo 1; preseleziona il provider impostato). Parte da sola da "Genera con AI" senza provider |
+| `wizardOpenPrereq` | – | apre la procedura sui prerequisiti mancanti (svn, provider AI); la riga `ai` porta alla procedura AI |
+| `wizardPick` | `provider`: `copilot|claudecode|claude|openai` | sceglie il provider (passo 1) |
+| `wizardNext` / `wizardBack` / `wizardCancel` | – | avanti (solo se il passo e' completo, ricontrolla prima) / indietro / chiude |
+| `wizardRecheck` | – | rilegge prerequisiti e accesso (la UI lo manda da sola ogni 4 s mentre manca qualcosa e al ritorno del focus) |
+| `wizardRun` | `id`, `primary` | azione di un prerequisito del passo 2 (stesse azioni della checklist) |
+| `wizardLogin` | – | login nel terminale (`gh auth login --web`, o Claude Code; se manca gh lo installa) |
+| `wizardSetAuth` | `endpoint`, `key` | salva la chiave (Claude API / OpenAI-compatibile) e l'endpoint (https, o http su localhost); vuoto = non cambiare. La chiave non torna mai nello snapshot |
+| `wizardFinish` | `model` | salva `aiProvider` + modello con le chiavi di Tools > Options e chiude; se la procedura veniva da "Genera con AI", genera |
+| `openOptions` | – | "Faccio io": chiude la procedura e apre Tools > Options > SVNAssist (`IHost.OpenSettingsAsync`) |
+
+Menu di VS: `Extensions > SVNAssist > Cambia provider AI...` (comando `CmdAiSetup` 0x0104) mostra Changes e invia `wizardOpen`.
+
 ### Log
 `logLoad{path}` (ultime 50), `logMore` (altre 50), `logSelect{rev}` (carica il diff della revisione).
 
@@ -80,7 +97,7 @@ Vale per file e cartelle (la cartella ha il percorso della cartella; le catene a
 ### `changes` (`changes-state.schema.json`)
 ```
 workingCopy {path, showInput, branch, rev}
-commit      {text, aiStatus, busy, lang, trace[{name,state,detail}], download{pct,label}|null}
+commit      {text, aiStatus, aiLevel: ""|busy|ok|warn|err|info, aiSeq, busy, lang, trace[{name,state,detail}], download{pct,label}|null}
 view        "tree" | "list"
 theme       {mode: auto|light|dark|blue, kind: light|dark|blue}
 sections[3] {id: staged|changes|unversioned, title, count, expanded, rows[]}
@@ -88,7 +105,10 @@ sections[3] {id: staged|changes|unversioned, title, count, expanded, rows[]}
 status      {msg, err}
 prereq      {open, summary, ai, feedback, items[{id, group, title, ok, detail, instructions, primary, secondary}]}
 loading     bool
+wizard      {open, mode: ai|prereq, step 1-4, fromGenerate, provider, busy, feedback, providers[{id,title,cost}], items[prereq item],
+             auth: ""|github|claudecode|key|openai, authOk, authDetail, endpoint, models[{value,label}], model, canNext}
 ```
+`aiLevel` colora il messaggio AI (avviso giallo, errore rosso, esito verde); `aiSeq` cresce a ogni messaggio, cosi' anche uno ripetuto si ridisegna.
 Le righe sono **già piatte e ordinate** (albero calcolato dal backend con `ChangesTreeBuilder`): la UI non ricostruisce nulla.
 `depth` 0 = figli diretti della sezione. `can.*` dice quali azioni sono valide; la UI disabilita/nasconde di conseguenza.
 `sections` contiene sempre le tre sezioni; la UI nasconde quelle vuote tranne Staged.
