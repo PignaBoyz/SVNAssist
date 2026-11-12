@@ -1,33 +1,7 @@
 # HANDOFF — SVNAssist 0.2.0
 
-## Prompt per nuova sessione locale (Windows)
-
-```
-Sei l'orchestratore del progetto SVNAssist (estensione Visual Studio, C#, VisualStudio.Extensibility, out-of-proc + Remote UI WPF).
-Delega il lavoro a sub-agenti scegliendo modello ed effort: Sonnet per audit/fix/feature, Haiku per ritocchi meccanici, Opus SOLO per decisioni architetturali. Mai Fable.
-Comunicami in italiano, messaggi corti, a punti, una cosa alla volta.
-
-Repo: pignaboyz/svnassist. Lavora sul branch `claude/eager-archimedes-kvbdoo` (git pull prima di iniziare).
-Leggi prima: HANDOFF.md, docs/audit/AUDIT-0.1.0.md, docs/release-notes/v0.2.0.md, DESIGN.md, docs/demo/svnassist-demo.html.
-Bug e migliorie dell'utente: C:\Users\andre\Downloads\BUGS&MIGLIORIE_0_1_0 — copiali in docs/feedback/0.1.0/ e committali.
-
-GIÀ FATTO (sul branch, NON ancora compilato né testato — qui sei su Windows: compila e testa per primo):
-1. Audit completo: docs/audit/AUDIT-0.1.0.md (Top 10 priorità in cima).
-2. Modelli AI: default Claude ora claude-sonnet-5-5 (era Opus); modelli Claude/Copilot/OpenAI-compat sono tendine (Setting.Enum); prerequisiti filtrati per provider + nota login/chiave/costo (AiProviderGuide); Copilot "usabile" solo con token GitHub; prompt "nessuna AI" apre la pagina del provider scelto; GitHub Models usa openai/gpt-4o-mini (NormalizeOpenAiModel).
-   Da verificare: valori enum con "/" o "." accettati da EnumSettingEntry; comportamento di vecchi valori salvati fuori lista; id modelli Copilot (gpt-4.1, gpt-5-mini, claude-sonnet-4.5) sono ipotesi; la factory prova ancora Copilot esplicito senza token (incoerente col checklist); niente "modello personalizzato" (Ollama/Azure persi).
-3. CI: .github/workflows/ci.yml (build+test su windows-latest, artifact .vsix) e release.yml (su tag v*: build, test, GitHub Release con .vsix + zip della demo + note da docs/release-notes/<tag>.md). Versione unica 0.2.0 in Directory.Build.props. releases/*.zip tolto da git.
-   Da verificare: percorso dell'output .vsix (src/SVNAssist/bin/Release/**/*.vsix), install choco sliksvn, esistenza di softprops/action-gh-release@v2.2.2. Controlla il primo run CI su GitHub.
-
-DA FARE, in ordine:
-A. Build + test locali; sistemare errori di compilazione dei punti 2-3.
-B. Fix dei bug in docs/feedback/0.1.0/ (un agente Sonnet per gruppo di bug).
-C. Fix dall'audit non ancora fatti: tema scuro (Log window con colori fissi, Changes window senza Foreground → nero su nero); "Seleziona tutto" spunta anche unversioned (bin/obj); flag Can* nel ChangeRowViewModel senza notifica (righe 86-106); "Working Copy Path" ignorato; albero è una ListBox piatta senza tastiera.
-D. UI in WebView2, IDENTICA alla demo HTML (stesso HTML/CSS/JS per estensione e demo; la demo usa un bridge finto con dati mock). Vincolo: WebView2 non si può ospitare in Remote UI out-of-proc → serve un host in-proc (ToolWindowPane VSSDK) con backend net8 esistente, oppure riscrittura in-proc. Prima uno spike/piano con Opus (effort alto) — se esiste docs/webview2-plan.md usalo. Tema: variabili CSS dai colori VS (chiaro/scuro/blu). Albero vero, leggibile.
-E. UX: qualsiasi altra miglioria per l'esperienza utente → delegare.
-F. Release: completa docs/release-notes/v0.2.0.md (scrivi che la 0.1.0 è deprecata, NON cancellare il tag v0.1.0), aggiorna README/FUNZIONALITA/ROADMAP, poi crea e pusha il tag v0.2.0 → la CI pubblica la Release con .vsix e demo. Verifica che la release compaia su GitHub.
-
-Regole: commit in italiano, push sul branch indicato, niente PR se non richiesto. Aggiorna HANDOFF.md dopo ogni fase.
-```
+## Prompt per nuova sessione
+Vedi `prompt.md` (aggiornato per la 0.3.0).
 
 ## Stato
 - [x] Audit
@@ -46,4 +20,5 @@ Regole: commit in italiano, push sul branch indicato, niente PR se non richiesto
 - Prossimi passi dettagliati: vedi prompt.md (sessione interrotta per crediti il 2026-11-11). Poi: integrazione (merge, sln, VSIX con ui/ + backend/, CI), passaggio backend/test a .NET 10 (agente Sonnet, alla fine, prima della release). DECISIONE UTENTE: backend framework-dependent (no self-contained); se manca il runtime .NET 10, l'host mostra un prompt automatico con 2 scelte: "Installa automaticamente" (winget install Microsoft.DotNet.Runtime.10, fallback script ufficiale dotnet-install.ps1 -Runtime dotnet -Channel 10.0) oppure "Apri pagina download" (link diretto al .NET Desktop/.NET Runtime 10 x64 per Windows, specificando ESATTAMENTE quale pacchetto scaricare: ".NET Runtime 10.x – Windows x64 installer"); dopo l'installazione ricontrolla e avvia il backend, F5 dell'utente, release.
 - DECISIONE UTENTE: la 0.2.0 esce SOLO con tutte le feature, UI WebView2 compresa (no release parziale). Note: docs/release-notes/v0.2.0.md (bozza)
 - DECISIONI UTENTE 2026-11-12: (a) procedura guidata configurazione AI (da "Genera con AI" senza provider e da menu "Cambia provider AI..."), con "Faccio io" che apre le opzioni; prerequisiti in basso verde/rosso cliccabile e guidato; "Aggiorna" -> "SVN Update"; feedback visibile su ogni clic. (b) Lingua UI italiano/inglese (+ Automatica) da sottomenu Extensions > SVNAssist > Lingua; lingua dei commit resta separata. (c) La 0.3.0 entra nella 0.2.0: Cleanup, Update to revision, Log con filtri + diff a due pannelli, diff senza TortoiseSVN nell'editor VS, Lock/Unlock, login SVN quando le credenziali in cache mancano/scadono (cache standard %APPDATA%\Subversionuth, password via --password-from-stdin).
-- [ ] UI WebView2 completa, UX, release v0.2.0
+- [x] 2026-11-12: procedura guidata AI, feedback UI, 0.3.0 originale inglobata (Cleanup, Update to revision con elenco, Lock/Unlock, login SVN, Log con filtri, diff nativo VS ovunque), lingua IT/EN, Commit All/Staged senza auto-stage, Show Log come documento MDI. 500 test xUnit + 60 node verdi. Note: docs/release-notes/v0.2.0.md. Piano 0.3.0 (Merge) e candidati 0.4.0 in docs/ROADMAP.md §4-§5.
+- [ ] Release v0.2.0 (tag) — vedi sotto.
