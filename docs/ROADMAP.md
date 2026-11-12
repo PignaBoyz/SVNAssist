@@ -1,103 +1,54 @@
 # SVNAssist — Roadmap e piano funzionalità
 
-> Data analisi: 2026-11-10 — branch `develop`, ultimo commit `1648785`.
-> Stato verificato leggendo il codice (non solo `DESIGN.md`/`README.md`) e le XML-doc dell'SDK
-> `Microsoft.VisualStudio.Extensibility` 17.14 nella cache NuGet. I test **non sono stati rieseguiti** in questa analisi.
-> Convenzioni: `file:riga` = riferimento nel codice; ore = sviluppo + test automatici, senza collaudo manuale in VS;
-> priorità P0 = sicurezza/blocca l'uso, P1 = valore alto, P2 = nice to have.
-> Le affermazioni marcate **(da verificare)** non sono provate né nel codice né nell'SDK locale.
+> Aggiornata alla **0.2.0** (2026-11-12). Stato verificato sul codice (`src/SVNAssist.Backend`, `.Host`, `.UI.Web`) e su `docs/release-notes/v0.2.0.md`, `docs/verifica/0.2.0/`.
+> Convenzioni: ore = sviluppo + test automatici, senza collaudo manuale in VS; priorità P0 = sicurezza/blocca l'uso, P1 = valore alto, P2 = nice to have.
+> Le specifiche di §3 sono quelle scritte prima della 0.2.0: le voci già uscite sono marcate "✅ fatto in 0.2.0" e restano come riferimento (alcuni dettagli tecnici, es. "UI web", sono superati dalla nuova architettura).
 
 ---
 
-## 1. Stato attuale
+## 1. Stato attuale (0.2.0)
 
-Percorsi relativi a `src/SVNAssist/`. "Test" = esiste almeno un test automatico che esercita la funzione
-(47 metodi `[Fact]/[Theory]` in `tests/SVNAssist.Tests`; nessun test su ViewModel, comandi, XAML, watcher).
+Architettura: host VS net472 in-process (`SVNAssist.Host`: comandi, menu, opzioni, WebView2, diff nativo) + backend .NET 10 su JSON-RPC (`SVNAssist.Backend`: servizi SVN e AI, store per Changes/Log/Wizard) + UI web (`SVNAssist.UI.Web`: HTML/CSS/JS, temi, i18n IT/EN). Vedi `DESIGN.md`.
 
-### 1.1 SVN
-
-| Feature | Dove nel codice | Test | Note / limiti |
-|---|---|---|---|
-| Status (`svn status --xml`) | `Services/SvnService.cs:49` | Sì (mock + integrazione `file://`) | Niente `-u` (nessun incoming); `ignored/external/obstructed/incomplete` e tree-conflict non mappati (`ParseStatusKind`, solo attributo `item`, `SvnService.cs:328`) |
-| Commit file selezionati | `Services/SvnService.cs:76`; UI `ToolWindows/SvnStatusToolWindowData.cs:370` | Sì (args + integrazione) | Mostra "n file", non la revisione creata; messaggio come singolo argomento (`ArgumentList`) |
-| Add (`svn add --force`) | `SvnService.cs:90`; UI `SvnStatusToolWindowData.cs:594` | Sì (solo args) | Da context menu su file `?` |
-| Delete | `SvnService.cs:102`; UI `SvnStatusToolWindowData.cs:621` | **No** | Nessuna conferma; niente `--force` (file modificato in locale: `svn delete` rifiuta) **(da verificare)** |
-| Revert (`--depth infinity`) | `SvnService.cs:114`; UI `SvnStatusToolWindowData.cs:648` | Sì (solo args) | **Nessuna conferma** (D1) |
-| Resolve conflitto | `SvnService.cs:126`; UI `SvnStatusToolWindowData.cs:675` | **No** | Solo `--accept working`: marca risolto il file com'è, anche con i marcatori `<<<<<<<` |
-| Add to ignore (`svn:ignore`) | `SvnService.cs:135`; UI `SvnStatusToolWindowData.cs:703` | Sì (mock: lista vuota, propget fallito) | Merge con voci esistenti; valore multilinea come singolo argomento (mai provato su svn reale) |
-| Update intera WC | `SvnService.cs:182`; UI `SvnStatusToolWindowData.cs:411`; menu `Commands/UpdateCommand.cs` | Sì (args + integrazione) | Output di svn scartato (revisione/conflitti); `UpdateCommand.cs:52` usa `new SvnService()` e la dir della solution, non la root WC; niente update di cartella/revisione |
-| Log / History | `Services/SvnService.cs:188`; `ToolWindows/SvnLogToolWindow*.cs` | Sì (args + integrazione) | Ultime N (50), senza `-v`, paginazione o filtri; path WC da inserire a mano (nessun auto-detect, `SvnLogToolWindowData.cs:24`) |
-| Diff di revisione (`svn diff -c`) | `SvnService.cs:212`; UI `SvnLogToolWindowData.cs:140` | No | Testo unificato nel pannello inferiore |
-| Diff file locale: TortoiseSVN o inline | `SvnService.cs:233` (`TortoiseProc /command:diff`), fallback `:226`; UI `SvnStatusToolWindowData.cs:526` | No | Senza TortoiseSVN testo unificato inline; il diff di un file `?` è vuoto |
-| Nome branch (`svn info --show-item relative-url`) | `SvnService.cs:262` | No | Ritorna `"unknown"` su qualsiasi errore |
-| Auto-detect WC dalla solution | `ToolWindows/SvnStatusToolWindow.cs:109`; `SvnService.FindSvnRoot` (`SvnService.cs:287`) | No | Risale max 10 livelli cercando `.svn`; usa `Workspaces().QuerySolutionAsync` |
-| Setting "Working Copy Path" | `Services/SettingsService.cs`; letto in `SvnStatusToolWindowData.cs:290` | No | Ignorato da `UpdateCommand` e dalla Log window |
-| Ricerca `svn.exe` / `TortoiseProc.exe` | `Services/SvnLocator.cs` | No | PATH + cartelle note (TortoiseSVN, SlikSvn, Subversion, CollabNet) |
-
-### 1.2 UI, comandi e infrastruttura
-
-| Feature | Dove nel codice | Test | Note / limiti |
-|---|---|---|---|
-| Menu Extensions > SVNAssist | `Commands/SvnAssistMenu.cs` (SVN Changes, Commit..., Update, Log/History) | No | `CommitCommand` è identico a `StatusCommand`. Nessun `Placements`: i comandi non sono in altri menu |
-| Tool window "SVN Changes" | `ToolWindows/SvnStatusToolWindow.cs`, `...Data.cs` (910 righe), `...Control.xaml` | No | Lista piatta con checkbox, commit inline, select all/none, pannello diff, context menu (Add/Ignore/Delete/Revert/Resolve). `Placement = Floating` (`SvnStatusToolWindow.cs:77`) |
-| Tool window "SVN Log" | `ToolWindows/SvnLogToolWindow*.cs` | No | `DocumentWell`; lista + diff; testo di stato con emoji |
-| Prompt "svn.exe mancante" | `SvnSetupAssistant.cs`; `Services/SvnEnvironment.cs` (winget `Slik.Subversion`, fallback pagina download) | No | Una volta per sessione (`Interlocked`); chiamato da `UpdateCommand` e `SvnStatusToolWindow.GetContentAsync` |
-| File watcher + refresh | `SvnStatusToolWindow.cs:220` (`FileSystemWatcher` ricorsivo), `:178` (timer 1 s, debounce 800 ms), `:159` (timer 5 s sulla solution) | No | Esclude solo `.svn`; ogni refresh = 2 processi (`status` + `info`) |
-| Impostazioni (Tools > Options > SVNAssist) | `Services/SettingsService.cs` (9 setting) | No (serve observer VS) | API key in chiaro nello store VS (DPAPI non fatto, commento nel codice) |
-| Esecuzione processi | `Services/ProcessRunner.cs`, `IProcessRunner.cs` | Indiretto (runner finto) | UTF-8, stdout/stderr in parallelo, kill su cancel; **nessun timeout, nessun `--non-interactive`** |
-| CommitDialog modale | `Dialogs/CommitDialog*.cs/.xaml` | No | **Codice morto**: nessun riferimento (solo commento in `CommitCommand.cs`), ancora EmbeddedResource nel csproj |
-
-### 1.3 AI (commit message)
-
-| Feature | Dove nel codice | Test | Note / limiti |
-|---|---|---|---|
-| Genera / Migliora messaggio | `Services/AiServiceBase.cs:43/55`; UI `SvnStatusToolWindowData.cs:437/485` | Sì (via `AiService`) | Prompt in italiano; diff **dell'intera WC** (D3) |
-| Provider `auto/copilot/claudecode/claude/openai` + fallback a catena | `Services/AiServiceFactory.cs:66`; `FallbackAiService` (`:127`) | Sì (10 factory + 2 fallback) | In `auto`: Copilot (solo se runtime già scaricato) > Claude Code > Claude API > OpenAI-compatibile |
-| OpenAI-compatibile (GitHub Models, OpenAI, Azure, Ollama, Gemini) | `Services/AiService.cs` | Sì (9, MockHttp) | `max_tokens = 200` fisso; retry con messaggio dimezzato su limite token |
-| Claude API (SDK `Anthropic` 13.8.0) | `Services/AnthropicAiService.cs` | Solo creazione via factory | Default `claude-sonnet-5-5` (elenco Sonnet/Haiku/Opus) |
-| Claude Code (`claude -p`, stdin, senza tool/MCP) | `Services/ClaudeCodeAiService.cs` | Sì (2) | Gira in `%TEMP%` per evitare `CLAUDE.md` di progetto |
-| GitHub Copilot (`GitHub.Copilot.SDK` 1.0.31) | `Services/CopilotAiService.cs` | No (serve runtime reale) | Token `gh`/env o login della CLI Copilot |
-| Runtime Copilot scaricato al primo uso | `Services/CopilotRuntimeInstaller.cs:49` (release GitHub + SHA-256 da `SHA256SUMS.txt`, in `%LOCALAPPDATA%\SVNAssist\copilot-runtime`) | Sì (4) | ~100 MB; versione dal metadato assembly `CopilotCliVersion`; UI di progresso non presente (da verificare) |
-| Token GitHub automatico (`gh auth token`, `GITHUB_TOKEN`, `GH_TOKEN`) | `Services/GitHubTokenResolver.cs`; prompt `AiSetupPrompt.cs` | Sì (4) | Il token va solo a `models.github.ai` (`IsGitHubModelsEndpoint`, testato) |
-| Chunking dei diff grandi | `Services/AiServiceBase.cs:72-153` | Parziale (`ExtractFilePaths`) | Limite input ~28.000 caratteri, tarato sul provider più stretto (GitHub Models) per tutti |
-
-### 1.4 Test e tooling
-
-| Cosa | Dove | Note |
+| Area | Stato in 0.2.0 | Limiti |
 |---|---|---|
-| 47 test xUnit | `tests/SVNAssist.Tests/` (Ai*, CopilotRuntimeInstaller, GitHubTokenResolver, SvnServiceArgs = unit con runner finto, SvnService = integrazione `file://`) | Integrazione richiede `svn`/`svnadmin` nel PATH |
-| Ambiente SVN usa-e-getta | `tools/setup-local-svn.ps1`, `tools/README.md` | Repo `file://` con trunk/branches/tags + `DemoApp.sln` + `branches/feature-demo`: già adatto a testare switch/merge |
+| Changes (albero, Staged, filtro, tastiera) | F-UI fatto: sezioni Staged / Modifiche / Non versionati / Conflitti, Commit All / Commit Staged (n), feedback sulle azioni | Niente indicatore "in arrivo" (`status -u`) |
+| Commit / Add / Delete / Revert / Ignore | Fatti, con conferme (D1, D2), revisione mostrata (D14), bloccato con conflitti | Proprietà multilinea (`svn:ignore`) poco provate |
+| Conflitti | Resolve con Working / Mine-full / Theirs-full / Base; tree-conflict con conferma (D10, D11 in parte) | Nessun editor 3-way |
+| Update | Esito con revisione e conflitti (D9); **F-UPD**: Update to revision con elenco revisioni | Nessuna anteprima di cosa arriva |
+| Cleanup, Lock/Unlock | **F-CLEAN** e **F-LOCK** fatti (cleanup suggerito su WC bloccata; steal lock con conferma) | I lock di altri utenti non sono elencati |
+| Log | **F-LOG** fatto: documento nell'area editor, filtri, file per revisione, confronto tra revisioni | Niente revisioni eligible / azioni per revisione |
+| Diff | **F-DIFF** fatto: diff nativo di VS (file, cartelle, revisioni), TortoiseSVN non serve | — |
+| Esplora soluzioni | **F-SE** fatto: sottomenu SVN su file/cartella/progetto/solution | Selezione singola |
+| Login SVN | Dialogo utente/password solo su errore di autenticazione, ripete il comando; cache standard svn | Nessun supporto certificati client |
+| Info | `svn info` usato per branch e root (header "/ (radice)" se manca trunk/branches) | Modello F-INFO completo non fatto |
+| AI | Procedura guidata, 4 provider, **AI-SEL** (diff dei soli Staged, D3), regole di commit copilot-instructions, limiti diff (`DiffLimiter`) | Limiti per provider (D16), modelli fissi |
+| Sicurezza | `--non-interactive` e timeout (D8), `LC_ALL=C`, **D17 DPAPI** per le API key, `SensitiveFiles` | — |
+| Piattaforma | Temi, IT/EN a caldo, controllo .NET 10 e proposta di installazione, release GitHub Actions | VS 2022 non provata; nessun VS Code |
+| Test | xUnit (unit + integrazione `file://`), test UI web (`tests/ui-web`); collaudo F5 con `docs/verifica/0.2.0/checklist-F5.md` | Menu/WebView2 solo via F5 manuale |
 
 ---
 
 ## 2. Limiti e debiti noti
 
-Ogni voce è verificata nel codice. Le correzioni sono assegnate alle fasi in §4.
+Fatti in 0.2.0 (non più debiti): D1, D2 (conferme), D3 (AI sui soli selezionati), D4 (date), D7 (menu Esplora soluzioni), D8 (non-interactive/timeout), D9 (update con esito), D12 (refresh con debounce, `RefreshDebouncer`), D13 (Log completo), D14 (revisione nel commit), D15 (dialog morto rimosso, nuova architettura), D17 (DPAPI).
 
-| # | Problema | Evidenza | Impatto | Fix proposto | Ore |
-|---|---|---|---|---|---|
-| D1 | **Revert senza conferma**: `svn revert --depth infinity` direttamente dal context menu | `SvnStatusToolWindowData.cs:648-672`, `SvnService.cs:114` | Perdita irreversibile di lavoro locale | Conferma con elenco file via `Shell().ShowPromptAsync(..., PromptOptions.OKCancel)` (già usato in `SvnSetupAssistant.cs:35`) dietro `IDialogService` iniettabile (come `IAiSetupPrompt`) | 2 |
-| D2 | **Delete senza conferma** né gestione file modificati | `SvnStatusToolWindowData.cs:621-645`, `SvnService.cs:102` | Cancellazione dal disco di file/cartelle | Conferma; `--force` solo dopo secondo avviso; test integrazione | 2 |
-| D3 | **AI usa il diff dell'intera WC**, non dei file selezionati | `SvnStatusToolWindowData.cs:459` e `:507` -> `GetWorkingCopyDiffAsync` (`SvnService.cs:219`, `svn diff` senza path) | Messaggio che descrive file non inclusi; i file nuovi non aggiunti (`?`) sono invisibili a `svn diff` | `GetDiffAsync(paths)` -> `svn diff <path...>`; per i `?` selezionati diff sintetico dal contenuto | 3 |
-| D4 | `DateTimeOffset.Parse` dipendente dalla cultura | `SvnService.cs:202` | L'ISO-8601 di svn in pratica si legge quasi ovunque, ma la chiamata è culture-dependent (e il fallback `MinValue.ToString("O")` è inutile) | `Parse(v, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)` + test con cultura diversa | 0,5 |
-| D5 | Pacchetti di test datati | `SVNAssist.Tests.csproj`: Test.Sdk 17.8.0, xunit 2.5.3, runner 2.5.3, coverlet 6.0.0 (anche `System.Text.Json 10.0.14` su net8: capire il motivo) | Compatibilità/sicurezza tooling | Aggiornare alle ultime stabili e rieseguire i 47 test | 1 |
-| D6 | **Nessun test UI / ViewModel** | nessun test su `ToolWindows/`, `Commands/`; `DESIGN.md` §6 lo lascia aperto | La logica più importante (VM da 910 righe) non è coperta | Test degli handler con `ISvnService` finto (verificare ergonomia `AsyncCommand`); UI solo con checklist manuale (`DESIGN.md` §9); test di integrazione in VS **(da verificare** fattibilità con modello out-of-proc) | 10 |
-| D7 | **Comandi non nel context menu di Solution Explorer** | nessun `Placements` nei 4 comandi; solo `GroupPlacement.KnownPlacements.ExtensionsMenu` (`SvnAssistMenu.cs:44`) | Per ogni azione su un file si passa dal pannello | F-SE (§3.1) | 14 |
-| D8 | **Nessun `--non-interactive` né timeout** | grep: assente in `src/`; `ProcessRunner.cs` senza timeout | Se svn chiede credenziali/trust certificato/conflitti, il processo può restare appeso senza console **(da verificare in VS reale)** | `--non-interactive` in `RunSvnAsync`; `CancelAfter` di timeout; mappare `E170013/E215004/E170001` in messaggi chiari | 2 |
-| D9 | Update: output scartato, conflitti non segnalati, comando di menu su WC sbagliata | `SvnService.cs:182`; `UpdateCommand.cs:52` | L'utente non sa a che revisione è arrivato né se ci sono conflitti | `UpdateAsync` ritorna `UpdateResult(revision, conflicts)` (parsing `Updated to revision N.` / `Summary of conflicts:`); il comando usa DI + `FindSvnRoot` | 3 |
-| D10 | Resolve marca "risolto" senza controllare i marcatori | `SvnService.cs:126-132` (`--accept working`) | Si committa un file con `<<<<<<<` | Offrire `mine-full`/`theirs-full`/`working`; con `working` avvisare se restano marcatori | 3 |
-| D11 | Parser status incompleto | `SvnService.cs:49-72`, `:328` | Tree conflict (`tree-conflicted="true"`), `ignored`, `external`, `obstructed`, `incomplete`, `props="conflicted"` non gestiti | Estendere `SvnStatusKind` + parser; test su XML campione | 3 |
-| D12 | Refresh ridondante | 2 timer (1 s + 5 s) + `FileSystemWatcher` che filtra solo `.svn` (`SvnStatusToolWindow.cs:34-35, 254-268`) | Build in `bin/`/`obj/` scatenano `status`+`info` a raffica sulle WC grandi | Unico loop con debounce, ignorare `bin/obj/.vs`, `info` solo al cambio WC | 4 |
-| D13 | Log window senza auto-detect né paginazione | `SvnLogToolWindowData.cs:24`; `SvnLogToolWindow.GetContentAsync` non rileva la WC | UX peggiore della Status window | Riusare auto-detect; `-v`; "carica altre" | 3 |
-| D14 | Commit non mostra la revisione, non gestisce out-of-date | `SvnStatusToolWindowData.cs:395` | Non si sa cosa si è creato | Parsare `Committed revision N.`; su errore out-of-date suggerire Update | 1 |
-| D15 | Codice morto e docs non allineate | `Dialogs/CommitDialog*`; `DESIGN.md` §1 ("13 test", AI solo OpenAI-compatibile); `README.md` ("Architettura: AI formato OpenAI") | Confusione | Rimuovere il dialog; aggiornare README/DESIGN | 1,5 |
-| D16 | Limiti AI tarati sul provider più stretto | `AiServiceBase.cs:17-26` (8000 token totali), `AiService.cs:58` (`max_tokens=200`) | Blocca AI più ricca (spiegare revisione, assistente conflitti) | Limiti per provider (proprietà virtuale) e `maxTokens` parametrico | 3 |
-| D17 | API key in chiaro nello store impostazioni | `SettingsService.cs` (commento sul DPAPI) | Segreti leggibili dal profilo | `ProtectedData` (DPAPI) o Credential Manager | 4 |
-| D18 | `ISvnService` e ViewModel crescono senza struttura | `ISvnService.cs` (117 righe, 14 metodi), VM 910 righe | Ogni feature peggiora il God object | Servizi per area (Info/Branch/Merge/Props), un ViewModel per finestra | incluso nelle fasi |
+Ancora aperti:
+
+| # | Problema | Impatto | Fix proposto | Ore |
+|---|---|---|---|---|
+| D5 | Pacchetti di test datati (xunit, Test.Sdk, coverlet) | Compatibilità tooling | Aggiornare alle ultime stabili | 1 |
+| D6 | Nessun test automatico su host/WebView2/menu | Regressioni scoperte solo con F5 | Checklist F5 a ogni release; valutare test di integrazione dell'host | 10 |
+| D10/D11 | Resolve "working" con marcatori residui e parser status incompleto (`ignored`, `external`, `obstructed`, `props="conflicted"`) | Commit di file con `<<<<<<<`; conflitti di proprietà non visti | Avviso marcatori + estendere stato e parser (serve al merge, vedi §4) | 3 + 3 |
+| D16 | Limiti AI tarati sul provider più stretto (`max_tokens`, soglie token) | Blocca AI più ricca (spiega revisione, review) | Limiti per provider, `maxTokens` parametrico | 3 |
+| D18 | `ISvnService` cresce senza struttura per area | Ogni feature peggiora il servizio | Servizi per area (Info/Branch/Merge) a partire dalla 0.3.0 | incluso in §4 |
+| D19 | Elenco modelli AI fisso (Copilot stimato) | Modelli nuovi mancanti | Elenco dinamico dal provider | 5 |
+| D20 | Layout repository assunto `trunk/branches/tags` | Branch picker/merge inutili su layout diversi | Impostazioni `TrunkPath`/`BranchesPath`/`TagsPath` | 2 |
+| D21 | Copilot: runtime ~100 MB scaricato al primo uso | Primo uso lento | Barra di avanzamento verificata | 3 |
 
 ---
 
-## 3. Funzionalità future
+## 3. Funzionalità future (specifiche; le voci ✅ sono uscite)
 
 ### 3.0 Premesse tecniche (valide per tutte le feature)
 
@@ -119,7 +70,7 @@ Ogni voce è verificata nel codice. Le correzioni sono assegnate alle fasi in §
 
 **Non risulta nell'SDK locale:** API per aprire il diff viewer di VS, API Language Model/Copilot (già noto, `DESIGN.md` §7), info bar. Per i diff si resta su TortoiseProc/TortoiseMerge o su `vsdiffmerge.exe` di VS **(da verificare percorso/argomenti)**, con fallback inline.
 
-**Limiti Remote UI (XAML standard, niente controlli custom, niente code-behind):** già usati nel repo `Grid/StackPanel/DockPanel`, `ListBox` + `DataTemplate`, `TextBox`, `Button`, `CheckBox`, `ComboBox`, `ContextMenu/MenuItem`, `Style/DataTrigger`, `ObservableList<T>`, `IAsyncCommand`. Pattern obbligati: niente converter -> proprietà già pronte nel VM (`StatusColor` come stringa, flag `CanXxx`); visibilità via `DataTrigger`. **Non verificati** (spike prima di progettare UI su di essi): `TreeView`, `Expander`, `DataGrid`, `Popup`, `KeyBinding`, drag&drop.
+**Limiti UI web (XAML standard, niente controlli custom, niente code-behind):** già usati nel repo `Grid/StackPanel/DockPanel`, `ListBox` + `DataTemplate`, `TextBox`, `Button`, `CheckBox`, `ComboBox`, `ContextMenu/MenuItem`, `Style/DataTrigger`, `ObservableList<T>`, `IAsyncCommand`. Pattern obbligati: niente converter -> proprietà già pronte nel VM (`StatusColor` come stringa, flag `CanXxx`); visibilità via `DataTrigger`. **Non verificati** (spike prima di progettare UI su di essi): `TreeView`, `Expander`, `DataGrid`, `Popup`, `KeyBinding`, drag&drop.
 
 **Regole comuni per ogni comando svn nuovo:**
 1. Sempre `--non-interactive` (D8) e `ArgumentList` (niente escaping a mano).
@@ -132,14 +83,14 @@ Ogni voce è verificata nel codice. Le correzioni sono assegnate alle fasi in §
 
 ### 3.1 Integrazione IDE
 
-#### F-SE — Context menu di Solution Explorer
+#### F-SE — Context menu di Solution Explorer — ✅ fatto in 0.2.0
 - **Cosa fa:** tasto destro su file/cartella/progetto -> sottomenu *SVNAssist* con Diff, Log del file, Blame, Update, Commit di questo file, Revert, Add, Lock/Unlock, Cleanup, Proprietà.
 - **Comandi svn:** quelli delle singole feature sul path selezionato (`svn diff <p>`, `svn log -v <p>`, `svn blame --xml <p>`, `svn update <p>`, `svn revert <p>`).
 - **UX:** sottomenu unico "SVNAssist"; Revert/Delete sempre con conferma.
 - **Note tecniche:** `CommandConfiguration.Placements = [CommandPlacement.VsctParent(guidSHLMainMenu, <id gruppo>, priority)]`. I gruppi dei context menu di Solution Explorer (item, folder, project) sono in `vsshlids.h`: gli ID esatti vanno trovati con uno **spike (4 h)**; servono ID di *gruppo*, non di menu **(da verificare)**. In alternativa un `MenuConfiguration` proprio agganciato con `GroupPlacement.VsctParent`. Il path si ottiene con `await context.GetSelectedPathAsync(ct)`: **selezione singola**; la multi-selezione richiederebbe la Project Query API **(da verificare)**. `VisibleWhen` non sa se il path è in una WC: comando sempre visibile, con messaggio chiaro se il path non è versionato.
 - **Effort:** spike 4 h + 10 h (5-6 comandi, `IDialogService`, WC dal path con `FindSvnRoot`) = **14 h**. **Rischio:** medio. **Priorità: P1.**
 
-#### F-UI — UI moderna stile Git Changes
+#### F-UI — UI moderna stile Git Changes — ✅ fatto in 0.2.0
 - **Cosa fa:** sezioni raggruppate (Conflitti / Modifiche / Aggiunti / Non versionati / Mancanti) con contatori; header con branch + revisione + indicatore incoming; azione primaria "Commit (n)"; conferme per Revert/Delete; backup `.patch` automatico prima di un Revert (undo).
 - **Comandi svn:** `svn status -u --xml` (incoming via `<repos-status>`), `svn info --xml`.
 - **UX:** una `ObservableList` per sezione con titolo comprimibile (toggle + `DataTrigger`, non `Expander` finché non verificato); icone vettoriali invece delle emoji; colori dai `VsResourceKeys` (già usati per i ComboBox) per tema chiaro/scuro; stato vuoto "Nessuna modifica".
@@ -150,7 +101,7 @@ Ogni voce è verificata nel codice. Le correzioni sono assegnate alle fasi in §
 - **Cosa fa:** suggerisce (a) nomi dei file modificati, (b) simboli (classi/metodi) dei file cambiati, (c) messaggi recenti dell'utente, (d) riferimenti ticket (`#123`, regex configurabile).
 - **Comandi svn:** (a) già in `Files`; (b) `svn diff -x -p <paths>` (hunk header con nome funzione: buono per C/C++, meno per C#) oppure regex sulle righe aggiunte (`class|interface|void|\w+\(`); (c) `svn log --search <utente> -l 30 --xml` (`--search` da svn 1.8) + cache in `%LOCALAPPDATA%\SVNAssist`.
 - **UX:** lista cliccabile sotto la TextBox quando si digita `#`/`@` o dopo 3 caratteri; ComboBox "messaggi recenti".
-- **Note tecniche:** in Remote UI non c'è controllo autocomplete né accesso al caret: solo lista separata (`HasSuggestions` + `DataTrigger`) con inserimento in coda al testo. Accettare con Tab/Enter richiede `KeyBinding` **(non verificato)**; niente completamento "a metà parola".
+- **Note tecniche:** in UI web non c'è controllo autocomplete né accesso al caret: solo lista separata (`HasSuggestions` + `DataTrigger`) con inserimento in coda al testo. Accettare con Tab/Enter richiede `KeyBinding` **(non verificato)**; niente completamento "a metà parola".
 - **Effort:** 14 h (6 h per i soli messaggi recenti). **Rischio:** alto (UX limitata). **Priorità: P2.**
 
 ---
@@ -228,11 +179,11 @@ Premessa: dalla 1.8 `svn merge` usa il merge-tracking automatico (`svn:mergeinfo
 #### F-BLAME — Blame / Annotate
 - **Cosa fa:** per ogni riga di un file mostra chi/quando/quale revisione l'ha scritta; click su una riga apre la revisione nel Log.
 - **Comandi svn:** `svn blame --xml [-g] [-r BASE] <file>` (`-g` attribuisce al branch sorgente delle righe mergiate) -> `<entry line-number><commit revision><author><date>`. **L'XML non contiene il testo delle righe**: leggerlo dal file locale (se non modificato) o con `svn cat -r <rev> <file>`.
-- **UX:** (1) tool window con `ListBox` (rev, autore, data, testo) e filtro autore; (2) P2: `TextViewMarginProvider`/`CodeLens` nell'editor (Editor.Contracts presente; fattibilità del margine Remote UI su file grandi **da verificare**).
+- **UX:** (1) tool window con `ListBox` (rev, autore, data, testo) e filtro autore; (2) P2: `TextViewMarginProvider`/`CodeLens` nell'editor (Editor.Contracts presente; fattibilità del margine UI web su file grandi **da verificare**).
 - **Note tecniche:** oltre ~5.000 righe virtualizzare/paginare; blame di file binari -> errore da gestire (`E195013`). Voce in F-SE.
 - **Effort:** tool window 12 h; margine editor +14 h. **Rischio:** medio. **Priorità: P1** (tool window), P2 (margine).
 
-#### F-LOG — History più ricca (già nel backlog)
+#### F-LOG — History più ricca (già nel backlog) — ✅ fatto in 0.2.0
 - **Cosa fa:** paginazione, filtri autore/testo/path/date, elenco file per revisione, azioni per revisione (copia numero, diff vs working, annulla revisione, merge, update to revision, branch da qui).
 - **Comandi svn:** `svn log --xml -v -l 50 -r HEAD:1 [--search txt] [-r {data}:{data}] <target>`; pagina successiva con `-r <ultima-1>:1`; `svn diff -c <rev> <file>` per file singolo; `--stop-on-copy` per limitarsi alla vita del branch.
 - **UX:** auto-detect WC come nella Status window, filtro in cima, dettaglio con elenco file (doppio click = diff).
@@ -242,20 +193,20 @@ Premessa: dalla 1.8 `svn merge` usa il merge-tracking automatico (`svn:mergeinfo
 
 ### 3.4 Manutenzione e lavoro quotidiano
 
-#### F-UPD — Update mirato e "Update to revision"
+#### F-UPD — Update mirato e "Update to revision" — ✅ fatto in 0.2.0
 - **Cosa fa:** update di singolo file/cartella e a una revisione specifica (es. per riprodurre un bug), ritorno a HEAD, riepilogo con conflitti.
 - **Comandi:** `svn update <path> --non-interactive --accept postpone`; `svn update -r 1234 <path>`; ritorno `svn update -r HEAD`; `--set-depth infinity` per cartelle sparse (P2). Pre-check `svn status -u --xml`.
 - **UX:** *Update* e *Update to revision...* (prompt con `InputPromptOptions` per il numero, o scelta dal Log); avviso che una WC a revisione vecchia non è committabile se il file è out-of-date; riepilogo "Aggiornato alla r1234 — 3 aggiornati, 1 conflitto".
 - **Note tecniche:** include D9; `UpdateCommand` su DI + root WC.
 - **Effort:** 6 h. **Rischio:** basso. **Priorità: P1.**
 
-#### F-CLEAN — Cleanup
+#### F-CLEAN — Cleanup — ✅ fatto in 0.2.0
 - **Cosa fa:** sblocca una WC (`E155004 working copy locked`, operazione precedente non terminata) e ripulisce non versionati/ignorati.
 - **Comandi:** `svn cleanup`; `--remove-unversioned`, `--remove-ignored`, `--vacuum-pristines` (1.9+), `--include-externals`.
 - **UX:** comando *Cleanup...* con checkbox; le opzioni distruttive spente di default, con conteggio/elenco dei file (da `svn status --xml`) e conferma. Suggerimento automatico quando un comando fallisce con `E155004`.
 - **Effort:** 3 h. **Rischio:** basso (opzioni distruttive protette). **Priorità: P1.**
 
-#### F-LOCK — Lock / Unlock
+#### F-LOCK — Lock / Unlock — ✅ fatto in 0.2.0
 - **Cosa fa:** blocca un file (tipico per binari) e mostra chi detiene il lock.
 - **Comandi:** `svn lock -m "motivo" <file>`, `svn unlock <file>`, `--force` per rubare/rompere; visibilità: `svn status -u --xml` (`<lock>` in `wc-status`/`repos-status`), `svn info --xml`; `svn propset svn:needs-lock '*' <file>` per file read-only finché non si fa lock.
 - **UX:** colonna/icona lucchetto, voci Lock/Unlock nel context menu e in F-SE, dialog con motivo, conferma per `--force`.
@@ -304,7 +255,7 @@ Premessa: dalla 1.8 `svn merge` usa il merge-tracking automatico (`svn:mergeinfo
 
 ### 3.5 Diff
 
-#### F-DIFF — Diff senza dipendere da TortoiseSVN
+#### F-DIFF — Diff senza dipendere da TortoiseSVN — ✅ fatto in 0.2.0
 - **Cosa fa:** oggi il diff è TortoiseSVN oppure testo unificato (`SvnService.cs:233, 226`). Obiettivo: diff utilizzabile con il solo `svn.exe`.
 - **Comandi:** `svn cat -r BASE <file>` su file temporaneo + `vsdiffmerge.exe <base> <working> <labelBase> <labelWorking>` **(da verificare percorso e argomenti; nessuna API out-of-proc nota)**; fallback: diff unificato colorato (una `ListBox` di righe con colore calcolato nel VM, perché la `TextBox` non colora).
 - **Effort:** 6 h (spike diff VS 2 h + colorato inline 4 h). **Rischio:** medio. **Priorità: P1.**
@@ -336,36 +287,90 @@ Prerequisiti comuni: D16 (limiti e `maxTokens` per provider) e un metodo pubblic
 
 ---
 
-## 4. Roadmap proposta
+---
 
-Ordine: **sicurezza e quick win -> mancanze quotidiane -> storia/analisi -> branching -> UI/AI -> avanzate -> VS Code (dopo lo spike).** Ore indicative (±30%), comprensive di test automatici, non del collaudo manuale in VS.
+## 4. Piano 0.3.0 — Merge da Visual Studio
 
-| Fase | Contenuto | Dipende da | Ore | Perché in quest'ordine |
-|---|---|---|---|---|
-| **Fase 0 — Sicurezza e quick win** | D1, D2 conferme + `IDialogService`; D8 `--non-interactive`/timeout; D3/AI-SEL diff dei soli selezionati; D10 resolve sicuro; D9 update con esito + DI; D14 revisione nel commit; D4 date; D11 parser status; D12 watcher/timer; D13 Log auto-detect; D5 pacchetti test; D15 pulizia/docs; D6 test VM di base | — | **~35** | Elimina rischi di perdita dati e possibili hang prima di aggiungere funzioni; tutte voci piccole e già individuate |
-| **Fase 1 — Fondamenta e quotidiano** | F-INFO; refactor di `ISvnService` per area (D18); F-UPD; F-CLEAN; F-SE (spike + comandi); F-DIFF; F-LOCK; **spike F-VSCODE 16 h (con estrazione Core)** | Fase 0 | **~60** | Chiude il backlog "priorità alta" di `DESIGN.md`; F-INFO e il refactor servono a tutto il resto; lo spike decide l'architettura prima di scrivere codice che andrebbe spostato |
-| **Fase 2 — Storia e portabilità del lavoro** | F-LOG; F-BLAME (tool window); F-PATCH; F-CL; D16; AI-EXPLAIN | Fase 1 | **~45** | Valore alto, rischio basso, poca rete; F-PATCH abilita il backup "undo" usato da merge e shelve |
-| **Fase 3 — Branching** | F-SWITCH; F-BRANCH; F-MERGE (M1, M3, M4, M5, M6, poi M2); AI-SUMMARY | Fasi 0-1 (D8, F-INFO, D11, F-PATCH) | **~85** | La parte più rischiosa e costosa: dopo la messa in sicurezza e con test d'integrazione su `file://` (`setup-local-svn.ps1` ha già `branches/feature-demo`). Prima iterazione opzionale con delega a TortoiseProc (3 h) |
-| **Fase 4 — UI moderna e AI** | F-UI; F-AUTOCOMPLETE (almeno "messaggi recenti"); AI-REVIEW; D17 (DPAPI) | Fasi 1-3 (le sezioni usano changelist/merge/lock) | **~45** | Rifare la UI a feature stabili evita di rifarla due volte |
-| **Fase 5 — Avanzate (a richiesta)** | F-PROP; F-REPO; F-SHELVE (variante patch); F-RELOC; AI-CONFLICT; blame inline nell'editor | Fasi 2-3 | **~75** | Valore di nicchia o rischio alto: solo se richiesti da utenti reali |
-| **Fase 6 — VS Code (MVP)** | Esito dello spike: SCM provider + commit + update + log/diff + AI via `vscode.lm` + packaging | Fase 1 (Core estratto) | **~100** | Può partire in parallelo alla Fase 2 se lo spike è positivo e c'è un secondo sviluppatore; è la priorità dichiarata in `DESIGN.md` |
+Obiettivo: fare da Visual Studio il flusso quotidiano "porto le modifiche tra trunk e branch" senza uscire dall'IDE né aprire TortoiseSVN. Sviluppo in tre blocchi: fondamenta (info, switch, branch/tag), merge, rifinitura (avanzamento, test).
 
-**Totale indicativo:** ~445 h (Fasi 0-5 ~345 h, Fase 6 ~100 h).
+### 4.1 Studio di fattibilità
 
-**Quick win (< 1 giornata ciascuno):** D1, D2, D4, D5, D8, D14, D15, F-INFO (3 h), F-CLEAN (3 h), F-RELOC (3 h).
+Tutto si appoggia a `svn.exe` già in uso; nessuna dipendenza nuova. Output da parsare: `--xml` dove esiste (`ls`, `log`, `info`, `status`); testo per `merge` e `mergeinfo` (nessun `--xml`), con `LC_ALL=C` già forzato.
 
-**Rischi trasversali:**
-1. Comportamento in VS reale non verificato (tool window, Remote UI, DI, watcher: `DESIGN.md` §8-§9): prevedere una sessione F5 a fine di ogni fase.
-2. Output testuale di svn localizzato: forzare `LC_ALL=C` o usare solo `--xml` dove possibile.
-3. Credenziali di rete: nessuna UI di autenticazione, oggi si dipende dalla cache di svn/TortoiseSVN.
-4. Versioni di svn diverse (1.8-1.14): `mergeinfo --show-revs`, `cleanup --vacuum-pristines`, `svn shelve` hanno requisiti minimi diversi; rilevare con `svn --version --quiet` e nascondere le funzioni non supportate.
+| Funzione | Comando svn | Note di fattibilità |
+|---|---|---|
+| Elenco branch / tag | `svn ls --xml ^/branches`, `svn ls --xml ^/tags` | Remoto ma leggero; cache per sessione + Aggiorna. Layout da impostazioni (D20) |
+| Revisioni da unire | `svn mergeinfo --show-revs eligible SRC TGT` | Server-side, veloce anche su repo grandi; una `rNNN` per riga. Poi `svn log --xml -r` sul sorgente per autore/messaggio, filtrato lato client. Mostrate nella tabella del Log |
+| Anteprima | `svn merge --dry-run SRC` | Righe `U/A/D/C/G`; non prevede sempre tree conflict e conflitti di proprietà: dirlo nella UI |
+| Merge automatico (svn >= 1.8) | sync: `svn merge ^/trunk`; reintegrazione: `svn merge ^/branches/x` (senza `--reintegrate`, deprecato) | `--non-interactive --accept postpone`; non committa: l'utente rivede e committa |
+| Cherry-pick | `svn merge -c N[,M] SRC`; undo di un commit: `svn merge -c -N .` | Dal menu del Log |
+| Conflitti | `svn status --xml` (`conflicted`, `tree-conflicted`, `props="conflicted"`) | Pannello Changes già mostra la sezione Conflitti e blocca il commit; serve D10/D11 |
+| Messaggio precompilato | — | "Merge r120-r135 da ^/trunk" generato dal merge; modificabile; si può affinare con AI |
+| Annulla merge | `svn revert -R .` | Solo se la WC era pulita all'avvio (controllo obbligatorio); conferma con elenco e backup `.patch` in `%LOCALAPPDATA%\SVNAssist\undo` |
+| Switch | `svn switch ^/branches/x --accept postpone` | WC pulita consigliata; avviso se sporca |
+| Crea branch / tag | `svn copy ^/trunk ^/branches/x -m "..."` (`--parents` se manca la cartella) | Commit server-side: niente dry-run, chiedere conferma |
+
+**Requisiti versione svn:** merge automatico, `mergeinfo --show-revs` e `log --search` richiedono svn >= 1.8 (1.8 è del 2013: praticamente ovunque); la versione si legge con `svn --version --quiet` e le funzioni non supportate si nascondono. I server più vecchi senza mergeinfo server-side rendono lente le `eligible`: mostrare un avanzamento.
+
+**Rischi:**
+1. **Mergeinfo su sottocartelle**: merge di una sola cartella crea `svn:mergeinfo` sul sottoalbero e rende i merge successivi più lenti e confusi. Mitigazione: il merge automatico parte sempre dalla radice della WC; se la WC è su una sottocartella, avviso.
+2. **Merge di sottoalberi / sparse depth / externals**: fuori scope iniziale, documentato.
+3. **Rinomine e tree conflict**: i più frequenti nei merge reali e i più difficili da spiegare; mostrati nel pannello Conflitti con spiegazione testuale, risoluzione solo per scelta esplicita, mai automatica.
+4. **WC non pulita o a revisioni miste**: prima del merge richiedere WC pulita e `svn update` (altrimenti "Annulla" porta via lavoro non correlato).
+5. **Repo lenti**: `ls`, `mergeinfo`, `log` su rete: ogni operazione con avanzamento e Annulla (kill del processo svn, già supportato dal timeout).
+6. **Output testuale** di merge/mergeinfo: parser con test su campioni reali e su repo `file://` (`tools/setup-local-svn.ps1` ha già `branches/feature-demo`).
+7. Dopo uno switch VS può aver caricato file della solution diversi: avvisare di ricaricare la solution (nessuna API nota per forzarlo).
+
+### 4.2 Pezzi e stime
+
+| Blocco | Pezzo | Ore |
+|---|---|---|
+| Fondamenta | F-INFO completo (modello `SvnInfo`) + rilevamento versione svn | 5 |
+| | Layout repository personalizzabile (D20) | 2 |
+| | **Switch** con branch picker (elenco, ricerca, ultimi usati, check WC sporca) | 14 |
+| | **Crea branch / tag** (da WC o revisione, "passa al nuovo") | 8 |
+| | D10/D11 (marcatori residui, parser status, tree/props conflict) | 6 |
+| Merge | Elenco branch/tag come sorgenti e revisioni **eligible** nella tabella del Log | 8 |
+| | Anteprima `--dry-run` con conteggi | 6 |
+| | Merge automatico (sync da trunk, reintegrazione) con controllo WC pulita | 8 |
+| | Cherry-pick `-c` e "Annulla questa revisione" dal Log | 8 |
+| | Conflitti nel pannello Changes (modalità merge, banner Commit / Annulla merge) | 8 |
+| | Messaggio di commit precompilato | 2 |
+| | Annulla merge (revert con conferma + backup `.patch`) | 3 |
+| | Wizard UI (sorgente, anteprima, esecuzione) | 10 |
+| Rifinitura | Avanzamento e annullamento per repo lenti | 6 |
+| | Test di integrazione (repo locale con conflitto forzato, cherry-pick, annulla) | 8 |
+| | Collaudo F5 e documentazione | (non stimato) |
+| **Totale** | | **~102 h** |
+
+Ordine consigliato: F-INFO e versione, switch, branch/tag, poi merge (eligible, dry-run, automatico, cherry-pick, conflitti), poi annulla e avanzamento. Scorciatoia a basso rischio se serve una release intermedia: delegare `merge`/`switch` a `TortoiseProc /command:...` (spike 3 h), ma contraddice l'obiettivo di non dipendere da TortoiseSVN.
 
 ---
 
-## 5. Domande aperte per il proprietario
+## 5. Candidati 0.4.0 (ordinati per valore/costo)
 
-1. **Ordine VS Code vs VS:** `DESIGN.md` mette VS Code come "prossimo step"; qui propongo solo lo *spike* in Fase 1 e il porting dopo Switch/Merge. Preferisci anticipare la Fase 6 prima del branching?
-2. **Uso reale dei repository:** i repo seguono `trunk/branches/tags` alla radice? Si lavora con una WC che cambia branch (switch) o una WC per branch? Il reintegro verso trunk oggi si fa con TortoiseSVN? (determina la priorità di F-SWITCH e M2.)
-3. **Autenticazione:** i server SVN reali richiedono credenziali non in cache (basic/NTLM/certificati)? Se sì serve una UI di login (e un posto dove salvarle) prima di imporre `--non-interactive` ovunque.
-4. **Dipendenza da TortoiseSVN:** è accettabile delegare diff/merge/conflitti a TortoiseSVN quando è installato (costo basso), o l'estensione deve funzionare con il solo `svn.exe`? (differenza di ~25 h tra F-DIFF/M5 e UI custom.)
-5. **Modello Claude di default e privacy AI:** Il default per Claude Code/API (`SettingDefinitions`) è ora `claude-sonnet-5-5` (risolto; Haiku è più economico, selezionabile dall'elenco). Le funzioni che inviano contenuto di file (AI-CONFLICT, AI-REVIEW) vanno abilitate solo con consenso esplicito?
+| # | Candidato | Ore | Motivazione |
+|---|---|---|---|
+| 1 | Crea / applica patch (F-PATCH) | 7 | Poco costo, abilita undo sicuro del revert e dell'annulla merge |
+| 2 | Lock di altri utenti visibili | 4 | Evita sorprese al commit sui binari; poco codice sopra F-LOCK |
+| 3 | Lettura sezione `## Commit` di CLAUDE.md per i provider Claude | 3 | Allinea i commit AI alle regole del team come già per Copilot |
+| 4 | Elenco modelli AI dinamico | 5 | Elimina l'elenco fisso che invecchia |
+| 5 | Blame / Annotate (F-BLAME) | 12 | Funzione molto richiesta, rischio basso, solo `svn blame --xml` |
+| 6 | AI: spiega questa revisione | 6 | Riusa il Log: ottimo valore per il costo |
+| 7 | AI: cosa sta per arrivare (+ indicatore "n in arrivo") | 10 | Previene conflitti prima dell'Update; richiede `status -u` |
+| 8 | Verifica su VS 2022 | 8 | Dichiarata ma mai provata: allarga gli utenti |
+| 9 | AI: review pre-commit | 6 | Valore alto ma da fare con consenso esplicito (invia diff) |
+| 10 | Changelist (F-CL) | 8 | Utile su commit separati, poi serve UI nell'albero |
+| 11 | Autocompletamento messaggi | 6 (solo recenti) / 14 | UX limitata Prima solo i messaggi recenti |
+| 12 | Versione VS Code (F-VSCODE) | 16 spike / 60 MVP | Alto costo: prima lo spike con Core condiviso |
+
+Restano in backlog (P2, vedi `docs/FUNZIONALITA.md`): shelve, editor proprietà, repository browser, relocate, assistente AI ai conflitti, firma VSIX e Marketplace.
+
+---
+
+## 6. Domande aperte per il proprietario
+
+1. **Repository reali**: seguono `trunk/branches/tags` alla radice? Una WC per branch o switch sulla stessa WC? (decide la priorità di switch e reintegrazione.)
+2. **Autenticazione**: serve altro oltre alla cache svn e all'accesso integrato Windows (certificati client, NTLM)?
+3. **Privacy AI**: le funzioni che inviano contenuto di file (review pre-commit, spiega revisione, conflitti) vanno abilitate solo con consenso esplicito?
+4. **VS Code vs merge**: confermi merge in 0.3.0 e VS Code solo come spike nella 0.4.0?
