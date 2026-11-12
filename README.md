@@ -10,6 +10,8 @@ Estensione VSIX per Visual Studio 2022 / VS 18 che integra **Subversion (SVN)** 
 
 ## ✨ Funzionalità
 
+> **Novità 0.3.0** — Switch e Merge da Visual Studio: selettore branch/tag con vista estesa, Merge e cherry-pick dal Log con anteprima, riquadro Conflitti con editor di merge a 3 vie, annullamento delle singole righe dal diff, indicatore della revisione, Genera con AI su tutti i diff. Dettagli in [docs/release-notes/v0.3.0.md](docs/release-notes/v0.3.0.md).
+
 - **Pannello SVN Changes** — Tool window dockabile, stile Git Changes:
   - Branch corrente, Refresh e Update in alto
   - Messaggio di commit multiriga con **Commit All** (Staged vuoto: tutte le modifiche dei file versionati, come `git commit -a`) / **Commit Staged (n)**, **Genera con AI**, **Migliora** e scelta della lingua (Italiano / English / Auto)
@@ -21,6 +23,8 @@ Estensione VSIX per Visual Studio 2022 / VS 18 che integra **Subversion (SVN)** 
   - **Login SVN** solo se serve: dopo un errore di autenticazione compare un dialogo utente/password (con "Ricorda") e il comando viene ripetuto una volta; con l'accesso integrato di Windows non compare mai
   - Pannello diff inline (o TortoiseSVN se installato)
   - **Checklist dei prerequisiti** in-panel: svn, TortoiseSVN, provider AI, con pulsanti di installazione/login a un clic
+- **Switch e Merge** — **Switch...** con usati di recente e vista estesa (filtri nome/tipo/autore/periodo); **SVN Merge...**: revisioni da unire nel Log, Anteprima, Merge tutto / Merge selezionate, Annulla merge; conflitti risolti dal riquadro Conflitti (editor a 3 vie di VS, mia/loro, tree conflict in blocco)
+- **Diff** — diff nativo di VS, Alt+F8 / Shift+Alt+F8 tra le modifiche (personalizzabili), **SVN: Revert Selected Changes** e pulsante Annulla per blocco
 - **Commit message con AI** — Genera dal diff **minimo** degli stessi file del commit (Staged, o tutte le modifiche versionate), o migliora la bozza; multi-provider con fallback
 - **Auto-detect SVN** — Rileva la working copy dalla solution aperta; refresh automatico (FileSystemWatcher con debounce)
 - **Log / History** — Cronologia con diff per revisione e "Carica altre 50"
@@ -224,7 +228,7 @@ Stati: **M** modificato, **A** aggiunto, **D** eliminato, **R** sostituito, **C*
 |---|---|
 | File | SVN Add, Aggiungi a ignore list, SVN Delete (avvisa se perde modifiche locali), SVN Revert (conferma), Risolvi conflitto (Working / Mio / Server / Base), Mostra diff |
 | Cartella | SVN Add (contenuto non versionato), SVN Revert cartella, Aggiungi a ignore list, Diff cartella, Espandi/Comprimi tutto |
-| Sezione | Aggiungi tutti a SVN (Non versionati), Revert tutto (Modifiche), Espandi/Comprimi tutto |
+| Sezione | Aggiungi tutti a SVN (Non versionati), SVN Revert di tutto… (Changes e Staged, con conferma), Espandi/Comprimi tutto |
 
 #### Prerequisiti
 

@@ -2,6 +2,6 @@
   <!-- Unica fonte della versione: AssemblyVersion, FileVersion e versione del manifest VSIX
        (SVNAssistExtension usa ExtensionAssemblyVersion) derivano da <Version>. -->
   <PropertyGroup>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
   </PropertyGroup>
 </Project>

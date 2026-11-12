@@ -1,6 +1,6 @@
 # SVNAssist — Funzionalità: cosa c'è, cosa manca
 
-**Versione:** 0.2.0 · **Data:** 2026-11-12
+**Versione:** 0.3.0 · **Data:** 2026-11-12
 
 ## Come usare questo file
 
@@ -13,6 +13,10 @@ Questo file è pensato per essere **modificato da te** e restituito per pianific
 - Legenda: **P0** = sicurezza/blocca l'uso · **P1** = valore alto · **P2** = nice to have. Le ore sono stime (sviluppo + test automatici, senza collaudo manuale in VS); dettagli in `docs/ROADMAP.md`.
 
 ---
+
+## ✅ Cosa c'è nella 0.3.0
+
+Switch e Merge da Visual Studio (dettagli in `docs/release-notes/v0.3.0.md`): ramo corrente e **Switch** con recenti e vista estesa; layout repository configurabile; **SVN Merge** con revisioni da unire, Anteprima, Merge tutto / selezionate, Annulla merge, messaggio TortoiseSVN nei Recenti; riquadro **Conflitti** (editor 3-way, mia/loro, tree conflict in blocco); **annulla righe** dal diff e Alt+F8 tra le modifiche; indicatore della revisione con controllo HEAD; Recenti; **Revert di tutto** per sezione; Genera con AI a blocchi su tutti i diff e con regole da copilot-instructions / CLAUDE.md / AGENTS.md. Rimosso il sottomenu SVN di Esplora soluzioni.
 
 ## ✅ Cosa c'è nella 0.2.0
 
@@ -61,7 +65,7 @@ Questo file è pensato per essere **modificato da te** e restituito per pianific
 Formato: `- [ ] **Nome** — descrizione · Priorità · ~ore`. Spunta `[x]` per la release che lo vuole.
 Le voci del merge sono dettagliate nel piano 0.3.0 di `docs/ROADMAP.md` (~100 h totali).
 
-### Candidati 0.3.0 — Merge da Visual Studio (e prerequisiti)
+### 0.3.0 — Merge da Visual Studio (USCITA: fatte le voci principali; restano Crea branch/tag, D10/D11, avanzamento per repo lenti, wizard, backup .patch)
 - [ ] **`svn info --xml` completo + versione svn** — URL, root, revisione, lock, conflitti; `svn --version` per nascondere funzioni non supportate · P0 · ~5 h
 - [ ] **D10/D11: marcatori residui e parser status** — avviso se restano `<<<<<<<`, `props="conflicted"`, ignored/external · P1 · ~6 h
 - [ ] **Layout repository personalizzabile** — `TrunkPath` / `BranchesPath` / `TagsPath` se non standard · P1 · ~2 h

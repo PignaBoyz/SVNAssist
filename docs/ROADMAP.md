@@ -6,7 +6,9 @@
 
 ---
 
-## 1. Stato attuale (0.2.0)
+## 1. Stato attuale (0.3.0)
+
+> 0.3.0 (2026-11-12): Switch, Merge/cherry-pick, conflitti con editor 3-way, annulla righe dal diff, indicatore revisione, AI a blocchi. Le righe sotto descrivono la base 0.2.0; le novità 0.3.0 sono in `docs/release-notes/v0.3.0.md`.
 
 Architettura: host VS net472 in-process (`SVNAssist.Host`: comandi, menu, opzioni, WebView2, diff nativo) + backend .NET 10 su JSON-RPC (`SVNAssist.Backend`: servizi SVN e AI, store per Changes/Log/Wizard) + UI web (`SVNAssist.UI.Web`: HTML/CSS/JS, temi, i18n IT/EN). Vedi `DESIGN.md`.
 
@@ -289,7 +291,7 @@ Prerequisiti comuni: D16 (limiti e `maxTokens` per provider) e un metodo pubblic
 
 ---
 
-## 4. Piano 0.3.0 — Merge da Visual Studio
+## 4. Piano 0.3.0 — Merge da Visual Studio (USCITA il 2026-11-12)
 
 > **Ambito DECISO dall'utente (2026-11-12): 0.3.0 minima, ~30-40 h.** Dentro: elenco branch (`svn ls ^/branches`, `^/tags`) + **Switch**; **Merge da un branch** con revisioni da unire (`svn mergeinfo --show-revs eligible`) nella tabella del Log, anteprima `--dry-run`, merge vero; **cherry-pick** (`-c REV` sulle revisioni selezionate); conflitti nel pannello Changes esistente; annulla = Revert esistente (con conferma); messaggio di commit precompilato. **Fuori (rimandato):** Crea branch/tag, procedura guidata dedicata al merge (basta un pannello semplice), avanzamento/annullamento per repo lenti, test di integrazione estesi, D10/D11. Lo studio sotto resta come riferimento; le ore di 4.x valgono per l'ambito completo.
 
