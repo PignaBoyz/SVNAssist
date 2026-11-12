@@ -284,8 +284,50 @@
       }
     },
     {
+      "title": "mergeRevertAll",
+      "description": "Log in modalita merge, avviso della working copy con modifiche locali: SVN Revert di tutto, con conferma che elenca i file (i non versionati non si toccano); poi rilegge le revisioni da unire.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "mergeRevertAll"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "mergeUpdate",
+      "description": "Log in modalita merge, errore che suggerisce l update (revisioni miste): SVN Update della working copy, poi ricalcola le revisioni da unire.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "mergeUpdate"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
       "title": "mergeResolve",
-      "description": "Log in modalita merge: Risolvi i conflitti. Porta in primo piano la finestra Changes (sezione Conflitti).",
+      "description": "Log in modalita merge: Risolvi i conflitti / Vai a Changes. Porta in primo piano la finestra Changes (sezione Conflitti).",
       "type": "object",
       "additionalProperties": false,
       "required": [

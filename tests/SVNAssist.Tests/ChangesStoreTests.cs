@@ -619,6 +619,29 @@ public class ChangesStoreTests
         Assert.Equal([false], f.Svn.RevertRecursive);
     }
 
+    [Theory]
+    [InlineData("section:staged")]
+    [InlineData("section:changes")]
+    public async Task Revert_DiTuttaLaSezione_PiuCartelle_ConfermaConElenco_NegataNonFaNiente(string key)
+    {
+        var f = new Fixture().With(("a.cs", SvnStatusKind.Modified), (@"sub\b.cs", SvnStatusKind.Modified), (@"sub\deep\c.cs", SvnStatusKind.Deleted), ("n.txt", SvnStatusKind.Unversioned));
+        await f.Refresh();
+        if (key == "section:changes")
+            await f.Cmd("unstage", new { key = "section:staged" });   // le modifiche passano da Staged a Changes
+        f.Dialogs.ConfirmResult = false;
+        await f.Cmd("rowOp", new { op = "revert", key });
+        Assert.Empty(f.Svn.Reverted);   // conferma negata: niente
+        var msg = Assert.Single(f.Dialogs.Messages);
+        Assert.Contains("a.cs", msg);
+        Assert.Contains("sub/b.cs", msg);
+        Assert.Contains("sub/deep/c.cs", msg);
+        Assert.DoesNotContain("n.txt", msg);
+
+        f.Dialogs.ConfirmResult = true;
+        await f.Cmd("rowOp", new { op = "revert", key });
+        Assert.Equal([Full("a.cs"), Full(@"sub\b.cs"), Full(@"sub\deep\c.cs")], f.Svn.Reverted.SelectMany(r => r).Order());
+    }
+
     [Fact]
     public async Task Revert_CartellaAggiunta_RicorsivoEConfermaElencaAncheIFigli()
     {

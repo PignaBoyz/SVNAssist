@@ -146,22 +146,25 @@ internal sealed class ChangesStore : ViewStore, IDisposable
     /// <summary>Apre il Log in modalita' merge sulla sorgente scelta (la imposta il backend: il Log e' un'altra vista).</summary>
     internal Func<string, SwitchPickerStore.Target, CancellationToken, Task>? StartMerge { get; set; }
 
-    // Merge eseguito e non ancora committato: banner con "Annulla merge" e testo del messaggio precompilato.
-    private string? _mergeBanner, _mergeCommitText;
+    // Merge eseguito e non ancora committato: banner con "Annulla merge".
+    private string? _mergeBanner;
 
-    /// <summary>Dopo un merge: messaggio di commit precompilato (se vuoto, senza auto-stage) e banner con "Annulla merge".</summary>
+    /// <summary>
+    /// Dopo un merge: banner con "Annulla merge" e messaggio di commit (stile TortoiseSVN) in cima ai Recenti del repository.
+    /// Il campo del messaggio non si tocca: il messaggio resta nei Recenti anche dopo un revert e lo si inserisce da li' se serve.
+    /// </summary>
     internal void AfterMerge(string commitText, string bannerText)
     {
+        string? repo;
         lock (_stateLock)
         {
             _mergeBanner = bannerText;
-            _mergeCommitText = commitText;
+            repo = _repoRoot;
         }
 
-        if (string.IsNullOrWhiteSpace(CommitMessage.Text))
-            CommitMessage.Text = commitText;
-        else
-            NotifyChanged();
+        if (!string.IsNullOrEmpty(repo))
+            Recent?.Add(repo, commitText);
+        NotifyChanged();
     }
 
     private void ClearMergeBanner()
@@ -169,7 +172,6 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         lock (_stateLock)
         {
             _mergeBanner = null;
-            _mergeCommitText = null;
         }
     }
 
@@ -193,18 +195,11 @@ internal sealed class ChangesStore : ViewStore, IDisposable
     internal Task ShowWindowAsync() => _host.ShowChangesWindowAsync();
 
     /// <summary>
-    /// Dopo un merge/update/switch che lascia conflitti: propone di risolverli subito (porta in primo piano Changes, dove c'e' la sezione Conflitti)
-    /// oppure piu' tardi (i conflitti restano come sono, postpone).
+    /// Dopo un merge/update/switch che lascia conflitti: porta in primo piano Changes (sezione Conflitti), senza chiedere nulla.
     /// </summary>
-    internal async Task OfferResolveConflictsAsync(int conflicts, CancellationToken ct)
+    internal async Task RevealConflictsAsync(int conflicts, CancellationToken ct)
     {
         if (conflicts <= 0)
-            return;
-        var now = await _dialogs.AskAsync(
-            Loc.T("{0} file in conflitto.\n\nVuoi risolverli ora? \"Risolvi ora\" apre la sezione Conflitti di Changes, con un editor di merge per ogni file. " +
-                  "\"Più tardi\" lascia i conflitti come sono (svn non li risolve da solo): potrai risolverli quando vuoi, ma finché restano non si può committare.", conflicts),
-            Loc.T("Risolvi ora"), Loc.T("Più tardi"), ct);
-        if (!now)
             return;
         await _host.ShowChangesWindowAsync();
         SetStatus(Loc.T("{0} file in conflitto: risolvili nella sezione Conflitti, poi committa.", conflicts));
@@ -237,7 +232,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             lock (_stateLock)
             {
                 if (!string.Equals(_workingCopyPath, value, StringComparison.OrdinalIgnoreCase))
-                    _mergeBanner = _mergeCommitText = null; // il merge riguardava un'altra working copy
+                    _mergeBanner = null; // il merge riguardava un'altra working copy
                 _workingCopyPath = value;
             }
         }
@@ -1306,7 +1301,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             await RefreshAsync(ct, reloadBranch: true, update.ConflictedPaths.Count > 0
                 ? Loc.T("{0}: {1} file in conflitto.", updated, update.ConflictedPaths.Count)
                 : $"{updated}.");
-            await OfferResolveConflictsAsync(update.ConflictedPaths.Count, ct);
+            await RevealConflictsAsync(update.ConflictedPaths.Count, ct);
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
@@ -1360,7 +1355,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             await RefreshAsync(ct, reloadBranch: true, conflicts > 0
                 ? Loc.T("{0}: {1} file in conflitto.", updated, conflicts)
                 : $"{updated}.");
-            await OfferResolveConflictsAsync(conflicts, ct);
+            await RevealConflictsAsync(conflicts, ct);
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
@@ -1442,7 +1437,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             await RefreshAsync(ct, reloadBranch: true, (result.ConflictedPaths.Count > 0
                 ? Loc.T("{0}: {1} file in conflitto.", done, result.ConflictedPaths.Count)
                 : $"{done}.") + " " + Loc.T("Se Visual Studio lo chiede, ricarica la solution."));
-            await OfferResolveConflictsAsync(result.ConflictedPaths.Count, ct);
+            await RevealConflictsAsync(result.ConflictedPaths.Count, ct);
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
@@ -1475,11 +1470,6 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         {
             SetStatus(Loc.T("Annullamento del merge in corso..."));
             await _svnService.RevertAsync([wc], ct, recursive: true);
-            string? prefilled;
-            lock (_stateLock)
-                prefilled = _mergeCommitText;
-            if (prefilled is not null && CommitMessage.Text == prefilled)
-                CommitMessage.Clear();
             ClearMergeBanner();
             await RefreshAsync(ct, reloadBranch: false, Loc.T("Merge annullato: {0} elementi ripristinati.", entries.Count));
             if (MergeUndone is not null)
@@ -1490,6 +1480,22 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             SetStatus(Loc.T("Errore revert: {0}", ex.Message));
         }
     }
+
+    /// <summary>"SVN Revert di tutto" (avviso del Log in modalita' merge): annulla ogni modifica locale (i non versionati no), con conferma e elenco.</summary>
+    internal async Task RevertAllAsync(CancellationToken ct)
+    {
+        await RefreshAsync(ct); // l'elenco in conferma e' quello di adesso, anche se Changes non e' mai stato aperto
+        await RunExclusiveAsync(() =>
+        {
+            List<ChangeEntry> all;
+            lock (_stateLock)
+                all = _entries.Where(e => SectionOf(e) != ChangeSection.Unversioned).ToList();
+            return RevertCoreAsync(new KeyTarget(ChangeSection.Changes, true, string.Empty, all), ct, everything: true);
+        });
+    }
+
+    /// <summary>SVN Update della working copy (da un errore che lo suggerisce, es. revisioni miste).</summary>
+    internal Task UpdateNowAsync(CancellationToken ct) => RunExclusiveAsync(() => UpdateCoreAsync(ct));
 
     /// <summary>SVN Cleanup della working copy (rimuove i lock lasciati da operazioni interrotte).</summary>
     private async Task CleanupCoreAsync(CancellationToken ct)
@@ -1519,7 +1525,9 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         // "Errore..." (it) e "Error..." (en) iniziano uguale: il test non dipende dalla lingua.
         var isError = _statusMessage.StartsWith("Error", StringComparison.Ordinal);
         return new StatusDto(_statusMessage, isError,
-            isError && SvnErrors.IsWorkingCopyLocked(_statusMessage) ? new StatusActionDto(Loc.T("Esegui Cleanup"), "cleanup") : null, _statusSeq);
+            !isError ? null
+                : SvnErrors.IsWorkingCopyLocked(_statusMessage) ? new StatusActionDto(Loc.T("Esegui Cleanup"), "cleanup")
+                : SvnErrors.SuggestsUpdate(_statusMessage) ? new StatusActionDto(Loc.T("SVN Update ora"), "update") : null, _statusSeq);
     }
 
     // ── Operazioni su file, cartelle e sezioni ───────────────────────
@@ -1645,7 +1653,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
     }
 
     /// <summary>SVN Revert su file, cartella o sezione. Chiede conferma elencando cosa verra' annullato.</summary>
-    private async Task RevertCoreAsync(KeyTarget target, CancellationToken ct)
+    private async Task RevertCoreAsync(KeyTarget target, CancellationToken ct, bool everything = false)
     {
         // Percorsi espliciti: si annulla esattamente cio' che la conferma elenca (vedi RevertPlan).
         var targets = RevertPlan(target.Entries.Where(e => StatusPresentation.IsRevertable(e.Status)).ToList());
@@ -1655,7 +1663,8 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             return;
         }
 
-        var scope = target.WholeSection
+        var scope = everything ? string.Empty
+            : target.WholeSection
             ? $" ({ChangesTreeBuilder.SectionTitle(target.Section)})"
             : target.SingleFile is null ? Loc.T(" nella cartella \"{0}\"", target.Path) : string.Empty;
         var message = Loc.T("Annullare le modifiche locali su {0} elementi{1}?\n\n{2}\n\nLe modifiche andranno perse e l'operazione non è annullabile.",
@@ -1677,6 +1686,11 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             if (shallow.Count > 0)
                 await _svnService.RevertAsync(shallow, ct, recursive: false);
             await RefreshAsync(ct, reloadBranch: false, Loc.T("Revert completato su {0} elementi.", targets.Count));
+            bool left;
+            lock (_stateLock)
+                left = _entries.Any(e => StatusPresentation.IsRevertable(e.Status));
+            if (!left)
+                ClearMergeBanner(); // niente piu' da annullare: il banner del merge non ha piu' senso
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {

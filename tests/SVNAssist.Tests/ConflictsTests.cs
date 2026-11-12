@@ -356,32 +356,30 @@ public class ConflictsTests
     }
 
     [Fact]
-    public async Task Update_ConConflitti_ProponeRisolviOraOPiuTardi()
+    public async Task Update_ConConflitti_PortaInPrimoPianoChanges_SenzaChiedereNulla()
     {
         using var f = new Fixture();
         f.Svn.Statuses.Add(new SvnFileStatus("a.cs", SvnStatusKind.Conflicted));
         f.Svn.UpdateConflicts = ["a.cs"];
 
-        f.Dialogs.AskResult = false;   // "Più tardi": resta com'e'
         await f.Cmd("update");
-        Assert.Contains("1 file in conflitto", Assert.Single(f.Dialogs.Asked));
-        Assert.Equal(0, f.Host.ChangesShown);
-        Assert.Contains("in conflitto", f.Snap.Status.Msg);
 
-        f.Dialogs.AskResult = true;   // "Risolvi ora": porta in primo piano Changes
-        await f.Cmd("update");
+        Assert.Empty(f.Dialogs.Asked);   // nessun dialogo "risolvere ora / piu' tardi"
+        Assert.Empty(f.Dialogs.Messages);
         Assert.Equal(1, f.Host.ChangesShown);
         Assert.Contains("sezione Conflitti", f.Snap.Status.Msg);
+        Assert.Single(f.Snap.Conflicts!);   // il riquadro Conflitti c'e' gia'
     }
 
     [Fact]
-    public async Task Update_SenzaConflitti_NonChiedeNulla()
+    public async Task Update_SenzaConflitti_NonChiedeNulla_NeCambiaFinestra()
     {
         using var f = new Fixture();
 
         await f.Cmd("update");
 
         Assert.Empty(f.Dialogs.Asked);
+        Assert.Equal(0, f.Host.ChangesShown);
     }
 
     [Fact]
@@ -516,7 +514,7 @@ public class ConflictsTests
     // ── Merge: "da committare" nel Log e proposta dei conflitti ──────
 
     [Fact]
-    public async Task MergeConConflitti_PropostaRisolviOra_LogPending_ResolveMostraChanges()
+    public async Task MergeConConflitti_NessunDialogo_ChangesInPrimoPiano_LogPending_ResolveMostraChanges()
     {
         var svn = new FakeSvnService { InfoRelativeUrl = "^/trunk", Eligible = [4, 5] };
         svn.Folders["file:///repo"] = ["branches", "tags", "trunk"];
@@ -545,8 +543,8 @@ public class ConflictsTests
         Assert.Equal(1, m.Result!.Counts.Conflicted);
         Assert.Contains("da committare", ((LogState)log.GetSnapshot()).Msg);
         Assert.Contains("Conflitti da risolvere in Changes: 1", ((LogState)log.GetSnapshot()).Msg);
-        Assert.Contains("1 file in conflitto", Assert.Single(dialogs.Asked));
-        Assert.Equal(1, host.ChangesShown);   // "Risolvi ora"
+        Assert.Empty(dialogs.Asked);   // niente dialogo: la sezione Conflitti di Changes e' gia' li'
+        Assert.Equal(1, host.ChangesShown);   // Changes portata in primo piano senza chiedere
 
         await log.DispatchAsync("mergeResolve", JsonSerializer.SerializeToElement(new { }), Ct);
         Assert.Equal(2, host.ChangesShown);   // il pulsante "Risolvi i conflitti" del Log

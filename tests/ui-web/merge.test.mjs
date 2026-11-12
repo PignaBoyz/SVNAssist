@@ -108,7 +108,7 @@ test('schema: merge nel Log e nel banner validi; azione sconosciuta o campo in p
   assert.notDeepEqual(validate(C, s), []);
 });
 
-test('mock: apri (senza il ramo corrente), scegli, anteprima, cherry-pick con conflitto, banner, messaggio precompilato, annulla', async () => {
+test('mock: apri (senza il ramo corrente), scegli, anteprima, cherry-pick con conflitto, banner, messaggio nei Recenti, revert, annulla', async () => {
   const { run, bridge } = await loadDemo();
   const B = bridge(), got = { changes: [], log: [] }, tick = () => new Promise(r => setImmediate(r));
   const wins = { changes: { frameElement: { isConnected: true } }, log: { frameElement: { isConnected: true } } };
@@ -134,8 +134,15 @@ test('mock: apri (senza il ramo corrente), scegli, anteprima, cherry-pick con co
   assert.deepEqual(last('log').entries.map(e => e.rev), [131, 129, 128, 126]);
   assert.match(m.blocked, /modifiche locali/, 'la working copy della demo parte sporca: il merge e bloccato');
 
+  // avviso giallo: "SVN Revert di tutto..." con conferma (negata = niente), poi il merge si puo' fare
+  await run('modal = async () => false', 't');
+  await send('log', 'mergeRevertAll', {}); ok();
+  assert.match(last('log').merge.blocked, /modifiche locali/, 'conferma negata: la working copy resta sporca');
+  await run('modal = async () => true', 't');   // dialoghi (conferma di revert e annullamento): senza DOM non esistono
+  await send('log', 'mergeRevertAll', {}); ok();
+  assert.equal(last('log').merge.blocked, '', 'dopo il revert di tutto il merge si puo rifare');
+  assert.ok(last('changes').sections.some(s => s.id === 'unversioned' && s.count), 'i non versionati non si toccano');
   await run("S.files.forEach(f => { if (f.st !== '?') { f.st = 'N'; f.text = f.base; } })", 't');   // working copy pulita
-  await run('modal = async () => true', 't');   // dialoghi (proposta "Risolvi ora", conferma dell'annullamento): senza DOM non esistono
   await send('log', 'mergePreview', {}); ok();
   m = last('log').merge;
   assert.equal(m.blocked, ''); assert.equal(m.result.mode, 'preview'); assert.equal(m.result.revs, 'r126-r131');
@@ -147,13 +154,21 @@ test('mock: apri (senza il ramo corrente), scegli, anteprima, cherry-pick con co
   await send('log', 'mergeToggle', { rev: 129 }); await send('log', 'mergeToggle', { rev: 128 }); ok();
   assert.deepEqual(last('log').merge.selected, [128, 129]);
   await send('log', 'mergeToggle', { rev: 999 }); assert.deepEqual(last('log').merge.selected, [128, 129], 'una revisione non in elenco si ignora');
+  // revisioni miste (dopo un commit): errore con "SVN Update ora", che aggiorna e riprova
+  await run('S.mixed = true', 't');
+  await send('log', 'mergeSelected', {}); ok();
+  assert.match(last('log').merge.error, /revisioni miste/); assert.equal(last('log').merge.needsUpdate, true);
+  await send('log', 'mergeUpdate', {}); ok();
+  assert.equal(last('log').merge.error, ''); assert.equal(last('log').merge.needsUpdate, false);
+  assert.equal(await run('S.mixed', 't'), false);
   await send('log', 'mergeSelected', {}); ok();
   m = last('log').merge;
   assert.equal(m.result.mode, 'merge'); assert.equal(m.result.revs, 'r128, r129'); assert.equal(m.result.counts.conflicted, 1);
   assert.deepEqual(m.selected, []); assert.deepEqual(last('log').entries.map(e => e.rev), [131, 126], 'le revisioni unite non sono piu da unire');
   const c = last('changes');
-  assert.equal(c.merge.text, 'Merge r128, r129 da ^/branches/feature-coupon: rivedi le modifiche e committa, oppure annulla il merge.'); assert.equal(c.merge.conflicts, 1);
-  assert.equal(c.commit.text, 'Unite le revisioni 128-129 da branches/feature-coupon:\n........\nr128 | mrossi | OrderService applica il coupon al totale\n........\nr129 | lbianchi | Checkout: mostra lo sconto sul riepilogo');   // formato TortoiseSVN
+  assert.equal(c.merge.text, 'Merge r128, r129 da ^/branches/feature-coupon: rivedi le modifiche e committa, oppure annulla il merge. Messaggio del merge disponibile nei Recenti.'); assert.equal(c.merge.conflicts, 1);
+  assert.equal(c.commit.text, '', 'il campo del messaggio non si precompila');
+  assert.equal(c.commit.recent[0], 'Unite le revisioni 128-129 da branches/feature-coupon:\n........\nr128 | mrossi | OrderService applica il coupon al totale\n........\nr129 | lbianchi | Checkout: mostra lo sconto sul riepilogo');   // formato TortoiseSVN, in cima ai Recenti
   assert.ok(c.sections.some(s => s.rows.some(r => r.status === 'C')), 'il conflitto compare in Changes');
   assert.deepEqual(c.conflicts.map(x => [x.name, x.kind]), [['CheckoutController.cs', 'text']]);
   assert.deepEqual(c.conflicts[0].files, ['Web/Controllers/CheckoutController.cs.working', 'Web/Controllers/CheckoutController.cs.merge-left.r127', 'Web/Controllers/CheckoutController.cs.merge-right.r129'], 'file di appoggio del merge, raggruppati sotto il file');
@@ -162,11 +177,47 @@ test('mock: apri (senza il ramo corrente), scegli, anteprima, cherry-pick con co
   await send('log', 'mergeResolve', {}); ok();
 
   await send('changes', 'mergeUndo', {}); ok();
-  assert.ok(!last('changes').merge); assert.equal(last('changes').commit.text, '');
+  assert.ok(!last('changes').merge); assert.equal(last('changes').commit.text, ''); assert.match(last('changes').commit.recent[0], /^Unite le revisioni 128-129/, 'il messaggio resta nei Recenti anche dopo il revert');
   assert.match(last('changes').status.msg, /Merge annullato/);
   assert.equal(last('log').merge.eligible, 4, 'dopo l\'annullamento le revisioni tornano da unire');
   assert.equal(last('log').merge.pending, false);
 
   await send('log', 'mergeClose', {}); ok();
   assert.ok(!last('log').merge);
+});
+
+test('Log merge: avviso "working copy sporca" con Revert di tutto e Vai a Changes; errore revisioni miste con SVN Update ora (comandi nello schema)', () => {
+  const blocked = U.logHTML.mergePanel(logState({ blocked: 'La working copy ha 3 elementi con modifiche locali.' }));
+  assert.deepEqual(args(blocked).map(c => c.name).filter(n => /^merge(RevertAll|Resolve)$/.test(n)), ['mergeRevertAll', 'mergeResolve']);
+  assert.match(blocked, /SVN Revert di tutto…/); assert.match(blocked, /Vai a Changes/);
+  args(blocked).forEach(c => assert.deepEqual(validate(cmds, c), [], c.name));
+  assert.doesNotMatch(U.logHTML.mergePanel(logState({})), /mergeRevertAll/);
+  const err = U.logHTML.mergePanel(logState({ error: 'La working copy è a revisioni miste.', needsUpdate: true }));
+  assert.match(err, /SVN Update ora/); assert.ok(args(err).some(c => c.name === 'mergeUpdate'));
+  assert.deepEqual(validate(cmds, { name: 'mergeUpdate', args: {} }), []);
+  assert.doesNotMatch(U.logHTML.mergePanel(logState({ error: 'Errore: boh' })), /mergeUpdate/);
+  const sc = contract('log-state.schema.json');
+  assert.deepEqual(validate(sc, logState({ error: 'x', needsUpdate: true })), []);
+});
+
+test('menu della sezione Changes/Staged: "SVN Revert di tutto…" (rowOp revert sulla chiave di sezione); non per i Non versionati', () => {
+  for (const sec of ['changes', 'staged']) {
+    const items = U.changesHTML.sectionMenu(sec, 'section:' + sec, { count: 4 });
+    const r = items.find(i => i.label === 'SVN Revert di tutto…');
+    assert.deepEqual(j(r.args), { op: 'revert', key: 'section:' + sec }); assert.equal(r.cmd, 'rowOp'); assert.ok(!r.disabled);
+    assert.deepEqual(validate(cmds, { name: r.cmd, args: j(r.args) }), []);
+  }
+  assert.ok(U.changesHTML.sectionMenu('changes', 'section:changes', { count: 0 }).find(i => i.label === 'SVN Revert di tutto…').disabled);
+  assert.ok(!U.changesHTML.sectionMenu('unversioned', 'section:unversioned', { count: 2 }).some(i => /Revert/.test(i.label || '')));
+});
+
+test('demo: Revert di sezione con conferma negata non tocca nulla, confermata annulla anche piu cartelle; nessun dialogo "risolvere ora"', async () => {
+  const { run } = await loadDemo();
+  await run('autoDetect()', 't');
+  assert.doesNotMatch(await run('String(offerResolve)', 't'), /Più tardi|Risolvi ora/);
+  await run('modal = async () => false', 't');
+  const before = await run("S.files.filter(f => ['M', 'A', 'D', 'R', '!', 'C'].includes(f.st)).length", 't');
+  assert.ok(before > 1);
+  await run("rowOp('revert', 'section:changes')", 't');
+  assert.equal(await run("S.files.filter(f => ['M', 'A', 'D', 'R', '!', 'C'].includes(f.st)).length", 't'), before, 'conferma negata: niente');
 });
