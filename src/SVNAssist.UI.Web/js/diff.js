@@ -2,7 +2,7 @@
 /* Diff unificato (testo di "svn diff") -> HTML affiancato (side by side), con evidenziazione intra-riga e
    colorazione sintattica C#/XML/JSON di base. Render puro: diffHTML(text) -> string. Sotto ~700px si impila. */
 (function (w) {
-  const U = w.SVNUI;
+  const U = w.SVNUI, t = U.t;
   const KW = /^(?:abstract|as|async|await|base|bool|break|case|catch|class|const|continue|decimal|default|delegate|do|double|else|enum|false|finally|float|for|foreach|if|in|int|interface|internal|is|lock|long|namespace|new|null|object|out|override|private|protected|public|readonly|ref|return|sealed|static|string|struct|switch|this|throw|true|try|typeof|using|var|virtual|void|while|param|function)$/;
   const TOK = /(\/\/.*$|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\b\d[\d_.]*\b|[A-Za-z_]\w*)/g;
   // tokenizza una riga in [{t:testo, c:classe}]
@@ -57,7 +57,7 @@
   const cell = (c, cls, mark) => c ? `<div class="s ${cls}"><span class="ln">${c.n}</span><span class="cd">${lineHTML(c.s, mark)}</span></div>` : '<div class="s empty"><span class="ln"></span><span class="cd"></span></div>';
   function diffHTML(text) {
     const files = parse(text);
-    if (!files.length) return '<div class="df-empty">Nessuna differenza testuale (file binario, non versionato o identico).</div>';
+    if (!files.length) return `<div class="df-empty">${t('Nessuna differenza testuale (file binario, non versionato o identico).')}</div>`;
     return files.map(f => `<section class="df">${f.title ? `<h3 class="df-h">${U.icon('file')}<span>${U.esc(f.title)}</span></h3>` : ''}` +
       (f.meta.length ? `<pre class="df-meta">${U.esc(f.meta.join('\n'))}</pre>` : '') +
       f.hunks.map(h => `<div class="df-hunk">${U.esc(h.head)}</div>` + h.rows.map(r => {

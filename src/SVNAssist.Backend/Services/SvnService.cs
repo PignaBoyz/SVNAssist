@@ -71,8 +71,8 @@ public class SvnService : ISvnService
     {
         _credentials = credentials;
         _svnExePath = svnExePath ?? SvnLocator.FindSvn() ?? throw new FileNotFoundException(
-            "svn.exe non trovato. Installa Subversion e assicurati che sia nel PATH, " +
-            "oppure installa TortoiseSVN con l'opzione 'command line client tools'.");
+            Loc.T("svn.exe non trovato. Installa Subversion e assicurati che sia nel PATH, " +
+                  "oppure installa TortoiseSVN con l'opzione 'command line client tools'."));
         _processRunner = processRunner ?? new ProcessRunner();
         _timeout = timeout ?? DefaultTimeout;
     }
@@ -223,8 +223,8 @@ public class SvnService : ISvnService
         // codice rotto, quindi ci si ferma prima di dire a svn che è risolto.
         if (accept == SvnConflictChoice.Working && ContainsConflictMarkers(path))
             throw new InvalidOperationException(
-                "Il file contiene ancora i marcatori di conflitto (<<<<<<<, =======, >>>>>>>). " +
-                "Sistemalo a mano e rimuovili, oppure scegli di tenere la versione locale o quella del server.");
+                Loc.T("Il file contiene ancora i marcatori di conflitto (<<<<<<<, =======, >>>>>>>). " +
+                      "Sistemalo a mano e rimuovili, oppure scegli di tenere la versione locale o quella del server."));
 
         var acceptValue = accept switch
         {
@@ -266,14 +266,14 @@ public class SvnService : ISvnService
 
         var targetName = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
         if (string.IsNullOrWhiteSpace(targetName))
-            throw new InvalidOperationException("Impossibile determinare il nome dell'elemento da ignorare.");
+            throw new InvalidOperationException(Loc.T("Impossibile determinare il nome dell'elemento da ignorare."));
 
         var parentDirectory = Directory.Exists(path)
             ? Directory.GetParent(path)?.FullName
             : Path.GetDirectoryName(path);
 
         if (string.IsNullOrWhiteSpace(parentDirectory))
-            throw new InvalidOperationException("Impossibile determinare la directory padre per svn:ignore.");
+            throw new InvalidOperationException(Loc.T("Impossibile determinare la directory padre per svn:ignore."));
 
         // Solo "proprietà non impostata" (W200017/E200017) significa lista vuota. Qualsiasi altro
         // errore va propagato: proseguire riscriverebbe svn:ignore perdendo le voci esistenti.
@@ -334,7 +334,7 @@ public class SvnService : ISvnService
     public Task<UpdateResult> UpdateToRevisionAsync(string workingCopyPath, string revision, CancellationToken ct)
         => SvnRevision.TryNormalize(revision, out var normalized)
             ? UpdateCoreAsync(workingCopyPath, normalized, ct)
-            : throw new ArgumentException("Revisione non valida: serve un numero intero positivo oppure HEAD.", nameof(revision));
+            : throw new ArgumentException(Loc.T("Revisione non valida: serve un numero intero positivo oppure HEAD."), nameof(revision));
 
     private async Task<UpdateResult> UpdateCoreAsync(string workingCopyPath, string? revision, CancellationToken ct)
     {
@@ -621,7 +621,7 @@ public class SvnService : ISvnService
     /// </summary>
     internal static string BuildStatusList(IEnumerable<(string Path, string Letter)> files)
     {
-        var sb = new StringBuilder("Elenco file selezionati (stato svn):\n");
+        var sb = new StringBuilder(Loc.T("Elenco file selezionati (stato svn):") + "\n");
         var shown = 0;
         var all = files.ToList();
         foreach (var (path, letter) in all)
@@ -634,7 +634,7 @@ public class SvnService : ISvnService
         }
 
         if (shown < all.Count)
-            sb.Append($"... (altri {all.Count - shown} file)\n");
+            sb.Append(Loc.T("... (altri {0} file)", all.Count - shown) + "\n");
         return all.Count == 0 ? string.Empty : sb.Append('\n').ToString();
     }
 
@@ -666,14 +666,14 @@ public class SvnService : ISvnService
     internal static string BuildNewFileDiff(string fullPath, string displayPath)
     {
         if (Directory.Exists(fullPath))
-            return $"Index: {displayPath}\n(nuova cartella non versionata)\n";
+            return $"Index: {displayPath}\n{Loc.T("(nuova cartella non versionata)")}\n";
 
         if (!File.Exists(fullPath))
             return string.Empty;
 
         var length = new FileInfo(fullPath).Length;
         if (IsBinaryFile(fullPath))
-            return $"Index: {displayPath}\n(nuovo file binario, {length} byte)\n";
+            return $"Index: {displayPath}\n{Loc.T("(nuovo file binario, {0} byte)", length)}\n";
 
         var shown = new List<string>();
         var omitted = 0;
@@ -1164,8 +1164,8 @@ public class SvnService : ISvnService
         catch (OperationCanceledException) when (!ct.IsCancellationRequested && timeoutCts.IsCancellationRequested)
         {
             throw new InvalidOperationException(
-                $"svn {arguments[0]} non ha risposto entro {_timeout.TotalMinutes:0.#} minuti ed è stato interrotto. " +
-                "Controlla la connessione al server e riprova.");
+                Loc.T("svn {0} non ha risposto entro {1:0.#} minuti ed è stato interrotto. " +
+                      "Controlla la connessione al server e riprova.", arguments[0], _timeout.TotalMinutes));
         }
     }
 
@@ -1175,7 +1175,7 @@ public class SvnService : ISvnService
     /// </summary>
     internal static string BuildErrorMessage(string subcommand, int exitCode, string standardError)
     {
-        var detail = $"svn {subcommand} fallito (exit code {exitCode}): {standardError}";
+        var detail = Loc.T("svn {0} fallito (exit code {1}): {2}", subcommand, exitCode, standardError);
         var hint = GetFriendlyHint(standardError);
         return hint is null ? detail : $"{hint}\n{detail}";
     }
@@ -1183,17 +1183,17 @@ public class SvnService : ISvnService
     private static string? GetFriendlyHint(string stderr)
     {
         if (stderr.Contains("E170013", StringComparison.Ordinal))
-            return "Impossibile collegarsi al server SVN: controlla la rete/VPN e l'indirizzo del repository.";
+            return Loc.T("Impossibile collegarsi al server SVN: controlla la rete/VPN e l'indirizzo del repository.");
 
         if (stderr.Contains("E215004", StringComparison.Ordinal) || stderr.Contains("E170001", StringComparison.Ordinal))
-            return "Autenticazione SVN mancante o rifiutata: riprova e inserisci utente e password quando richiesto.";
+            return Loc.T("Autenticazione SVN mancante o rifiutata: riprova e inserisci utente e password quando richiesto.");
 
         if (stderr.Contains("E155004", StringComparison.Ordinal))
-            return "La working copy è bloccata da un'operazione interrotta: esegui SVN Cleanup e riprova.";
+            return Loc.T("La working copy è bloccata da un'operazione interrotta: esegui SVN Cleanup e riprova.");
 
         if (stderr.Contains("E155011", StringComparison.Ordinal) || stderr.Contains("E160024", StringComparison.Ordinal)
             || stderr.Contains("out of date", StringComparison.OrdinalIgnoreCase))
-            return "Alcuni file sono più recenti sul server: fai prima Update, poi riprova il commit.";
+            return Loc.T("Alcuni file sono più recenti sul server: fai prima Update, poi riprova il commit.");
 
         return null;
     }

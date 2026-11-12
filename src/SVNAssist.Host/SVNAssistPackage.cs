@@ -13,7 +13,7 @@ using Task = System.Threading.Tasks.Task;
 namespace SVNAssist.Host
 {
     [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
-    [InstalledProductRegistration("SVNAssist", "Integrazione SVN con commit message AI", "0.2.0")]
+    [InstalledProductRegistration("SVNAssist", "SVN integration with AI commit messages", "0.2.0")]
     [Guid(Ids.PackageGuid)]
     [ProvideMenuResource("Menus.ctmenu", 1)]
     [ProvideToolWindow(typeof(ChangesToolWindow), Style = VsDockStyle.Tabbed, Window = ToolWindowGuids80.SolutionExplorer, Orientation = ToolWindowOrientation.Left)]
@@ -36,6 +36,8 @@ namespace SVNAssist.Host
             await JoinableTaskFactory.SwitchToMainThreadAsync(ct);
             Instance = this;
             _ = Options; // crea la pagina sul thread UI
+            SvnAssistOptions.VsCulture = System.Globalization.CultureInfo.CurrentUICulture.Name; // lingua dell'interfaccia di VS (thread UI)
+            Loc.Lang = Options.EffectiveLanguage;
             Host = new HostService(this);
 
             if (await GetServiceAsync(typeof(IMenuCommandService)) is OleMenuCommandService mcs)
@@ -92,6 +94,17 @@ namespace SVNAssist.Host
             Add(Ids.CmdUpdateRev, () => Host.SendCommandAsync("changes", "updateToRevision", null));
             Add(Ids.CmdCleanup, () => Host.SendCommandAsync("changes", "cleanup", null));
 
+            // Sottomenu Lingua: tre voci a scelta esclusiva, la spunta segue l'impostazione.
+            void AddLang(int id, string value)
+            {
+                var cmd = new OleMenuCommand((s, e) => Run(() => SetLanguageAsync(value)), new CommandID(Ids.CmdSet, id));
+                cmd.BeforeQueryStatus += (s, e) => ((OleMenuCommand)s).Checked = Options.UiLanguage == value;
+                mcs.AddCommand(cmd);
+            }
+            AddLang(Ids.CmdLangAuto, "auto");
+            AddLang(Ids.CmdLangIt, "it");
+            AddLang(Ids.CmdLangEn, "en");
+
             // Solution Explorer: i percorsi selezionati sono un dato dell'host (non vengono dalla pagina) e vanno
             // al backend con IBackend.RunPathCommandAsync(command, paths). Vedi docs/host.md.
             Add(Ids.CmdSeUpdate, () => SeAsync("update", null));
@@ -107,17 +120,25 @@ namespace SVNAssist.Host
             Add(Ids.CmdSeUnlock, () => SeAsync("unlock", null));
         }
 
+        private async Task SetLanguageAsync(string value)
+        {
+            await JoinableTaskFactory.SwitchToMainThreadAsync();
+            Options.UiLanguage = value;
+            Options.SaveSettingsToStorage();
+            Host.OnLanguageChanged();
+        }
+
         private async Task SeAsync(string command, string showView)
         {
             var paths = await SelectedPathsAsync();
-            if (paths.Length == 0) { await MessageAsync("Nessun elemento selezionato in Solution Explorer."); return; }
+            if (paths.Length == 0) { await MessageAsync(Loc.T("Nessun elemento selezionato in Solution Explorer.")); return; }
             if (showView != null) await ShowViewAsync(showView);
             await Host.RunPathCommandAsync(command, paths);
         }
         private void Run(Func<Task> action) => JoinableTaskFactory.RunAsync(async () =>
         {
             try { await action(); }
-            catch (Exception ex) { Log.Write("comando: " + ex); await MessageAsync("Errore: " + ex.Message); }
+            catch (Exception ex) { Log.Write("comando: " + ex); await MessageAsync(Loc.T("Errore: {0}", ex.Message)); }
         }).FileAndForget("SVNAssist/command");
 
         private async Task MessageAsync(string text)

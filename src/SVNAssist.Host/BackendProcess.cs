@@ -51,14 +51,14 @@ namespace SVNAssist.Host
             }
             try { await start.ConfigureAwait(false); }
             finally { lock (_gate) { if (_starting == start) _starting = null; } }
-            lock (_gate) { return _proxy ?? throw new InvalidOperationException("Backend SVNAssist non avviato."); }
+            lock (_gate) { return _proxy ?? throw new InvalidOperationException(Loc.T("Backend SVNAssist non avviato.")); }
         }
 
         private void Start()
         {
             var exe = BackendExe;
             if (!File.Exists(exe))
-                throw new FileNotFoundException("Backend SVNAssist non trovato (" + exe + "). Reinstalla l'estensione.");
+                throw new FileNotFoundException(Loc.T("Backend SVNAssist non trovato ({0}). Reinstalla l'estensione.", exe));
 
             var dotnetRoot = EnsureRuntime();
 
@@ -130,18 +130,18 @@ namespace SVNAssist.Host
             {
                 await Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
                 return PromptDialog.Show(
-                    "SVNAssist richiede il runtime .NET 10, che non e' installato.\n\n" +
-                    "Installa automaticamente: parte l'installazione (winget, oppure lo script ufficiale dotnet-install) in una finestra visibile.\n\n" +
-                    "Apri pagina download: scarica \".NET Runtime 10.x – Windows x64 installer\" (non l'SDK), installalo e riprova.",
-                    new[] { "Installa automaticamente", "Apri pagina download", "Annulla" });
+                    Loc.T("SVNAssist richiede il runtime .NET 10, che non e' installato.\n\n" +
+                          "Installa automaticamente: parte l'installazione (winget, oppure lo script ufficiale dotnet-install) in una finestra visibile.\n\n" +
+                          "Apri pagina download: scarica \".NET Runtime 10.x – Windows x64 installer\" (non l'SDK), installalo e riprova."),
+                    new[] { Loc.T("Installa automaticamente"), Loc.T("Apri pagina download"), Loc.T("Annulla") });
             });
 
             if (choice == 1)
             {
                 try { Process.Start(new ProcessStartInfo(DownloadUrl) { UseShellExecute = true }); } catch (Exception ex) { Log.Write("apri download: " + ex.Message); }
-                throw new InvalidOperationException("Runtime .NET 10 mancante: installa \".NET Runtime 10.x – Windows x64 installer\" da " + DownloadUrl + " e riprova.");
+                throw new InvalidOperationException(Loc.T("Runtime .NET 10 mancante: installa \".NET Runtime 10.x – Windows x64 installer\" da {0} e riprova.", DownloadUrl));
             }
-            if (choice != 0) throw new InvalidOperationException("Runtime .NET 10 mancante: SVNAssist non puo' avviare il servizio.");
+            if (choice != 0) throw new InvalidOperationException(Loc.T("Runtime .NET 10 mancante: SVNAssist non puo' avviare il servizio."));
 
             // Finestra console visibile; exit code ignorato: conta solo il ricontrollo.
             RunVisible("winget", "install --id Microsoft.DotNet.Runtime.10 -e --silent --accept-package-agreements --accept-source-agreements");
@@ -154,7 +154,7 @@ namespace SVNAssist.Host
                 root = FindRuntimeRoot();
             }
             if (root == null)
-                throw new InvalidOperationException("Installazione del runtime .NET 10 non riuscita: installa \".NET Runtime 10.x – Windows x64 installer\" da " + DownloadUrl);
+                throw new InvalidOperationException(Loc.T("Installazione del runtime .NET 10 non riuscita: installa \".NET Runtime 10.x – Windows x64 installer\" da {0}", DownloadUrl));
             Log.Write("runtime .NET 10 in " + root);
             return root;
         }
@@ -187,13 +187,13 @@ namespace SVNAssist.Host
             if ((DateTime.UtcNow - _windowStart).TotalSeconds > 60) { _windowStart = DateTime.UtcNow; _restarts = 0; }
             if (++_restarts > MaxRestartsPerMinute)
             {
-                Failed?.Invoke("Il servizio SVNAssist si è chiuso troppe volte. Riavvia Visual Studio o consulta il log.");
+                Failed?.Invoke(Loc.T("Il servizio SVNAssist si è chiuso troppe volte. Riavvia Visual Studio o consulta il log."));
                 return;
             }
             Task.Run(async () =>
             {
                 try { await GetAsync().ConfigureAwait(false); Restarted?.Invoke(); }
-                catch (Exception ex) { Failed?.Invoke("Impossibile riavviare il servizio SVNAssist: " + ex.Message); }
+                catch (Exception ex) { Failed?.Invoke(Loc.T("Impossibile riavviare il servizio SVNAssist: {0}", ex.Message)); }
             });
         }
 

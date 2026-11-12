@@ -99,6 +99,13 @@
             "null"
           ]
         },
+        "lang": {
+          "enum": [
+            "it",
+            "en"
+          ],
+          "description": "Lingua dell'interfaccia (gia' risolta: mai auto). I testi dello stato sono gia' in questa lingua; la UI traduce i propri con js/i18n.js."
+        },
         "rev": {
           "type": "integer",
           "minimum": 1,

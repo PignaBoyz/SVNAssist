@@ -94,7 +94,7 @@ internal sealed class CopilotAiService : AiServiceBase
             new MessageOptions { Prompt = userMessage }, TimeSpan.FromMinutes(2), ct);
 
         return reply?.Data?.Content
-            ?? throw new InvalidOperationException("Copilot non ha restituito alcun messaggio.");
+            ?? throw new InvalidOperationException(Loc.T("Copilot non ha restituito alcun messaggio."));
     }
 
     private async Task<CopilotClient> GetClientAsync(CancellationToken ct)

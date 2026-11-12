@@ -46,7 +46,7 @@ internal sealed class DiffOpener : IDisposable
 
     /// <summary>Titolo del diff: <c>Program.cs r12 ↔ r13</c>.</summary>
     internal static string Title(string name, long? left, long? right)
-        => $"{name} {(left is { } l ? "r" + l : "(vuoto)")} ↔ {(right is { } r ? "r" + r : "(vuoto)")}";
+        => $"{name} {(left is { } l ? "r" + l : Loc.T("(vuoto)"))} ↔ {(right is { } r ? "r" + r : Loc.T("(vuoto)"))}";
 
     /// <summary>Diff di un file della working copy: BASE ↔ working copy (BASE vuoto se il file e' nuovo, working copy vuota se e' sparito).</summary>
     public async Task OpenWorkingAsync(string path, CancellationToken ct)
@@ -81,7 +81,7 @@ internal sealed class DiffOpener : IDisposable
         var l = await ExportSideAsync(target, name, left, Path.Combine(dir, "left"), ct);
         var r = await ExportSideAsync(target, name, right, Path.Combine(dir, "right"), ct);
         var title = Title(name, left, right);
-        await _host.OpenDiffAsync(l, r, left is { } a ? $"{name} r{a}" : "(vuoto)", right is { } b ? $"{name} r{b}" : "(vuoto)", title);
+        await _host.OpenDiffAsync(l, r, left is { } a ? $"{name} r{a}" : Loc.T("(vuoto)"), right is { } b ? $"{name} r{b}" : Loc.T("(vuoto)"), title);
     }
 
     private async Task<string> ExportSideAsync(string target, string name, long? rev, string dir, CancellationToken ct)

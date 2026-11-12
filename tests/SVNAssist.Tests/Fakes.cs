@@ -14,6 +14,7 @@ internal sealed class StubSettings : ISvnAssistSettings
     public string Language { get; set; } = "auto";
     public string WorkingCopy { get; set; } = string.Empty;
     public string Theme { get; set; } = "auto";
+    public string UiLanguage { get; set; } = "it";
 
     public Task<string> GetAiProviderAsync(CancellationToken ct) => Task.FromResult(Provider);
     public Task<string> GetClaudeModelAsync(CancellationToken ct) => Task.FromResult("claude");
@@ -25,6 +26,7 @@ internal sealed class StubSettings : ISvnAssistSettings
     public Task<string> GetDefaultLanguageAsync(CancellationToken ct) => Task.FromResult(Language);
     public Task<string> GetWorkingCopyPathAsync(CancellationToken ct) => Task.FromResult(WorkingCopy);
     public Task<string> GetWindowThemeAsync(CancellationToken ct) => Task.FromResult(Theme);
+    public Task<string> GetUiLanguageAsync(CancellationToken ct) => Task.FromResult(UiLanguage);
     public Task SetWindowThemeAsync(string mode, CancellationToken ct) { Theme = mode; return Task.CompletedTask; }
 
     /// <summary>Impostazioni salvate con SetSettingAsync (le chiavi AI aggiornano anche i valori letti).</summary>

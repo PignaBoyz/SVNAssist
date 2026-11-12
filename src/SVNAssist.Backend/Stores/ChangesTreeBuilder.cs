@@ -169,8 +169,8 @@ internal static class ChangesTreeBuilder
     internal static string SectionTitle(ChangeSection section) => section switch
     {
         ChangeSection.Staged => "Staged",
-        ChangeSection.Changes => "Modifiche",
-        _ => "Non versionati",
+        ChangeSection.Changes => Loc.T("Modifiche"),
+        _ => Loc.T("Non versionati"),
     };
 
     /// <summary>Divide un percorso relativo nei suoi segmenti (accetta <c>\</c> e <c>/</c>).</summary>
@@ -251,17 +251,17 @@ internal static class StatusPresentation
     /// <summary>Descrizione in italiano dello stato.</summary>
     public static string DisplayName(SvnStatusKind status, bool isTreeConflict) => status switch
     {
-        SvnStatusKind.Conflicted => isTreeConflict ? "Conflitto (albero)" : "Conflitto",
-        SvnStatusKind.Modified => "Modificato",
-        SvnStatusKind.Added => "Aggiunto",
-        SvnStatusKind.Deleted => "Eliminato",
-        SvnStatusKind.Unversioned => "Non versionato",
-        SvnStatusKind.Missing => "Mancante",
-        SvnStatusKind.Replaced => "Sostituito",
-        SvnStatusKind.Obstructed => "Ostruito",
-        SvnStatusKind.Incomplete => "Incompleto",
-        SvnStatusKind.Normal => "Bloccato (lock)",
-        _ => "Sconosciuto",
+        SvnStatusKind.Conflicted => isTreeConflict ? Loc.T("Conflitto (albero)") : Loc.T("Conflitto"),
+        SvnStatusKind.Modified => Loc.T("Modificato"),
+        SvnStatusKind.Added => Loc.T("Aggiunto"),
+        SvnStatusKind.Deleted => Loc.T("Eliminato"),
+        SvnStatusKind.Unversioned => Loc.T("Non versionato"),
+        SvnStatusKind.Missing => Loc.T("Mancante"),
+        SvnStatusKind.Replaced => Loc.T("Sostituito"),
+        SvnStatusKind.Obstructed => Loc.T("Ostruito"),
+        SvnStatusKind.Incomplete => Loc.T("Incompleto"),
+        SvnStatusKind.Normal => Loc.T("Bloccato (lock)"),
+        _ => Loc.T("Sconosciuto"),
     };
 
     /// <summary>Stati su cui <c>svn revert</c> ha senso.</summary>

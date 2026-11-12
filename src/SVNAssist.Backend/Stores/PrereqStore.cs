@@ -39,7 +39,7 @@ internal sealed class PrereqStore
     private bool _autoOpened;
     private bool? _svnWasMissing;
     private int _busy;
-    private string _summary = "Prerequisiti";
+    private string _summary = Loc.T("Prerequisiti");
     private string _ai = string.Empty;
     private string _feedback = string.Empty;
     private DownloadDto? _download;
@@ -134,15 +134,15 @@ internal sealed class PrereqStore
         var items = snapshot.Items.Select(ToDto).ToList();
 
         var ai = snapshot.HasAiProvider
-            ? $"AI Provider: {snapshot.ConfiguredProvider}. Utilizzabili: {string.Join(" → ", snapshot.UsableProviders)}"
-            : $"AI Provider: {snapshot.ConfiguredProvider}. Nessun provider AI utilizzabile: configurane almeno uno.";
+            ? Loc.T("AI Provider: {0}. Utilizzabili: {1}", snapshot.ConfiguredProvider, string.Join(" → ", snapshot.UsableProviders))
+            : Loc.T("AI Provider: {0}. Nessun provider AI utilizzabile: configurane almeno uno.", snapshot.ConfiguredProvider);
         if (snapshot.ProviderNote.Length > 0)
             ai += "\n" + snapshot.ProviderNote;
 
         lock (_lock)
         {
             _items = items;
-            _summary = snapshot.ProblemCount == 0 ? "Prerequisiti ✓" : $"Prerequisiti ({snapshot.ProblemCount} da sistemare)";
+            _summary = snapshot.ProblemCount == 0 ? Loc.T("Prerequisiti") + " ✓" : Loc.T("Prerequisiti ({0} da sistemare)", snapshot.ProblemCount);
             _ai = ai;
         }
 
@@ -166,7 +166,7 @@ internal sealed class PrereqStore
         lock (_lock)
             row = (rows ?? _items).FirstOrDefault(i => string.Equals(i.Id, id, StringComparison.Ordinal));
         if (row is null)
-            throw new ArgumentException($"Prerequisito sconosciuto: {id}");
+            throw new ArgumentException(Loc.T("Prerequisito sconosciuto: {0}", id));
 
         if (Interlocked.CompareExchange(ref _busy, 1, 0) != 0)
             return;
@@ -176,7 +176,7 @@ internal sealed class PrereqStore
             switch (row.Id, primary)
             {
                 case (PrerequisiteIds.Svn, true):
-                    await LaunchAsync(ConsoleCommand.InstallSvn, "Si è aperto un terminale con l'installazione di SVN: al termine premi Ricontrolla.");
+                    await LaunchAsync(ConsoleCommand.InstallSvn, Loc.T("Si è aperto un terminale con l'installazione di SVN: al termine premi Ricontrolla."));
                     break;
                 case (PrerequisiteIds.Svn, false):
                     await _actions.OpenUrl(SvnEnvironment.DownloadUrl);
@@ -186,27 +186,27 @@ internal sealed class PrereqStore
                     break;
                 case (PrerequisiteIds.GitHubCli, true):
                     await LaunchAsync(ConsoleCommand.InstallGitHubCli,
-                        "Si è aperto un terminale con l'installazione di GitHub CLI: al termine premi Ricontrolla (se gh non viene trovato, riavvia VS).");
+                        Loc.T("Si è aperto un terminale con l'installazione di GitHub CLI: al termine premi Ricontrolla (se gh non viene trovato, riavvia VS)."));
                     break;
                 case (PrerequisiteIds.GitHubLogin, true):
                     await LaunchAsync(ConsoleCommand.GitHubLogin,
-                        "Si è aperto un terminale: conferma il codice nel browser, poi premi Ricontrolla.");
+                        Loc.T("Si è aperto un terminale: conferma il codice nel browser, poi premi Ricontrolla."));
                     break;
-                case (PrerequisiteIds.ClaudeCode, true) when row.Primary.StartsWith("Accedi", StringComparison.Ordinal):
+                case (PrerequisiteIds.ClaudeCode, true) when row.Primary == Loc.T("Accedi a Claude Code"):
                     await LaunchAsync(ConsoleCommand.ClaudeLogin,
-                        "Si è aperto un terminale con Claude Code: se richiesto esegui /login, poi premi Ricontrolla.");
+                        Loc.T("Si è aperto un terminale con Claude Code: se richiesto esegui /login, poi premi Ricontrolla."));
                     break;
                 case (PrerequisiteIds.ClaudeCode, true):
                     await LaunchAsync(ConsoleCommand.InstallClaudeCode,
-                        "Si è aperto un terminale con l'installazione di Claude Code: al termine premi Ricontrolla.");
+                        Loc.T("Si è aperto un terminale con l'installazione di Claude Code: al termine premi Ricontrolla."));
                     break;
                 case (PrerequisiteIds.ClaudeCode, false):
                     await _actions.OpenUrl(PrerequisitesService.ClaudeCodeDocsUrl);
                     break;
                 case (PrerequisiteIds.CopilotRuntime, true):
-                    Feedback = "Download del runtime Copilot in corso (~100 MB)...";
+                    Feedback = Loc.T("Download del runtime Copilot in corso (~100 MB)...");
                     lock (_lock)
-                        _download = new DownloadDto(0, "Runtime GitHub Copilot (~100 MB)");
+                        _download = new DownloadDto(0, Loc.T("Runtime GitHub Copilot (~100 MB)"));
                     Changed?.Invoke();
                     try
                     {
@@ -218,14 +218,14 @@ internal sealed class PrereqStore
                             _download = null;
                     }
 
-                    Feedback = "Runtime Copilot scaricato.";
+                    Feedback = Loc.T("Runtime Copilot scaricato.");
                     await RefreshAsync(ct);
                     break;
             }
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            Feedback = $"Errore: {ex.Message}";
+            Feedback = Loc.T("Errore: {0}", ex.Message);
         }
         finally
         {
@@ -238,6 +238,6 @@ internal sealed class PrereqStore
         var claude = command == ConsoleCommand.ClaudeLogin ? _actions.FindClaude() : null;
         Feedback = await _actions.LaunchConsole(command, claude)
             ? successMessage
-            : "Impossibile aprire il terminale: usa i comandi indicati nelle istruzioni.";
+            : Loc.T("Impossibile aprire il terminale: usa i comandi indicati nelle istruzioni.");
     }
 }

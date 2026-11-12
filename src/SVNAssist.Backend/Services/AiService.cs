@@ -61,7 +61,7 @@ public class AiService : AiServiceBase
             return;
 
         if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri))
-            throw new InvalidOperationException($"L'endpoint AI \"{endpoint}\" non è un URL valido.");
+            throw new InvalidOperationException(Loc.T("L'endpoint AI \"{0}\" non è un URL valido.", endpoint));
 
         if (uri.Scheme == Uri.UriSchemeHttps)
             return;
@@ -71,8 +71,8 @@ public class AiService : AiServiceBase
                          || uri.Host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase);
         if (uri.Scheme != Uri.UriSchemeHttp || !isLoopback)
             throw new InvalidOperationException(
-                $"Rifiuto di inviare la chiave API a {uri.Host} con una connessione non cifrata ({uri.Scheme}://). " +
-                "Usa un endpoint https:// (le sole eccezioni sono gli endpoint locali come http://localhost).");
+                Loc.T("Rifiuto di inviare la chiave API a {0} con una connessione non cifrata ({1}://). " +
+                      "Usa un endpoint https:// (le sole eccezioni sono gli endpoint locali come http://localhost).", uri.Host, uri.Scheme));
     }
 
     /// <remarks>
@@ -117,7 +117,7 @@ public class AiService : AiServiceBase
 
             // Il corpo d'errore del server può citare la chiave (es. "invalid key: sk-..."): la si oscura.
             var hint = response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden && AiServiceFactory.IsGitHubModelsEndpoint(_endpoint)
-                ? " Il token GitHub (anche quello di gh) potrebbe non avere il permesso per GitHub Models: crea un token con permesso models:read e incollalo in Tools > Options > SVNAssist > AI API Key."
+                ? Loc.T(" Il token GitHub (anche quello di gh) potrebbe non avere il permesso per GitHub Models: crea un token con permesso models:read e incollalo in Tools > Options > SVNAssist > AI API Key.")
                 : string.Empty;
             throw new HttpRequestException(
                 $"AI API error {(int)response.StatusCode} {response.StatusCode}: {RedactSecret(responseJson)}{hint}");
@@ -135,12 +135,12 @@ public class AiService : AiServiceBase
         using var doc = JsonDocument.Parse(responseJson);
         var choices = doc.RootElement.GetProperty("choices");
         if (choices.GetArrayLength() == 0)
-            throw new InvalidOperationException("La risposta AI non contiene alcun messaggio.");
+            throw new InvalidOperationException(Loc.T("La risposta AI non contiene alcun messaggio."));
 
         var messageContent = choices[0].GetProperty("message").GetProperty("content").GetString();
 
         return messageContent?.Trim()
-            ?? throw new InvalidOperationException("Il contenuto del messaggio AI è null.");
+            ?? throw new InvalidOperationException(Loc.T("Il contenuto del messaggio AI è null."));
     }
 
     private static bool IsTokenLimitError(HttpStatusCode statusCode, string responseJson)

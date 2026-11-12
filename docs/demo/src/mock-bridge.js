@@ -8,17 +8,70 @@
   const theme = { mode: 'auto', vs: 'dark' };
   let lastTheme = '', rev = 0;
 
+  // ---------- lingua ----------
+  // Come in VS: "auto" = lingua del browser. Il campo lang di ogni messaggio state fa cambiare al volo i testi della UI.Web (js/i18n.js).
+  // I testi simulati dal backend finto (stati, messaggi) si traducono qui con un dizionario minimo; la cornice della demo (menu, tour,
+  // pannello simulazione) resta in italiano.
+  let lang = 'it';
+  try {
+    const saved = w.localStorage.getItem('svnassist.demoLang');
+    lang = saved === 'it' || saved === 'en' ? saved : (typeof navigator !== 'undefined' && !/^it/i.test(navigator.language || 'it') ? 'en' : 'it');
+  } catch (e) { /* storage non disponibile */ }
+  const TRM = {
+    'Staged': 'Staged', 'Modifiche': 'Changes', 'Non versionati': 'Unversioned',
+    'Modificato': 'Modified', 'Aggiunto': 'Added', 'Eliminato': 'Deleted', 'Conflitto': 'Conflict', 'Non versionato': 'Unversioned', 'Mancante': 'Missing', 'Sostituito': 'Replaced', 'Normale': 'Normal',
+    '(verrà aggiunto con il commit)': '(will be added with the commit)', '. (cartella radice)': '. (root folder)',
+    'Caricamento in corso...': 'Loading...', 'Prerequisiti': 'Prerequisites', 'Esegui Cleanup': 'Run Cleanup',
+    'Inserisci il percorso della working copy.': 'Enter the path of the working copy.',
+    'Inserisci il percorso della working copy e premi Refresh.': 'Enter the path of the working copy and press Refresh.',
+    'Inserisci il percorso della working copy e premi Carica log.': 'Enter the path of the working copy and press Load log.',
+    'La solution corrente non è una working copy SVN.': 'The current solution is not an SVN working copy.',
+    'Working copy SVN rilevata automaticamente, aggiornamento...': 'SVN working copy detected automatically, updating...',
+    'Nessuna modifica.': 'No changes.', 'Nessuna working copy configurata.': 'No working copy configured.',
+    'Seleziona almeno un file per il commit.': 'Select at least one file for the commit.', 'Scrivi un messaggio di commit.': 'Write a commit message.',
+    'Commit in corso...': 'Commit in progress...', 'Update in corso...': 'Update in progress...', 'Cleanup in corso...': 'Cleanup in progress...',
+    'Update alla revisione HEAD in corso...': 'Updating to revision HEAD...', 'Cleanup completato.': 'Cleanup completed.',
+    'Aggiunta a SVN in corso...': 'Adding to SVN...', 'Eliminazione in corso...': 'Deleting...', 'Lock in corso...': 'Locking...', 'Unlock in corso...': 'Unlocking...', 'Revert in corso...': 'Revert in progress...',
+    'Risoluzione conflitto in corso...': 'Resolving the conflict...', 'Aggiornamento ignore list in corso...': 'Updating the ignore list...',
+    'Nessun elemento non versionato da aggiungere.': 'No unversioned item to add.', 'Seleziona un file da eliminare.': 'Select a file to delete.',
+    'Seleziona un file modificato non ancora bloccato.': 'Select a modified file that is not locked yet.', 'Seleziona un file bloccato da te.': 'Select a file locked by you.',
+    'Nessun elemento idoneo per SVN Revert.': 'No item suitable for SVN Revert.', 'Seleziona un file in conflitto da risolvere.': 'Select a conflicted file to resolve.',
+    'Add to Ignore List è disponibile solo per elementi non versionati.': 'Add to Ignore List is only available for unversioned items.',
+    'Nessuna modifica da confrontare in questa cartella.': 'No changes to compare in this folder.',
+    'Caricamento log...': 'Loading log...', 'Nessuna revisione trovata.': 'No revision found.', 'Caricamento diff...': 'Loading diff...',
+    '(nessuna differenza testuale per questa revisione)': '(no textual difference for this revision)',
+    'Generazione in corso...': 'Generating...', 'Miglioramento in corso...': 'Improving...',
+    'Messaggio generato con AI.': 'Message generated with AI.', 'Messaggio migliorato.': 'Message improved.',
+    'Scrivi prima una bozza del messaggio da migliorare.': 'First write a draft of the message to improve.',
+    'Nessun provider AI configurato: completa la procedura guidata.': 'No AI provider configured: complete the setup wizard.',
+    'Download del runtime Copilot in corso (~100 MB)...': 'Downloading the Copilot runtime (~100 MB)...', 'Runtime Copilot scaricato.': 'Copilot runtime downloaded.',
+  };
+  const TRX = [   // testi con numeri/nomi: [regex italiana, sostituzione inglese]
+    [/^Errore update: /, 'Error during update: '], [/^Errore cleanup: /, 'Error during cleanup: '], [/^Errore diff: /, 'Error showing diff: '], [/^Errore commit: /, 'Error during commit: '], [/^Errore: /, 'Error: '], [/^Errore (\w+): /, 'Error during $1: '],
+    [/^Commit completato: revisione (\d+) \((\d+) elementi\)\.$/, 'Commit completed: revision $1 ($2 items).'], [/^Aggiornato alla revisione (\d+)\.?$/, 'Updated to revision $1.'], [/^Update completato\.?$/, 'Update completed.'],
+    [/^(\d+) revisioni caricate( \(filtro attivo\))?\.$/, '$1 revisions loaded$2.'], [/^Diff revisione (\d+) caricato\.$/, 'Diff of revision $1 loaded.'], [/^Caricamento diff per revisione (\d+)\.\.\.$/, 'Loading diff for revision $1...'],
+    [/^Risolvi prima i conflitti \((\d+) file\) o deselezionali: .*$/, 'Resolve the conflicts first ($1 files) or deselect them: svn does not commit conflicted files.'],
+    [/^(\d+) file cambiati tra r(\d+) e r(\d+)\.$/, '$1 files changed between r$2 and r$3.'], [/^(\d+) file modificati\.$/, '$1 files modified.'],
+  ];
+  const tr = s => {
+    if (lang !== 'en' || typeof s !== 'string' || !s) return s;
+    if (TRM[s] != null) return TRM[s];
+    for (const [re, to] of TRX) if (re.test(s)) return s.replace(re, to);
+    return s;
+  };
+
   // ---------- snapshot ----------
   const kindOf = () => theme.mode === 'auto' ? theme.vs : theme.mode;
   const SECS = [['staged', 'Staged'], ['changes', 'Modifiche'], ['unversioned', 'Non versionati']];
+  const STN = c => tr(STNAME[c]);
   const key = (sec, p) => sec + ':' + fwd(p);
   function can(sec, it) {
     return { diff: !!it.canDiff, stage: sec !== 'staged' && it.st !== 'C', unstage: sec === 'staged', add: !!it.canAdd, ignore: !!it.canIgn, revert: !!it.canRev, resolve: !!it.canRes, deleteFile: !it.dir, lock: !it.dir && !it.locked && it.st === 'M', unlock: !!it.locked };
   }
   function fileRow(sec, it, depth, list) {
     const par = parentDir(it.path);
-    return { key: key(sec, it.path), kind: 'file', depth, name: it.path === '.' ? '. (cartella radice)' : base(it.path), detail: list && par !== '.' ? fwd(par) : '', dir: !!it.dir,
-      status: it.st, statusText: STNAME[it.st] + (sec === 'staged' && it.st === '?' ? ' (verrà aggiunto con il commit)' : ''), can: can(sec, it), tooltip: fwd(it.path) + ' — ' + STNAME[it.st], ...(it.locked ? { locked: true } : {}) };
+    return { key: key(sec, it.path), kind: 'file', depth, name: it.path === '.' ? tr('. (cartella radice)') : base(it.path), detail: list && par !== '.' ? fwd(par) : '', dir: !!it.dir,
+      status: it.st, statusText: STN(it.st) + (sec === 'staged' && it.st === '?' ? ' ' + tr('(verrà aggiunto con il commit)') : ''), can: can(sec, it), tooltip: fwd(it.path) + ' — ' + STN(it.st), ...(it.locked ? { locked: true } : {}) };
   }
   function rowsOf(sec, items) {
     const rows = [], v = S.vm;
@@ -41,7 +94,7 @@
   }
   function prereq() {
     const P = prqSnap();
-    return { open: !!S.ui.prereq, summary: S.prq.init ? P.summary : 'Prerequisiti', ai: P.ai, feedback: S.prq.feedback || '',
+    return { open: !!S.ui.prereq, summary: tr(S.prq.init ? P.summary : 'Prerequisiti'), ai: P.ai, feedback: tr(S.prq.feedback || ''),
       items: P.items.map(i => ({ id: i.id, group: i.g, title: i.title, ok: !!i.ok, detail: i.detail, instructions: i.ok ? '' : (i.instr || ''), primary: i.p1 || '', secondary: i.p2 || '' })) };
   }
   function aiLevel(v) {
@@ -50,13 +103,13 @@
   }
   function snapshotChanges() {
     const v = S.vm;
-    const sections = SECS.map(([id, title]) => { const items = secItems(id); return { id, title, count: items.length, expanded: !v.collapsed['sec:' + id], rows: rowsOf(id, items) }; });
+    const sections = SECS.map(([id, title]) => { const items = secItems(id); return { id, title: tr(title), count: items.length, expanded: !v.collapsed['sec:' + id], rows: rowsOf(id, items) }; });
     const msg = v.statusMsg || '';
     return {
       workingCopy: { path: v.wcPath || '', showInput: !!v.showInput, branch: v.branch || '', rev: S.wcRev || 0 },
-      commit: { text: v.commitMsg || '', aiStatus: v.aiMsg || '', aiLevel: aiLevel(v), aiSeq: v.aiSeq || 0, busy: !!v.aiBusy, lang: String(v.lang || S.settings.defaultlanguage || 'auto').toLowerCase(),
+      commit: { text: v.commitMsg || '', aiStatus: tr(v.aiMsg || ''), aiLevel: aiLevel(v), aiSeq: v.aiSeq || 0, busy: !!v.aiBusy, lang: String(v.lang || S.settings.defaultlanguage || 'auto').toLowerCase(),
         trace: (v.trace || []).map(t => ({ name: t.name, state: t.state, detail: t.detail || '' })), download: v.dl ? { pct: v.dl.pct, label: v.dl.label } : null },
-      view: v.view, theme: { mode: theme.mode, kind: kindOf() }, sections, status: { msg, err: !!v.err || /^Errore/.test(msg), ...(/E155004/.test(msg) ? { action: { label: 'Esegui Cleanup', cmd: 'cleanup' } } : {}) }, prereq: prereq(), loading: !!v.loading, wizard: wizardSnap(),
+      view: v.view, theme: { mode: theme.mode, kind: kindOf() }, sections, status: { msg: tr(msg), err: !!v.err || /^Errore/.test(msg), ...(/E155004/.test(msg) ? { action: { label: tr('Esegui Cleanup'), cmd: 'cleanup' } } : {}) }, prereq: prereq(), loading: !!v.loading, wizard: wizardSnap(),
     };
   }
   function logMatch(e) {   // stessi filtri del backend: sottostringhe senza maiuscole, date incluse
@@ -66,8 +119,8 @@
   }
   function snapshotLog() {
     const l = S.lvm;
-    return { path: l.path || '', msg: l.msg || '', err: /^Errore/.test(l.msg || ''), loading: /^Caricamento/.test(l.msg || ''), canMore: !!l.canMore, sel: l.sel == null ? null : l.sel,
-      entries: l.entries.filter(logMatch).map(e => ({ rev: e.rev, author: e.author, date: e.date.toISOString(), msg: e.msg, paths: e.paths.map(p => ({ a: p.a, p: p.p })) })), diff: l.diff || '',
+    return { path: l.path || '', msg: tr(l.msg || ''), err: /^Errore/.test(l.msg || ''), loading: /^Caricamento/.test(l.msg || ''), canMore: !!l.canMore, sel: l.sel == null ? null : l.sel,
+      entries: l.entries.filter(logMatch).map(e => ({ rev: e.rev, author: e.author, date: e.date.toISOString(), msg: e.msg, paths: e.paths.map(p => ({ a: p.a, p: p.p })) })), diff: tr(l.diff || ''),
       filter: l.filter || { author: '', text: '', path: '', from: '', to: '' }, files: l.files || null };
   }
   function snapshotDiff(id) {
@@ -87,7 +140,8 @@
     for (const f of frames) {
       if (f.theme !== t) { f.theme = t; deliver(f, { v: 1, type: 'theme', kind: kindOf(), vars: {} }); }
       const st = stateFor(f), s = JSON.stringify(st);
-      if (f.last !== s) { f.last = s; deliver(f, { v: 1, type: 'state', view: f.view, id: f.id, rev: ++rev, state: st }); }
+      const sig = lang + s;
+      if (f.last !== sig) { f.last = sig; deliver(f, { v: 1, type: 'state', view: f.view, id: f.id, lang, rev: ++rev, state: st }); }
     }
     lastTheme = t;
     setTimeout(() => { try { applyTarget(); } catch (e) { } }, 0);
@@ -171,6 +225,8 @@
 
   w.__mockBridge = {
     theme, commands: Object.keys(C), snapshotChanges, snapshotLog, snapshotDiff, pushAll,
+    getLang: () => lang,
+    setLang(l) { lang = l === 'en' ? 'en' : 'it'; try { w.localStorage.setItem('svnassist.demoLang', lang); } catch (e) { /* storage non disponibile */ } pushAll(); },
     attach(win, fn) { handlers.set(win, fn); },
     postMessage(m, win) {
       if (!m || m.v !== 1) return;

@@ -2,84 +2,85 @@
 /* Vista "SVN Changes". update(root, state) ridisegna a regioni, senza distruggere textarea/focus. */
 (function (w) {
   const U = w.SVNUI, esc = U.esc;
-  const LANGS = [['auto', 'Auto (lingua del codice)'], ['italiano', 'Italiano'], ['english', 'English']];
-  const THEMES = [['auto', 'Auto (segue Visual Studio)'], ['light', 'Chiaro'], ['dark', 'Scuro'], ['blue', 'Blu']];
+  const t = U.t;
+  const LANGS = () => [['auto', t('Auto (lingua del codice)')], ['italiano', 'Italiano'], ['english', 'English']];
+  const THEMES = () => [['auto', t('Auto (segue Visual Studio)')], ['light', t('Chiaro')], ['dark', t('Scuro')], ['blue', t('Blu')]];
   let st = null, forceInput = false, timer = 0, filter = '';
 
   function header(s) {
     const wc = s.workingCopy, rev = wc.rev ? `<span class="muted">r${wc.rev}</span>` : '';
-    return `<div class="branch" title="Branch della working copy: ${esc(wc.path)}">${U.icon('branch')}<b>${esc(wc.branch || '—')}</b>${rev}</div><span class="fill"></span>` +
-      U.btn('btn', 'SVN Update', 'down', 'update', null, 'Scarica le modifiche dal server (svn update)') +
-      U.btn('ib', '', 'refresh', 'refresh', null, 'Ricarica l\'elenco delle modifiche (svn status)') +
-      `<button type="button" class="ib" data-menu="more" title="Altre azioni: vista, tema, prerequisiti" aria-label="Altre azioni" aria-haspopup="menu">${U.icon('more')}</button>`;
+    return `<div class="branch" title="${esc(t('Branch della working copy: {0}', wc.path))}">${U.icon('branch')}<b>${esc(wc.branch || '—')}</b>${rev}</div><span class="fill"></span>` +
+      U.btn('btn', 'SVN Update', 'down', 'update', null, t('Scarica le modifiche dal server (svn update)')) +
+      U.btn('ib', '', 'refresh', 'refresh', null, t("Ricarica l'elenco delle modifiche (svn status)")) +
+      `<button type="button" class="ib" data-menu="more" title="${esc(t('Altre azioni: vista, tema, prerequisiti'))}" aria-label="${esc(t('Altre azioni'))}" aria-haspopup="menu">${U.icon('more')}</button>`;
   }
   function wcForm(s) {
-    return (s.workingCopy.showInput || forceInput) ? `<form class="wc" id="wcform"><label for="wcp">Working copy</label><input id="wcp" type="text" value="${esc(s.workingCopy.path)}" placeholder="C:\\percorso\\della\\working copy" spellcheck="false"><button class="btn sm" type="submit" title="Carica questa working copy">Apri</button></form>` : '';
+    return (s.workingCopy.showInput || forceInput) ? `<form class="wc" id="wcform"><label for="wcp">Working copy</label><input id="wcp" type="text" value="${esc(s.workingCopy.path)}" placeholder="${esc(t('C:\\percorso\\della\\working copy'))}" spellcheck="false"><button class="btn sm" type="submit" title="${esc(t('Carica questa working copy'))}">${t('Apri')}</button></form>` : '';
   }
   function commitBar(s) {
     const n = (s.sections.find(x => x.id === 'staged') || { count: 0 }).count, c = s.commit, busy = c.busy || s.loading;
-    const why = n ? `Committa ${n} ${n === 1 ? 'file' : 'file'} (Ctrl+Invio)` : 'Aggiungi almeno un file dalla lista (+) per committare';
+    const why = n ? t('Committa {0} file (Ctrl+Invio)', n) : t('Aggiungi almeno un file dalla lista (+) per committare');
     return `<button type="button" class="btn primary" ${U.cmd('commit')} ${n && !busy ? '' : 'disabled'} title="${esc(why)}">${U.icon('check')}<span>Commit</span>${n ? `<span class="pill">${n}</span>` : ''}</button><span class="fill"></span>` +
-      `<button type="button" class="btn ai" ${U.cmd('genAi')} ${c.busy ? 'disabled aria-busy="true"' : ''} title="Scrive il messaggio dal diff dei file da committare">${c.busy ? '<span class="spin"></span>' : U.icon('spark')}<span>${c.busy ? 'Generazione in corso…' : 'Genera con AI'}</span></button>` +
-      `<button type="button" class="ib" data-menu="ai" ${c.busy ? 'disabled' : ''} title="Migliora il messaggio, lingua" aria-label="Altre opzioni AI" aria-haspopup="menu">${U.icon('chev-d')}</button>`;
+      `<button type="button" class="btn ai" ${U.cmd('genAi')} ${c.busy ? 'disabled aria-busy="true"' : ''} title="${esc(t('Scrive il messaggio dal diff dei file da committare'))}">${c.busy ? '<span class="spin"></span>' : U.icon('spark')}<span>${c.busy ? t('Generazione in corso…') : t('Genera con AI')}</span></button>` +
+      `<button type="button" class="ib" data-menu="ai" ${c.busy ? 'disabled' : ''} title="${esc(t('Migliora il messaggio, lingua'))}" aria-label="${esc(t('Altre opzioni AI'))}" aria-haspopup="menu">${U.icon('chev-d')}</button>`;
   }
   function aiStat(c) {
     // Ogni messaggio ha colore e icona per gravita' (aviso/errore/esito); data-seq cambia a ogni messaggio, cosi' anche uno ripetuto si ridisegna e lampeggia.
     const lv = c.aiLevel || 'info', ic = lv === 'busy' ? '<span class="spin"></span>' : lv === 'ok' ? U.icon('check') : lv === 'warn' ? U.icon('warn') : lv === 'err' ? U.icon('x') : '';
     let h = c.aiStatus ? `<div class="ai-s lv-${lv}" role="${lv === 'warn' || lv === 'err' ? 'alert' : 'status'}" data-seq="${+c.aiSeq || 0}">${ic}<span>${esc(c.aiStatus).replace(/\n/g, '<br>')}</span></div>` : '';
-    if (c.download) h += `<div class="dl"><b>GitHub Copilot: primo utilizzo</b> <span class="muted">(runtime ~100 MB, una sola volta)</span><progress max="100" value="${+c.download.pct || 0}"></progress>${esc(c.download.label)}</div>`;
-    if (c.trace && c.trace.length) h += `<div class="trace">` + c.trace.map((t, i) => {
-      const lab = t.state === 'ok' ? `${t.name}: OK` : t.state === 'fail' ? `${t.name}: errore` : t.state === 'skip' ? `${t.name}: saltato` : t.state === 'run' ? `<span class="spin"></span>${esc(t.name)}…` : esc(t.name);
-      return (i ? '<span class="muted">›</span>' : '') + `<span class="chip ${t.state}" title="${esc(t.detail || '')}">${t.state === 'ok' || t.state === 'fail' || t.state === 'skip' ? esc(lab) : lab}</span>`;
+    if (c.download) h += `<div class="dl"><b>${t('GitHub Copilot: primo utilizzo')}</b> <span class="muted">${t('(runtime ~100 MB, una sola volta)')}</span><progress max="100" value="${+c.download.pct || 0}"></progress>${esc(c.download.label)}</div>`;
+    if (c.trace && c.trace.length) h += `<div class="trace">` + c.trace.map((x, i) => {
+      const lab = x.state === 'ok' ? t('{0}: OK', x.name) : x.state === 'fail' ? t('{0}: errore', x.name) : x.state === 'skip' ? t('{0}: saltato', x.name) : x.state === 'run' ? `<span class="spin"></span>${esc(x.name)}…` : esc(x.name);
+      return (i ? '<span class="muted">›</span>' : '') + `<span class="chip ${x.state}" title="${esc(x.detail || '')}">${x.state === 'ok' || x.state === 'fail' || x.state === 'skip' ? esc(lab) : lab}</span>`;
     }).join('') + `</div>`;
     return h;
   }
   function foot(s) {
-    const p = s.prereq, bad = !!(p.summary && /da sistemare/.test(p.summary)), m = s.status.msg || '';
+    const p = s.prereq, bad = !!(p.summary && /da sistemare|to fix/.test(p.summary)), m = s.status.msg || '';
     // Esito: icona + colore + semibold (stessa dimensione del testo); i messaggi di sola informazione restano normali.
-    const kind = s.status.err ? 'err' : /(completat|aggiornat|annullat|aggiunt|eliminat|risolt|ignorat|salvat)/i.test(m) ? 'ok' : '';
+    const kind = s.status.err ? 'err' : /(completat|aggiornat|annullat|aggiunt|eliminat|risolt|ignorat|salvat|completed|updated|cancel|added|deleted|resolved|ignore|saved)/i.test(m) ? 'ok' : '';
     const act = s.status.action;
     return `<span class="msg ${kind}" role="status">${kind ? U.icon(kind === 'err' ? 'x' : 'check') : ''}<span>${esc(m)}</span></span>` +
-      (act ? `<button type="button" class="btn sm" ${U.cmd(act.cmd)} title="Esegue svn cleanup sulla working copy">${esc(act.label)}</button>` : '') + `<span class="fill"></span>` +
-      (bad ? `<button type="button" class="btn sm prq-st bad" ${U.cmd('wizardOpenPrereq')} title="Manca qualcosa: apre la procedura guidata per sistemarlo">${U.icon('warn')}<span>${esc(p.summary)}</span></button>`
-        : `<button type="button" class="btn sm prq-st ok" ${U.cmd('prereqToggle')} aria-expanded="${!!p.open}" title="Tutto a posto. Mostra/nasconde la checklist: svn, TortoiseSVN, provider AI">${U.icon('check')}<span>${esc((p.summary || 'Prerequisiti').replace(/\s*✓/, ''))}</span></button>`);
+      (act ? `<button type="button" class="btn sm" ${U.cmd(act.cmd)} title="${esc(t('Esegue svn cleanup sulla working copy'))}">${esc(act.label)}</button>` : '') + `<span class="fill"></span>` +
+      (bad ? `<button type="button" class="btn sm prq-st bad" ${U.cmd('wizardOpenPrereq')} title="${esc(t('Manca qualcosa: apre la procedura guidata per sistemarlo'))}">${U.icon('warn')}<span>${esc(p.summary)}</span></button>`
+        : `<button type="button" class="btn sm prq-st ok" ${U.cmd('prereqToggle')} aria-expanded="${!!p.open}" title="${esc(t('Tutto a posto. Mostra/nasconde la checklist: svn, TortoiseSVN, provider AI'))}">${U.icon('check')}<span>${esc((p.summary || t('Prerequisiti')).replace(/\s*✓/, ''))}</span></button>`);
   }
   const isEmpty = s => s.sections.every(x => !x.count);
 
   function moreMenu() {
     return [
       { header: true, label: 'SVN' },
-      { label: 'SVN Update to revision…', cmd: 'updateToRevision', hint: 'Aggiorna a una revisione precisa (svn update -r)' },
-      { label: 'SVN Cleanup', cmd: 'cleanup', hint: 'Ripulisce la working copy da un\'operazione interrotta (svn cleanup)' }, { sep: true },
-      { header: true, label: 'Vista' },
-      { label: 'Albero per cartelle', cmd: 'setView', args: { view: 'tree' }, checked: st.view === 'tree' },
-      { label: 'Elenco semplice', cmd: 'setView', args: { view: 'list' }, checked: st.view === 'list' },
-      { label: 'Espandi tutto', cmd: 'expandAll' }, { label: 'Comprimi tutto', cmd: 'collapseAll' }, { sep: true },
-      { header: true, label: 'Tema della finestra' },
-      ...THEMES.map(([m, l]) => ({ label: l, cmd: 'setTheme', args: { mode: m }, checked: st.theme.mode === m })), { sep: true },
-      { label: 'Cambia provider AI…', cmd: 'wizardOpen' },
-      { label: 'Prerequisiti…', cmd: 'prereqToggle' },
-      { label: 'Cambia working copy…', run: () => { forceInput = true; render(); const i = document.getElementById('wcp'); if (i) i.focus(); } },
+      { label: 'SVN Update to revision…', cmd: 'updateToRevision', hint: t('Aggiorna a una revisione precisa (svn update -r)') },
+      { label: 'SVN Cleanup', cmd: 'cleanup', hint: t("Ripulisce la working copy da un'operazione interrotta (svn cleanup)") }, { sep: true },
+      { header: true, label: t('Vista') },
+      { label: t('Albero per cartelle'), cmd: 'setView', args: { view: 'tree' }, checked: st.view === 'tree' },
+      { label: t('Elenco semplice'), cmd: 'setView', args: { view: 'list' }, checked: st.view === 'list' },
+      { label: t('Espandi tutto'), cmd: 'expandAll' }, { label: t('Comprimi tutto'), cmd: 'collapseAll' }, { sep: true },
+      { header: true, label: t('Tema della finestra') },
+      ...THEMES().map(([m, l]) => ({ label: l, cmd: 'setTheme', args: { mode: m }, checked: st.theme.mode === m })), { sep: true },
+      { label: t('Cambia provider AI…'), cmd: 'wizardOpen' },
+      { label: t('Prerequisiti…'), cmd: 'prereqToggle' },
+      { label: t('Cambia working copy…'), run: () => { forceInput = true; render(); const i = document.getElementById('wcp'); if (i) i.focus(); } },
     ];
   }
   function aiMenu() {
-    return [{ label: 'Migliora il messaggio scritto', cmd: 'improveAi', hint: 'Riscrive la bozza nel campo sopra' }, { label: 'Cambia provider AI…', cmd: 'wizardOpen', hint: 'Procedura guidata: provider, accesso, modello' }, { sep: true }, { header: true, label: 'Lingua del messaggio' },
-      ...LANGS.map(([l, t]) => ({ label: t, cmd: 'setLanguage', args: { lang: l }, checked: st.commit.lang === l }))];
+    return [{ label: t('Migliora il messaggio scritto'), cmd: 'improveAi', hint: t('Riscrive la bozza nel campo sopra') }, { label: t('Cambia provider AI…'), cmd: 'wizardOpen', hint: t('Procedura guidata: provider, accesso, modello') }, { sep: true }, { header: true, label: t('Lingua del messaggio') },
+      ...LANGS().map(([l, t]) => ({ label: t, cmd: 'setLanguage', args: { lang: l }, checked: st.commit.lang === l }))];
   }
   function rowMenu(row, x, y) {
     const key = row.dataset.key, kind = row.dataset.kind, sec = row.dataset.sec;
     const s = st.sections.find(z => z.id === sec); const r = s && s.rows.find(z => z.key === key);
     const A = (op, label, can, kbd) => ({ label, cmd: 'rowOp', args: { op, key }, disabled: !can, kbd });
-    if (kind === 'section') return U.menu.open(x, y, [{ label: sec === 'staged' ? 'Rimuovi tutto dai file da committare' : 'Aggiungi tutto ai file da committare', cmd: sec === 'staged' ? 'unstage' : 'stage', args: { key } }, { sep: true }, { label: 'Espandi tutto', cmd: 'expandAll' }, { label: 'Comprimi tutto', cmd: 'collapseAll' }], row);
+    if (kind === 'section') return U.menu.open(x, y, [{ label: sec === 'staged' ? t('Rimuovi tutto dai file da committare') : t('Aggiungi tutto ai file da committare'), cmd: sec === 'staged' ? 'unstage' : 'stage', args: { key } }, { sep: true }, { label: t('Espandi tutto'), cmd: 'expandAll' }, { label: t('Comprimi tutto'), cmd: 'collapseAll' }], row);
     if (!r) return;
     const c = r.can, isF = kind === 'file';
     U.menu.open(x, y, [
-      { label: isF ? 'Mostra differenze' : 'Mostra differenze della cartella', cmd: isF ? 'showDiff' : 'showFolderDiff', args: { key }, disabled: !c.diff, kbd: isF ? 'Invio' : '' },
-      c.unstage || sec === 'staged' ? { label: 'Rimuovi dai file da committare', cmd: 'unstage', args: { key }, disabled: !c.unstage, kbd: 'Spazio' } : { label: 'Aggiungi ai file da committare', cmd: 'stage', args: { key }, disabled: !c.stage, kbd: 'Spazio', hint: c.stage ? '' : 'Risolvi prima il conflitto' },
-      { sep: true }, A('add', 'SVN Add (aggiungi al controllo di versione)', c.add), A('ignore', 'Aggiungi alla ignore list', c.ignore),
-      A('revert', isF ? 'SVN Revert (annulla le modifiche)…' : 'SVN Revert della cartella (annulla le modifiche)…', c.revert), isF ? A('resolve', 'Risolvi conflitto…', c.resolve) : null,
+      { label: isF ? t('Mostra differenze') : t('Mostra differenze della cartella'), cmd: isF ? 'showDiff' : 'showFolderDiff', args: { key }, disabled: !c.diff, kbd: isF ? t('Invio') : '' },
+      c.unstage || sec === 'staged' ? { label: t('Rimuovi dai file da committare'), cmd: 'unstage', args: { key }, disabled: !c.unstage, kbd: t('Spazio') } : { label: t('Aggiungi ai file da committare'), cmd: 'stage', args: { key }, disabled: !c.stage, kbd: t('Spazio'), hint: c.stage ? '' : t('Risolvi prima il conflitto') },
+      { sep: true }, A('add', t('SVN Add (aggiungi al controllo di versione)'), c.add), A('ignore', t('Aggiungi alla ignore list'), c.ignore),
+      A('revert', isF ? t('SVN Revert (annulla le modifiche)…') : t('SVN Revert della cartella (annulla le modifiche)…'), c.revert), isF ? A('resolve', t('Risolvi conflitto…'), c.resolve) : null,
       isF && (c.lock || c.unlock) ? { sep: true } : null, isF && c.lock ? A('lock', 'SVN Lock…', true) : null, isF && c.unlock ? A('unlock', 'SVN Unlock', true) : null,
-      { sep: true }, isF ? A('deleteFile', 'Elimina file…', c.deleteFile, 'Canc') : { label: 'Espandi tutto', cmd: 'expandAll' }, isF ? null : { label: 'Comprimi tutto', cmd: 'collapseAll' },
+      { sep: true }, isF ? A('deleteFile', t('Elimina file…'), c.deleteFile, t('Canc')) : { label: t('Espandi tutto'), cmd: 'expandAll' }, isF ? null : { label: t('Comprimi tutto'), cmd: 'collapseAll' },
     ].filter(Boolean), row);
   }
 
@@ -97,7 +98,7 @@
     const list = root.querySelector('#list'), had = list.contains(document.activeElement), cur = list.__cursor, top = list.scrollTop;
     const keys = []; st.sections.forEach(s => { keys.push('section:' + s.id); s.rows.forEach(r => keys.push(r.key)); });
     const cursor = keys.includes(cur) ? cur : keys[0];
-    const html = isEmpty(st) && !st.loading ? `<div class="empty-state">${U.icon('check', 'big')}<b>Nessuna modifica</b><span class="muted">La working copy è pulita.</span></div>` + '' : '';
+    const html = isEmpty(st) && !st.loading ? `<div class="empty-state">${U.icon('check', 'big')}<b>${t('Nessuna modifica')}</b><span class="muted">${t('La working copy è pulita.')}</span></div>` + '' : '';
     const changed = U.setHTML(list, (html ? html : '') + U.treeHTML(st.sections.filter(s => s.id === 'staged' || s.count), cursor, filter));
     if (changed) { list.scrollTop = top; if (had) { const r = list.querySelector(`.tr[data-key="${CSS.escape(cursor)}"]`); if (r) r.focus(); } }
     list.setAttribute('aria-busy', !!st.loading);
@@ -139,11 +140,12 @@
   U.views.changes = {
     mount(root) {
       root.innerHTML = `<div class="app"><div class="prog" aria-hidden="true"></div><header class="bar" id="hdr"></header><div id="wcbox"></div>
-        <section class="commit"><textarea id="msg" rows="3" aria-label="Messaggio di commit" placeholder="Messaggio di commit (Ctrl+Invio per committare)"></textarea>
+        <section class="commit"><textarea id="msg" rows="3"></textarea>
         <div class="bar" id="cbar"></div><div id="aist"></div></section><div id="prq"></div>
-        <div class="flt"><input id="flt" type="search" placeholder="Filtra i file…" aria-label="Filtra i file per nome" spellcheck="false" autocomplete="off"></div>
-        <div class="list" id="list" role="tree" aria-label="Modifiche della working copy"></div>
+        <div class="flt"><input id="flt" type="search" spellcheck="false" autocomplete="off"></div>
+        <div class="list" id="list" role="tree"></div>
         <footer class="foot" id="foot"></footer></div><div id="wiz"></div>`;
+      U.views.changes.relang(root);
       const ta = root.querySelector('#msg');
       ta.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => U.bridge.send('setCommitText', { text: ta.value }), 150); });
       ta.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); clearTimeout(timer); U.bridge.send('setCommitText', { text: ta.value }); U.bridge.send('commit'); } });
@@ -169,5 +171,12 @@
       U.bindTree(root.querySelector('#list'), { rowMenu });
     },
     update(root, state) { st = state; render(); },
+    // testi statici dello scheletro (attributi): da rifare a ogni cambio di lingua
+    relang(root) {
+      const set = (sel, attrs) => { const e = root.querySelector(sel); if (e) for (const k in attrs) e.setAttribute(k, attrs[k]); };
+      set('#msg', { 'aria-label': t('Messaggio di commit'), placeholder: t('Messaggio di commit (Ctrl+Invio per committare)') });
+      set('#flt', { placeholder: t('Filtra i file…'), 'aria-label': t('Filtra i file per nome') });
+      set('#list', { 'aria-label': t('Modifiche della working copy') });
+    },
   };
 })(window);

@@ -48,14 +48,14 @@ internal sealed class AnthropicAiService : AiServiceBase
         }, ct);
 
         if (response.StopReason == "refusal")
-            throw new InvalidOperationException("Claude ha rifiutato la richiesta.");
+            throw new InvalidOperationException(Loc.T("Claude ha rifiutato la richiesta."));
 
         var text = string.Concat(response.Content
             .Select(b => b.TryPickText(out var t) ? t.Text : null)
             .Where(t => t is not null));
 
         return string.IsNullOrWhiteSpace(text)
-            ? throw new InvalidOperationException("Claude non ha restituito testo.")
+            ? throw new InvalidOperationException(Loc.T("Claude non ha restituito testo."))
             : text;
     }
 }

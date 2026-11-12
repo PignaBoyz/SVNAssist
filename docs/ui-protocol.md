@@ -23,7 +23,7 @@ Una pagina = una vista: `index.html?view=changes|log|diff` (`&id=…` per distin
 |---|---|---|
 | `ready` | JS → host | `view`, `id?` — la pagina è pronta; l'host risponde con `theme` e `state` |
 | `cmd` | JS → host | `id` (progressivo), `name`, `args` — vedi comandi |
-| `state` | host → JS | `view`, `id?`, `rev` (cresce), `state` — **snapshot completo** della vista |
+| `state` | host → JS | `view`, `id?`, `lang` (`it`/`en`), `rev` (cresce), `state` — **snapshot completo** della vista |
 | `reply` | host → JS | `id`, `ok`, `result?`, `error?` — esito di un `cmd` (se `ok:false` la UI mostra un toast) |
 | `theme` | host → JS | `kind` (`light`/`dark`/`blue`), `vars` — variabili CSS che sovrascrivono `tokens.css` |
 | `event` | host → JS | `name`: `toast` (`text`), `focus`, `backendRestarted` |
@@ -78,7 +78,7 @@ Stato e logica nel backend (`WizardStore`); la UI mostra `wizard` e invia solo q
 | `wizardFinish` | `model` | salva `aiProvider` + modello con le chiavi di Tools > Options e chiude; se la procedura veniva da "Genera con AI", genera |
 | `openOptions` | – | "Faccio io": chiude la procedura e apre Tools > Options > SVNAssist (`IHost.OpenSettingsAsync`) |
 
-Menu di VS: `Extensions > SVNAssist > Cambia provider AI...` (comando `CmdAiSetup` 0x0104) mostra Changes e invia `wizardOpen`.
+Menu di VS: `Extensions > SVNAssist > Change AI Provider...` (comando `CmdAiSetup` 0x0104) mostra Changes e invia `wizardOpen`.
 
 ### Log
 `logLoad{path}` (ultime 50), `logMore` (altre 50), `logSelect{rev}` (carica il diff della revisione; chiude l'elenco `files`).
@@ -136,6 +136,14 @@ Le righe sono **già piatte e ordinate** (albero calcolato dal backend con `Chan
 
 ### `diff` (`diff-state.schema.json`)
 `{title, subtitle, diff}` — `diff` è il testo di `svn diff` (uno o più file, righe `Index:`); la pagina lo mostra affiancato.
+
+## Lingua dell'interfaccia
+
+Impostazione `uiLanguage` = `auto` (default) | `it` | `en` (Tools > Options > SVNAssist > Generale, oppure Extensions > SVNAssist > Language / Lingua). `auto` = italiano se la cultura UI di Visual Studio è `it-*`, altrimenti inglese. **La risolve l'host** (ha la cultura di VS) e la manda al backend come `uiLanguageEffective` (`it`/`en`) insieme a `uiLanguage` in `GetSettingsAsync`; senza valori (test) il backend resta in italiano.
+Il backend tiene la lingua effettiva in `Loc.Lang` (processo unico) e ogni `state` porta `lang`: la UI chiama `U.setLang(lang)` **prima** di ridisegnare, così i testi propri della UI (`js/i18n.js`) e quelli già tradotti dal backend (stato, errori, prerequisiti, procedura guidata, nomi degli stati) sono sempre nella stessa lingua.
+**Cambio a caldo**: l'host aggiorna `Loc.Lang` e chiama `IBackend.SettingsChangedAsync()`; il backend rilegge la lingua, ricalcola checklist/procedura guidata/riepilogo e rimanda lo snapshot a tutte le viste (la firma dello snapshot include `lang`, quindi parte anche se il resto è identico). I messaggi di stato già scritti (es. "Commit completato…") restano nella lingua in cui sono nati fino al prossimo messaggio.
+Convenzione dei testi (UI e backend): la **chiave è il testo italiano**, con segnaposto `{0}`, `{1}`; la traduzione inglese sta in `js/i18n.js` (`EN`) e in `src/Shared/LocEn.cs`. In italiano `t()`/`Loc.T()` ritornano la chiave. I test (`tests/ui-web/i18n.test.mjs`, `LocalizationTests`) verificano che ogni testo usato nel codice abbia la voce inglese con gli stessi segnaposto e che non restino voci inutilizzate.
+Non si traducono: messaggi di `svn.exe`, log, prompt inviati all'AI, i nomi dei comandi SVN ("SVN Update", "SVN Commit", "SVN Cleanup", Lock/Unlock) e le voci di menu di VS (sono in inglese standard SVN, uguali per entrambe le lingue). La lingua dei **commit message generati dall'AI** è un'altra impostazione (`defaultLanguage` + scelta nel pannello) e non cambia.
 
 ## Tema
 
@@ -211,5 +219,6 @@ L'host le espone in Tools > Options > SVNAssist (categoria "SVNAssist") e le res
 | `defaultLanguage` | enum | `auto` | `auto`, `italiano`, `english` |
 | `workingCopyPath` | string | `` | se valorizzato vince sull'auto-rilevamento dalla solution |
 | `windowTheme` | enum | `auto` | `auto`, `light`, `dark`, `blue` (scritta dal backend con `SetSettingAsync`) |
+| `uiLanguage` | enum | `auto` | `auto`, `it`, `en` — lingua dell'interfaccia (vedi "Lingua dell'interfaccia"); l'host aggiunge `uiLanguageEffective` (`it`/`en`, già risolta, non è un'impostazione) |
 
 Un valore fuori elenco ricade sul default (come prima). Le chiavi segrete non vanno mai loggate.

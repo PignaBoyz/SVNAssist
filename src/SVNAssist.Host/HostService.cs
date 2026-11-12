@@ -79,9 +79,9 @@ namespace SVNAssist.Host
             {
                 Log.Write("dispatch " + view + ": " + ex.Message);
                 if (type == "cmd" && id != null)
-                    await PushAsync(view, new JObject { ["v"] = 1, ["type"] = "reply", ["id"] = id, ["ok"] = false, ["error"] = "Servizio SVNAssist non disponibile: " + ex.Message }.ToString(Newtonsoft.Json.Formatting.None)).ConfigureAwait(false);
+                    await PushAsync(view, new JObject { ["v"] = 1, ["type"] = "reply", ["id"] = id, ["ok"] = false, ["error"] = Loc.T("Servizio SVNAssist non disponibile: {0}", ex.Message) }.ToString(Newtonsoft.Json.Formatting.None)).ConfigureAwait(false);
                 else
-                    await PushAsync(view, Event("toast", "Servizio SVNAssist non disponibile: " + ex.Message)).ConfigureAwait(false);
+                    await PushAsync(view, Event("toast", Loc.T("Servizio SVNAssist non disponibile: {0}", ex.Message))).ConfigureAwait(false);
             }
         }
 
@@ -168,8 +168,16 @@ namespace SVNAssist.Host
             _ = Task.Run(async () => { try { await SendThemeAsync(await _backend.GetAsync().ConfigureAwait(false)).ConfigureAwait(false); } catch (Exception ex) { Log.Write("theme: " + ex.Message); } });
         }
 
+        /// <summary>Lingua dell'interfaccia cambiata (menu Lingua o Tools > Options): aggiorna l'host e fa rileggere il backend (finestre incluse).</summary>
+        public void OnLanguageChanged()
+        {
+            Loc.Lang = _pkg.Options.EffectiveLanguage;
+            OnOptionsChanged();
+        }
+
         private void OnOptionsChanged()
         {
+            Loc.Lang = _pkg.Options.EffectiveLanguage;
             _ = Task.Run(async () =>
             {
                 try
@@ -238,7 +246,7 @@ namespace SVNAssist.Host
         public Task OpenUrlAsync(string url)
         {
             if (!Uri.TryCreate(url, UriKind.Absolute, out var u) || u.Scheme != Uri.UriSchemeHttps)
-                throw new ArgumentException("Solo URL https.");
+                throw new ArgumentException(Loc.T("Solo URL https."));
             Process.Start(new ProcessStartInfo(u.AbsoluteUri) { UseShellExecute = true });
             return Task.CompletedTask;
         }
@@ -247,7 +255,7 @@ namespace SVNAssist.Host
         {
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
             var svc = await _pkg.GetServiceAsync(typeof(SVsDifferenceService)) as IVsDifferenceService;
-            if (svc == null) throw new InvalidOperationException("IVsDifferenceService non disponibile.");
+            if (svc == null) throw new InvalidOperationException(Loc.T("IVsDifferenceService non disponibile."));
             svc.OpenComparisonWindow2(leftPath, rightPath, caption, caption, leftLabel, rightLabel, caption, null,
                 (uint)__VSDIFFSERVICEOPTIONS.VSDIFFOPT_DetectBinaryFiles);
         }

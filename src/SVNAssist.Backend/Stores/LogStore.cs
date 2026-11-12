@@ -28,7 +28,8 @@ internal sealed class LogStore : ViewStore
     private readonly SemaphoreSlim _loadGate = new(1, 1);
 
     private string _path = string.Empty;
-    private string _msg = "Inserisci il percorso della working copy e premi Carica log.";
+    private string _msg = string.Empty;
+    private bool _msgInitial = true; // il messaggio iniziale si compone al momento dello snapshot (segue la lingua corrente)
     private bool _err;
     private bool _loading;
     private int _limit;
@@ -74,7 +75,7 @@ internal sealed class LogStore : ViewStore
     internal override object GetSnapshot()
     {
         lock (_lock)
-            return new LogState(_path, _msg, _err, _loading, _canMore, _sel, _entries, _diff, _filterText, FilesDto());
+            return new LogState(_path, _msgInitial ? Loc.T("Inserisci il percorso della working copy e premi Carica log.") : _msg, _err, _loading, _canMore, _sel, _entries, _diff, _filterText, FilesDto());
     }
 
     private LogFilesDto? FilesDto() => _filesKind is null
@@ -161,7 +162,7 @@ internal sealed class LogStore : ViewStore
                 NotifyChanged();
                 break;
             default:
-                throw new ArgumentException($"Comando sconosciuto: {name}");
+                throw new ArgumentException(Loc.T("Comando sconosciuto: {0}", name));
         }
 
         return null;
@@ -195,7 +196,7 @@ internal sealed class LogStore : ViewStore
         var path = typed.Trim();
         if (path.Length == 0)
         {
-            Set("Inserisci il percorso della working copy.", err: false);
+            Set(Loc.T("Inserisci il percorso della working copy."), err: false);
             return;
         }
 
@@ -208,13 +209,13 @@ internal sealed class LogStore : ViewStore
             }
             catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
             {
-                Set("Errore: percorso non valido.", err: true);
+                Set(Loc.T("Errore: percorso non valido."), err: true);
                 return;
             }
 
             if (!Directory.Exists(full) || SvnService.FindSvnRoot(full) is null)
             {
-                Set("Errore: non è una working copy SVN.", err: true);
+                Set(Loc.T("Errore: non è una working copy SVN."), err: true);
                 return;
             }
 
@@ -231,6 +232,7 @@ internal sealed class LogStore : ViewStore
         lock (_lock)
         {
             _msg = msg;
+            _msgInitial = false;
             _err = err;
             _loading = loading;
         }
@@ -246,14 +248,14 @@ internal sealed class LogStore : ViewStore
             path = _path;
         if (string.IsNullOrWhiteSpace(path))
         {
-            Set("Inserisci il percorso della working copy.", err: false);
+            Set(Loc.T("Inserisci il percorso della working copy."), err: false);
             return;
         }
 
         await _loadGate.WaitAsync(ct);
         try
         {
-            Set("Caricamento log...", err: false, loading: true);
+            Set(Loc.T("Caricamento log..."), err: false, loading: true);
             var entries = await _svnService.GetLogAsync(path, limit, _filter, ct);
 
             var dtos = entries.Select(e => new LogEntryDto(
@@ -274,11 +276,11 @@ internal sealed class LogStore : ViewStore
                 }
             }
 
-            Set(dtos.Count == 0 ? "Nessuna revisione trovata." : $"{dtos.Count} revisioni caricate{(_filter.IsEmpty ? "" : " (filtro attivo)")}.", err: false);
+            Set(dtos.Count == 0 ? Loc.T("Nessuna revisione trovata.") : Loc.T("{0} revisioni caricate{1}.", dtos.Count, _filter.IsEmpty ? "" : Loc.T(" (filtro attivo)")), err: false);
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            Set($"Errore: {ex.Message}", err: true);
+            Set(Loc.T("Errore: {0}", ex.Message), err: true);
         }
         finally
         {
@@ -321,16 +323,16 @@ internal sealed class LogStore : ViewStore
         try
         {
             if (_diffs is null || _host is null)
-                throw new InvalidOperationException("diff non disponibile");
+                throw new InvalidOperationException(Loc.T("diff non disponibile"));
             await action();
         }
         catch (ArgumentException ex)
         {
-            Set($"Errore: {ex.Message}", err: true);
+            Set(Loc.T("Errore: {0}", ex.Message), err: true);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            Set($"Errore diff: {ex.Message}", err: true);
+            Set(Loc.T("Errore diff: {0}", ex.Message), err: true);
         }
     }
 
@@ -353,19 +355,19 @@ internal sealed class LogStore : ViewStore
         lock (_lock)
         {
             path = _path;
-            var entry = _entries.FirstOrDefault(e => e.Rev == rev) ?? throw new ArgumentException($"Revisione {rev} non presente nell'elenco.");
+            var entry = _entries.FirstOrDefault(e => e.Rev == rev) ?? throw new ArgumentException(Loc.T("Revisione {0} non presente nell'elenco.", rev));
             if (index < 0 || index >= entry.Paths.Count)
-                throw new ArgumentException("File non presente nella revisione.");
+                throw new ArgumentException(Loc.T("File non presente nella revisione."));
             file = entry.Paths[index];
         }
 
         if (file.K == "dir")
-            throw new ArgumentException("è una cartella: scegli un file.");
+            throw new ArgumentException(Loc.T("è una cartella: scegli un file."));
         var url = await RepoRootAsync(path, ct) + file.P;
         var (l, r) = DiffOpener.ForRevision(file.A, rev);
         var name = System.IO.Path.GetFileName(file.P);
         await _diffs!.OpenRevisionsAsync(url, name, l, r, ct);
-        Set($"Diff aperto: {DiffOpener.Title(name, l, r)}", err: false);
+        Set(Loc.T("Diff aperto: {0}", DiffOpener.Title(name, l, r)), err: false);
     }
 
     /// <summary>Ctrl+clic su un'altra revisione: elenca i file cambiati tra le due (<c>svn diff --summarize</c>).</summary>
@@ -375,25 +377,25 @@ internal sealed class LogStore : ViewStore
         lock (_lock)
         {
             if (!_entries.Any(e => e.Rev == a) || !_entries.Any(e => e.Rev == b))
-                throw new ArgumentException("revisione non presente nell'elenco.");
+                throw new ArgumentException(Loc.T("revisione non presente nell'elenco."));
             path = _path;
         }
 
         if (a > b)
             (a, b) = (b, a);
-        Set($"Confronto r{a} ↔ r{b}...", err: false, loading: true);
+        Set(Loc.T("Confronto r{0} ↔ r{1}...", a, b), err: false, loading: true);
         var changes = await _svnService.GetChangedBetweenAsync(path, a, b, ct);
         lock (_lock)
         {
             _filesKind = "compare";
-            _filesTitle = $"File cambiati tra r{a} e r{b}";
+            _filesTitle = Loc.T("File cambiati tra r{0} e r{1}", a, b);
             _filesBase = path;
             _files = changes;
             _cmpFrom = a;
             _cmpTo = b;
         }
 
-        Set(changes.Count == 0 ? $"Nessun file cambiato tra r{a} e r{b}." : $"{changes.Count} file cambiati tra r{a} e r{b}.", err: false);
+        Set(changes.Count == 0 ? Loc.T("Nessun file cambiato tra r{0} e r{1}.", a, b) : Loc.T("{0} file cambiati tra r{1} e r{2}.", changes.Count, a, b), err: false);
     }
 
     /// <summary>Diff di cartella: elenco dei file modificati (<c>svn status</c>); ogni clic apre il diff nativo BASE ↔ working copy.</summary>
@@ -406,11 +408,11 @@ internal sealed class LogStore : ViewStore
         }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
         {
-            throw new ArgumentException("percorso non valido.");
+            throw new ArgumentException(Loc.T("percorso non valido."));
         }
 
         if (!Directory.Exists(folder) || SvnService.FindSvnRoot(folder) is not { } root)
-            throw new ArgumentException("non è una working copy SVN.");
+            throw new ArgumentException(Loc.T("non è una working copy SVN."));
 
         if (CurrentPath.Length == 0)
         {
@@ -419,7 +421,7 @@ internal sealed class LogStore : ViewStore
             await LoadAsync(PageSize, ct);
         }
 
-        Set("Lettura delle modifiche...", err: false, loading: true);
+        Set(Loc.T("Lettura delle modifiche..."), err: false, loading: true);
         var changes = new List<SvnChange>();
         foreach (var s in await _svnService.GetStatusAsync(folder, ct))
         {
@@ -439,12 +441,12 @@ internal sealed class LogStore : ViewStore
         lock (_lock)
         {
             _filesKind = "folder";
-            _filesTitle = $"Modifiche in {folder}";
+            _filesTitle = Loc.T("Modifiche in {0}", folder);
             _filesBase = folder;
             _files = changes;
         }
 
-        Set(changes.Count == 0 ? "Nessuna modifica nella cartella." : $"{changes.Count} file modificati.", err: false);
+        Set(changes.Count == 0 ? Loc.T("Nessuna modifica nella cartella.") : Loc.T("{0} file modificati.", changes.Count), err: false);
     }
 
     private async Task OpenListedFileAsync(int index, CancellationToken ct)
@@ -455,7 +457,7 @@ internal sealed class LogStore : ViewStore
         lock (_lock)
         {
             if (_filesKind is null || index < 0 || index >= _files.Count)
-                throw new ArgumentException("file non presente nell'elenco.");
+                throw new ArgumentException(Loc.T("file non presente nell'elenco."));
             kind = _filesKind;
             file = _files[index];
             (from, to) = (_cmpFrom, _cmpTo);
@@ -478,14 +480,14 @@ internal sealed class LogStore : ViewStore
         lock (_lock)
         {
             if (_filesKind != "folder")
-                throw new ArgumentException("nessuna cartella selezionata.");
+                throw new ArgumentException(Loc.T("nessuna cartella selezionata."));
             folder = _filesBase;
         }
 
         var text = await _svnService.GetFileDiffAsync(folder, ct);
         if (string.IsNullOrWhiteSpace(text))
         {
-            Set("Nessuna modifica.", err: false);
+            Set(Loc.T("Nessuna modifica."), err: false);
             return;
         }
 
@@ -502,30 +504,30 @@ internal sealed class LogStore : ViewStore
         lock (_lock)
         {
             if (!_entries.Any(e => e.Rev == revision))
-                throw new ArgumentException($"Revisione {revision} non presente nell'elenco.");
+                throw new ArgumentException(Loc.T("Revisione {0} non presente nell'elenco.", revision));
 
             path = _path;
             _sel = revision;
-            _diff = "Caricamento diff...";
+            _diff = Loc.T("Caricamento diff...");
         }
 
-        Set($"Caricamento diff per revisione {revision}...", err: false, loading: true);
+        Set(Loc.T("Caricamento diff per revisione {0}...", revision), err: false, loading: true);
         try
         {
             var diff = await _svnService.GetDiffAsync(path, revision, ct);
             lock (_lock)
             {
                 if (_sel == revision)
-                    _diff = string.IsNullOrWhiteSpace(diff) ? "(nessuna differenza testuale per questa revisione)" : diff;
+                    _diff = string.IsNullOrWhiteSpace(diff) ? Loc.T("(nessuna differenza testuale per questa revisione)") : diff;
             }
 
-            Set($"Diff revisione {revision} caricato.", err: false);
+            Set(Loc.T("Diff revisione {0} caricato.", revision), err: false);
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
             lock (_lock)
-                _diff = $"Errore nel caricamento del diff: {ex.Message}";
-            Set($"Errore diff: {ex.Message}", err: true);
+                _diff = Loc.T("Errore nel caricamento del diff: {0}", ex.Message);
+            Set(Loc.T("Errore diff: {0}", ex.Message), err: true);
         }
     }
 }

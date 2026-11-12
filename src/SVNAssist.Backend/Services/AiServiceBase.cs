@@ -85,13 +85,13 @@ public abstract class AiServiceBase : IAiService
             var answer = (await CompleteAsync(systemPrompt, TrimToMaxChars(userMessage, MaxUserMessageChars), timeoutCts.Token))?.Trim();
             // Una risposta vuota non è un successo: senza errore l'utente vedrebbe "generato" ma nessun testo.
             if (string.IsNullOrEmpty(answer))
-                throw new InvalidOperationException("Il provider AI ha risposto con un messaggio vuoto (modello sovraccarico o filtro di contenuto): riprova.");
+                throw new InvalidOperationException(Loc.T("Il provider AI ha risposto con un messaggio vuoto (modello sovraccarico o filtro di contenuto): riprova."));
             return answer;
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested && timeoutCts.IsCancellationRequested)
         {
             throw new TimeoutException(
-                $"Il provider AI non ha risposto entro {CallTimeout.TotalMinutes:0.#} minuti: richiesta interrotta.");
+                Loc.T("Il provider AI non ha risposto entro {0:0.#} minuti: richiesta interrotta.", CallTimeout.TotalMinutes));
         }
     }
 

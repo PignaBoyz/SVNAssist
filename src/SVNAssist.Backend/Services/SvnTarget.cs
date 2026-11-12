@@ -16,7 +16,7 @@ internal sealed record SvnTarget(string Path, bool IsDirectory, string? WorkingC
         [".sln", ".slnx", ".csproj", ".vbproj", ".fsproj", ".vcxproj", ".proj", ".shproj", ".wapproj"];
 
     /// <summary>Messaggio mostrato quando il percorso non appartiene a una working copy.</summary>
-    public const string NotWorkingCopyMessage = "Non è una working copy SVN";
+    public static string NotWorkingCopyMessage => Loc.T("Non è una working copy SVN");
 
     /// <summary>Cartella in cui lanciare svn: il percorso stesso se è una cartella, altrimenti la sua cartella padre.</summary>
     public string WorkingDirectory => IsDirectory ? Path : System.IO.Path.GetDirectoryName(Path)!;
@@ -54,7 +54,7 @@ internal sealed record SvnTarget(string Path, bool IsDirectory, string? WorkingC
         if (items.Count <= max)
             return string.Join("\n", items);
 
-        return string.Join("\n", items.Take(max)) + $"\n... e altri {items.Count - max}";
+        return string.Join("\n", items.Take(max)) + "\n" + Loc.T("... e altri {0}", items.Count - max);
     }
 
     private static SvnTarget Create(string path, bool isDirectory)

@@ -2,20 +2,20 @@
 /* Albero delle modifiche (Staged / Modifiche / Non versionati). ARIA tree "piatto": ogni riga e' role=treeitem con aria-level.
    treeHTML(sections, cursor) e' puro. Tastiera in bindTree(). */
 (function (w) {
-  const U = w.SVNUI;
-  const SEC_ACTS = {   // azioni di gruppo visibili sulla riga di sezione
-    staged: [['minus', 'unstage', 'Rimuovi tutto dai file da committare']],
-    changes: [['plus', 'stage', 'Aggiungi tutto ai file da committare']],
-    unversioned: [['plus', 'stage', 'Aggiungi tutto ai file da committare']],
-  };
+  const U = w.SVNUI, t = U.t;
+  const SEC_ACTS = () => ({   // azioni di gruppo visibili sulla riga di sezione
+    staged: [['minus', 'unstage', t('Rimuovi tutto dai file da committare')]],
+    changes: [['plus', 'stage', t('Aggiungi tutto ai file da committare')]],
+    unversioned: [['plus', 'stage', t('Aggiungi tutto ai file da committare')]],
+  });
   const guides = depth => '<span class="gd"></span>'.repeat(Math.max(0, depth));
   function rowActs(sec, r) {
     const a = [], k = { key: r.key };
-    if (r.kind === 'file' && r.can.diff) a.push(['diff', 'showDiff', k, 'Mostra le differenze nell\'editor (Invio)']);
-    if (r.kind === 'folder' && r.can.diff) a.push(['diff', 'showFolderDiff', k, 'Mostra le differenze della cartella']);
-    if (sec !== 'staged' && r.can.revert) a.push(['undo', 'rowOp', { op: 'revert', key: r.key }, 'Annulla le modifiche (revert)']);
-    if (r.can.unstage) a.push(['minus', 'unstage', k, 'Rimuovi dai file da committare (Spazio)']);
-    if (r.can.stage) a.push(['plus', 'stage', k, 'Aggiungi ai file da committare (Spazio)']);
+    if (r.kind === 'file' && r.can.diff) a.push(['diff', 'showDiff', k, t("Mostra le differenze nell'editor (Invio)")]);
+    if (r.kind === 'folder' && r.can.diff) a.push(['diff', 'showFolderDiff', k, t('Mostra le differenze della cartella')]);
+    if (sec !== 'staged' && r.can.revert) a.push(['undo', 'rowOp', { op: 'revert', key: r.key }, t('Annulla le modifiche (revert)')]);
+    if (r.can.unstage) a.push(['minus', 'unstage', k, t('Rimuovi dai file da committare (Spazio)')]);
+    if (r.can.stage) a.push(['plus', 'stage', k, t('Aggiungi ai file da committare (Spazio)')]);
     return a.map(([i, c, g, t]) => `<button type="button" class="ib" tabindex="-1" ${U.cmd(c, g)} title="${U.esc(t)}" aria-label="${U.esc(t)}">${U.icon(i)}</button>`).join('');
   }
   // filtro testuale: tiene i file il cui percorso contiene `q` e le cartelle che ne hanno almeno uno sotto (righe piatte, depth crescente)
@@ -29,18 +29,18 @@
   function sectionHTML(s, cursor, q) {
     const key = 'section:' + s.id, open = s.expanded !== false;
     let h = `<div class="tr sec" role="treeitem" aria-level="1" aria-expanded="${open}" data-key="${U.esc(key)}" data-kind="section" data-sec="${s.id}" tabindex="${cursor === key ? 0 : -1}">` +
-      `<span class="chev">${U.icon(open ? 'chev-d' : 'chev-r')}</span><span class="nm">${U.esc(s.title)}</span><span class="cnt" title="${s.count} elementi">${s.count}</span><span class="fill"></span>` +
-      `<span class="acts">${s.count ? (SEC_ACTS[s.id] || []).map(([i, c, t]) => `<button type="button" class="ib" tabindex="-1" ${U.cmd(c, { key })} title="${U.esc(t)}" aria-label="${U.esc(t)}">${U.icon(i)}</button>`).join('') : ''}</span></div>`;
+      `<span class="chev">${U.icon(open ? 'chev-d' : 'chev-r')}</span><span class="nm">${U.esc(s.title)}</span><span class="cnt" title="${U.esc(t('{0} elementi', s.count))}">${s.count}</span><span class="fill"></span>` +
+      `<span class="acts">${s.count ? (SEC_ACTS()[s.id] || []).map(([i, c, t]) => `<button type="button" class="ib" tabindex="-1" ${U.cmd(c, { key })} title="${U.esc(t)}" aria-label="${U.esc(t)}">${U.icon(i)}</button>`).join('') : ''}</span></div>`;
     if (!open) return h;
     const rows = filterRows(s.rows, q);
-    if (!rows.length) return h + `<div class="tr empty" role="none">${q ? 'Nessun risultato.' : s.id === 'staged' ? 'Nessun file da committare. Usa + sulle modifiche per aggiungerli qui.' : 'Nessun elemento.'}</div>`;
+    if (!rows.length) return h + `<div class="tr empty" role="none">${q ? t('Nessun risultato.') : s.id === 'staged' ? t('Nessun file da committare. Usa + sulle modifiche per aggiungerli qui.') : t('Nessun elemento.')}</div>`;
     for (const r of rows) {
       const lvl = r.depth + 2, isF = r.kind === 'folder', st = r.status;
       h += `<div class="tr ${isF ? 'fol' : 'fil'}" role="treeitem" aria-level="${lvl}" ${isF ? `aria-expanded="${!!r.expanded}"` : ''} aria-selected="${cursor === r.key}" aria-checked="${s.id === 'staged'}" data-key="${U.esc(r.key)}" data-kind="${r.kind}" data-sec="${s.id}" tabindex="${cursor === r.key ? 0 : -1}" title="${U.esc(r.tooltip || r.name)}">` +
         guides(r.depth + 1) + `<span class="chev">${isF ? U.icon(r.expanded ? 'chev-d' : 'chev-r') : ''}</span>` +
         U.icon(isF || r.dir ? (r.expanded ? 'folder-open' : 'folder') : 'file', 'fi ' + (isF || r.dir ? 'fld' : (st ? U.stClass(st) : ''))) +
         `<span class="nm">${U.esc(r.name)}</span>${r.locked && st !== 'K' ? U.icon('lock', 'lk') : ''}${r.detail ? `<span class="dt">${U.esc(r.detail)}</span>` : ''}${isF ? `<span class="cnt">${r.count}</span>` : ''}<span class="fill"></span>` +
-        `<span class="acts">${rowActs(s.id, r)}</span>${st ? `<span class="st ${U.stClass(st)}" title="${U.esc(r.statusText || U.STATUS[st] || st)}" aria-label="${U.esc(r.statusText || U.STATUS[st] || st)}">${U.esc(st)}</span>` : ''}</div>`;
+        `<span class="acts">${rowActs(s.id, r)}</span>${st ? `<span class="st ${U.stClass(st)}" title="${U.esc(r.statusText || U.statusName(st))}" aria-label="${U.esc(r.statusText || U.statusName(st))}">${U.esc(st)}</span>` : ''}</div>`;
     }
     return h;
   }

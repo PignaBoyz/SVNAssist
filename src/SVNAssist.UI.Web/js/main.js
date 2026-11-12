@@ -6,7 +6,7 @@
   let fe = null; try { fe = w.frameElement; } catch (e) { /* cross-origin */ }
   const view = q.get('view') || (fe && fe.dataset.view) || 'changes';
   const vid = q.get('id') || (fe && fe.dataset.id) || null;
-  const V = U.views[view]; if (!V) { document.body.textContent = 'Vista sconosciuta: ' + view; return; }
+  const V = U.views[view]; if (!V) { document.body.textContent = U.t('Vista sconosciuta: {0}', view); return; }
   const root = document.getElementById('root');
   document.documentElement.dataset.view = view;
   V.mount(root);
@@ -23,10 +23,13 @@
   }
   U.bridge.onMessage(m => {
     if (!m || typeof m !== 'object') return;
-    if (m.type === 'state' && m.view === view && (!m.id || !vid || m.id === vid)) V.update(root, m.state);
+    if (m.type === 'state' && m.view === view && (!m.id || !vid || m.id === vid)) {
+      if (m.lang && U.setLang(m.lang) && V.relang) V.relang(root);   // cambio lingua a caldo: i testi statici si rifanno, lo stato ridisegna il resto
+      V.update(root, m.state);
+    }
     else if (m.type === 'theme') theme(m);
-    else if (m.type === 'event') { if (m.name === 'toast') toast(m.text || ''); else if (m.name === 'focus') { const f = root.querySelector('[tabindex="0"],textarea'); if (f) f.focus(); } else if (m.name === 'backendRestarted') toast('Il servizio SVNAssist è stato riavviato.'); }
-    else if (m.type === 'reply' && !m.ok) toast(m.error || 'Operazione non riuscita');
+    else if (m.type === 'event') { if (m.name === 'toast') toast(m.text || ''); else if (m.name === 'focus') { const f = root.querySelector('[tabindex="0"],textarea'); if (f) f.focus(); } else if (m.name === 'backendRestarted') toast(U.t('Il servizio SVNAssist è stato riavviato.')); }
+    else if (m.type === 'reply' && !m.ok) toast(m.error || U.t('Operazione non riuscita'));
   });
   // comandi dichiarativi: <button data-cmd="nome" data-args='{"k":1}'>
   document.addEventListener('click', e => {

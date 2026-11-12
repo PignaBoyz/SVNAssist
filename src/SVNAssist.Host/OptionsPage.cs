@@ -8,6 +8,28 @@ using Microsoft.VisualStudio.Shell;
 
 namespace SVNAssist.Host
 {
+    // Testi della pagina Options nella lingua corrente (Loc.T e' valutato a ogni lettura: cambiano al volo,
+    // salvo la Category che il PropertyGrid memorizza alla prima lettura: segue la lingua dopo un riavvio di VS).
+    internal sealed class LDisplayNameAttribute : DisplayNameAttribute
+    {
+        private readonly string _key;
+        public LDisplayNameAttribute(string key) : base(key) { _key = key; }
+        public override string DisplayName { get { return Loc.T(_key); } }
+    }
+
+    internal sealed class LDescriptionAttribute : DescriptionAttribute
+    {
+        private readonly string _key;
+        public LDescriptionAttribute(string key) : base(key) { _key = key; }
+        public override string Description { get { return Loc.T(_key); } }
+    }
+
+    internal sealed class LCategoryAttribute : CategoryAttribute
+    {
+        public LCategoryAttribute(string key) : base(key) { }
+        protected override string GetLocalizedString(string value) { return Loc.T(value); }
+    }
+
     /// <summary>Tendina per una proprieta' stringa: valore memorizzato (chiave del setting) e testo mostrato.</summary>
     internal abstract class ChoiceConverter : StringConverter
     {
@@ -22,46 +44,51 @@ namespace SVNAssist.Host
         public override object ConvertTo(ITypeDescriptorContext c, CultureInfo culture, object value, Type destinationType)
         {
             if (destinationType == typeof(string) && value is string s)
-                return _choices.Where(x => x.Value == s).Select(x => x.Label).FirstOrDefault() ?? s;
+                return _choices.Where(x => x.Value == s).Select(x => Loc.T(x.Label)).FirstOrDefault() ?? s;
             return base.ConvertTo(c, culture, value, destinationType);
         }
 
         public override object ConvertFrom(ITypeDescriptorContext c, CultureInfo culture, object value) =>
-            value is string s ? _choices.Where(x => x.Label == s).Select(x => x.Value).FirstOrDefault() ?? s : base.ConvertFrom(c, culture, value);
+            value is string s ? _choices.Where(x => Loc.T(x.Label) == s || x.Label == s).Select(x => x.Value).FirstOrDefault() ?? s : base.ConvertFrom(c, culture, value);
     }
 
     internal sealed class AiProviderConverter : ChoiceConverter
     {
-        public AiProviderConverter() : base(("auto", "Automatico (consigliato)"), ("copilot", "GitHub Copilot (abbonamento)"),
-            ("claudecode", "Claude Code (abbonamento Claude)"), ("claude", "Claude API (API key Anthropic)"), ("openai", "OpenAI-compatibile / GitHub Models")) { }
+        public AiProviderConverter() : base(("auto", Loc.K("Automatico (consigliato)")), ("copilot", Loc.K("GitHub Copilot (abbonamento)")),
+            ("claudecode", Loc.K("Claude Code (abbonamento Claude)")), ("claude", Loc.K("Claude API (API key Anthropic)")), ("openai", Loc.K("OpenAI-compatibile / GitHub Models"))) { }
     }
 
     internal sealed class ClaudeModelConverter : ChoiceConverter
     {
-        public ClaudeModelConverter() : base(("claude-sonnet-5-5", "Sonnet (consigliato, equilibrato)"), ("claude-haiku-5-5", "Haiku (il più economico e veloce)"),
-            ("claude-opus-5-5", "Opus (il più potente, costoso)")) { }
+        public ClaudeModelConverter() : base(("claude-sonnet-5-5", Loc.K("Sonnet (consigliato, equilibrato)")), ("claude-haiku-5-5", Loc.K("Haiku (il più economico e veloce)")),
+            ("claude-opus-5-5", Loc.K("Opus (il più potente, costoso)"))) { }
     }
 
     internal sealed class CopilotModelConverter : ChoiceConverter
     {
-        public CopilotModelConverter() : base(("default", "Predefinito di Copilot (consigliato)"), ("gpt-4.1", "GPT-4.1"),
-            ("gpt-5-mini", "GPT-5 mini"), ("claude-sonnet-4.5", "Claude Sonnet 4.5")) { }
+        public CopilotModelConverter() : base(("default", Loc.K("Predefinito di Copilot (consigliato)")), ("gpt-4.1", Loc.K("GPT-4.1")),
+            ("gpt-5-mini", Loc.K("GPT-5 mini")), ("claude-sonnet-4.5", Loc.K("Claude Sonnet 4.5"))) { }
     }
 
     internal sealed class AiModelConverter : ChoiceConverter
     {
-        public AiModelConverter() : base(("openai/gpt-4o-mini", "GPT-4o mini (consigliato, gratuito su GitHub Models)"), ("openai/gpt-4o", "GPT-4o"),
-            ("openai/gpt-4.1-mini", "GPT-4.1 mini"), ("openai/gpt-4.1", "GPT-4.1")) { }
+        public AiModelConverter() : base(("openai/gpt-4o-mini", Loc.K("GPT-4o mini (consigliato, gratuito su GitHub Models)")), ("openai/gpt-4o", Loc.K("GPT-4o")),
+            ("openai/gpt-4.1-mini", Loc.K("GPT-4.1 mini")), ("openai/gpt-4.1", Loc.K("GPT-4.1"))) { }
     }
 
     internal sealed class LanguageConverter : ChoiceConverter
     {
-        public LanguageConverter() : base(("auto", "Automatica"), ("italiano", "Italiano"), ("english", "English")) { }
+        public LanguageConverter() : base(("auto", Loc.K("Automatica")), ("italiano", Loc.K("Italiano")), ("english", Loc.K("English"))) { }
+    }
+
+    internal sealed class UiLanguageConverter : ChoiceConverter
+    {
+        public UiLanguageConverter() : base(("auto", Loc.K("Automatica (lingua di Visual Studio)")), ("it", Loc.K("Italiano")), ("en", Loc.K("English"))) { }
     }
 
     internal sealed class WindowThemeConverter : ChoiceConverter
     {
-        public WindowThemeConverter() : base(("auto", "Automatico (segue Visual Studio)"), ("light", "Chiaro"), ("dark", "Scuro"), ("blue", "Blu")) { }
+        public WindowThemeConverter() : base(("auto", Loc.K("Automatico (segue Visual Studio)")), ("light", Loc.K("Chiaro")), ("dark", Loc.K("Scuro")), ("blue", Loc.K("Blu"))) { }
     }
 
     /// <summary>
@@ -76,46 +103,54 @@ namespace SVNAssist.Host
 
         // chiave del setting (come in SettingsService, camelCase) -> proprieta'
         internal static readonly string[] Keys =
-            { "aiProvider", "claudeModel", "anthropicApiKey", "copilotModel", "aiEndpoint", "aiApiKey", "aiModel", "defaultLanguage", "workingCopyPath", "windowTheme" };
+            { "aiProvider", "claudeModel", "anthropicApiKey", "copilotModel", "aiEndpoint", "aiApiKey", "aiModel", "defaultLanguage", "workingCopyPath", "windowTheme", "uiLanguage" };
 
-        private const string Ai = "Commit message AI";
-
-        [Category(Ai), DisplayName("Provider AI per i commit message"), DefaultValue("auto"), TypeConverter(typeof(AiProviderConverter))]
-        [Description("Automatico prova Copilot, Claude Code, Claude API e OpenAI-compatibile in quest'ordine.")]
+        [LCategory("Commit message AI"), LDisplayName("Provider AI per i commit message"), DefaultValue("auto"), TypeConverter(typeof(AiProviderConverter))]
+        [LDescription("Automatico prova Copilot, Claude Code, Claude API e OpenAI-compatibile in quest'ordine.")]
         public string AiProvider { get; set; } = "auto";
 
-        [Category(Ai), DisplayName("Modello Claude (solo Claude Code e Claude API)"), DefaultValue("claude-sonnet-5-5"), TypeConverter(typeof(ClaudeModelConverter))]
+        [LCategory("Commit message AI"), LDisplayName("Modello Claude (solo Claude Code e Claude API)"), DefaultValue("claude-sonnet-5-5"), TypeConverter(typeof(ClaudeModelConverter))]
         public string ClaudeModel { get; set; } = "claude-sonnet-5-5";
 
-        [Category(Ai), DisplayName("API key Anthropic (solo Claude API)"), PasswordPropertyText(true)]
-        [Description("Vuota = variabile d'ambiente ANTHROPIC_API_KEY. Salvata cifrata (DPAPI, solo per il tuo utente Windows) nelle impostazioni di Visual Studio.")]
+        [LCategory("Commit message AI"), LDisplayName("API key Anthropic (solo Claude API)"), PasswordPropertyText(true)]
+        [LDescription("Vuota = variabile d'ambiente ANTHROPIC_API_KEY. Salvata cifrata (DPAPI, solo per il tuo utente Windows) nelle impostazioni di Visual Studio.")]
         public string AnthropicApiKey { get; set; } = "";
 
-        [Category(Ai), DisplayName("Modello Copilot (solo Copilot)"), DefaultValue("default"), TypeConverter(typeof(CopilotModelConverter))]
-        [Description("Serve un abbonamento Copilot e 'gh auth login'.")]
+        [LCategory("Commit message AI"), LDisplayName("Modello Copilot (solo Copilot)"), DefaultValue("default"), TypeConverter(typeof(CopilotModelConverter))]
+        [LDescription("Serve un abbonamento Copilot e 'gh auth login'.")]
         public string CopilotModel { get; set; } = "default";
 
-        [Category(Ai), DisplayName("URL endpoint (solo OpenAI-compatibile)"), DefaultValue(GitHubModelsEndpoint)]
-        [Description("Endpoint Chat Completions compatibile OpenAI. Default: GitHub Models.")]
+        [LCategory("Commit message AI"), LDisplayName("URL endpoint (solo OpenAI-compatibile)"), DefaultValue(GitHubModelsEndpoint)]
+        [LDescription("Endpoint Chat Completions compatibile OpenAI. Default: GitHub Models.")]
         public string AiEndpoint { get; set; } = GitHubModelsEndpoint;
 
-        [Category(Ai), DisplayName("API key o GitHub PAT (solo OpenAI-compatibile)"), PasswordPropertyText(true)]
-        [Description("Salvata cifrata (DPAPI, solo per il tuo utente Windows) nelle impostazioni di Visual Studio.")]
+        [LCategory("Commit message AI"), LDisplayName("API key o GitHub PAT (solo OpenAI-compatibile)"), PasswordPropertyText(true)]
+        [LDescription("Salvata cifrata (DPAPI, solo per il tuo utente Windows) nelle impostazioni di Visual Studio.")]
         public string AiApiKey { get; set; } = "";
 
-        [Category(Ai), DisplayName("Modello (solo OpenAI-compatibile / GitHub Models)"), DefaultValue("openai/gpt-4o-mini"), TypeConverter(typeof(AiModelConverter))]
+        [LCategory("Commit message AI"), LDisplayName("Modello (solo OpenAI-compatibile / GitHub Models)"), DefaultValue("openai/gpt-4o-mini"), TypeConverter(typeof(AiModelConverter))]
         public string AiModel { get; set; } = "openai/gpt-4o-mini";
 
-        [Category(Ai), DisplayName("Lingua dei commit message"), DefaultValue("auto"), TypeConverter(typeof(LanguageConverter))]
+        [LCategory("Commit message AI"), LDisplayName("Lingua dei commit message"), DefaultValue("auto"), TypeConverter(typeof(LanguageConverter))]
         public string DefaultLanguage { get; set; } = "auto";
 
-        [Category("Generale"), DisplayName("Working Copy Path")]
-        [Description("Se impostato ha la precedenza sull'auto-rilevamento dalla solution aperta.")]
+        [LCategory("Generale"), LDisplayName("Working Copy Path")]
+        [LDescription("Se impostato ha la precedenza sull'auto-rilevamento dalla solution aperta.")]
         public string WorkingCopyPath { get; set; } = "";
 
-        [Category("Generale"), DisplayName("Tema delle finestre SVNAssist"), DefaultValue("auto"), TypeConverter(typeof(WindowThemeConverter))]
-        [Description("Automatico usa i colori del tema di Visual Studio (chiaro, scuro, blu, alto contrasto).")]
+        [LCategory("Generale"), LDisplayName("Tema delle finestre SVNAssist"), DefaultValue("auto"), TypeConverter(typeof(WindowThemeConverter))]
+        [LDescription("Automatico usa i colori del tema di Visual Studio (chiaro, scuro, blu, alto contrasto).")]
         public string WindowTheme { get; set; } = "auto";
+
+        [LCategory("Generale"), LDisplayName("Lingua dell'interfaccia"), DefaultValue("auto"), TypeConverter(typeof(UiLanguageConverter))]
+        [LDescription("Automatica usa la lingua di Visual Studio (italiano se è italiano, altrimenti inglese). Si applica subito a finestre e messaggi; la lingua dei commit message AI è un'impostazione separata.")]
+        public string UiLanguage { get; set; } = "auto";
+
+        /// <summary>Cultura UI di Visual Studio (valorizzata dal package sul thread UI): serve a risolvere "auto".</summary>
+        internal static string VsCulture = "";
+
+        /// <summary>Lingua effettiva dell'interfaccia, "it" o "en".</summary>
+        internal string EffectiveLanguage { get { return Loc.Resolve(Pick(UiLanguage, new UiLanguageConverter(), "auto"), VsCulture); } }
 
         // Le API key finiscono nel registro cifrate con DPAPI (utente corrente), non in chiaro. Un valore salvato
         // in chiaro da versioni precedenti si legge com'e' e viene cifrato al prossimo salvataggio.
@@ -180,6 +215,8 @@ namespace SVNAssist.Host
                 ["defaultLanguage"] = Pick(DefaultLanguage, new LanguageConverter(), "auto"),
                 ["workingCopyPath"] = WorkingCopyPath ?? "",
                 ["windowTheme"] = Pick(WindowTheme, new WindowThemeConverter(), "auto"),
+                ["uiLanguage"] = Pick(UiLanguage, new UiLanguageConverter(), "auto"),
+                ["uiLanguageEffective"] = EffectiveLanguage,
             };
             // Alias minuscoli: sono gli id dei setting della 0.1.0 (SettingDefinitions), per chi li usa ancora.
             foreach (var k in Keys.ToList()) d[k.ToLowerInvariant()] = d[k];
@@ -207,6 +244,7 @@ namespace SVNAssist.Host
                 case "defaultLanguage": DefaultLanguage = value; break;
                 case "workingCopyPath": WorkingCopyPath = value; break;
                 case "windowTheme": WindowTheme = value; break;
+                case "uiLanguage": UiLanguage = value; break;
                 default: return false;
             }
             return true;

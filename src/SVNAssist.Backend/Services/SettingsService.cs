@@ -42,6 +42,10 @@ internal static class SettingDefinitions
     internal const string WorkingCopyPath = "workingCopyPath";
     internal const string WindowTheme = "windowTheme";
 
+    /// <summary>Lingua dell'interfaccia: auto | it | en (l'host manda anche <c>uiLanguageEffective</c>, gia' risolta).</summary>
+    internal const string UiLanguage = "uiLanguage";
+    internal const string UiLanguageEffective = "uiLanguageEffective";
+
     /// <summary>Tutte le chiavi con il loro valore di default (usato quando l'host non ne fornisce una).</summary>
     internal static readonly IReadOnlyDictionary<string, string> Defaults = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
@@ -55,6 +59,7 @@ internal static class SettingDefinitions
         [DefaultLanguage] = "auto",
         [WorkingCopyPath] = "",
         [WindowTheme] = "auto",
+        // UiLanguage non ha default qui: senza il valore dell'host (es. nei test) l'interfaccia resta in italiano.
     };
 }
 
@@ -93,6 +98,9 @@ internal interface ISvnAssistSettings
 
     /// <summary>Tema della finestra (auto/light/dark/blue).</summary>
     Task<string> GetWindowThemeAsync(CancellationToken ct);
+
+    /// <summary>Lingua effettiva dell'interfaccia ("it" o "en"): l'host risolve "auto" con la lingua di Visual Studio.</summary>
+    Task<string> GetUiLanguageAsync(CancellationToken ct) => Task.FromResult("it");
 
     /// <summary>Salva il tema della finestra (scrive nelle impostazioni dell'host).</summary>
     Task SetWindowThemeAsync(string mode, CancellationToken ct);
@@ -177,6 +185,16 @@ internal sealed class HostSettings : ISvnAssistSettings
         return string.Equals(endpoint.Trim(), SettingDefinitions.LegacyGitHubModelsEndpoint, StringComparison.OrdinalIgnoreCase)
             ? SettingDefinitions.GitHubModelsEndpoint
             : endpoint;
+    }
+
+    /// <summary>Usa <c>uiLanguageEffective</c> dell'host; se manca risolve <c>uiLanguage</c> con la lingua di sistema.</summary>
+    public async Task<string> GetUiLanguageAsync(CancellationToken ct)
+    {
+        var effective = await GetAsync(SettingDefinitions.UiLanguageEffective, ct);
+        if (effective is "it" or "en")
+            return effective;
+        var raw = await GetAsync(SettingDefinitions.UiLanguage, ct);
+        return raw == "auto" ? Loc.Resolve(raw, System.Globalization.CultureInfo.CurrentUICulture.Name) : raw == "en" ? "en" : "it";
     }
 
     public Task SetWindowThemeAsync(string mode, CancellationToken ct) => SetSettingAsync(SettingDefinitions.WindowTheme, mode, ct);

@@ -39,6 +39,8 @@
   <!-- Contratto RPC condiviso con l'host (stesso file, compilato da entrambi). -->
   <ItemGroup>
     <Compile Include="..\Shared\RpcContract.cs" Link="Hosting\RpcContract.cs" />
+    <Compile Include="..\Shared\Loc.cs" Link="Hosting\Loc.cs" />
+    <Compile Include="..\Shared\LocEn.cs" Link="Hosting\LocEn.cs" />
   </ItemGroup>
 
 </Project>

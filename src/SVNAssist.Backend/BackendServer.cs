@@ -64,7 +64,7 @@ internal sealed class DiffStore : ViewStore
     internal override object GetSnapshot() => new DiffState("Diff", string.Empty, string.Empty);
 
     internal override Task<object?> DispatchAsync(string name, JsonElement args, CancellationToken ct)
-        => throw new ArgumentException($"Comando sconosciuto: {name}");
+        => throw new ArgumentException(Loc.T("Comando sconosciuto: {0}", name));
 }
 
 /// <summary>
@@ -83,6 +83,7 @@ internal sealed class BackendServer : IBackend, IDisposable
     internal ChangesStore Changes { get; }
     internal LogStore Log { get; }
     private readonly HostSettings? _hostSettings;
+    private readonly ISvnAssistSettings _settings;
     private readonly PathCommands _pathCommands;
 
     /// <summary>Una vista collegata a uno store, con il suo contatore di revisione e l'ultimo snapshot inviato.</summary>
@@ -102,6 +103,7 @@ internal sealed class BackendServer : IBackend, IDisposable
     {
         _host = host;
         _hostSettings = services.Settings as HostSettings;
+        _settings = services.Settings;
         var prereq = new PrereqStore(new PrerequisitesService(services.Settings, services.Probes), services.PrerequisiteActions);
         Changes = new ChangesStore(services.Settings, services.Svn, services.Ai, services.AiSetupPrompt, services.Dialogs, host, prereq)
         {
@@ -156,6 +158,7 @@ internal sealed class BackendServer : IBackend, IDisposable
                         channel.Id = readyId.GetString();
                     channel.Ready = true;
                     channel.Last = null; // pagina nuova (anche ricaricata): lo snapshot va inviato comunque
+                    await ApplyLanguageAsync();
                     await channel.Store.OnReadyAsync(_lifetime.Token);
                     await FlushAsync(channel);
                     break;
@@ -196,7 +199,7 @@ internal sealed class BackendServer : IBackend, IDisposable
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
         {
-            error = "Operazione annullata.";
+            error = Loc.T("Operazione annullata.");
         }
         catch (ArgumentException ex)
         {
@@ -221,11 +224,34 @@ internal sealed class BackendServer : IBackend, IDisposable
         try
         {
             _hostSettings?.Invalidate();
+            var languageChanged = await ApplyLanguageAsync();
             await Changes.OnSettingsChangedAsync(_lifetime.Token);
+            // Cambio lingua a caldo: tutte le finestre aperte ricevono subito lo snapshot nella nuova lingua.
+            if (languageChanged)
+                foreach (var channel in _channels.Values)
+                    await FlushAsync(channel);
         }
         catch (Exception ex)
         {
             BackendLog.Error("SettingsChangedAsync", ex);
+        }
+    }
+
+    /// <summary>Allinea <see cref="Loc.Lang"/> all'impostazione "uiLanguage" (risolta dall'host). <c>true</c> se e' cambiata.</summary>
+    private async Task<bool> ApplyLanguageAsync()
+    {
+        try
+        {
+            var lang = await _settings.GetUiLanguageAsync(_lifetime.Token);
+            if (lang == Loc.Lang)
+                return false;
+            Loc.Lang = lang;
+            return true;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            BackendLog.Warn("Lingua dell'interfaccia non letta: " + ex.Message);
+            return false;
         }
     }
 
@@ -307,14 +333,16 @@ internal sealed class BackendServer : IBackend, IDisposable
         await channel.Gate.WaitAsync();
         try
         {
+            var lang = Loc.Lang;
             var stateJson = UiJson.Serialize(channel.Store.GetSnapshot());
-            if (stateJson == channel.Last)
+            var signature = lang + stateJson; // un cambio di lingua rimanda lo stato anche se il resto e' uguale
+            if (signature == channel.Last)
                 return;
 
-            channel.Last = stateJson;
+            channel.Last = signature;
             var rev = ++channel.Rev;
             var id = channel.Id is null ? string.Empty : $"\"id\":{JsonSerializer.Serialize(channel.Id)},";
-            await SendAsync(channel.View, $"{{\"v\":1,\"type\":\"state\",\"view\":\"{channel.View}\",{id}\"rev\":{rev},\"state\":{stateJson}}}");
+            await SendAsync(channel.View, $"{{\"v\":1,\"type\":\"state\",\"view\":\"{channel.View}\",{id}\"lang\":\"{lang}\",\"rev\":{rev},\"state\":{stateJson}}}");
         }
         finally
         {

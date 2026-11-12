@@ -34,6 +34,8 @@
     <Reference Include="System.Design" />
     <Reference Include="System.Security" />
     <Compile Include="..\Shared\RpcContract.cs" Link="RpcContract.cs" />
+    <Compile Include="..\Shared\Loc.cs" Link="Loc.cs" />
+    <Compile Include="..\Shared\LocEn.cs" Link="LocEn.cs" />
     <Compile Include="..\Shared\DotnetRuntime.cs" Link="DotnetRuntime.cs" />
     <VSCTCompile Include="SVNAssist.vsct">
       <ResourceName>Menus.ctmenu</ResourceName>

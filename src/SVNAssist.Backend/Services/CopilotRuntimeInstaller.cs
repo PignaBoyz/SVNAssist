@@ -69,7 +69,7 @@ internal static class CopilotRuntimeInstaller
             {
                 response.EnsureSuccessStatusCode();
                 if (response.Content.Headers.ContentLength > MaxDownloadBytes)
-                    throw new InvalidOperationException("Il runtime Copilot da scaricare è più grande del previsto: download annullato.");
+                    throw new InvalidOperationException(Loc.T("Il runtime Copilot da scaricare è più grande del previsto: download annullato."));
 
                 await using var file = File.Create(archivePath);
                 await using var body = await response.Content.ReadAsStreamAsync(ct);
@@ -81,7 +81,7 @@ internal static class CopilotRuntimeInstaller
             await using (var archive = File.OpenRead(archivePath))
                 actualHash = Convert.ToHexString(await SHA256.HashDataAsync(archive, ct));
             if (!string.Equals(actualHash, expectedHash, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("Runtime Copilot scaricato corrotto (checksum SHA-256 diverso).");
+                throw new InvalidOperationException(Loc.T("Runtime Copilot scaricato corrotto (checksum SHA-256 diverso)."));
 
             // TarFile rifiuta le voci che puntano fuori dalla cartella di destinazione.
             var extractDir = Path.Combine(stagingRoot, "runtime");
@@ -98,7 +98,7 @@ internal static class CopilotRuntimeInstaller
             MoveDirectoryContents(Path.Combine(extractDir, "prebuilds", Platform), extractDir);
             RemoveUnneededAssets(extractDir);
             if (!File.Exists(Path.Combine(extractDir, "copilot-runtime.exe")))
-                throw new InvalidOperationException("Archivio del runtime Copilot senza copilot-runtime.exe.");
+                throw new InvalidOperationException(Loc.T("Archivio del runtime Copilot senza copilot-runtime.exe."));
 
             if (Directory.Exists(InstallDirectory))
                 Directory.Delete(InstallDirectory, recursive: true);
@@ -139,7 +139,7 @@ internal static class CopilotRuntimeInstaller
         if (PinnedHashes.TryGetValue(assetName, out var pinned)
             && !string.Equals(pinned, releaseHash, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException(
-                "Il checksum pubblicato per il runtime Copilot non coincide con quello atteso da SVNAssist: download rifiutato.");
+                Loc.T("Il checksum pubblicato per il runtime Copilot non coincide con quello atteso da SVNAssist: download rifiutato."));
 
         return pinned ?? releaseHash;
     }
@@ -154,7 +154,7 @@ internal static class CopilotRuntimeInstaller
         {
             total += read;
             if (total > maxBytes)
-                throw new InvalidOperationException("Il download del runtime Copilot supera il limite consentito: annullato.");
+                throw new InvalidOperationException(Loc.T("Il download del runtime Copilot supera il limite consentito: annullato."));
 
             await destination.WriteAsync(buffer.AsMemory(0, read), ct);
         }
@@ -170,7 +170,7 @@ internal static class CopilotRuntimeInstaller
 
         return matches.Count == 1 && matches[0].Length == 64
             ? matches[0]
-            : throw new InvalidOperationException($"Checksum non trovato per {assetName}.");
+            : throw new InvalidOperationException(Loc.T("Checksum non trovato per {0}.", assetName));
     }
 
     /// <summary>

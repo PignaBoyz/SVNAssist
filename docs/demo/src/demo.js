@@ -944,6 +944,7 @@ function render() {
   const f = saveFocus();
   document.body.classList.toggle('panel-closed', !S.ui.panelOpen);
   $('#btnPanel').setAttribute('aria-pressed', S.ui.panelOpen);
+  langBtn();
   $('#vsBody').className = 'vs-body v-' + S.ui.view + (S.ui.seOpen ? ' se-open' : '');
   renderMenu(); renderSE(); renderDoc(); renderDock(); renderStatusBar(); renderSim(); renderTour(); renderSplash(); applyTarget();
   restoreFocus(f);
@@ -1654,10 +1655,12 @@ async function menuUpdate() {
   } catch (e) { await prompt(`Errore durante l'update:\n${e.message}`); }
   render();
 }
+function langBtn() { const b = $('#btnLang'); if (b) b.textContent = __mockBridge.getLang() === 'it' ? 'Lingua: IT' : 'Language: EN'; }
 const ACT = {
   tab: a => { $$('.tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.arg === a)); $('#view-sim').hidden = a !== 'sim'; $('#view-soon').hidden = a !== 'soon'; try { localStorage.setItem('svnassist-demo-tab', a); } catch (e) { } if (a === 'soon') renderSoon(); },
   togglePanel: () => { S.ui.panelOpen = !S.ui.panelOpen; render(); },
   reset: () => { startMode('free', true); },
+  lang: () => { __mockBridge.setLang(__mockBridge.getLang() === 'it' ? 'en' : 'it'); langBtn(); },
   tourStart: () => startMode('first'),
   tourNext: () => { const T_ = S.tour; if (T_.step >= STEPS.length - 1) T_.finished = true; else T_.step++; render(); },
   tourPrev: () => { if (S.tour.step > 0) S.tour.step--; render(); },

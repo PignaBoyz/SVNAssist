@@ -10,6 +10,11 @@
         <Parent guid="guidSVNAssistCmdSet" id="GroupExtensions" />
         <Strings><ButtonText>SVNAssist</ButtonText></Strings>
       </Menu>
+      <!-- Extensions > SVNAssist > Language / Lingua: Automatica | Italiano | English -->
+      <Menu guid="guidSVNAssistCmdSet" id="MenuLang" priority="0x0100" type="Menu">
+        <Parent guid="guidSVNAssistCmdSet" id="GroupLangHost" />
+        <Strings><ButtonText>Language / Lingua</ButtonText></Strings>
+      </Menu>
       <!-- Menu contestuale di Solution Explorer: sottomenu "SVN" -->
       <Menu guid="guidSVNAssistCmdSet" id="MenuSe" priority="0x0100" type="Menu">
         <Parent guid="guidSVNAssistCmdSet" id="GroupSeHost" />
@@ -24,6 +29,8 @@
       </Group>
       <Group guid="guidSVNAssistCmdSet" id="GroupMainPrimary" priority="0x0000"><Parent guid="guidSVNAssistCmdSet" id="MenuMain" /></Group>
       <Group guid="guidSVNAssistCmdSet" id="GroupMainSecondary" priority="0x0100"><Parent guid="guidSVNAssistCmdSet" id="MenuMain" /></Group>
+      <Group guid="guidSVNAssistCmdSet" id="GroupLangHost" priority="0x0200"><Parent guid="guidSVNAssistCmdSet" id="MenuMain" /></Group>
+      <Group guid="guidSVNAssistCmdSet" id="GroupLang" priority="0x0000"><Parent guid="guidSVNAssistCmdSet" id="MenuLang" /></Group>
 
       <!-- Gruppo che contiene il sottomenu SE; agganciato (CommandPlacements) ai 4 menu contestuali. -->
       <Group guid="guidSVNAssistCmdSet" id="GroupSeHost" priority="0x0F00">
@@ -39,21 +46,24 @@
       <Button guid="guidSVNAssistCmdSet" id="CmdCommit" priority="0x0010" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainPrimary" /><Strings><CommandName>SVNAssist.Commit</CommandName><ButtonText>Commit...</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdUpdate" priority="0x0000" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainSecondary" /><Strings><CommandName>SVNAssist.Update</CommandName><ButtonText>Update</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdLog" priority="0x0010" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainSecondary" /><Strings><CommandName>SVNAssist.Log</CommandName><ButtonText>Log / History</ButtonText></Strings></Button>
-      <Button guid="guidSVNAssistCmdSet" id="CmdAiSetup" priority="0x0020" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainSecondary" /><Strings><CommandName>SVNAssist.AiSetup</CommandName><ButtonText>Cambia provider AI...</ButtonText></Strings></Button>
+      <Button guid="guidSVNAssistCmdSet" id="CmdAiSetup" priority="0x0020" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainSecondary" /><Strings><CommandName>SVNAssist.AiSetup</CommandName><ButtonText>Change AI Provider...</ButtonText></Strings></Button>
 
       <Button guid="guidSVNAssistCmdSet" id="CmdSeUpdate" priority="0x0000" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeSync" /><Strings><CommandName>SVNAssist.SeUpdate</CommandName><ButtonText>SVN Update</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdSeCommit" priority="0x0010" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeSync" /><Strings><CommandName>SVNAssist.SeCommit</CommandName><ButtonText>SVN Commit...</ButtonText></Strings></Button>
-      <Button guid="guidSVNAssistCmdSet" id="CmdSeDiff" priority="0x0000" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeInspect" /><Strings><CommandName>SVNAssist.SeDiff</CommandName><ButtonText>Diff con BASE</ButtonText></Strings></Button>
-      <Button guid="guidSVNAssistCmdSet" id="CmdSeLog" priority="0x0010" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeInspect" /><Strings><CommandName>SVNAssist.SeLog</CommandName><ButtonText>Mostra log</ButtonText></Strings></Button>
+      <Button guid="guidSVNAssistCmdSet" id="CmdSeDiff" priority="0x0000" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeInspect" /><Strings><CommandName>SVNAssist.SeDiff</CommandName><ButtonText>Diff with BASE</ButtonText></Strings></Button>
+      <Button guid="guidSVNAssistCmdSet" id="CmdSeLog" priority="0x0010" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeInspect" /><Strings><CommandName>SVNAssist.SeLog</CommandName><ButtonText>Show Log</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdSeAdd" priority="0x0000" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeEdit" /><Strings><CommandName>SVNAssist.SeAdd</CommandName><ButtonText>SVN Add</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdSeRevert" priority="0x0010" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeEdit" /><Strings><CommandName>SVNAssist.SeRevert</CommandName><ButtonText>SVN Revert</ButtonText></Strings></Button>
-      <Button guid="guidSVNAssistCmdSet" id="CmdSeIgnore" priority="0x0020" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeEdit" /><Strings><CommandName>SVNAssist.SeIgnore</CommandName><ButtonText>Aggiungi a ignore list</ButtonText></Strings></Button>
+      <Button guid="guidSVNAssistCmdSet" id="CmdSeIgnore" priority="0x0020" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeEdit" /><Strings><CommandName>SVNAssist.SeIgnore</CommandName><ButtonText>Add to Ignore List</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdUpdateRev" priority="0x0005" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainSecondary" /><Strings><CommandName>SVNAssist.UpdateToRevision</CommandName><ButtonText>Update to revision...</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdCleanup" priority="0x0030" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainSecondary" /><Strings><CommandName>SVNAssist.Cleanup</CommandName><ButtonText>Cleanup</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdSeUpdateRev" priority="0x0005" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeSync" /><Strings><CommandName>SVNAssist.SeUpdateToRevision</CommandName><ButtonText>SVN Update to revision...</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdSeCleanup" priority="0x0030" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeEdit" /><Strings><CommandName>SVNAssist.SeCleanup</CommandName><ButtonText>SVN Cleanup</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdSeLock" priority="0x0040" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeEdit" /><Strings><CommandName>SVNAssist.SeLock</CommandName><ButtonText>SVN Lock...</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdSeUnlock" priority="0x0050" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeEdit" /><Strings><CommandName>SVNAssist.SeUnlock</CommandName><ButtonText>SVN Unlock</ButtonText></Strings></Button>
+      <Button guid="guidSVNAssistCmdSet" id="CmdLangAuto" priority="0x0000" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupLang" /><Strings><CommandName>SVNAssist.LanguageAuto</CommandName><ButtonText>Automatica / Automatic (lingua di Visual Studio)</ButtonText></Strings></Button>
+      <Button guid="guidSVNAssistCmdSet" id="CmdLangIt" priority="0x0010" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupLang" /><Strings><CommandName>SVNAssist.LanguageItalian</CommandName><ButtonText>Italiano</ButtonText></Strings></Button>
+      <Button guid="guidSVNAssistCmdSet" id="CmdLangEn" priority="0x0020" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupLang" /><Strings><CommandName>SVNAssist.LanguageEnglish</CommandName><ButtonText>English</ButtonText></Strings></Button>
     </Buttons>
   </Commands>
 
@@ -69,6 +79,12 @@
     <GuidSymbol name="guidSVNAssistCmdSet" value="{4d6e8f0a-3c5e-4071-9c9d-2e3f4a5b6c74}">
       <IDSymbol name="MenuMain" value="0x1000" />
       <IDSymbol name="MenuSe" value="0x1001" />
+      <IDSymbol name="MenuLang" value="0x1002" />
+      <IDSymbol name="GroupLangHost" value="0x1114" />
+      <IDSymbol name="GroupLang" value="0x1115" />
+      <IDSymbol name="CmdLangAuto" value="0x011B" />
+      <IDSymbol name="CmdLangIt" value="0x011C" />
+      <IDSymbol name="CmdLangEn" value="0x011D" />
       <IDSymbol name="GroupExtensions" value="0x1100" />
       <IDSymbol name="GroupMainPrimary" value="0x1101" />
       <IDSymbol name="GroupMainSecondary" value="0x1102" />

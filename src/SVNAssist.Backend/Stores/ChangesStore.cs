@@ -55,7 +55,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
     private string? _branchLoadedFor;
     private bool _autoDetected;
     private bool _statusIsAuto = true;
-    private string _statusMessage = "Caricamento in corso...";
+    private string _statusMessage = Loc.T("Caricamento in corso...");
     private bool _showWorkingCopyInput;
     private bool _isTreeView = true;
     private bool _loading = true;
@@ -218,15 +218,15 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             var statusName = StatusPresentation.DisplayName(entry.Status, entry.IsTreeConflict);
             var statusText = statusName;
             if (entry.IsLocked && entry.Status != SvnStatusKind.Normal)
-                statusText += " — bloccato (lock)";
+                statusText += " — " + Loc.T("bloccato (lock)");
             if (section == ChangeSection.Staged && entry.Status == SvnStatusKind.Unversioned)
-                statusText += " (verrà aggiunto con il commit)";
+                statusText += " " + Loc.T("(verrà aggiunto con il commit)");
             else if (section == ChangeSection.Staged && entry.Status == SvnStatusKind.Missing)
-                statusText += " (verrà eliminato con il commit)";
+                statusText += " " + Loc.T("(verrà eliminato con il commit)");
 
             var isRoot = entry.RelativePath == ".";
             rows.Add(new RowDto(node.Key, "file", depth,
-                isRoot ? "(cartella radice)" : node.Label,
+                isRoot ? Loc.T("(cartella radice)") : node.Label,
                 Detail: _isTreeView ? string.Empty : entry.FolderPath,
                 Dir: entry.IsDirectory, Expanded: null, Count: null,
                 Status: StatusPresentation.ShortCode(entry.Status), StatusText: statusText,
@@ -383,7 +383,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                     await CommitMessage.GenerateAsync(ct);
                 break;
             default:
-                throw new ArgumentException($"Comando sconosciuto: {name}");
+                throw new ArgumentException(Loc.T("Comando sconosciuto: {0}", name));
         }
 
         return null;
@@ -460,7 +460,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            Prerequisites.Feedback = $"Controllo prerequisiti non riuscito: {ex.Message}";
+            Prerequisites.Feedback = Loc.T("Controllo prerequisiti non riuscito: {0}", ex.Message);
         }
 
         NotifyChanged();
@@ -475,8 +475,13 @@ internal sealed class ChangesStore : ViewStore, IDisposable
 
         if (Volatile.Read(ref _started) == 1)
         {
+            // Rilegge anche i testi che dipendono dalla lingua dell'interfaccia (checklist, procedura guidata, riepilogo).
             await Prerequisites.RefreshAsync(ct);
+            if (Wizard.GetSnapshot().Open)
+                await Wizard.RefreshAsync(ct);
             await ApplyAutoDetectedWorkingCopyAsync(SolutionRootOrNull(), ct);
+            if (_statusIsAuto)
+                SetStatusAuto(BuildSummary());
         }
 
         NotifyChanged();
@@ -541,7 +546,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                         _loading = false;
                     }
 
-                    SetStatusAuto("La solution corrente non è una working copy SVN.");
+                    SetStatusAuto(Loc.T("La solution corrente non è una working copy SVN."));
                 }
 
                 return;
@@ -556,7 +561,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             ConfigureWatcher(svnRoot);
             lock (_stateLock)
                 _showWorkingCopyInput = false;
-            SetStatusAuto("Working copy SVN rilevata automaticamente, aggiornamento...");
+            SetStatusAuto(Loc.T("Working copy SVN rilevata automaticamente, aggiornamento..."));
             await RefreshAsync(ct, reloadBranch: true, showLoading: true);
         }
         finally
@@ -570,7 +575,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
     {
         lock (_stateLock)
             _loading = false;
-        SetStatus($"Errore durante il caricamento: {message}");
+        SetStatus(Loc.T("Errore durante il caricamento: {0}", message));
     }
 
     /// <summary>
@@ -582,7 +587,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         var path = typed.Trim();
         if (path.Length == 0)
         {
-            SetStatus("Inserisci il percorso della working copy.");
+            SetStatus(Loc.T("Inserisci il percorso della working copy."));
             return;
         }
 
@@ -593,19 +598,19 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
         {
-            SetStatus("Errore: percorso non valido.");
+            SetStatus(Loc.T("Errore: percorso non valido."));
             return;
         }
 
         if (!Directory.Exists(full))
         {
-            SetStatus($"Errore: cartella non trovata: {full}");
+            SetStatus(Loc.T("Errore: cartella non trovata: {0}", full));
             return;
         }
 
         if (SvnService.FindSvnRoot(full) is null)
         {
-            SetStatus($"Errore: non è una working copy SVN: {full}");
+            SetStatus(Loc.T("Errore: non è una working copy SVN: {0}", full));
             return;
         }
 
@@ -653,7 +658,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             {
                 lock (_stateLock)
                     _showWorkingCopyInput = true;
-                SetStatusAuto("Inserisci il percorso della working copy.");
+                SetStatusAuto(Loc.T("Inserisci il percorso della working copy."));
                 return;
             }
 
@@ -699,7 +704,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            SetStatus($"Errore: {ex.Message}");
+            SetStatus(Loc.T("Errore: {0}", ex.Message));
             // Una working copy rilevata dalla solution non si "perde" per un errore passeggero (es. lock di svn).
             if (!_autoDetected)
             {
@@ -762,7 +767,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             entries = _entries;
 
         if (entries.Count == 0)
-            return "Nessuna modifica.";
+            return Loc.T("Nessuna modifica.");
 
         var parts = new List<string>();
         var conflicts = entries.Count(e => e.Status == SvnStatusKind.Conflicted);
@@ -770,13 +775,13 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         var lockedOnly = entries.Count(e => e.Status == SvnStatusKind.Normal);
         var changes = entries.Count - conflicts - unversioned - lockedOnly;
         if (conflicts > 0)
-            parts.Add($"{conflicts} in conflitto");
+            parts.Add(Loc.T("{0} in conflitto", conflicts));
         if (changes > 0)
-            parts.Add($"{changes} modificati");
+            parts.Add(Loc.T("{0} modificati", changes));
         if (unversioned > 0)
-            parts.Add($"{unversioned} non versionati");
+            parts.Add(Loc.T("{0} non versionati", unversioned));
         if (lockedOnly > 0)
-            parts.Add($"{lockedOnly} bloccati");
+            parts.Add(Loc.T("{0} bloccati", lockedOnly));
         return string.Join(", ", parts) + ".";
     }
 
@@ -799,7 +804,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         "staged" => ChangeSection.Staged,
         "changes" => ChangeSection.Changes,
         "unversioned" => ChangeSection.Unversioned,
-        _ => throw new ArgumentException($"Sezione sconosciuta: {id}"),
+        _ => throw new ArgumentException(Loc.T("Sezione sconosciuta: {0}", id)),
     };
 
     /// <summary>
@@ -811,7 +816,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
     {
         var colon = key.IndexOf(':');
         if (colon <= 0)
-            throw new ArgumentException("Chiave di riga non valida.");
+            throw new ArgumentException(Loc.T("Chiave di riga non valida."));
 
         var prefix = key[..colon];
         var rest = key[(colon + 1)..];
@@ -831,7 +836,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                                 || e.RelativePath.StartsWith(path + "/", StringComparison.OrdinalIgnoreCase)))
                 .ToList();
             if (path.Length == 0 || entries.Count == 0)
-                throw new ArgumentException("Elemento non più presente: aggiorna l'elenco (Refresh) e riprova.");
+                throw new ArgumentException(Loc.T("Elemento non più presente: aggiorna l'elenco (Refresh) e riprova."));
 
             return new KeyTarget(section, false, path, entries);
         }
@@ -880,7 +885,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         lock (_stateLock)
         {
             if (!AllFolderKeys().Contains(key, StringComparer.Ordinal))
-                throw new ArgumentException("Cartella non più presente: aggiorna l'elenco (Refresh) e riprova.");
+                throw new ArgumentException(Loc.T("Cartella non più presente: aggiorna l'elenco (Refresh) e riprova."));
 
             ToggleKey(key);
         }
@@ -919,7 +924,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
     {
         if (Interlocked.CompareExchange(ref _operationRunning, 1, 0) != 0)
         {
-            SetStatus("Operazione in corso...");
+            SetStatus(Loc.T("Operazione in corso..."));
             return;
         }
 
@@ -954,26 +959,26 @@ internal sealed class ChangesStore : ViewStore, IDisposable
 
         if (selected.Count == 0)
         {
-            SetStatus("Metti almeno un file in Staged per il commit.");
+            SetStatus(Loc.T("Metti almeno un file in Staged per il commit."));
             return;
         }
 
         if (string.IsNullOrWhiteSpace(CommitMessage.Text))
         {
-            SetStatus("Scrivi un messaggio di commit.");
+            SetStatus(Loc.T("Scrivi un messaggio di commit."));
             return;
         }
 
         var conflicted = selected.Where(e => e.Status == SvnStatusKind.Conflicted).ToList();
         if (conflicted.Count > 0)
         {
-            SetStatus($"Risolvi prima i conflitti ({conflicted.Count} file) o toglili da Staged: svn non committa file in conflitto.");
+            SetStatus(Loc.T("Risolvi prima i conflitti ({0} file) o toglili da Staged: svn non committa file in conflitto.", conflicted.Count));
             return;
         }
 
         try
         {
-            SetStatus("Commit in corso...");
+            SetStatus(Loc.T("Commit in corso..."));
 
             // Come TortoiseSVN: le cartelle padre nuove (aggiunte o non versionate) di un elemento in Staged vanno
             // nel commit anche se non ci sono, altrimenti svn rifiuta ("is not known to exist in the repository
@@ -1000,13 +1005,13 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             CommitMessage.Clear();
 
             await RefreshAsync(ct, reloadBranch: true, revision is { } rev
-                ? $"Commit completato: revisione {rev} ({selected.Count} elementi)."
-                : $"Commit completato: {selected.Count} elementi.");
+                ? Loc.T("Commit completato: revisione {0} ({1} elementi).", rev, selected.Count)
+                : Loc.T("Commit completato: {0} elementi.", selected.Count));
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
             // Add/delete gia' eseguiti prima del commit fallito (es. "fai prima Update"): la lista va riallineata.
-            await RefreshAsync(ct, reloadBranch: false, $"Errore commit: {ex.Message}");
+            await RefreshAsync(ct, reloadBranch: false, Loc.T("Errore commit: {0}", ex.Message));
         }
     }
 
@@ -1043,22 +1048,22 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         var wc = WorkingCopyPath;
         if (string.IsNullOrWhiteSpace(wc))
         {
-            SetStatus("Nessuna working copy configurata.");
+            SetStatus(Loc.T("Nessuna working copy configurata."));
             return;
         }
 
         try
         {
-            SetStatus("Update in corso...");
+            SetStatus(Loc.T("Update in corso..."));
             var update = await _svnService.UpdateAsync(wc, ct);
-            var updated = update.Revision is { } rev ? $"Aggiornato alla revisione {rev}" : "Update completato";
+            var updated = update.Revision is { } rev ? Loc.T("Aggiornato alla revisione {0}", rev) : Loc.T("Update completato");
             await RefreshAsync(ct, reloadBranch: true, update.ConflictedPaths.Count > 0
-                ? $"{updated}: {update.ConflictedPaths.Count} file in conflitto."
+                ? Loc.T("{0}: {1} file in conflitto.", updated, update.ConflictedPaths.Count)
                 : $"{updated}.");
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            SetStatus($"Errore update: {ex.Message}");
+            SetStatus(Loc.T("Errore update: {0}", ex.Message));
         }
     }
 
@@ -1068,7 +1073,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         var wc = WorkingCopyPath;
         if (string.IsNullOrWhiteSpace(wc))
         {
-            SetStatus("Nessuna working copy configurata.");
+            SetStatus(Loc.T("Nessuna working copy configurata."));
             return;
         }
 
@@ -1078,31 +1083,31 @@ internal sealed class ChangesStore : ViewStore, IDisposable
 
         try
         {
-            SetStatus($"Update alla revisione {revision} in corso...");
+            SetStatus(Loc.T("Update alla revisione {0} in corso...", revision));
             var update = await _svnService.UpdateToRevisionAsync(wc, revision, ct);
-            var updated = update.Revision is { } rev ? $"Aggiornato alla revisione {rev}" : "Update completato";
+            var updated = update.Revision is { } rev ? Loc.T("Aggiornato alla revisione {0}", rev) : Loc.T("Update completato");
             await RefreshAsync(ct, reloadBranch: true, update.ConflictedPaths.Count > 0
-                ? $"{updated}: {update.ConflictedPaths.Count} file in conflitto."
+                ? Loc.T("{0}: {1} file in conflitto.", updated, update.ConflictedPaths.Count)
                 : $"{updated}.");
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            SetStatus($"Errore update: {ex.Message}");
+            SetStatus(Loc.T("Errore update: {0}", ex.Message));
         }
     }
 
     /// <summary>Chiede la revisione finché non è valida; <c>null</c> se l'utente annulla.</summary>
     private async Task<string?> AskRevisionAsync(CancellationToken ct)
     {
-        var message = "Aggiorna la working copy alla revisione indicata (numero intero positivo oppure HEAD).";
+        var message = Loc.T("Aggiorna la working copy alla revisione indicata (numero intero positivo oppure HEAD).");
         while (true)
         {
-            var typed = await _dialogs.AskTextAsync(message, "Revisione", "HEAD", ct);
+            var typed = await _dialogs.AskTextAsync(message, Loc.T("Revisione"), "HEAD", ct);
             if (typed is null)
                 return null;
             if (SvnRevision.TryNormalize(typed, out var revision))
                 return revision;
-            message = $"\"{typed.Trim()}\" non è una revisione valida: scrivi un numero intero positivo (es. 1234) oppure HEAD.";
+            message = Loc.T("\"{0}\" non è una revisione valida: scrivi un numero intero positivo (es. 1234) oppure HEAD.", typed.Trim());
         }
     }
 
@@ -1112,28 +1117,29 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         var wc = WorkingCopyPath;
         if (string.IsNullOrWhiteSpace(wc))
         {
-            SetStatus("Nessuna working copy configurata.");
+            SetStatus(Loc.T("Nessuna working copy configurata."));
             return;
         }
 
         try
         {
-            SetStatus("Cleanup in corso...");
+            SetStatus(Loc.T("Cleanup in corso..."));
             await _svnService.CleanupAsync(wc, ct);
-            await RefreshAsync(ct, reloadBranch: false, "Cleanup completato.");
+            await RefreshAsync(ct, reloadBranch: false, Loc.T("Cleanup completato."));
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            SetStatus($"Errore cleanup: {ex.Message}");
+            SetStatus(Loc.T("Errore cleanup: {0}", ex.Message));
         }
     }
 
     /// <summary>Messaggio di stato + eventuale pulsante d'azione: working copy bloccata -> "Esegui Cleanup".</summary>
     private StatusDto BuildStatus()
     {
-        var isError = _statusMessage.StartsWith("Errore", StringComparison.Ordinal);
+        // "Errore..." (it) e "Error..." (en) iniziano uguale: il test non dipende dalla lingua.
+        var isError = _statusMessage.StartsWith("Error", StringComparison.Ordinal);
         return new StatusDto(_statusMessage, isError,
-            isError && SvnErrors.IsWorkingCopyLocked(_statusMessage) ? new StatusActionDto("Esegui Cleanup", "cleanup") : null);
+            isError && SvnErrors.IsWorkingCopyLocked(_statusMessage) ? new StatusActionDto(Loc.T("Esegui Cleanup"), "cleanup") : null);
     }
 
     // ── Operazioni su file, cartelle e sezioni ───────────────────────
@@ -1153,7 +1159,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 "ignore" => IgnoreCoreAsync(target, ct),
                 "lock" => LockCoreAsync(target, ct),
                 "unlock" => UnlockCoreAsync(target, ct),
-                _ => throw new ArgumentException($"Operazione sconosciuta: {op}"),
+                _ => throw new ArgumentException(Loc.T("Operazione sconosciuta: {0}", op)),
             };
         });
     }
@@ -1164,13 +1170,13 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         var affected = target.Entries.Where(e => e.Status == SvnStatusKind.Unversioned).ToList();
         if (affected.Count == 0)
         {
-            SetStatus("Nessun elemento non versionato da aggiungere.");
+            SetStatus(Loc.T("Nessun elemento non versionato da aggiungere."));
             return;
         }
 
         try
         {
-            SetStatus("Aggiunta a SVN in corso...");
+            SetStatus(Loc.T("Aggiunta a SVN in corso..."));
             await _svnService.AddAsync(affected.Select(e => e.FullPath).ToList(), ct);
 
             lock (_stateLock)
@@ -1179,11 +1185,11 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                     Wc.Staged.Add(entry.FullPath);
             }
 
-            await RefreshAsync(ct, reloadBranch: false, $"Aggiunti a SVN: {affected.Count} elementi.");
+            await RefreshAsync(ct, reloadBranch: false, Loc.T("Aggiunti a SVN: {0} elementi.", affected.Count));
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            SetStatus($"Errore add: {ex.Message}");
+            SetStatus(Loc.T("Errore add: {0}", ex.Message));
         }
     }
 
@@ -1197,42 +1203,42 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         if (entry is null || !CanDeleteFile(entry))
         {
             SetStatus(target.Entries.Any(e => e.IsDirectory) || target.Entries.Count != 1
-                ? "L'eliminazione con Canc non è disponibile sulle cartelle."
-                : "Nessun file idoneo per l'eliminazione.");
+                ? Loc.T("L'eliminazione con Canc non è disponibile sulle cartelle.")
+                : Loc.T("Nessun file idoneo per l'eliminazione."));
             return;
         }
 
         // Difesa in profondita': il file viene da svn status, ma non si tocca mai nulla fuori dalla working copy.
         if (!IsUnderWorkingCopy(entry.FullPath))
         {
-            SetStatus("Errore: il file non si trova nella working copy.");
+            SetStatus(Loc.T("Errore: il file non si trova nella working copy."));
             return;
         }
 
         var versioned = entry.Status != SvnStatusKind.Unversioned;
         var message = versioned
-            ? $"Eliminare \"{entry.RelativePath}\"?\n\nIl file verrà eliminato dalla cartella di lavoro e rimosso da SVN al prossimo commit."
-            : $"Eliminare \"{entry.RelativePath}\" dal disco?\n\nIl file non è versionato: verrà spostato nel cestino.";
+            ? Loc.T("Eliminare \"{0}\"?\n\nIl file verrà eliminato dalla cartella di lavoro e rimosso da SVN al prossimo commit.", entry.RelativePath)
+            : Loc.T("Eliminare \"{0}\" dal disco?\n\nIl file non è versionato: verrà spostato nel cestino.", entry.RelativePath);
         var hasLocalChanges = entry.Status is SvnStatusKind.Modified or SvnStatusKind.Replaced or SvnStatusKind.Conflicted or SvnStatusKind.Added;
         if (hasLocalChanges)
-            message += "\n\nATTENZIONE: il file ha modifiche locali non committate, che andranno perse.";
+            message += "\n\n" + Loc.T("ATTENZIONE: il file ha modifiche locali non committate, che andranno perse.");
 
         if (!await _dialogs.ConfirmAsync(message, ct))
             return;
 
         try
         {
-            SetStatus("Eliminazione in corso...");
+            SetStatus(Loc.T("Eliminazione in corso..."));
             if (versioned)
                 await _svnService.DeleteAsync([entry.FullPath], ct, force: true);
             else
                 DeleteFromDisk(entry.FullPath);
 
-            await RefreshAsync(ct, reloadBranch: false, $"Eliminato: {entry.RelativePath}.");
+            await RefreshAsync(ct, reloadBranch: false, Loc.T("Eliminato: {0}.", entry.RelativePath));
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            SetStatus($"Errore eliminazione: {ex.Message}");
+            SetStatus(Loc.T("Errore eliminazione: {0}", ex.Message));
         }
     }
 
@@ -1265,21 +1271,21 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         var targets = RevertPlan(target.Entries.Where(e => StatusPresentation.IsRevertable(e.Status)).ToList());
         if (targets.Count == 0)
         {
-            SetStatus("Nessun elemento idoneo per SVN Revert.");
+            SetStatus(Loc.T("Nessun elemento idoneo per SVN Revert."));
             return;
         }
 
         var scope = target.WholeSection
             ? $" ({ChangesTreeBuilder.SectionTitle(target.Section)})"
-            : target.SingleFile is null ? $" nella cartella \"{target.Path}\"" : string.Empty;
-        var message = $"Annullare le modifiche locali su {targets.Count} elementi{scope}?\n\n{ListForConfirmation(targets)}\n\n" +
-                      "Le modifiche andranno perse e l'operazione non è annullabile.";
+            : target.SingleFile is null ? Loc.T(" nella cartella \"{0}\"", target.Path) : string.Empty;
+        var message = Loc.T("Annullare le modifiche locali su {0} elementi{1}?\n\n{2}\n\nLe modifiche andranno perse e l'operazione non è annullabile.",
+            targets.Count, scope, ListForConfirmation(targets));
         if (!await _dialogs.ConfirmAsync(message, ct))
             return;
 
         try
         {
-            SetStatus("Revert in corso...");
+            SetStatus(Loc.T("Revert in corso..."));
             // Cartelle aggiunte/sostituite: svn le annulla solo con i figli (E155038), che sono gia' in elenco.
             // Tutto il resto, cartelle comprese (es. solo svn:ignore), a --depth empty: niente effetti sul sottoalbero.
             var recursive = targets.Where(IsNewFolder).Select(e => e.FullPath).ToList();
@@ -1290,11 +1296,11 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 await _svnService.RevertAsync(recursive, ct, recursive: true);
             if (shallow.Count > 0)
                 await _svnService.RevertAsync(shallow, ct, recursive: false);
-            await RefreshAsync(ct, reloadBranch: false, $"Revert completato su {targets.Count} elementi.");
+            await RefreshAsync(ct, reloadBranch: false, Loc.T("Revert completato su {0} elementi.", targets.Count));
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            SetStatus($"Errore revert: {ex.Message}");
+            SetStatus(Loc.T("Errore revert: {0}", ex.Message));
         }
     }
 
@@ -1344,7 +1350,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             .Select(e => $"• {e.RelativePath} ({StatusPresentation.DisplayName(e.Status, e.IsTreeConflict)})");
         var text = string.Join("\n", lines);
         return entries.Count > MaxListedInConfirmation
-            ? $"{text}\n… e altri {entries.Count - MaxListedInConfirmation}"
+            ? $"{text}\n{Loc.T("… e altri {0}", entries.Count - MaxListedInConfirmation)}"
             : text;
     }
 
@@ -1356,7 +1362,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
     {
         if (target.SingleFile is not { Status: SvnStatusKind.Conflicted } entry)
         {
-            SetStatus("Seleziona un file in conflitto da risolvere.");
+            SetStatus(Loc.T("Seleziona un file in conflitto da risolvere."));
             return;
         }
 
@@ -1364,8 +1370,8 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         if (entry.IsTreeConflict)
         {
             if (!await _dialogs.ConfirmAsync(
-                    $"Conflitto ad albero su \"{entry.RelativePath}\" (rinomina/cancellazione). " +
-                    "Sistema prima la struttura a mano, poi conferma per segnarlo come risolto.", ct))
+                    Loc.T("Conflitto ad albero su \"{0}\" (rinomina/cancellazione). " +
+                          "Sistema prima la struttura a mano, poi conferma per segnarlo come risolto.", entry.RelativePath), ct))
                 return;
             choice = SvnConflictChoice.Working;
         }
@@ -1379,13 +1385,13 @@ internal sealed class ChangesStore : ViewStore, IDisposable
 
         try
         {
-            SetStatus("Risoluzione conflitto in corso...");
+            SetStatus(Loc.T("Risoluzione conflitto in corso..."));
             await _svnService.ResolveAsync(entry.FullPath, choice, ct);
-            await RefreshAsync(ct, reloadBranch: false, $"Conflitto risolto: {entry.RelativePath}");
+            await RefreshAsync(ct, reloadBranch: false, Loc.T("Conflitto risolto: {0}", entry.RelativePath));
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            SetStatus($"Errore resolve: {ex.Message}");
+            SetStatus(Loc.T("Errore resolve: {0}", ex.Message));
         }
     }
 
@@ -1398,27 +1404,27 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         var targets = target.Entries.Where(e => e.Status == SvnStatusKind.Unversioned).ToList();
         if (targets.Count == 0)
         {
-            SetStatus("Add to Ignore List è disponibile solo per elementi non versionati.");
+            SetStatus(Loc.T("Add to Ignore List è disponibile solo per elementi non versionati."));
             return;
         }
 
         if (target.SingleFile is null
             && !await _dialogs.ConfirmAsync(
-                $"Aggiungere {targets.Count} elementi non versionati alla ignore list (svn:ignore) " +
-                $"delle rispettive cartelle?\n\n{ListForConfirmation(targets)}", ct))
+                Loc.T("Aggiungere {0} elementi non versionati alla ignore list (svn:ignore) delle rispettive cartelle?\n\n{1}",
+                    targets.Count, ListForConfirmation(targets)), ct))
             return;
 
         try
         {
-            SetStatus("Aggiornamento ignore list in corso...");
+            SetStatus(Loc.T("Aggiornamento ignore list in corso..."));
             foreach (var entry in targets)
                 await _svnService.AddToIgnoreListAsync(entry.FullPath, ct);
 
-            await RefreshAsync(ct, reloadBranch: false, $"Aggiunti alla ignore list: {targets.Count} elementi.");
+            await RefreshAsync(ct, reloadBranch: false, Loc.T("Aggiunti alla ignore list: {0} elementi.", targets.Count));
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            SetStatus($"Errore ignore list: {ex.Message}");
+            SetStatus(Loc.T("Errore ignore list: {0}", ex.Message));
         }
     }
 
@@ -1430,17 +1436,17 @@ internal sealed class ChangesStore : ViewStore, IDisposable
     {
         if (target.SingleFile is not { IsLocked: false } entry || entry.Status != SvnStatusKind.Modified)
         {
-            SetStatus("Seleziona un file modificato non ancora bloccato.");
+            SetStatus(Loc.T("Seleziona un file modificato non ancora bloccato."));
             return;
         }
 
-        var message = await _dialogs.AskTextAsync($"Blocca \"{entry.RelativePath}\" (svn lock). Messaggio facoltativo:", "Messaggio", string.Empty, ct);
+        var message = await _dialogs.AskTextAsync(Loc.T("Blocca \"{0}\" (svn lock). Messaggio facoltativo:", entry.RelativePath), Loc.T("Messaggio"), string.Empty, ct);
         if (message is null)
             return;
 
         try
         {
-            SetStatus("Lock in corso...");
+            SetStatus(Loc.T("Lock in corso..."));
             try
             {
                 await _svnService.LockAsync([entry.FullPath], message, force: false, ct);
@@ -1448,21 +1454,21 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             catch (InvalidOperationException ex) when (SvnErrors.IsLockedByOther(ex.Message))
             {
                 if (!await _dialogs.ConfirmAsync(
-                        $"\"{entry.RelativePath}\" è già bloccato da un altro utente.\n\n{FirstLine(ex.Message)}\n\n" +
-                        "Rubare il lock lo toglie a lui: potrebbe perdere il diritto di committare il file. Procedere?", ct))
+                        Loc.T("\"{0}\" è già bloccato da un altro utente.\n\n{1}\n\nRubare il lock lo toglie a lui: potrebbe perdere il diritto di committare il file. Procedere?",
+                            entry.RelativePath, FirstLine(ex.Message)), ct))
                 {
-                    SetStatus("Lock non preso: il file è bloccato da un altro utente.");
+                    SetStatus(Loc.T("Lock non preso: il file è bloccato da un altro utente."));
                     return;
                 }
 
                 await _svnService.LockAsync([entry.FullPath], message, force: true, ct);
             }
 
-            await RefreshAsync(ct, reloadBranch: false, $"Bloccato (lock): {entry.RelativePath}");
+            await RefreshAsync(ct, reloadBranch: false, Loc.T("Bloccato (lock): {0}", entry.RelativePath));
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            SetStatus($"Errore lock: {ex.Message}");
+            SetStatus(Loc.T("Errore lock: {0}", ex.Message));
         }
     }
 
@@ -1470,19 +1476,19 @@ internal sealed class ChangesStore : ViewStore, IDisposable
     {
         if (target.SingleFile is not { IsLocked: true } entry)
         {
-            SetStatus("Seleziona un file bloccato da te.");
+            SetStatus(Loc.T("Seleziona un file bloccato da te."));
             return;
         }
 
         try
         {
-            SetStatus("Unlock in corso...");
+            SetStatus(Loc.T("Unlock in corso..."));
             await _svnService.UnlockAsync([entry.FullPath], ct);
-            await RefreshAsync(ct, reloadBranch: false, $"Sbloccato (unlock) completato: {entry.RelativePath}");
+            await RefreshAsync(ct, reloadBranch: false, Loc.T("Sbloccato (unlock) completato: {0}", entry.RelativePath));
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            SetStatus($"Errore unlock: {ex.Message}");
+            SetStatus(Loc.T("Errore unlock: {0}", ex.Message));
         }
     }
 
@@ -1500,8 +1506,8 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         if (target.SingleFile is not { } entry || !CanDiff(entry))
         {
             SetStatus(target.SingleFile is { Status: SvnStatusKind.Unversioned }
-                ? "Il file non è versionato: non c'è nessun diff."
-                : "Seleziona un file versionato per vedere il diff.");
+                ? Loc.T("Il file non è versionato: non c'è nessun diff.")
+                : Loc.T("Seleziona un file versionato per vedere il diff."));
             return;
         }
 
@@ -1531,11 +1537,11 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             }
 
             await _host.OpenDiffAsync(left, right, $"{name} (BASE)", $"{name} (working copy)", $"{name} — BASE ⇄ working copy");
-            SetStatus($"Diff aperto: {entry.RelativePath}");
+            SetStatus(Loc.T("Diff aperto: {0}", entry.RelativePath));
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            SetStatus($"Errore diff: {ex.Message}");
+            SetStatus(Loc.T("Errore diff: {0}", ex.Message));
         }
     }
 
@@ -1546,7 +1552,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         var files = target.Entries.Where(CanDiff).ToList();
         if (files.Count == 0)
         {
-            SetStatus("Nessuna modifica da confrontare in questa cartella.");
+            SetStatus(Loc.T("Nessuna modifica da confrontare in questa cartella."));
             return;
         }
 
@@ -1559,7 +1565,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
 
         try
         {
-            SetStatus($"Preparazione del diff di {files.Count} file...");
+            SetStatus(Loc.T("Preparazione del diff di {0} file...", files.Count));
             var parts = new List<string>();
             foreach (var file in files.Take(MaxFolderDiffFiles))
             {
@@ -1569,18 +1575,18 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             }
 
             if (files.Count > MaxFolderDiffFiles)
-                parts.Add($"… altri {files.Count - MaxFolderDiffFiles} file omessi.");
+                parts.Add(Loc.T("… altri {0} file omessi.", files.Count - MaxFolderDiffFiles));
 
-            var text = parts.Count == 0 ? "(Nessuna differenza testuale)" : string.Join("\n\n", parts);
+            var text = parts.Count == 0 ? Loc.T("(Nessuna differenza testuale)") : string.Join("\n\n", parts);
             var folderName = target.WholeSection ? ChangesTreeBuilder.SectionTitle(target.Section) : Path.GetFileName(target.Path);
             var file2 = Path.Combine(NewTempDirectory(), SafeFileName($"Diff {folderName}") + ".diff");
             await File.WriteAllTextAsync(file2, text, new UTF8Encoding(false), ct);
             await _host.OpenFileAsync(file2);
-            SetStatus($"Diff cartella aperto: {files.Count} file.");
+            SetStatus(Loc.T("Diff cartella aperto: {0} file.", files.Count));
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            SetStatus($"Errore diff: {ex.Message}");
+            SetStatus(Loc.T("Errore diff: {0}", ex.Message));
         }
     }
 

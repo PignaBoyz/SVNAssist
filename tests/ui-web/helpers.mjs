@@ -46,7 +46,7 @@ export async function loadDemo() {
 }
 
 // carica nel contesto gli script puri della UI.Web (niente DOM)
-export function loadUi(files = ['util', 'diff', 'tree', 'prereq', 'log']) {
+export function loadUi(files = ['i18n', 'util', 'diff', 'tree', 'prereq', 'log']) {
   const ctx = vm.createContext({ console });
   ctx.window = ctx;
   for (const f of files) vm.runInContext(read(`src/SVNAssist.UI.Web/js/${f}.js`), ctx, { filename: f + '.js' });

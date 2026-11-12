@@ -98,7 +98,7 @@ namespace SVNAssist.Host
             catch (Exception ex)
             {
                 Log.Write("WebView2 init " + _view + ": " + ex);
-                ShowError("Impossibile avviare WebView2: " + ex.Message);
+                ShowError(Loc.T("Impossibile avviare WebView2: {0}", ex.Message));
             }
         }
 
@@ -168,11 +168,11 @@ namespace SVNAssist.Host
         private void ShowRuntimeMissing()
         {
             var tb = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(12) };
-            tb.Inlines.Add("SVNAssist richiede il runtime Microsoft Edge WebView2, che non è installato su questo computer. ");
-            var link = new Hyperlink(new Run("Scarica il runtime Evergreen")) { NavigateUri = new Uri(RuntimeUrl) };
+            tb.Inlines.Add(Loc.T("SVNAssist richiede il runtime Microsoft Edge WebView2, che non è installato su questo computer. "));
+            var link = new Hyperlink(new Run(Loc.T("Scarica il runtime Evergreen"))) { NavigateUri = new Uri(RuntimeUrl) };
             link.RequestNavigate += (s, e) => { try { Process.Start(new ProcessStartInfo(RuntimeUrl) { UseShellExecute = true }); } catch { } e.Handled = true; };
             tb.Inlines.Add(link);
-            tb.Inlines.Add(", installalo e riapri la finestra.");
+            tb.Inlines.Add(Loc.T(", installalo e riapri la finestra."));
             Themed(tb);
             Content = tb;
         }

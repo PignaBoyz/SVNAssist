@@ -14,21 +14,21 @@ internal sealed class WizardStore
 
     internal static readonly string[] ProviderIds = ["copilot", "claudecode", "claude", "openai"];
 
-    private static readonly IReadOnlyList<WizardProviderDto> Providers =
+    private static IReadOnlyList<WizardProviderDto> Providers =>
     [
         new("copilot", "GitHub Copilot", AiProviderGuide.Requirements("copilot")),
-        new("claudecode", "Claude Code (abbonamento Claude)", AiProviderGuide.Requirements("claudecode")),
-        new("claude", "Claude API (API key, a consumo)", AiProviderGuide.Requirements("claude")),
-        new("openai", "GitHub Models / OpenAI-compatibile", AiProviderGuide.Requirements("openai")),
+        new("claudecode", Loc.T("Claude Code (abbonamento Claude)"), AiProviderGuide.Requirements("claudecode")),
+        new("claude", Loc.T("Claude API (API key, a consumo)"), AiProviderGuide.Requirements("claude")),
+        new("openai", Loc.T("GitHub Models / OpenAI-compatibile"), AiProviderGuide.Requirements("openai")),
     ];
 
     // Etichette come nelle tendine di Tools > Options (OptionsPage.cs): tenere allineate; il primo e' il consigliato.
-    private static readonly WizardModelDto[] ClaudeModels =
-        [new("claude-sonnet-5-5", "Sonnet (consigliato, equilibrato)"), new("claude-haiku-5-5", "Haiku (il più economico e veloce)"), new("claude-opus-5-5", "Opus (il più potente, costoso)")];
-    private static readonly WizardModelDto[] CopilotModels =
-        [new("default", "Predefinito di Copilot (consigliato)"), new("gpt-4.1", "GPT-4.1"), new("gpt-5-mini", "GPT-5 mini"), new("claude-sonnet-4.5", "Claude Sonnet 4.5")];
-    private static readonly WizardModelDto[] OpenAiModels =
-        [new("openai/gpt-4o-mini", "GPT-4o mini (consigliato, gratuito su GitHub Models)"), new("openai/gpt-4o", "GPT-4o"), new("openai/gpt-4.1-mini", "GPT-4.1 mini"), new("openai/gpt-4.1", "GPT-4.1")];
+    private static WizardModelDto[] ClaudeModels =>
+        [new("claude-sonnet-5-5", Loc.T("Sonnet (consigliato, equilibrato)")), new("claude-haiku-5-5", Loc.T("Haiku (il più economico e veloce)")), new("claude-opus-5-5", Loc.T("Opus (il più potente, costoso)"))];
+    private static WizardModelDto[] CopilotModels =>
+        [new("default", Loc.T("Predefinito di Copilot (consigliato)")), new("gpt-4.1", "GPT-4.1"), new("gpt-5-mini", "GPT-5 mini"), new("claude-sonnet-4.5", "Claude Sonnet 4.5")];
+    private static WizardModelDto[] OpenAiModels =>
+        [new("openai/gpt-4o-mini", Loc.T("GPT-4o mini (consigliato, gratuito su GitHub Models)")), new("openai/gpt-4o", "GPT-4o"), new("openai/gpt-4.1-mini", "GPT-4.1 mini"), new("openai/gpt-4.1", "GPT-4.1")];
 
     private readonly PrereqStore _prereq;
     private readonly ISvnAssistSettings _settings;
@@ -150,7 +150,7 @@ internal sealed class WizardStore
     internal void Pick(string provider)
     {
         if (!ProviderIds.Contains(provider))
-            throw new ArgumentException($"Provider sconosciuto: {provider}");
+            throw new ArgumentException(Loc.T("Provider sconosciuto: {0}", provider));
         lock (_lock)
         {
             if (_step != 1)
@@ -206,10 +206,10 @@ internal sealed class WizardStore
         {
             var all = await _prereq.Service.CheckAsync(ct);
             var rows = all.Items.Where(i => i.Id == PrerequisiteIds.Svn).Select(PrereqStore.ToDto).ToList();
-            rows.Add(new PrereqItemDto(AiRowId, "Provider AI", "Provider AI per i commit message", all.HasAiProvider,
-                all.HasAiProvider ? string.Join(" → ", all.UsableProviders) : "Nessun provider AI utilizzabile: serve per generare i messaggi di commit.",
-                all.HasAiProvider ? string.Empty : "La procedura guidata ti accompagna nella scelta e nell'accesso.",
-                all.HasAiProvider ? string.Empty : "Configura l'AI", string.Empty));
+            rows.Add(new PrereqItemDto(AiRowId, Loc.T("Provider AI"), Loc.T("Provider AI per i commit message"), all.HasAiProvider,
+                all.HasAiProvider ? string.Join(" → ", all.UsableProviders) : Loc.T("Nessun provider AI utilizzabile: serve per generare i messaggi di commit."),
+                all.HasAiProvider ? string.Empty : Loc.T("La procedura guidata ti accompagna nella scelta e nell'accesso."),
+                all.HasAiProvider ? string.Empty : Loc.T("Configura l'AI"), string.Empty));
             lock (_lock)
             {
                 if (_mode != ModePrereq)
@@ -244,7 +244,7 @@ internal sealed class WizardStore
             _ghInstalled = snapshot.Items.Any(i => i.Id == PrerequisiteIds.GitHubCli && i.IsOk);
             _authOk = auth?.IsOk ?? false;
             _authDetail = provider == "claudecode"
-                ? "Il login a Claude Code non si può verificare da qui: se non l'hai mai fatto, aprilo e digita /login."
+                ? Loc.T("Il login a Claude Code non si può verificare da qui: se non l'hai mai fatto, aprilo e digita /login.")
                 : auth?.Detail ?? string.Empty;
             _endpoint = endpoint;
         }
@@ -296,11 +296,11 @@ internal sealed class WizardStore
         }
 
         if (provider == "claudecode")
-            await _prereq.LaunchAsync(ConsoleCommand.ClaudeLogin, "Si è aperto un terminale con Claude Code: se richiesto esegui /login, poi torna qui.");
+            await _prereq.LaunchAsync(ConsoleCommand.ClaudeLogin, Loc.T("Si è aperto un terminale con Claude Code: se richiesto esegui /login, poi torna qui."));
         else if (gh)
-            await _prereq.LaunchAsync(ConsoleCommand.GitHubLogin, "Si è aperto un terminale: conferma il codice nel browser, poi torna qui.");
+            await _prereq.LaunchAsync(ConsoleCommand.GitHubLogin, Loc.T("Si è aperto un terminale: conferma il codice nel browser, poi torna qui."));
         else
-            await _prereq.LaunchAsync(ConsoleCommand.InstallGitHubCli, "Si è aperto un terminale con l'installazione di GitHub CLI: al termine premi di nuovo Accedi (se gh non viene trovato, riavvia VS).");
+            await _prereq.LaunchAsync(ConsoleCommand.InstallGitHubCli, Loc.T("Si è aperto un terminale con l'installazione di GitHub CLI: al termine premi di nuovo Accedi (se gh non viene trovato, riavvia VS)."));
     }
 
     /// <summary>Passo 3: salva la chiave (Claude API) o endpoint e chiave (OpenAI-compatibile). Valori vuoti = non cambiare.</summary>
@@ -318,7 +318,7 @@ internal sealed class WizardStore
             var ok = Uri.TryCreate(endpoint, UriKind.Absolute, out var uri)
                 && (uri.Scheme == Uri.UriSchemeHttps || (uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback));
             if (!ok)
-                throw new ArgumentException("L'endpoint deve essere un URL https (o http://localhost).");
+                throw new ArgumentException(Loc.T("L'endpoint deve essere un URL https (o http://localhost)."));
             await _settings.SetSettingAsync(SettingDefinitions.AiEndpoint, endpoint, ct);
         }
 
@@ -339,13 +339,13 @@ internal sealed class WizardStore
         lock (_lock)
         {
             if (_step != 4)
-                throw new InvalidOperationException("La procedura non è arrivata al passo del modello.");
+                throw new InvalidOperationException(Loc.T("La procedura non è arrivata al passo del modello."));
             provider = _provider;
             from = _fromGenerate;
         }
 
         if (!ModelsFor(provider).Any(m => m.Value == model))
-            throw new ArgumentException($"Modello non valido: {model}");
+            throw new ArgumentException(Loc.T("Modello non valido: {0}", model));
 
         await _settings.SetSettingAsync(SettingDefinitions.AiProvider, provider, ct);
         await _settings.SetSettingAsync(ModelSettingKey(provider), model, ct);

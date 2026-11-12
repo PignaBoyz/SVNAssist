@@ -9,7 +9,7 @@ namespace SVNAssist.Hosting;
 /// </summary>
 internal sealed class HostDialogs : IDialogService
 {
-    private static readonly string[] OkCancel = ["OK", "Annulla"];
+    private static string[] OkCancel => ["OK", Loc.T("Annulla")];
 
     private readonly IHost _host;
 
@@ -28,12 +28,12 @@ internal sealed class HostDialogs : IDialogService
     {
         // Una scelta per pulsante, con il significato dell'opzione di svn resolve --accept.
         var pick = await _host.PromptAsync(
-            $"Come vuoi risolvere il conflitto su \"{fileName}\"?\n\n" +
-            "• Ho risolto a mano: tieni il file com'è (sistemato a mano, senza marcatori <<<<<<<)\n" +
-            "• Tieni il mio file: scarta le modifiche del server, vale il tuo file intero\n" +
-            "• Prendi quello del server: scarta le TUE modifiche locali\n" +
-            "• Torna alla base: scarta le modifiche di entrambi",
-            ["Ho risolto a mano", "Tieni il mio file", "Prendi quello del server", "Torna alla base", "Annulla"]);
+            Loc.T("Come vuoi risolvere il conflitto su \"{0}\"?\n\n" +
+                  "• Ho risolto a mano: tieni il file com'è (sistemato a mano, senza marcatori <<<<<<<)\n" +
+                  "• Tieni il mio file: scarta le modifiche del server, vale il tuo file intero\n" +
+                  "• Prendi quello del server: scarta le TUE modifiche locali\n" +
+                  "• Torna alla base: scarta le modifiche di entrambi", fileName),
+            [Loc.T("Ho risolto a mano"), Loc.T("Tieni il mio file"), Loc.T("Prendi quello del server"), Loc.T("Torna alla base"), Loc.T("Annulla")]);
 
         return pick switch
         {
@@ -73,7 +73,7 @@ internal sealed class HostCredentialPrompt : ISvnCredentialPrompt
 /// </summary>
 internal sealed class HostAiSetupPrompt : IAiSetupPrompt
 {
-    private static readonly string[] OkCancel = ["OK", "Annulla"];
+    private static string[] OkCancel => ["OK", Loc.T("Annulla")];
 
     private readonly IHost _host;
     private readonly ISvnAssistSettings _settings;

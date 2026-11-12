@@ -122,7 +122,7 @@ Se non hai alcun provider pronto, "Genera con AI" apre la **procedura guidata** 
 3. **Accesso**: login GitHub / Claude Code nel terminale, oppure la API key (salvata cifrata, mai mostrata);
 4. **Modello**: tendina con il consigliato preselezionato. **Fine** salva provider e modello (stesse impostazioni di *Tools → Options*) e genera subito il messaggio.
 
-La stessa procedura si apre da **Extensions → SVNAssist → Cambia provider AI…** (e dal menu ▾ accanto a "Genera con AI").
+La stessa procedura si apre da **Extensions → SVNAssist → Change AI Provider…** (e dal menu ▾ accanto a "Genera con AI").
 **Faccio io** chiude la procedura e apre *Tools → Options → SVNAssist* per chi preferisce configurare a mano.
 Il pulsante **Prerequisiti** in basso è verde se tutto è a posto, rosso se manca qualcosa: cliccandolo si apre la stessa procedura sui prerequisiti mancanti.
 
@@ -258,8 +258,18 @@ Tutte le impostazioni sono in **Tools → Options → SVNAssist**:
 | `defaultLanguage` | `auto` | Lingua dei commit message (`auto`, `italiano`, `english`) |
 | `workingCopyPath` | *(vuoto)* | Se impostato ha la precedenza sull'auto-rilevamento |
 | `windowTheme` | `auto` | Tema delle finestre (`auto` segue VS) |
+| `uiLanguage` | `auto` | Lingua dell'interfaccia: `auto` (lingua di VS), `it`, `en` — vedi sotto |
 
 Le API key sono cifrate con DPAPI (utente corrente) nel registro.
+
+### 🌐 Lingua dell'interfaccia (Italiano / English)
+
+Dal menu **Extensions → SVNAssist → Language / Lingua** scegli **Automatica**, **Italiano** o **English** (la spunta indica la scelta); la stessa impostazione è in **Tools → Options → SVNAssist → Generale → Lingua dell'interfaccia**.
+- **Automatica** (default) usa la lingua di Visual Studio: italiano se è italiano, altrimenti inglese.
+- Il cambio è **immediato**: le finestre Changes e Log, la procedura guidata, i prerequisiti, i dialoghi e i messaggi del servizio passano subito alla nuova lingua, senza riavviare VS.
+- Restano uguali nelle due lingue i nomi dei comandi SVN (SVN Update, SVN Commit, SVN Cleanup, Lock/Unlock), le voci di menu di VS e i messaggi di `svn.exe` (arrivano come li scrive svn).
+- La lingua dei **commit message generati dall'AI** è un'impostazione separata (*Lingua dei commit message*, e la scelta nel menu ▾ accanto a "Genera con AI").
+- Le etichette di Tools > Options si aggiornano subito, tranne i nomi delle categorie ("Commit message AI", "Generale"), che VS memorizza alla prima lettura: cambiano al riavvio successivo.
 
 ---|---|---|
 | AI Endpoint | `https://models.github.ai/inference/chat/completions` | URL dell'endpoint AI (formato OpenAI Chat Completions) |

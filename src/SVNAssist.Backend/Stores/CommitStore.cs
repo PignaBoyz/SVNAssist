@@ -85,13 +85,16 @@ internal sealed class CommitStore
             return "busy";
         if (status.Length == 0)
             return string.Empty;
-        if (status.StartsWith("Errore", StringComparison.Ordinal))
+        // Prefissi italiani e inglesi (i testi sono nella lingua corrente al momento in cui sono stati scritti).
+        if (status.StartsWith("Error", StringComparison.Ordinal))
             return "err";
-        if (status.StartsWith("Nessun", StringComparison.Ordinal) || status.StartsWith("Metti almeno", StringComparison.Ordinal)
-            || status.StartsWith("Scrivi prima", StringComparison.Ordinal) || status.StartsWith("Operazione", StringComparison.Ordinal))
+        if (StartsWithAny(status, "Nessun", "Metti almeno", "Scrivi prima", "Operazione", "No ", "Add at least", "First write", "Operation"))
             return "warn";
-        return status.StartsWith("Messaggio", StringComparison.Ordinal) ? "ok" : "info";
+        return StartsWithAny(status, "Messaggio", "Message") ? "ok" : "info";
     }
+
+    private static bool StartsWithAny(string text, params string[] prefixes)
+        => prefixes.Any(p => text.StartsWith(p, StringComparison.Ordinal));
 
     /// <summary>Un'operazione AI e' in corso.</summary>
     internal bool IsBusy
@@ -118,7 +121,7 @@ internal sealed class CommitStore
     {
         var value = lang?.Trim().ToLowerInvariant();
         if (value is not ("auto" or "italiano" or "english"))
-            throw new ArgumentException($"Lingua non valida: {lang}");
+            throw new ArgumentException(Loc.T("Lingua non valida: {0}", lang));
 
         lock (_lock)
         {
@@ -201,17 +204,17 @@ internal sealed class CommitStore
         try
         {
             IsBusy = true;
-            AiStatus = improve ? "Miglioramento in corso..." : "Generazione in corso..."; // riscontro immediato a ogni clic
+            AiStatus = improve ? Loc.T("Miglioramento in corso...") : Loc.T("Generazione in corso..."); // riscontro immediato a ogni clic
             await RunAiCoreAsync(improve, ct);
         }
         catch (OperationCanceledException)
         {
             // Mai silenzio: anche un annullamento deve lasciare un feedback.
-            AiStatus = ct.IsCancellationRequested ? "Operazione AI annullata." : "Errore AI: richiesta interrotta per timeout.";
+            AiStatus = ct.IsCancellationRequested ? Loc.T("Operazione AI annullata.") : Loc.T("Errore AI: richiesta interrotta per timeout.");
         }
         catch (Exception ex)
         {
-            AiStatus = $"Errore AI: {ex.Message}";
+            AiStatus = Loc.T("Errore AI: {0}", ex.Message);
         }
         finally
         {
@@ -226,31 +229,31 @@ internal sealed class CommitStore
         var ai = await _aiServiceFactory.CreateAsync(ct);
         if (ai is null && OpenAiWizard is { } openWizard)
         {
-            AiStatus = "Nessun provider AI configurato: completa la procedura guidata.";
+            AiStatus = Loc.T("Nessun provider AI configurato: completa la procedura guidata.");
             await openWizard(ct);
             return;
         }
 
         if (ai is null)
         {
-            AiStatus = "Nessun provider AI disponibile (Copilot, Claude o token GitHub).";
+            AiStatus = Loc.T("Nessun provider AI disponibile (Copilot, Claude o token GitHub).");
             // La guida compare a ogni click: se l'utente la chiude senza fare nulla riceve comunque questo messaggio.
             AiStatus += await _aiSetupPrompt.ShowMissingTokenHelpAsync(ct)
-                ? " Completato il login o creato il token, premi di nuovo \"Genera con AI\"."
-                : " Premi di nuovo \"Genera con AI\" per rivedere come configurarlo.";
+                ? Loc.T(" Completato il login o creato il token, premi di nuovo \"Genera con AI\".")
+                : Loc.T(" Premi di nuovo \"Genera con AI\" per rivedere come configurarlo.");
             return;
         }
 
         if (improve && string.IsNullOrWhiteSpace(Text))
         {
-            AiStatus = "Scrivi prima una bozza del messaggio da migliorare.";
+            AiStatus = Loc.T("Scrivi prima una bozza del messaggio da migliorare.");
             return;
         }
 
         var workingCopy = _workingCopyPath();
         if (string.IsNullOrWhiteSpace(workingCopy))
         {
-            AiStatus = "Nessuna working copy configurata.";
+            AiStatus = Loc.T("Nessuna working copy configurata.");
             return;
         }
 
@@ -259,26 +262,28 @@ internal sealed class CommitStore
         if (paths.Count == 0)
         {
             AiStatus = improve
-                ? "Metti almeno un file in Staged per migliorare il messaggio."
-                : "Metti almeno un file in Staged per generare il messaggio.";
+                ? Loc.T("Metti almeno un file in Staged per migliorare il messaggio.")
+                : Loc.T("Metti almeno un file in Staged per generare il messaggio.");
             return;
         }
 
         var chain = DescribeChain(ai);
         if (!await ConfirmDisclosureAsync(paths, chain, ct))
         {
-            AiStatus = "Operazione annullata: nessun dato è stato inviato.";
+            AiStatus = Loc.T("Operazione annullata: nessun dato è stato inviato.");
             return;
         }
 
         var chainNames = ai is FallbackAiService fb ? fb.ProviderNames.ToList() : DescribeProvider(ai) is { } single ? [single] : null;
         SetTrace(chainNames, null, finished: false);
-        AiStatus = (improve ? "Miglioramento" : "Generazione") + (chain is null ? " in corso..." : $" con {chain}...");
+        AiStatus = chain is null
+            ? (improve ? Loc.T("Miglioramento in corso...") : Loc.T("Generazione in corso..."))
+            : (improve ? Loc.T("Miglioramento con {0}...", chain) : Loc.T("Generazione con {0}...", chain));
 
         var diff = await _svnService.GetDiffForAiAsync(paths, workingCopy, ct);
         if (!improve && string.IsNullOrWhiteSpace(diff))
         {
-            AiStatus = "Nessun diff disponibile.";
+            AiStatus = Loc.T("Nessun diff disponibile.");
             SetTrace(null, null, finished: true);
             return;
         }
@@ -306,12 +311,12 @@ internal sealed class CommitStore
         Text = result;
         var provider = DescribeProvider(ai);
         SetTrace(chainNames, provider, finished: true);
-        var done = improve ? "Messaggio migliorato" : "Messaggio generato con AI";
+        var done = improve ? Loc.T("Messaggio migliorato") : Loc.T("Messaggio generato con AI");
         AiStatus = provider is null ? $"{done}." : $"{done} ({provider}).";
         if (rules is not null)
-            AiStatus += " Regole di commit del progetto applicate.";
+            AiStatus += Loc.T(" Regole di commit del progetto applicate.");
         if (limited.WasTruncated)
-            AiStatus += $" Attenzione: diff molto grande, inviata solo una parte (max {DiffLimiter.MaxTotalChars / 1000} KB, {DiffLimiter.MaxFileChars / 1000} KB per file).";
+            AiStatus += Loc.T(" Attenzione: diff molto grande, inviata solo una parte (max {0} KB, {1} KB per file).", DiffLimiter.MaxTotalChars / 1000, DiffLimiter.MaxFileChars / 1000);
     }
 
     /// <summary>
@@ -327,17 +332,17 @@ internal sealed class CommitStore
         if (_disclosureAccepted && sensitive.Count == 0)
             return true;
 
-        var message = $"Per usare l'AI, il diff dei soli file in Staged ({paths.Count} elementi) verrà inviato a un servizio esterno: " +
-                      $"{chain ?? "provider AI configurato"}.";
+        var message = Loc.T("Per usare l'AI, il diff dei soli file in Staged ({0} elementi) verrà inviato a un servizio esterno: {1}.",
+            paths.Count, chain ?? Loc.T("provider AI configurato"));
         if (chain is not null && chain.Contains("→"))
-            message += " I provider vengono provati nell'ordine indicato: se il primo fallisce, il diff passa al successivo.";
-        message += " Nessun altro file viene inviato. Questa conferma compare una volta per sessione.";
+            message += Loc.T(" I provider vengono provati nell'ordine indicato: se il primo fallisce, il diff passa al successivo.");
+        message += Loc.T(" Nessun altro file viene inviato. Questa conferma compare una volta per sessione.");
         if (sensitive.Count > 0)
-            message += "\n\nATTENZIONE: questi file sembrano contenere segreti (chiavi, certificati, configurazioni):\n" +
+            message += "\n\n" + Loc.T("ATTENZIONE: questi file sembrano contenere segreti (chiavi, certificati, configurazioni):") + "\n" +
                        string.Join("\n", sensitive.Take(8).Select(p => $"• {Path.GetFileName(p)}")) +
-                       (sensitive.Count > 8 ? $"\n… e altri {sensitive.Count - 8}" : string.Empty) +
-                       "\nTogli dallo Staged i file di cui non vuoi che il contenuto lasci il computer.";
-        message += "\n\nProcedere?";
+                       (sensitive.Count > 8 ? "\n" + Loc.T("… e altri {0}", sensitive.Count - 8) : string.Empty) +
+                       "\n" + Loc.T("Togli dallo Staged i file di cui non vuoi che il contenuto lasci il computer.");
+        message += "\n\n" + Loc.T("Procedere?");
 
         if (!await _dialogs.ConfirmAsync(message, ct))
             return false;
@@ -361,7 +366,7 @@ internal sealed class CommitStore
         CopilotAiService => "GitHub Copilot",
         ClaudeCodeAiService => "Claude Code",
         AnthropicAiService => "Claude API",
-        AiService => "OpenAI-compatibile",
+        AiService => Loc.T("OpenAI-compatibile"),
         _ => null,
     };
 }

@@ -49,10 +49,10 @@ internal sealed class ClaudeCodeAiService : AiServiceBase
 
         if (result.ExitCode != 0)
             throw new InvalidOperationException(
-                $"Claude Code fallito (exit code {result.ExitCode}): {FirstNonEmpty(result.StandardError, result.StandardOutput)}");
+                Loc.T("Claude Code fallito (exit code {0}): {1}", result.ExitCode, FirstNonEmpty(result.StandardError, result.StandardOutput)));
 
         return string.IsNullOrWhiteSpace(result.StandardOutput)
-            ? throw new InvalidOperationException("Claude Code non ha restituito testo.")
+            ? throw new InvalidOperationException(Loc.T("Claude Code non ha restituito testo."))
             : result.StandardOutput;
     }
 

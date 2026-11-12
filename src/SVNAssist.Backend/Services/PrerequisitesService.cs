@@ -36,15 +36,15 @@ internal static class AiProviderGuide
     /// <summary>Requisiti, login e costi del provider scelto, in una frase.</summary>
     internal static string Requirements(string provider) => Normalize(provider) switch
     {
-        "copilot" => "GitHub Copilot: serve un abbonamento Copilot (le richieste possono consumare \"premium request\"), " +
-                     "GitHub CLI con login (gh auth login) e il runtime Copilot (~100 MB, scaricato al primo uso).",
-        "claudecode" => "Claude Code: serve Claude Code installato e il login (/login) con un abbonamento Claude Pro/Max; " +
-                        "usa la quota del tuo abbonamento.",
-        "claude" => "Claude API: serve una API key Anthropic; l'uso è a pagamento a consumo " +
-                    "(Haiku costa meno di Sonnet, Sonnet meno di Opus).",
-        "openai" => "OpenAI-compatibile: con GitHub Models (default) basta il login GitHub (gh auth login) o un token, gratis entro i limiti; " +
-                    "con altri endpoint serve la loro API key (a pagamento, tranne Ollama in locale).",
-        _ => "Automatico: prova in ordine Copilot, Claude Code, Claude API, OpenAI-compatibile; ne basta uno configurato.",
+        "copilot" => Loc.T("GitHub Copilot: serve un abbonamento Copilot (le richieste possono consumare \"premium request\"), " +
+                           "GitHub CLI con login (gh auth login) e il runtime Copilot (~100 MB, scaricato al primo uso)."),
+        "claudecode" => Loc.T("Claude Code: serve Claude Code installato e il login (/login) con un abbonamento Claude Pro/Max; " +
+                              "usa la quota del tuo abbonamento."),
+        "claude" => Loc.T("Claude API: serve una API key Anthropic; l'uso è a pagamento a consumo " +
+                          "(Haiku costa meno di Sonnet, Sonnet meno di Opus)."),
+        "openai" => Loc.T("OpenAI-compatibile: con GitHub Models (default) basta il login GitHub (gh auth login) o un token, gratis entro i limiti; " +
+                          "con altri endpoint serve la loro API key (a pagamento, tranne Ollama in locale)."),
+        _ => Loc.T("Automatico: prova in ordine Copilot, Claude Code, Claude API, OpenAI-compatibile; ne basta uno configurato."),
     };
 
     /// <summary>Pagina utile per configurare il provider scelto.</summary>
@@ -70,25 +70,25 @@ internal static class AiProviderGuide
     /// <summary>Prima scelta (default): fare il login nel terminale. Annulla porta all'alternativa con token/chiave.</summary>
     internal static string LoginPrompt(string provider) => Normalize(provider) switch
     {
-        "claudecode" => "Claude Code non è pronto.\n\nVuoi aprire un terminale per accedere a Claude Code (comando: claude, poi /login)?\n\n" +
-                        "OK = apri il terminale. Annulla = altre opzioni.",
-        _ => "Nessun provider AI pronto.\n\nVuoi aprire un terminale per accedere a GitHub (comando: gh auth login --web)? " +
-             "Dopo il login nel browser, premi di nuovo \"Genera con AI\".\n\n" +
-             "OK = accedi nel terminale. Annulla = usa invece un token / un'altra chiave.",
+        "claudecode" => Loc.T("Claude Code non è pronto.\n\nVuoi aprire un terminale per accedere a Claude Code (comando: claude, poi /login)?\n\n" +
+                              "OK = apri il terminale. Annulla = altre opzioni."),
+        _ => Loc.T("Nessun provider AI pronto.\n\nVuoi aprire un terminale per accedere a GitHub (comando: gh auth login --web)? " +
+                   "Dopo il login nel browser, premi di nuovo \"Genera con AI\".\n\n" +
+                   "OK = accedi nel terminale. Annulla = usa invece un token / un'altra chiave."),
     };
 
     /// <summary>Domanda mostrata quando nessun provider è utilizzabile, specifica per il provider scelto.</summary>
     internal static string MissingProviderPrompt(string provider) => Normalize(provider) switch
     {
-        "copilot" => "GitHub Copilot non è utilizzabile.\n\n" + Requirements("copilot") + "\n\nVuoi aprire la pagina di GitHub Copilot?",
-        "claudecode" => "Claude Code non è utilizzabile.\n\n" + Requirements("claudecode") + "\n\nVuoi aprire la documentazione di Claude Code?",
-        "claude" => "Claude API non è utilizzabile.\n\n" + Requirements("claude") + "\nInserisci la chiave in Tools > Options > SVNAssist > Anthropic API Key.\n\nVuoi aprire la pagina per creare la API key Anthropic?",
-        "openai" => "Il provider OpenAI-compatibile non è utilizzabile.\n\n" + Requirements("openai") + "\nIncolla la chiave in Tools > Options > SVNAssist > AI API Key.\n\nVuoi aprire la pagina per creare il token GitHub gratuito?",
-        _ => "Nessun provider AI trovato per generare i commit. Basta UNA di queste opzioni:\n\n" +
-             "• GitHub Copilot o GitHub CLI: esegui 'gh auth login'\n" +
-             "• Claude: installa Claude Code e fai login, oppure inserisci una Anthropic API Key\n" +
-             "• Gratis: crea un token GitHub e incollalo in Tools > Options > SVNAssist > AI API Key\n\n" +
-             "Vuoi aprire la pagina per creare il token GitHub gratuito?",
+        "copilot" => Loc.T("GitHub Copilot non è utilizzabile.\n\n{0}\n\nVuoi aprire la pagina di GitHub Copilot?", Requirements("copilot")),
+        "claudecode" => Loc.T("Claude Code non è utilizzabile.\n\n{0}\n\nVuoi aprire la documentazione di Claude Code?", Requirements("claudecode")),
+        "claude" => Loc.T("Claude API non è utilizzabile.\n\n{0}\nInserisci la chiave in Tools > Options > SVNAssist > Anthropic API Key.\n\nVuoi aprire la pagina per creare la API key Anthropic?", Requirements("claude")),
+        "openai" => Loc.T("Il provider OpenAI-compatibile non è utilizzabile.\n\n{0}\nIncolla la chiave in Tools > Options > SVNAssist > AI API Key.\n\nVuoi aprire la pagina per creare il token GitHub gratuito?", Requirements("openai")),
+        _ => Loc.T("Nessun provider AI trovato per generare i commit. Basta UNA di queste opzioni:\n\n" +
+                   "• GitHub Copilot o GitHub CLI: esegui 'gh auth login'\n" +
+                   "• Claude: installa Claude Code e fai login, oppure inserisci una Anthropic API Key\n" +
+                   "• Gratis: crea un token GitHub e incollalo in Tools > Options > SVNAssist > AI API Key\n\n" +
+                   "Vuoi aprire la pagina per creare il token GitHub gratuito?"),
     };
 }
 
@@ -196,9 +196,9 @@ internal sealed class PrerequisitesService
     internal const string TortoiseDownloadUrl = "https://tortoisesvn.net/downloads.html";
     internal const string ClaudeCodeDocsUrl = "https://docs.claude.com/en/docs/claude-code/overview";
 
-    private const string GroupRequired = "Obbligatori";
-    private const string GroupOptional = "Opzionali";
-    private const string GroupAi = "Provider AI (ne basta uno)";
+    private static string GroupRequired => Loc.T("Obbligatori");
+    private static string GroupOptional => Loc.T("Opzionali");
+    private static string GroupAi => Loc.T("Provider AI (ne basta uno)");
 
     private readonly ISvnAssistSettings _settings;
     private readonly PrerequisiteProbes _probes;
@@ -225,7 +225,7 @@ internal sealed class PrerequisitesService
         var settingsKey = await _settings.GetAnthropicApiKeyAsync(ct);
         var envKey = _probes.ReadEnvironment("ANTHROPIC_API_KEY");
         var anthropicKeySource = !string.IsNullOrWhiteSpace(settingsKey) ? "Tools > Options"
-            : !string.IsNullOrWhiteSpace(envKey) ? "variabile ANTHROPIC_API_KEY" : null;
+            : !string.IsNullOrWhiteSpace(envKey) ? Loc.T("variabile ANTHROPIC_API_KEY") : null;
 
         var apiKey = await _settings.GetAiApiKeyAsync(ct);
         var endpoint = await _settings.GetAiEndpointAsync(ct);
@@ -241,59 +241,59 @@ internal sealed class PrerequisitesService
             usable.Add("Claude API");
         var openAiKeyOk = !string.IsNullOrWhiteSpace(apiKey) || (AiServiceFactory.IsGitHubModelsEndpoint(endpoint) && token is not null);
         if (Use("openai") && openAiKeyOk)
-            usable.Add("OpenAI-compatibile");
+            usable.Add(Loc.T("OpenAI-compatibile"));
 
         var items = new List<PrerequisiteItem>
         {
-            new(PrerequisiteIds.Svn, GroupRequired, "Client Subversion (svn.exe)", svn is not null,
-                svn ?? "svn.exe non trovato: serve per tutte le operazioni SVN.",
-                "Si apre una finestra con:  winget install --id Slik.Subversion -e\n" +
-                "Oppure installa TortoiseSVN e, nell'installer, abilita \"command line client tools\".\n" +
-                "Poi premi Ricontrolla (se svn non viene trovato, riavvia Visual Studio).",
-                "Installa con winget", "Pagina download"),
+            new(PrerequisiteIds.Svn, GroupRequired, Loc.T("Client Subversion (svn.exe)"), svn is not null,
+                svn ?? Loc.T("svn.exe non trovato: serve per tutte le operazioni SVN."),
+                Loc.T("Si apre una finestra con:  winget install --id Slik.Subversion -e\n" +
+                      "Oppure installa TortoiseSVN e, nell'installer, abilita \"command line client tools\".\n" +
+                      "Poi premi Ricontrolla (se svn non viene trovato, riavvia Visual Studio)."),
+                Loc.T("Installa con winget"), Loc.T("Pagina download")),
 
-            new(PrerequisiteIds.TortoiseSvn, GroupOptional, "TortoiseSVN (diff nativo)", tortoise is not null,
-                tortoise ?? "Opzionale: senza, il diff si vede nel pannello inline.",
-                $"Scarica TortoiseSVN da {TortoiseDownloadUrl}\nNell'installer abilita anche \"command line client tools\".",
-                "Pagina download"),
+            new(PrerequisiteIds.TortoiseSvn, GroupOptional, Loc.T("TortoiseSVN (diff nativo)"), tortoise is not null,
+                tortoise ?? Loc.T("Opzionale: senza, il diff si vede nel pannello inline."),
+                Loc.T("Scarica TortoiseSVN da {0}\nNell'installer abilita anche \"command line client tools\".", TortoiseDownloadUrl),
+                Loc.T("Pagina download")),
 
             new(PrerequisiteIds.GitHubCli, GroupAi, "GitHub CLI (gh)", gh is not null,
-                gh ?? "gh.exe non trovato (per Copilot e GitHub Models).",
-                "Si apre una finestra con:  winget install --id GitHub.cli -e\n" +
-                "Poi premi Ricontrolla. Se gh non viene trovato, riavvia Visual Studio (il PATH non si aggiorna da solo).",
-                gh is null ? "Installa GitHub CLI" : null),
+                gh ?? Loc.T("gh.exe non trovato (per Copilot e GitHub Models)."),
+                Loc.T("Si apre una finestra con:  winget install --id GitHub.cli -e\n" +
+                      "Poi premi Ricontrolla. Se gh non viene trovato, riavvia Visual Studio (il PATH non si aggiorna da solo)."),
+                gh is null ? Loc.T("Installa GitHub CLI") : null),
 
-            new(PrerequisiteIds.GitHubLogin, GroupAi, "GitHub CLI: login", ghLoggedIn,
-                gh is null ? "Installa prima GitHub CLI."
-                    : ghLoggedIn ? "login effettuato" : "non hai ancora fatto login.",
-                "Si apre una finestra con:  gh auth login --hostname github.com --git-protocol https --web\n" +
-                "Conferma il codice nel browser, poi premi Ricontrolla.",
-                gh is not null && !ghLoggedIn ? "Accedi a GitHub" : null),
+            new(PrerequisiteIds.GitHubLogin, GroupAi, Loc.T("GitHub CLI: login"), ghLoggedIn,
+                gh is null ? Loc.T("Installa prima GitHub CLI.")
+                    : ghLoggedIn ? Loc.T("login effettuato") : Loc.T("non hai ancora fatto login."),
+                Loc.T("Si apre una finestra con:  gh auth login --hostname github.com --git-protocol https --web\n" +
+                      "Conferma il codice nel browser, poi premi Ricontrolla."),
+                gh is not null && !ghLoggedIn ? Loc.T("Accedi a GitHub") : null),
 
             new(PrerequisiteIds.ClaudeCode, GroupAi, "Claude Code", claude is not null,
-                claude is null ? "claude.exe non trovato."
-                    : $"{claude} (il login non è verificabile: premi \"Accedi a Claude Code\" se non l'hai mai fatto)",
-                "Si apre una finestra PowerShell con:  irm https://claude.ai/install.ps1 | iex\n" +
-                "Poi premi Ricontrolla ed esegui \"Accedi a Claude Code\" (nella finestra che si apre, /login con il tuo abbonamento).",
-                claude is null ? "Installa Claude Code" : "Accedi a Claude Code",
-                claude is null ? "Pagina documentazione" : null),
+                claude is null ? Loc.T("claude.exe non trovato.")
+                    : Loc.T("{0} (il login non è verificabile: premi \"Accedi a Claude Code\" se non l'hai mai fatto)", claude),
+                Loc.T("Si apre una finestra PowerShell con:  irm https://claude.ai/install.ps1 | iex\n" +
+                      "Poi premi Ricontrolla ed esegui \"Accedi a Claude Code\" (nella finestra che si apre, /login con il tuo abbonamento)."),
+                claude is null ? Loc.T("Installa Claude Code") : Loc.T("Accedi a Claude Code"),
+                claude is null ? Loc.T("Pagina documentazione") : null),
 
             new(PrerequisiteIds.AnthropicKey, GroupAi, "Anthropic API Key", anthropicKeySource is not null,
-                anthropicKeySource is null ? "nessuna chiave" : $"chiave disponibile ({anthropicKeySource})",
-                "Incolla la chiave in Tools > Options > SVNAssist > Anthropic API Key,\n" +
-                "oppure imposta la variabile d'ambiente ANTHROPIC_API_KEY e riavvia Visual Studio."),
+                anthropicKeySource is null ? Loc.T("nessuna chiave") : Loc.T("chiave disponibile ({0})", anthropicKeySource),
+                Loc.T("Incolla la chiave in Tools > Options > SVNAssist > Anthropic API Key,\n" +
+                      "oppure imposta la variabile d'ambiente ANTHROPIC_API_KEY e riavvia Visual Studio.")),
 
-            new(PrerequisiteIds.CopilotRuntime, GroupAi, "Runtime GitHub Copilot (~100 MB)", copilotInstalled,
-                copilotInstalled ? "scaricato" : "si scarica da solo al primo uso con AI Provider = copilot.",
-                "Premi \"Scarica ora\" oppure imposta AI Provider = copilot in Tools > Options > SVNAssist.\n" +
-                "Richiede anche il login a GitHub (gh auth login).",
-                copilotInstalled ? null : "Scarica ora (~100 MB)"),
+            new(PrerequisiteIds.CopilotRuntime, GroupAi, Loc.T("Runtime GitHub Copilot (~100 MB)"), copilotInstalled,
+                copilotInstalled ? Loc.T("scaricato") : Loc.T("si scarica da solo al primo uso con AI Provider = copilot."),
+                Loc.T("Premi \"Scarica ora\" oppure imposta AI Provider = copilot in Tools > Options > SVNAssist.\n" +
+                      "Richiede anche il login a GitHub (gh auth login)."),
+                copilotInstalled ? null : Loc.T("Scarica ora (~100 MB)")),
 
-            new(PrerequisiteIds.OpenAiKey, GroupAi, "API key / token (OpenAI-compatibile)", openAiKeyOk,
-                !string.IsNullOrWhiteSpace(apiKey) ? "chiave in Tools > Options"
-                    : openAiKeyOk ? "token GitHub rilevato (GitHub Models)" : "nessuna chiave né token GitHub.",
-                "Con GitHub Models (default) basta il login GitHub (gh auth login) oppure un token da incollare in\n" +
-                "Tools > Options > SVNAssist > AI API Key. Per OpenAI/Azure incolla la loro API key (a pagamento)."),
+            new(PrerequisiteIds.OpenAiKey, GroupAi, Loc.T("API key / token (OpenAI-compatibile)"), openAiKeyOk,
+                !string.IsNullOrWhiteSpace(apiKey) ? Loc.T("chiave in Tools > Options")
+                    : openAiKeyOk ? Loc.T("token GitHub rilevato (GitHub Models)") : Loc.T("nessuna chiave né token GitHub."),
+                Loc.T("Con GitHub Models (default) basta il login GitHub (gh auth login) oppure un token da incollare in\n" +
+                      "Tools > Options > SVNAssist > AI API Key. Per OpenAI/Azure incolla la loro API key (a pagamento).")),
         };
 
         // Con un provider fisso mostra solo i prerequisiti AI che lo riguardano (in auto, tutti).

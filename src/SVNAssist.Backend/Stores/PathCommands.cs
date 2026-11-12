@@ -40,7 +40,7 @@ internal sealed class PathCommands
 
         if (targets.Count == 0)
         {
-            await InfoAsync("Nessun percorso valido selezionato.");
+            await InfoAsync(Loc.T("Nessun percorso valido selezionato."));
             return;
         }
 
@@ -64,7 +64,7 @@ internal sealed class PathCommands
                 case "diff": await DiffAsync(targets[0], ct); break;
                 case "ignore": await IgnoreAsync(targets, ct); break;
                 case "log": await _host.ShowLogAsync(targets[0].Path); break;
-                default: throw new ArgumentException($"Comando sconosciuto: {command}");
+                default: throw new ArgumentException(Loc.T("Comando sconosciuto: {0}", command));
             }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -74,22 +74,22 @@ internal sealed class PathCommands
         catch (Exception ex)
         {
             BackendLog.Warn($"Comando percorso {command}: {ex.Message}");
-            await InfoAsync($"Errore ({command}):\n{ex.Message}");
+            await InfoAsync(Loc.T("Errore ({0}):\n{1}", command, ex.Message));
         }
     }
 
     private Task InfoAsync(string message) => _host.PromptAsync(message, ["OK"]);
 
-    private async Task<bool> ConfirmAsync(string message) => await _host.PromptAsync(message, ["OK", "Annulla"]) == 0;
+    private async Task<bool> ConfirmAsync(string message) => await _host.PromptAsync(message, ["OK", Loc.T("Annulla")]) == 0;
 
     private Task UpdateAsync(List<SvnTarget> targets, CancellationToken ct) => UpdateAsync(targets, null, ct);
 
     private async Task UpdateToRevisionAsync(List<SvnTarget> targets, CancellationToken ct)
     {
-        var message = "Aggiorna alla revisione indicata (numero intero positivo oppure HEAD).";
+        var message = Loc.T("Aggiorna alla revisione indicata (numero intero positivo oppure HEAD).");
         while (true)
         {
-            var typed = await _host.PromptTextAsync(message, "Revisione", "HEAD");
+            var typed = await _host.PromptTextAsync(message, Loc.T("Revisione"), "HEAD");
             if (typed is null)
                 return;
             if (SvnRevision.TryNormalize(typed, out var revision))
@@ -98,7 +98,7 @@ internal sealed class PathCommands
                 return;
             }
 
-            message = $"\"{typed.Trim()}\" non è una revisione valida: scrivi un numero intero positivo (es. 1234) oppure HEAD.";
+            message = Loc.T("\"{0}\" non è una revisione valida: scrivi un numero intero positivo (es. 1234) oppure HEAD.", typed.Trim());
         }
     }
 
@@ -106,7 +106,7 @@ internal sealed class PathCommands
     {
         foreach (var t in targets)
             await _svn.CleanupAsync(t.Path, ct);
-        await InfoAsync("Cleanup completato.");
+        await InfoAsync(Loc.T("Cleanup completato."));
         await _refresh();
     }
 
@@ -114,12 +114,12 @@ internal sealed class PathCommands
     {
         if (targets.Any(t => t.IsDirectory))
         {
-            await InfoAsync("Il lock si applica ai singoli file: seleziona uno o più file.");
+            await InfoAsync(Loc.T("Il lock si applica ai singoli file: seleziona uno o più file."));
             return;
         }
 
         var paths = targets.Select(t => t.Path).ToList();
-        var message = await _host.PromptTextAsync("Blocca (svn lock):\n" + SvnTarget.FormatList(paths) + "\n\nMessaggio facoltativo:", "Messaggio", string.Empty);
+        var message = await _host.PromptTextAsync(Loc.T("Blocca (svn lock):\n{0}\n\nMessaggio facoltativo:", SvnTarget.FormatList(paths)), Loc.T("Messaggio"), string.Empty);
         if (message is null)
             return;
 
@@ -129,13 +129,12 @@ internal sealed class PathCommands
         }
         catch (InvalidOperationException ex) when (SvnErrors.IsLockedByOther(ex.Message))
         {
-            if (!await ConfirmAsync("Almeno un file è già bloccato da un altro utente.\n\n" + ex.Message
-                    + "\n\nRubare il lock lo toglie a lui: potrebbe perdere il diritto di committare il file. Procedere?"))
+            if (!await ConfirmAsync(Loc.T("Almeno un file è già bloccato da un altro utente.\n\n{0}\n\nRubare il lock lo toglie a lui: potrebbe perdere il diritto di committare il file. Procedere?", ex.Message)))
                 return;
             await _svn.LockAsync(paths, message, force: true, ct);
         }
 
-        await InfoAsync($"Bloccati (lock) {paths.Count} file.");
+        await InfoAsync(Loc.T("Bloccati (lock) {0} file.", paths.Count));
         await _refresh();
     }
 
@@ -143,12 +142,12 @@ internal sealed class PathCommands
     {
         if (targets.Any(t => t.IsDirectory))
         {
-            await InfoAsync("L'unlock si applica ai singoli file: seleziona uno o più file.");
+            await InfoAsync(Loc.T("L'unlock si applica ai singoli file: seleziona uno o più file."));
             return;
         }
 
         await _svn.UnlockAsync(targets.Select(t => t.Path).ToList(), ct);
-        await InfoAsync("Sbloccati (unlock).");
+        await InfoAsync(Loc.T("Sbloccati (unlock)."));
         await _refresh();
     }
 
@@ -159,12 +158,12 @@ internal sealed class PathCommands
         foreach (var t in targets)
         {
             var r = revision is null ? await _svn.UpdateAsync(t.Path, ct) : await _svn.UpdateToRevisionAsync(t.Path, revision, ct);
-            last = r.Revision is { } rev ? $"Aggiornato alla revisione {rev}." : "Update completato.";
+            last = r.Revision is { } rev ? Loc.T("Aggiornato alla revisione {0}.", rev) : Loc.T("Update completato.");
             conflicts.AddRange(r.ConflictedPaths);
         }
 
         if (conflicts.Count > 0)
-            last += $"\n\nFile in conflitto ({conflicts.Count}):\n" + SvnTarget.FormatList(conflicts);
+            last += "\n\n" + Loc.T("File in conflitto ({0}):", conflicts.Count) + "\n" + SvnTarget.FormatList(conflicts);
         await InfoAsync(last);
         await _refresh();
     }
@@ -193,28 +192,28 @@ internal sealed class PathCommands
 
         if (toAdd.Count == 0)
         {
-            await InfoAsync("Nessun file non versionato da aggiungere.");
+            await InfoAsync(Loc.T("Nessun file non versionato da aggiungere."));
             return;
         }
 
         if (targets.Any(t => t.IsDirectory)
-            && !await ConfirmAsync($"Aggiungere a SVN {toAdd.Count} elementi non versionati?\n(Attenzione a bin/, obj/, .vs/, packages/)\n\n"
-                + SvnTarget.FormatList(toAdd.Select(p => Path.GetFileName(p)).ToList())))
+            && !await ConfirmAsync(Loc.T("Aggiungere a SVN {0} elementi non versionati?\n(Attenzione a bin/, obj/, .vs/, packages/)\n\n{1}",
+                toAdd.Count, SvnTarget.FormatList(toAdd.Select(p => Path.GetFileName(p)).ToList()))))
             return;
 
         await _svn.AddAsync(toAdd, ct);
-        await InfoAsync($"Aggiunti {toAdd.Count} elementi.");
+        await InfoAsync(Loc.T("Aggiunti {0} elementi.", toAdd.Count));
         await _refresh();
     }
 
     private async Task RevertAsync(List<SvnTarget> targets, CancellationToken ct)
     {
         var paths = targets.Select(t => t.Path).ToList();
-        if (!await ConfirmAsync("Annullare le modifiche locali su:\n" + SvnTarget.FormatList(paths) + "\n\nL'operazione non è reversibile."))
+        if (!await ConfirmAsync(Loc.T("Annullare le modifiche locali su:\n{0}\n\nL'operazione non è reversibile.", SvnTarget.FormatList(paths))))
             return;
 
         await _svn.RevertAsync(paths, ct);
-        await InfoAsync("Modifiche annullate.");
+        await InfoAsync(Loc.T("Modifiche annullate."));
         await _refresh();
     }
 
@@ -231,7 +230,7 @@ internal sealed class PathCommands
     {
         foreach (var t in targets)
             await _svn.AddToIgnoreListAsync(t.Path, ct);
-        await InfoAsync("Aggiunto a svn:ignore. La modifica alla proprietà va committata sulla cartella padre.");
+        await InfoAsync(Loc.T("Aggiunto a svn:ignore. La modifica alla proprietà va committata sulla cartella padre."));
         await _refresh();
     }
 }

@@ -57,13 +57,13 @@ namespace SVNAssist.Host
         {
             var user = new TextBox { Text = defaultUser, MinWidth = 280 };
             var pwd = new PasswordBox { MinWidth = 280 };
-            var remember = new CheckBox { Content = "Ricorda", IsChecked = true, Margin = new Thickness(0, 8, 0, 0) };
+            var remember = new CheckBox { Content = Loc.T("Ricorda"), IsChecked = true, Margin = new Thickness(0, 8, 0, 0) };
             remember.SetResourceReference(Control.ForegroundProperty, EnvironmentColors.ToolWindowTextBrushKey);
             var panel = new StackPanel();
-            panel.Children.Add(Field("Utente", user));
+            panel.Children.Add(Field(Loc.T("Utente"), user));
             panel.Children.Add(Field("Password", pwd));
             panel.Children.Add(remember);
-            var msg = "Il server SVN richiede l'accesso." + (string.IsNullOrWhiteSpace(detail) ? "" : "\n" + detail);
+            var msg = Loc.T("Il server SVN richiede l'accesso.") + (string.IsNullOrWhiteSpace(detail) ? "" : "\n" + detail);
             return ShowFields(msg, panel, new Control[] { user, pwd })
                 ? new[] { user.Text, pwd.Password, remember.IsChecked == true ? "1" : "0" }
                 : null;
@@ -81,7 +81,7 @@ namespace SVNAssist.Host
 
         private static bool ShowFields(string message, UIElement fields, Control[] focusOrder)
         {
-            var d = new PromptDialog(message, new[] { "OK", "Annulla" });
+            var d = new PromptDialog(message, new[] { "OK", Loc.T("Annulla") });
             d._inputs = fields;
             d.AddInputs();
             d.Loaded += (s, e) => { focusOrder[0].Focus(); (focusOrder[0] as TextBox)?.SelectAll(); };

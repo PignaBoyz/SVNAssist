@@ -109,8 +109,8 @@ public sealed class ProcessRunner : IProcessRunner
             {
                 kill();
                 throw new InvalidOperationException(
-                    $"L'output di {Path.GetFileName(fileName)} è troppo grande (oltre {_maxOutputChars / (1024 * 1024)} MB): operazione interrotta. " +
-                    "Restringi la selezione (meno file) e riprova.");
+                    Loc.T("L'output di {0} è troppo grande (oltre {1} MB): operazione interrotta. " +
+                          "Restringi la selezione (meno file) e riprova.", Path.GetFileName(fileName), _maxOutputChars / (1024 * 1024)));
             }
 
             builder.Append(buffer, 0, read);

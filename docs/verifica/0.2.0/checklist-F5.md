@@ -36,7 +36,7 @@ Segna ✅ / ❌ (+ una riga su cosa vedi).
 **Procedura guidata AI e feedback** (con un provider NON configurato: Tools > Options > Provider AI = "Automatico", niente `gh`/Claude/chiavi)
 17. [ ] "Genera con AI" apre la procedura guidata (non un prompt); Esc la chiude, Tab resta dentro il dialogo; Avanti è disabilitato finché non scegli un provider.
 18. [ ] Scegli un provider: al passo 2 compaiono solo i suoi prerequisiti; installa ciò che manca dal pulsante (si apre il terminale) e, tornando in VS, lo stato diventa verde da solo (o con Ricontrolla). Passo 3: login o API key; passo 4: modello consigliato preselezionato; Fine salva (verifica in Tools > Options) e genera il messaggio.
-19. [ ] Extensions > SVNAssist > "Cambia provider AI..." apre Changes con la procedura; "Faccio io" apre Tools > Options > SVNAssist; Annulla non cambia nessuna impostazione.
+19. [ ] Extensions > SVNAssist > "Change AI Provider..." apre Changes con la procedura; "Faccio io" apre Tools > Options > SVNAssist; Annulla non cambia nessuna impostazione.
 20. [ ] "Genera con AI" con 0 file in Staged: banner giallo ben visibile con icona (a ogni clic si ridisegna e lampeggia); durante la generazione il pulsante è disabilitato con spinner e "Generazione in corso…"; un errore del provider compare in rosso.
 21. [ ] Pulsante in alto "SVN Update"; dopo l'update il messaggio in basso ("Aggiornato alla revisione N.") è verde con icona e un breve alone che sfuma.
 22. [ ] Barra in basso: "Prerequisiti" verde se tutto ok; senza svn o senza provider AI è rosso con icona di avviso e, cliccandolo, apre la procedura sui prerequisiti mancanti (con "Configura l'AI" e "Faccio io").
@@ -57,3 +57,14 @@ Segna ✅ / ❌ (+ una riga su cosa vedi).
 33. [ ] Ctrl+clic su un'altra revisione: compare "File cambiati tra rA e rB" con l'elenco; clic su un file = diff nativo rA ↔ rB; Chiudi (o clic semplice su una revisione) torna al dettaglio.
 34. [ ] Esplora soluzioni > cartella > SVN > Diff: la finestra Log mostra "Modifiche in <cartella>" con i file modificati; clic su un file = diff nativo BASE ↔ working copy; "Apri come patch" apre un unico .diff.
 35. [ ] Diff di un file (Changes o Esplora soluzioni) = diff nativo di VS anche con TortoiseSVN disinstallato; dopo aver chiuso VS la cartella %TEMP%\SVNAssist\diff non contiene più le sottocartelle di questa sessione.
+
+**Lingua dell'interfaccia (Italiano / English)** (tieni aperte Changes e Log, con la procedura guidata AI a portata di mano)
+36. [ ] Extensions > SVNAssist > "Language / Lingua" è un sottomenu con tre voci ("Automatica / Automatic (lingua di Visual Studio)", "Italiano", "English") a scelta esclusiva: la spunta è su una sola, in modo coerente con Tools > Options > SVNAssist > Generale > "Lingua dell'interfaccia" (default Automatica).
+37. [ ] Con Visual Studio in italiano e "Automatica": finestre e messaggi in italiano. Scegli "English": **subito** (senza riavviare VS) Changes e Log passano all'inglese — pulsanti, tooltip, menu ⋯ e ▾, sezioni (Changes / Unversioned), nomi degli stati (Modified, Added...), barra di stato, "Prerequisites", il messaggio iniziale del Log; riscegli "Italiano" e tutto torna in italiano.
+38. [ ] In inglese: apri la procedura guidata (Extensions > SVNAssist > Change AI Provider...) e i prerequisiti: titoli, istruzioni, dettagli e pulsanti (Install with winget, Sign in to GitHub...) sono in inglese; cambiando lingua con la procedura aperta si riscrivono al volo (testo digitato e passo corrente restano).
+39. [ ] In inglese: provoca un errore (Update su una cartella non working copy, commit senza messaggio, "Genera con AI" con 0 file in Staged): i messaggi sono in inglese e hanno gli stessi colori/icone di prima (errore rosso, avviso giallo, esito verde); il messaggio di svn.exe resta com'è. Un messaggio già scritto resta nella lingua in cui è nato fino al successivo.
+40. [ ] In inglese: i dialoghi nativi (conferma Revert/Delete, scelta risoluzione conflitto, "Update to revision", Lock, login SVN con "Remember"/"User") sono in inglese, con "Cancel" al posto di "Annulla".
+41. [ ] Tools > Options > SVNAssist: nomi e descrizioni delle impostazioni e le voci delle tendine sono nella lingua scelta (le categorie "Commit message AI"/"Generale" si aggiornano al riavvio di VS); cambia "Lingua dell'interfaccia" da qui e dopo OK le finestre cambiano al volo.
+42. [ ] La lingua dei commit message è indipendente: con interfaccia inglese e "Lingua dei commit message" = Italiano, il messaggio generato è in italiano (e viceversa); non cambia con il menu Lingua.
+43. [ ] Con Visual Studio in inglese (o un'altra lingua) e "Automatica": l'interfaccia è in inglese; con VS in italiano è in italiano.
+44. [ ] Dopo aver chiuso e riaperto VS la scelta è mantenuta.

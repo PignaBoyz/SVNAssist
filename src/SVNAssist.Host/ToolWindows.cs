@@ -17,7 +17,7 @@ namespace SVNAssist.Host
         {
             _viewName = view;
             Caption = caption;
-            var host = SVNAssistPackage.Instance?.Host ?? throw new InvalidOperationException("Package SVNAssist non inizializzato.");
+            var host = SVNAssistPackage.Instance?.Host ?? throw new InvalidOperationException(Loc.T("Package SVNAssist non inizializzato."));
             _view = new WebViewHost(_viewName, host);
             Content = _view; // va impostato nel costruttore: dopo, l'Init del frame fallisce con E_UNEXPECTED
         }

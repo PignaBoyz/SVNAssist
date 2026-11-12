@@ -17,7 +17,7 @@ page = page.replace(/<meta http-equiv="Content-Security-Policy"[^>]*>\n?/, ''); 
 let n = 0;
 page = page.replace(/<link rel="stylesheet" href="([^"]+)">/g, (_, h) => { n++; return '<style>\n' + read(ui + h) + '</style>'; });
 page = page.replace(/<script src="([^"]+)"><\/script>/g, (_, h) => { n++; return '<script>\n' + safe(h, read(ui + h)) + '</script>'; });
-if (n !== 2 + 9 || /(src|href)="(js|css)\//.test(page)) throw new Error('index.html: risorse non inlineate (' + n + ')');
+if (n !== 2 + 10 || /(src|href)="(js|css)\//.test(page)) throw new Error('index.html: risorse non inlineate (' + n + ')');
 // literal JS valido dentro <script>: niente "</script" e niente "<!--"
 const uidoc = 'window.__UI_DOC = ' + JSON.stringify(page).replace(/<\/script/gi, '<\\/script').replace(/<!--/g, '<\\!--') + ';';
 

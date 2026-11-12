@@ -71,7 +71,7 @@ internal static class ProcessRunnerExtensions
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested && timeoutCts.IsCancellationRequested)
         {
-            throw new TimeoutException($"{description} non ha risposto entro {timeout.TotalSeconds:0} secondi ed è stato interrotto.");
+            throw new TimeoutException(Loc.T("{0} non ha risposto entro {1:0} secondi ed è stato interrotto.", description, timeout.TotalSeconds));
         }
     }
 }

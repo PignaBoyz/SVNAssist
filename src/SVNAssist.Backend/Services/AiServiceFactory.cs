@@ -92,7 +92,7 @@ internal sealed class AiServiceFactory : IAiServiceFactory
         }
 
         if (Use("openai") && await CreateOpenAiCompatibleAsync(ct) is { } openAi)
-            candidates.Add(("OpenAI-compatibile", openAi));
+            candidates.Add((Loc.T("OpenAI-compatibile"), openAi));
 
         return candidates.Count switch
         {
@@ -193,6 +193,6 @@ internal sealed class FallbackAiService : IAiService
             }
         }
 
-        throw new InvalidOperationException("Nessun provider AI ha risposto.\n" + string.Join("\n", errors));
+        throw new InvalidOperationException(Loc.T("Nessun provider AI ha risposto.") + "\n" + string.Join("\n", errors));
     }
 }
