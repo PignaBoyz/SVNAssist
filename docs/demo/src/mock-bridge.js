@@ -32,7 +32,7 @@
     'Commit in corso...': 'Commit in progress...', 'Update in corso...': 'Update in progress...', 'Cleanup in corso...': 'Cleanup in progress...',
     'Cleanup completato.': 'Cleanup completed.',
     'Aggiunta a SVN in corso...': 'Adding to SVN...', 'Eliminazione in corso...': 'Deleting...', 'Lock in corso...': 'Locking...', 'Unlock in corso...': 'Unlocking...', 'Revert in corso...': 'Revert in progress...',
-    'Risoluzione conflitto in corso...': 'Resolving the conflict...', 'Aggiornamento ignore list in corso...': 'Updating the ignore list...',
+    'Risoluzione conflitto in corso...': 'Resolving the conflict...', 'Risoluzione conflitti ad albero in corso...': 'Resolving tree conflicts...', 'Nessun conflitto ad albero da risolvere.': 'No tree conflicts to resolve.', 'Aggiornamento ignore list in corso...': 'Updating the ignore list...',
     'Nessun elemento non versionato da aggiungere.': 'No unversioned item to add.', 'Seleziona un file da eliminare.': 'Select a file to delete.',
     'Seleziona un file modificato non ancora bloccato.': 'Select a modified file that is not locked yet.', 'Seleziona un file bloccato da te.': 'Select a file locked by you.',
     'Nessun elemento idoneo per SVN Revert.': 'No item suitable for SVN Revert.', 'Seleziona un file in conflitto da risolvere.': 'Select a conflicted file to resolve.',
@@ -56,7 +56,7 @@
     [/^Elemento non valido: .*$/, 'Invalid item: refresh the list and try again.'], [/^"(.*)" non è una revisione valida: .*$/, '"$1" is not a valid revision: type a positive integer (e.g. 1234) or HEAD.'],
     [/^File aperto: (.+)$/, 'File opened: $1'], [/^Merge da (.+)$/, 'Merge from $1'], [/^Lettura delle revisioni da unire\.\.\.$/, 'Reading the revisions to merge...'], [/^(\d+) revisioni da unire\.$/, '$1 revisions to merge.'],
     [/^Nessuna revisione da unire: (.+) è già allineato\.$/, 'No revisions to merge: $1 is already up to date.'], [/^Anteprima completata\.$/, 'Preview completed.'], [/^Merge eseguito, da committare\.$/, 'Merge done, ready to commit.'], [/^Merge eseguito, da committare\. Conflitti da risolvere in Changes: (\d+)\.$/, 'Merge done, ready to commit. Conflicts to resolve in Changes: $1.'],
-    [/^(\d+) file in conflitto: risolvili nella sezione Conflitti, poi committa\.$/, '$1 conflicted files: resolve them in the Conflicts section, then commit.'], [/^Conflitto risolto: (.+)$/, 'Conflict resolved: $1'],
+    [/^(\d+) file in conflitto: risolvili nella sezione Conflitti, poi committa\.$/, '$1 conflicted files: resolve them in the Conflicts section, then commit.'], [/^Conflitti ad albero risolti: (\d+)\.$/, 'Tree conflicts resolved: $1.'], [/^Conflitto risolto: (.+)$/, 'Conflict resolved: $1'],
     [/^Editor di merge aperto \(vsDiffMerge\): .*$/, 'Merge editor opened (vsDiffMerge): save the result, then press "Mark as resolved".'], [/^Editor di merge chiuso senza salvare: .*$/, 'Merge editor closed without saving: the file still has the conflict markers.'],
     [/^Merge completato\.$/, 'Merge completed.'],
     [/^Seleziona almeno una revisione da unire\.$/, 'Select at least one revision to merge.'], [/^Merge completato: rivedi le modifiche e committa\.$/, 'Merge completed: review the changes and commit.'],
@@ -139,7 +139,7 @@
         count: commitSet().files.length, all: commitSet().all, recent: (S.recentMsgs || []).slice() },
       view: v.view, theme: { mode: theme.mode, kind: kindOf() }, sections, status: { msg: tr(msg), err: !!v.err || /^Errore/.test(msg), seq: v.statusSeq || 0, ...(/E155004/.test(msg) ? { action: { label: tr('Esegui Cleanup'), cmd: 'cleanup' } } : {}) }, prereq: prereq(), loading: !!v.loading, wizard: wizardSnap(), revPicker: rpSnap(), switchPicker: swSnap(),
       ...(v.mergeBanner && commitSet().files.length ? { merge: { text: tr(v.mergeBanner.text), conflicts: S.files.filter(f => f.st === 'C').length } } : {}),
-      conflicts: S.files.filter(f => f.st === 'C').map(f => ({ key: key('changes', f.path), path: fwd(f.path), name: base(f.path), kind: 'text', files: cflAux(f).map(fwd) })),
+      conflicts: S.files.filter(f => f.st === 'C').map(f => ({ key: key('changes', f.path), path: fwd(f.path), name: base(f.path), kind: f.tree ? 'tree' : 'text', files: f.tree ? [] : cflAux(f).map(fwd) })),
     };
   }
   function logMatch(e) {   // stessi filtri del backend: sottostringhe senza maiuscole, date incluse
@@ -232,6 +232,7 @@
     mergeUndo: () => mgUndo(),
     mergeResolve: () => { S.ui.statusOpen = true; S.ui.view = 'dock'; S.ui.seOpen = false; S.ui.menu = null; render(); },
     conflictOp: a => conflictOp(a.op, a.key),
+    resolveTreeConflicts: () => resolveTreeConflicts(),
     mergeDismiss: () => { S.vm.mergeBanner = null; render(); },
     mergeToggle: a => { const m = S.lvm.merge; if (m && !m.busy && mgEligible(m.name).some(r => r.rev === +a.rev)) { m.sel = m.sel.includes(+a.rev) ? m.sel.filter(x => x !== +a.rev) : m.sel.concat(+a.rev); m.result = null; render(); } },
     mergeClear: () => { const m = S.lvm.merge; if (m) { m.sel = []; m.result = null; render(); } },

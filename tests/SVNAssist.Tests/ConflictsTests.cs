@@ -280,6 +280,30 @@ public class ConflictsTests
     }
 
     [Fact]
+    public async Task ResolveTreeConflicts_TuttiInUnColpo_ConfermaConElenco_UnErroreNonBloccaGliAltri()
+    {
+        using var f = new Fixture();
+        f.ConflictWithAuxFiles();   // un conflitto di testo: non va toccato
+        f.Svn.Statuses.Add(new SvnFileStatus("a.cs", SvnStatusKind.Conflicted, IsTreeConflict: true));
+        f.Svn.Statuses.Add(new SvnFileStatus("b.cs", SvnStatusKind.Conflicted, IsTreeConflict: true));
+        f.Svn.Statuses.Add(new SvnFileStatus("c.cs", SvnStatusKind.Conflicted, IsTreeConflict: true));
+        f.Svn.ResolveFailPaths.Add(Path.Combine(Wc, "b.cs"));
+        await f.Store.RefreshAsync(Ct);
+
+        await f.Cmd("resolveTreeConflicts");
+
+        Assert.Equal([(Path.Combine(Wc, "a.cs"), SvnConflictChoice.Working), (Path.Combine(Wc, "c.cs"), SvnConflictChoice.Working)], f.Svn.Resolved);
+        var ask = Assert.Single(f.Dialogs.Messages);
+        Assert.Contains("a.cs", ask); Assert.Contains("b.cs", ask); Assert.Contains("c.cs", ask); Assert.DoesNotContain("README", ask);
+        Assert.Contains("2 conflitti ad albero risolti, 1 falliti", f.Snap.Status.Msg);
+        Assert.Contains("b.cs", f.Snap.Status.Msg);
+
+        f.Svn.Resolved.Clear(); f.Dialogs.Messages.Clear(); f.Dialogs.ConfirmResult = false;
+        await f.Cmd("resolveTreeConflicts");
+        Assert.Empty(f.Svn.Resolved);   // conferma negata: nulla
+    }
+
+    [Fact]
     public async Task ConflictOp_Edit_AvviaLEditorConBaseMiaLoroEFileDaRisolvere()
     {
         using var f = new Fixture();

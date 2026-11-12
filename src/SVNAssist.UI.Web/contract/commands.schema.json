@@ -263,6 +263,27 @@
       }
     },
     {
+      "title": "resolveTreeConflicts",
+      "description": "Sezione Conflitti: \"Segna tutti come risolti\" per i conflitti ad albero. Conferma con l'elenco, poi svn resolve --accept working su ognuno; un errore su uno non ferma gli altri e viene riportato nel messaggio di stato.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "resolveTreeConflicts"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
       "title": "mergeResolve",
       "description": "Log in modalita merge: Risolvi i conflitti. Porta in primo piano la finestra Changes (sezione Conflitti).",
       "type": "object",

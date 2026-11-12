@@ -99,7 +99,15 @@ internal sealed class FakeSvnService : ISvnService
     public Task DeleteAsync(IEnumerable<string> paths, CancellationToken ct, bool force = false) { Deleted.Add(paths.ToList()); DeleteForced.Add(force); return Task.CompletedTask; }
     public List<bool> RevertRecursive { get; } = [];
     public Task RevertAsync(IEnumerable<string> paths, CancellationToken ct, bool recursive = true) { Reverted.Add(paths.ToList()); RevertRecursive.Add(recursive); return Task.CompletedTask; }
-    public Task ResolveAsync(string path, SvnConflictChoice accept, CancellationToken ct) { Resolved.Add((path, accept)); return Task.CompletedTask; }
+    /// <summary>Percorsi per cui <see cref="ResolveAsync"/> fallisce (prova della risoluzione di gruppo con un errore in mezzo).</summary>
+    public HashSet<string> ResolveFailPaths { get; } = [];
+    public Task ResolveAsync(string path, SvnConflictChoice accept, CancellationToken ct)
+    {
+        if (ResolveFailPaths.Contains(path))
+            throw new InvalidOperationException("svn: E155010: boom " + Path.GetFileName(path));
+        Resolved.Add((path, accept));
+        return Task.CompletedTask;
+    }
     public Task AddToIgnoreListAsync(string path, CancellationToken ct) { Ignored.Add(path); return Task.CompletedTask; }
     public Task<UpdateResult> UpdateAsync(string workingCopyPath, CancellationToken ct)
         => UpdateError is not null ? throw new InvalidOperationException(UpdateError) : Task.FromResult(new UpdateResult(7, UpdateConflicts));

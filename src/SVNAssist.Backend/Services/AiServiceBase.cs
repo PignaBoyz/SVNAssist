@@ -82,7 +82,7 @@ public abstract class AiServiceBase : IAiService
         timeoutCts.CancelAfter(CallTimeout);
         try
         {
-            var answer = (await CompleteAsync(systemPrompt, TrimToMaxChars(userMessage, MaxUserMessageChars), timeoutCts.Token))?.Trim();
+            var answer = CleanAnswer(await CompleteAsync(systemPrompt, TrimToMaxChars(userMessage, MaxUserMessageChars), timeoutCts.Token));
             // Una risposta vuota non è un successo: senza errore l'utente vedrebbe "generato" ma nessun testo.
             if (string.IsNullOrEmpty(answer))
                 throw new InvalidOperationException(Loc.T("Il provider AI ha risposto con un messaggio vuoto (modello sovraccarico o filtro di contenuto): riprova."));
@@ -93,6 +93,34 @@ public abstract class AiServiceBase : IAiService
             throw new TimeoutException(
                 Loc.T("Il provider AI non ha risposto entro {0:0.#} minuti: richiesta interrotta.", CallTimeout.TotalMinutes));
         }
+    }
+
+    /// <summary>
+    /// Toglie dalla risposta AI l'involucro che non fa parte del messaggio: blocco di codice markdown (``` con linguaggio facoltativo,
+    /// anche non chiuso) e virgolette che avvolgono tutto il testo. Un solo punto, usato anche per i messaggi recenti gia' salvati.
+    /// </summary>
+    public static string CleanAnswer(string? text)
+    {
+        var t = (text ?? "").Trim();
+        for (var i = 0; i < 3; i++) // al piu' qualche involucro annidato (virgolette dentro il blocco, ecc.)
+        {
+            var before = t;
+            if (t.StartsWith("```", StringComparison.Ordinal))
+            {
+                var nl = t.IndexOf('\n');
+                t = nl < 0 ? "" : t[(nl + 1)..].TrimEnd(); // salta la riga di apertura ("```" o "```text")
+                if (t.EndsWith("```", StringComparison.Ordinal))
+                    t = t[..^3];
+                t = t.Trim();
+            }
+            else if (t.EndsWith("```", StringComparison.Ordinal) && !t[..^3].Contains("```"))
+                t = t[..^3].Trim(); // chiusura rimasta senza apertura
+            if (t.Length >= 2 && ((t[0] == '"' && t[^1] == '"' && !t[1..^1].Contains('"')) || (t[0] == '“' && t[^1] == '”')))
+                t = t[1..^1].Trim();
+            if (t == before)
+                break;
+        }
+        return t;
     }
 
     private async Task<string> GetDiffContextAsync(string diff, string language, CancellationToken ct)

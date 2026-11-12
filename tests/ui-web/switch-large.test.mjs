@@ -40,6 +40,47 @@ test('500 voci: ordine per nome (numerico, ignora le maiuscole), per data (piu r
   assert.equal(big[1].name, 'branches/feature-Area-1', 'l\'elenco in ingresso non viene toccato');
 });
 
+test('vista estesa: filtro per autore (uguale, senza maiuscole), per intervallo di date (estremi inclusi), combinati con nome e tipo', () => {
+  const mk = (name, kind, author, date, rev) => ({ name, kind, current: false, rev, author, date: date && new Date(date).toISOString() });
+  const L = [mk('trunk', 'trunk', 'mrossi', '2026-03-10T12:00:00Z', 90), mk('branches/a', 'branch', 'lbianchi', '2026-03-01T12:00:00Z', 70), mk('branches/b', 'branch', 'MRossi', '2026-03-05T12:00:00Z', 80),
+    mk('tags/v1', 'tag', 'gverdi', '2026-02-20T12:00:00Z', 5), mk('tags/v2', 'tag', '', '', 0)];
+  const names = o => U.swFilter(L, o).map(i => i.name);
+  assert.deepEqual(names({ author: 'mrossi' }), ['trunk', 'branches/b']); assert.deepEqual(names({ author: ' LBIANCHI ' }), ['branches/a']); assert.deepEqual(names({ author: 'nessuno' }), []);
+  assert.deepEqual(names({ from: '2026-03-01' }), ['trunk', 'branches/a', 'branches/b'], 'da incluso; senza data = escluso');
+  assert.deepEqual(names({ to: '2026-03-05' }), ['branches/a', 'branches/b', 'tags/v1'], 'a incluso (tutto il giorno)');
+  assert.deepEqual(names({ from: '2026-03-02', to: '2026-03-05' }), ['branches/b']);
+  assert.deepEqual(names({ from: '2026-03-10', to: '2026-03-01' }), [], 'intervallo invertito: nessun risultato, nessun errore');
+  assert.deepEqual(names({ author: 'mrossi', from: '2026-03-06' }), ['trunk']); assert.deepEqual(names({ kind: 'branch', author: 'mrossi' }), ['branches/b']); assert.deepEqual(names({ q: 'tags', to: '2026-12-31' }), ['tags/v1']);
+  // ordinamenti per autore e per revisione (numerico), a parita' per nome
+  assert.deepEqual(names({ sort: 'author' }), ['tags/v2', 'tags/v1', 'branches/a', 'branches/b', 'trunk'], 'senza autore, gverdi, lbianchi, mrossi/MRossi (stesso autore: per nome)');
+  assert.deepEqual(names({ sort: 'author', desc: true }), ['branches/b', 'trunk', 'branches/a', 'tags/v1', 'tags/v2']);
+  assert.deepEqual(names({ sort: 'rev' }), ['tags/v2', 'tags/v1', 'branches/a', 'branches/b', 'trunk']); assert.deepEqual(names({ sort: 'rev', desc: true }), ['trunk', 'branches/b', 'branches/a', 'tags/v1', 'tags/v2']);
+  assert.deepEqual([...U.swAuthors(L)], ['gverdi', 'lbianchi', 'mrossi'], 'autori distinti (senza maiuscole), senza vuoti');
+  // preset "ultimi N giorni": data locale di N giorni prima
+  const now = new Date(2026, 5, 15, 12).getTime();
+  assert.equal(U.swPreset(7, now), '2026-06-08'); assert.equal(U.swPreset(30, now), '2026-05-16'); assert.equal(U.swPreset(90, now), '2026-03-17');
+  // sui 500 voci: i filtri combinati restano coerenti con la lista completa
+  const au = U.swFilter(big, { author: 'lbianchi' }); assert.ok(au.length > 200 && au.every(i => i.author === 'lbianchi'));
+  const win = U.swFilter(big, { from: '2026-02-01', to: '2026-02-28' }); assert.ok(win.length > 0 && win.every(i => { const d = new Date(i.date); return d >= new Date(2026, 1, 1) && d < new Date(2026, 2, 1); }));
+});
+
+test('vista estesa: filtri autore/periodo/date, "Azzera filtri" (attivo solo con filtri), contatore, intestazioni ordinabili per autore e rev', () => {
+  const none = U.changesHTML.switchHTML(SW(), { ext: true, sel: '' });
+  assert.match(none, /id="sw-a"[\s\S]*Tutti gli autori[\s\S]*<option value="lbianchi">lbianchi<\/option>[\s\S]*<option value="mrossi">mrossi<\/option>/);
+  assert.match(none, /id="sw-p"[\s\S]*Qualsiasi data[\s\S]*Ultimi 7 giorni[\s\S]*Ultimi 30 giorni[\s\S]*Ultimi 90 giorni/);
+  assert.match(none, /id="sw-df" type="date" value=""/); assert.match(none, /id="sw-dt" type="date" value=""/);
+  assert.match(none, /data-sw-reset disabled/, 'senza filtri il pulsante e spento'); assert.match(none, /500 di 500/);
+  for (const k of ['name', 'rev', 'author', 'date']) assert.match(none, new RegExp(`data-sw-sort="${k}"`));
+  const on = U.changesHTML.switchHTML(SW(), { ext: true, sel: '', author: 'mrossi', from: '2026-02-01', to: '2026-02-28', preset: '' });
+  assert.match(on, /<option value="mrossi" selected>/); assert.match(on, /id="sw-df" type="date" value="2026-02-01"/); assert.match(on, /id="sw-dt" type="date" value="2026-02-28"/);
+  assert.match(on, /data-sw-reset\s+title/); assert.doesNotMatch(on, /data-sw-reset disabled/); assert.match(on, /Azzera filtri/);
+  assert.match(on, new RegExp(`${U.swFilter(big, { author: 'mrossi', from: '2026-02-01', to: '2026-02-28' }).length} di 500`));
+  const srt = U.changesHTML.switchHTML(SW(), { ext: true, sort: 'author', desc: false });
+  assert.match(srt, /data-sw-sort="author"[^>]*aria-sort="ascending"/);
+  U.setLang('en');
+  try { const e = U.changesHTML.switchHTML(SW(), { ext: true }); for (const l of ['All authors', 'Any date', 'Last 30 days', 'Clear filters', 'From', 'To']) assert.match(e, new RegExp(l)); } finally { U.setLang('it'); }
+});
+
 test('500 voci: filtro e ordine veloci (nessun blocco della UI)', () => {
   const t = performance.now();
   for (let i = 0; i < 200; i++) U.swFilter(big, { q: 'feature', kind: 'branch', sort: i % 2 ? 'date' : 'name', desc: !!(i % 3) });

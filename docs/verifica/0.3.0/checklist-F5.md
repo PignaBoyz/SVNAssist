@@ -37,13 +37,13 @@ Segna ✅ / ❌ (+ una riga su cosa vedi).
 10. [ ] Clic sull'indicatore arancio (o SVN Update): arriva il commit del collega (`MainWindow.cs`), l'indicatore diventa **verde**; il messaggio verde di esito sparisce dopo ~5 s.
 11. [ ] Genera con AI (Copilot): durante la generazione vedi l'avanzamento; il messaggio ha un titolo e un elenco puntato che descrive **davvero** le modifiche (Order.cs TODO, Payment.cs, Invoice.cs rimosso) e segue le regole di `.github/copilot-instructions.md` della simulazione: formato **Conventional Commits** (`feat(core): ...`). Vale anche per `CLAUDE.md`/`AGENTS.md` e per i file globali `~/.copilot/copilot-instructions.md`, `~/.claude/CLAUDE.md`.
 12. [ ] **Commit All**: va a buon fine; il messaggio di esito sparisce da solo; con la WC pulita lo stato vuoto "Nessuna modifica" sta **sotto** la sezione Staged.
-13. [ ] Tendina **Recenti** accanto al messaggio: c'è il messaggio appena committato; un clic lo reinserisce.
+13. [ ] Pulsante **Recenti** accanto al messaggio: si apre un pannello largo quanto la finestra, con il campo di ricerca in cima e, per ogni messaggio, la prima riga in grassetto + 2-3 righe di anteprima (intero sulla voce selezionata o sotto il mouse). Nessuna voce "```": se Genera con AI ha messaggi salvati in blocco di codice, compaiono ripuliti. Scrivi parte di un messaggio: l'elenco si filtra; frecce su/giù + Invio (o un clic) lo reinseriscono nel campo; Esc chiude. Il pannello non supera ~60% dell'altezza (scorre).
 
 ## B. Switch e Merge (`wc-merge\Shop.sln`)
 
 **Switch**
 14. [ ] **Switch...**: in cima "Usati di recente" (vuoto al primo uso), la ricerca filtra subito (scrivi `login`), al massimo 50 righe con "Mostrati N di M".
-15. [ ] **Mostra tutti / vista estesa…**: tabella Nome / Tipo / Rev. / Autore / Data con 152 branch + 20 tag; filtro per nome e per tipo, clic su Nome o Data ordina, scorrimento fluido.
+15. [ ] **Mostra tutti / vista estesa…**: la finestra occupa quasi tutta l'area; tabella Nome / Tipo / Rev. / Autore / Data con 152 branch + 20 tag. Filtri: nome, tipo, **autore** (elenco), **periodo** (Ultimi 7/30/90 giorni o Da/A) e il contatore "N di M" si aggiorna; clic su Nome, Rev., Autore o Data ordina (anche inverso); **Azzera filtri** li toglie tutti (spento se non c'è nulla da azzerare); scorrimento fluido.
 16. [ ] Switch su `branches/hotfix-login`: il ramo cambia, `Customer.cs` ha `Locked`; torna su `trunk` e verifica che compaia tra i recenti.
 
 **Merge con conflitti**
@@ -51,9 +51,9 @@ Segna ✅ / ❌ (+ una riga su cosa vedi).
 18. [ ] **Anteprima**: Coupon.cs A, Order.cs U, README.txt C, docs/old-setup.md conflitto ad albero; la WC non cambia.
 19. [ ] Seleziona solo r8 > **Merge selezionate (1)**: Coupon.cs e Order.cs in Changes, nessun conflitto; messaggio precompilato in formato TortoiseSVN (`Unite le revisioni 8 da branches/feature-coupon:` + `........` + `r8 | mrossi | ...`). **Annulla merge** (conferma con elenco) riporta la WC pulita.
 20. [ ] **Merge tutto**: dialogo "2 elementi in conflitto: risolverli ora?" → **Risolvi ora** porta in primo piano Changes.
-21. [ ] Riquadro **Conflitti (2)**: README.txt (testo) con **Apri editor di merge / Usa la mia / Usa la loro / Segna come risolto**; docs/old-setup.md (albero) con spiegazione e Segna come risolto. I file di appoggio (`.merge-left.r…`, `.merge-right.r…`, `.working`) sono sotto README.txt, **non** tra i non versionati.
+21. [ ] Riquadro **Conflitti (2)** (più grande e leggibile, con il pulsante freccia per comprimerlo/espanderlo): README.txt (testo) con **Apri editor di merge / Usa la mia / Usa la loro / Segna come risolto**; sotto, il gruppo **Conflitti ad albero (1)** (docs/old-setup.md) con la spiegazione, **Segna tutti come risolti** e **Mostra elenco** che apre la singola voce con il suo Segna come risolto.
 22. [ ] **Apri editor di merge**: si apre l'editor a 3 vie di VS; sistema il file, salva, **Segna come risolto**: il conflitto sparisce e i file di appoggio pure. (Con i marcatori ancora nel file deve rifiutare.)
-23. [ ] Tree conflict: **Segna come risolto** con conferma. Il banner dice "senza conflitti"; nel Log la vista merge dice **"Merge eseguito, da committare"** (non "0 revisioni da unire").
+23. [ ] Tree conflict: **Segna tutti come risolti** chiede conferma con l'elenco dei file, poi li risolve (in alternativa **Mostra elenco** > **Segna come risolto** sulla singola voce). Se uno fallisce il messaggio lo riporta e gli altri restano risolti. Il banner dice "senza conflitti"; nel Log la vista merge dice **"Merge eseguito, da committare"** (non "0 revisioni da unire").
 24. [ ] Commit All: va a buon fine. Riaprendo SVN Merge da `feature-coupon` non c'è più nulla da unire.
 25. [ ] (facoltativo) Rifai il setup e prova **Usa la mia** / **Usa la loro** su README.txt: chiedono conferma e tengono la versione giusta (trunk `1.0.1` / branch `1.1-coupon`).
 

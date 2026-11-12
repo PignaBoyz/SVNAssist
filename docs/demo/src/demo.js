@@ -349,6 +349,9 @@ function freshFiles() {
     F('Web\\Controllers\\CartController.cs', 'M', T.cartBase, T.cartMod, "l'azione ApplyCoupon nel carrello", 'the ApplyCoupon cart action'),
     Object.assign(F('Web\\Controllers\\CheckoutController.cs', 'C', T.checkoutBase, T.checkoutConf, 'il checkout (conflitto con la r125)', 'checkout (conflict with r125)'), { cfl: { kind: 'update', old: 124, neu: 125 } }),
     F('Web\\Program.cs', 'N', T.progBase, T.progBase),
+    // conflitti ad albero (rinomina/cancellazione in conflitto): nessuna versione da scegliere, si segnano risolti tutti insieme
+    Object.assign(F('Core\\Services\\TaxHelper.cs', 'C', T.invBase, T.invBase, 'TaxHelper (cancellato sul server, modificato da te)', 'TaxHelper (deleted on the server, edited by you)'), { tree: true }),
+    Object.assign(F('Web\\Helpers\\PriceFormatter.cs', 'C', T.invBase, T.invBase, 'PriceFormatter (rinominato sul server, modificato da te)', 'PriceFormatter (renamed on the server, edited by you)'), { tree: true }),
     F('Web\\Views\\Cart\\Index.cshtml', '!', T.cshtmlBase, null, 'la vista del carrello', 'the cart view'),
     F('docs\\notes.txt', '?', null, T.notes, 'gli appunti su coupon e scadenze', 'notes about coupons and expiry'),
     F('tools\\export-orders.ps1', '?', null, T.export, 'lo script di esportazione ordini', 'the order export script'),
@@ -403,7 +406,7 @@ function freshState(mode) {
     env: freshEnv(), settings: freshSettings(),
     sess: { svnPrompted: false, aiPrompted: false },   // flag "una volta per sessione" (si azzerano con "Riavvia VS")
     files: freshFiles(), ign: { '.': ['*.suo', '.vs'], 'Web': ['bin'] }, ignBase: { '.': ['*.suo', '.vs'], 'Web': ['bin'] },
-    log: seedLog().concat(fillerLog()), headRev: 124, wcRev: 124, branch: 'trunk', recentMsgs: ['Aggiunge il calcolo del totale con coupon', "Corregge l'arrotondamento dell'IVA", 'Aggiorna le dipendenze'],
+    log: seedLog().concat(fillerLog()), headRev: 124, wcRev: 124, branch: 'trunk', recentMsgs: ['feat(coupon): aggiunge il calcolo del totale con coupon\n\nIl totale dell\'ordine applica ora il coupon prima dell\'IVA, con scadenza e importo minimo.\nOrderService espone ApplyCoupon; il carrello mostra lo sconto applicato.\nRefs #482', "fix(iva): corregge l'arrotondamento dell'IVA\n\nL'arrotondamento avveniva per riga invece che sul totale: differenze di un centesimo nelle fatture.", 'chore(deps): aggiorna le dipendenze', 'refactor(checkout): estrae la validazione dell\'indirizzo\n\nLa logica era duplicata in CheckoutController e CartController.\nOra vive in AddressValidator, con i suoi test.\n\nBREAKING CHANGE: ICheckoutValidator richiede un AddressValidator nel costruttore.', 'docs: aggiorna le istruzioni di installazione'],
     scn: 0, simStep: 0, cmd: [],
     ui: { menu: null, sub: false, open: [], active: null, statusOpen: false, logOpen: false, buf: {}, selFile: null, panelOpen: false, view: 'dock', seOpen: false, prereq: false, diffs: [] },
     vm: freshVM(), lvm: freshLVM(),
@@ -928,6 +931,15 @@ async function conflictOp(op, key) {
     await svn(`resolve --accept ${mode} "${fwd(f.path)}"`, 400); svnResolve(f.path, mode);
     await vmRefresh(`Conflitto risolto: ${f.path}`);
   } catch (e) { setStatus(`Errore resolve: ${e.message}`); render(); }
+}
+// "Segna tutti come risolti" sui conflitti ad albero: conferma con l'elenco, poi resolve --accept working su ognuno (un errore su uno non ferma gli altri)
+async function resolveTreeConflicts() {
+  const trees = S.files.filter(f => f.st === 'C' && f.tree);
+  if (!trees.length) { setStatus('Nessun conflitto ad albero da risolvere.'); return render(); }
+  if (!await confirmBox(`Segnare come risolti ${trees.length} conflitti ad albero (rinomine/cancellazioni)? Sistema prima la struttura a mano: svn non controlla nulla.\n\n${trees.map(f => '• ' + fwd(f.path) + ' (Conflitto ad albero)').join('\n')}`)) return;
+  setStatus('Risoluzione conflitti ad albero in corso...'); render();
+  for (const f of trees) { await svn(`resolve --accept working "${fwd(f.path)}"`, 300); svnResolve(f.path, 'working'); }
+  await vmRefresh(`Conflitti ad albero risolti: ${trees.length}.`);
 }
 async function vmSwitchOpen(refresh, mode) {
   if (!S.vm.wcPath.trim()) { setStatus('Nessuna working copy configurata.'); return render(); }

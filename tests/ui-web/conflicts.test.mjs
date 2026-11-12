@@ -29,9 +29,9 @@ test('conflitto di testo: 4 azioni esplicite con comandi validi, file di appoggi
 });
 
 test('conflitto ad albero: solo spiegazione e "Segna come risolto"; sulle proprieta niente editor', () => {
-  const t = U.changesHTML.conflictsHTML(state(C({ kind: 'tree', files: [] })));
-  assert.deepEqual(args(t).map(c => c.args.op), ['resolved']);
-  assert.match(t, /Conflitto ad albero/); assert.match(t, /non ci sono versioni da scegliere/); assert.doesNotMatch(t, /File di appoggio/);
+  const t = U.changesHTML.conflictsHTML(state(C({ kind: 'tree', files: [] })), { open: true, treeOpen: true });
+  assert.deepEqual(args(t).map(c => c.args.op), [undefined, 'resolved'], 'gruppo (Segna tutti) + la voce');
+  assert.match(t, /Conflitti ad albero \(1\)/); assert.match(t, /non ci sono versioni da scegliere/); assert.doesNotMatch(t, /File di appoggio/);
   const p = U.changesHTML.conflictsHTML(state(C({ kind: 'property' })));
   assert.deepEqual(args(p).map(c => c.args.op), ['mine', 'theirs', 'resolved']);
 });
@@ -41,7 +41,8 @@ test('conflitti: nomi neutralizzati, percorso mostrato se diverso dal nome, puls
   const h = U.changesHTML.conflictsHTML(s);
   assert.doesNotMatch(h, /<img/); assert.doesNotMatch(h, /<b>x<\/b>/); assert.match(h, /cf-p/);
   s.loading = true; const busy = U.changesHTML.conflictsHTML(s);
-  assert.equal((busy.match(/<button/g) || []).length, (busy.match(/<button[^>]*disabled/g) || []).length, 'durante il caricamento nessuna azione e attiva');
+  const acts = busy.replace(/<button[^>]*data-cfl-toggle[^>]*>/g, '');   // il pulsante comprimi/espandi e' solo della UI: resta attivo
+  assert.equal((acts.match(/<button/g) || []).length, (acts.match(/<button[^>]*disabled/g) || []).length, 'durante il caricamento nessuna azione e attiva');
   U.setLang('en');
   try {
     const e = U.changesHTML.conflictsHTML(state(C()));
@@ -97,14 +98,55 @@ test('mock: i conflitti della demo con file di appoggio; "Segna come risolto" ri
   await run('autoDetect()', 't');
   B.postMessage({ v: 1, type: 'ready', view: 'changes', id: null }, win); await tick();
   await send('refresh', {}); ok();
-  const cf = last().conflicts;
+  const cf = last().conflicts.filter(c => c.kind === 'text');   // i tree conflict hanno la loro prova piu' sotto
   assert.equal(cf.length, 1); assert.equal(cf[0].kind, 'text'); assert.equal(cf[0].name, 'CheckoutController.cs');
   assert.deepEqual(cf[0].files, ['Web/Controllers/CheckoutController.cs.mine', 'Web/Controllers/CheckoutController.cs.r124', 'Web/Controllers/CheckoutController.cs.r125']);
   await send('conflictOp', { op: 'resolved', key: cf[0].key }); ok();
   assert.match(last().status.msg, /marcatori di conflitto/, 'con i marcatori ancora nel file non si segna come risolto');
-  assert.equal(last().conflicts.length, 1);
+  assert.equal(last().conflicts.filter(c => c.kind === 'text').length, 1);
   await send('mergeResolve', {}); ok();
   await run("modal = async () => true", 't');
   await send('conflictOp', { op: 'mine', key: cf[0].key }); ok();
-  assert.deepEqual(last().conflicts, []); assert.match(last().status.msg, /Conflitto risolto/);
+  assert.deepEqual(last().conflicts.filter(c => c.kind === 'text'), []); assert.match(last().status.msg, /Conflitto risolto/);
+});
+
+test('tree conflict raggruppati: un gruppo con spiegazione e "Segna tutti come risolti"; elenco espandibile con "Segna come risolto" per voce', () => {
+  const trees = [C({ key: 'changes:a.cs', path: 'Core/a.cs', name: 'a.cs', kind: 'tree', files: [] }), C({ key: 'changes:b.cs', path: 'b.cs', name: 'b.cs', kind: 'tree', files: [] })];
+  const s = state(C(), ...trees), h = U.changesHTML.conflictsHTML(s);
+  assert.match(h, /<b>Conflitti<\/b><span class="pill">3<\/span>/);
+  assert.match(h, /Conflitti ad albero \(2\)/); assert.match(h, /non ci sono versioni da scegliere/); assert.match(h, /<span>Segna tutti come risolti<\/span>/);
+  const a = args(h); assert.deepEqual(a.map(c => c.name === 'conflictOp' ? c.args.op : c.name), ['edit', 'mine', 'theirs', 'resolved', 'resolveTreeConflicts'], 'a elenco chiuso: solo il testo e il pulsante di gruppo');
+  a.forEach(c => assert.deepEqual(validate(cmds, c), []));
+  assert.doesNotMatch(h, /Conflitto ad albero<\/span>/, 'le voci ad albero non hanno il riquadro singolo');
+  const open = U.changesHTML.conflictsHTML(s, { open: true, treeOpen: true });
+  assert.deepEqual(args(open).filter(c => c.name === 'conflictOp' && c.args.op === 'resolved').map(c => c.args.key), ['changes:README.txt', 'changes:a.cs', 'changes:b.cs']);
+  assert.match(open, /data-cfl-tree[^>]*aria-expanded="true"/); assert.match(open, /Nascondi elenco/);
+  assert.match(open, /<b class="cf-n" title="Core\/a.cs">a.cs<\/b>/);
+  const closed = U.changesHTML.conflictsHTML(s, { open: false });
+  assert.doesNotMatch(closed, /cfl-l/); assert.match(closed, /data-cfl-toggle[^>]*aria-expanded="false"/);
+  assert.equal(U.changesHTML.conflictsHTML(state(C()), { open: true }).includes('resolveTreeConflicts'), false, 'senza tree conflict niente gruppo');
+  U.setLang('en');
+  try { const e = U.changesHTML.conflictsHTML(s); assert.match(e, /Tree conflicts \(2\)/); assert.match(e, /Mark all as resolved/); } finally { U.setLang('it'); }
+  assert.deepEqual(validate(contract('changes-state.schema.json'), s), []);
+  assert.deepEqual(validate(cmds, { name: 'resolveTreeConflicts', args: {} }), []);
+  s.loading = true; assert.match(U.changesHTML.conflictsHTML(s), /data-cmd="resolveTreeConflicts"[^>]*disabled/);
+});
+
+test('mock: tree conflict della demo raggruppati; "Segna tutti come risolti" li risolve in un colpo (con conferma) e lascia il testo', async () => {
+  const { run, bridge } = await loadDemo();
+  const B = bridge(), got = [], win = { frameElement: { isConnected: true } }, tick = () => new Promise(r => setImmediate(r));
+  B.attach(win, m => got.push(JSON.parse(JSON.stringify(m))));
+  const send = async (name, a) => { B.postMessage({ v: 1, id: send.n = (send.n || 0) + 1, type: 'cmd', name, args: a }, win); for (let i = 0; i < 30; i++) await tick(); };
+  const last = () => got.filter(m => m.type === 'state').at(-1).state;
+  await run('autoDetect()', 't');
+  B.postMessage({ v: 1, type: 'ready', view: 'changes', id: null }, win); await tick();
+  await send('refresh', {});
+  assert.deepEqual(last().conflicts.map(c => c.kind).sort(), ['text', 'tree', 'tree'], 'almeno due tree conflict nella demo');
+  await run("modal = async () => false", 't');
+  await send('resolveTreeConflicts', {});
+  assert.equal(last().conflicts.filter(c => c.kind === 'tree').length, 2, 'conferma negata: nulla cambia');
+  await run("modal = async () => true", 't');
+  await send('resolveTreeConflicts', {});
+  assert.deepEqual(last().conflicts.map(c => c.kind), ['text']); assert.match(last().status.msg, /Conflitti ad albero risolti: 2/);
+  assert.deepEqual(validate(contract('changes-state.schema.json'), last()), []);
 });
