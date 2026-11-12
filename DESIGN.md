@@ -30,19 +30,17 @@ con un'esperienza in stile *Git Changes*, più la generazione automatica dei com
 
 | Componente | File | Responsabilità |
 |---|---|---|
-| Entry point | `SVNAssistExtension.cs` | Registra servizi DI + settings observer |
-| Menu e comandi | `Commands/*.cs` | Sottomenu *Extensions → SVNAssist*; Status, Commit, Update, Log |
-| SVN | `Services/SvnService.cs` (+ `ISvnService`) | Wrapper su `svn.exe`; `ReloadableSvnService` ritrova svn installato dopo l'avvio |
-| AI | `Services/Ai*.cs`, `CopilotAiService`, `ClaudeCodeAiService`, `AnthropicAiService` | Provider, factory con fallback, runtime Copilot (`CopilotRuntimeInstaller`) |
-| Settings | `Services/SettingsService.cs` | Provider AI, modelli, chiavi, lingua, path da Tools→Options |
-| Prerequisiti | `Services/PrerequisitesService.cs`, `ConsoleLauncher.cs` | Controllo svn/TortoiseSVN/provider AI (sonde iniettabili); comandi in console visibile |
-| Dialoghi | `Services/IDialogService.cs`, `VsDialogService.cs` | Conferme e scelta risoluzione conflitto (`ShowPromptAsync`) |
-| Pannello Changes | `ToolWindows/SvnStatusToolWindow*.cs` | Composition root, watcher, ViewModel orchestratore |
-| Raggruppamento | `ToolWindows/ChangesTreeBuilder.cs`, `ChangeRowFactory.cs` | Sezioni, alberi con cartelle compattate, tri-state (logica pura) |
-| ViewModel di supporto | `CommitMessageViewModel`, `PrerequisitesViewModel`, `ChangeRowViewModel` | Messaggio + AI + lingua; checklist; righe appiattite |
-| Refresh | `ToolWindows/RefreshDebouncer.cs` | Un solo ciclo con debounce, filtro `bin/ obj/ .vs/ .svn/` |
-| Log | `ToolWindows/SvnLog*` | Cronologia (auto-detect, "Carica altre 50") + diff |
-| Test | `tests/SVNAssist.Tests` | xUnit: servizi SVN/AI, factory, albero, ViewModel con servizi finti, prerequisiti |
+| Package VS | `src/SVNAssist.Host/SVNAssistPackage.cs`, `SVNAssist.vsct`, `Ids.cs` | Package in-proc, menu e comandi (anche Esplora soluzioni) |
+| Tool window | `src/SVNAssist.Host/ToolWindows.cs`, `WebViewHost.cs`, `ThemeBridge.cs` | Changes/Log in WebView2, colori VS → variabili CSS |
+| Ponte host | `src/SVNAssist.Host/HostService.cs`, `BackendProcess.cs`, `PromptDialog.cs` | Avvio backend, relay UI↔backend, dialoghi, diff nell'editor |
+| Impostazioni | `src/SVNAssist.Host/OptionsPage.cs` | Tools → Options → SVNAssist |
+| Contratto | `src/Shared/RpcContract.cs` | `IBackend` / `IHost` (StreamJsonRpc) |
+| Backend | `src/SVNAssist.Backend/BackendServer.cs`, `Program.cs` | Server JSON-RPC su stdio |
+| SVN | `Services/SvnService.cs`, `ReloadableSvnService.cs`, `SvnLocator.cs` | Wrapper su `svn.exe` |
+| AI | `Services/AiServiceFactory.cs` e provider `*AiService.cs`, `CommitInstructions.cs` | Catena di provider con fallback, regole da `copilot-instructions.md` |
+| Prerequisiti | `Services/PrerequisitesService.cs`, `ConsoleLauncher.cs` | svn/TortoiseSVN/provider AI; login in console |
+| UI web | `src/SVNAssist.UI.Web` | HTML/CSS/JS della finestra, condivisi con la demo |
+| Test | `tests/SVNAssist.Tests`, `tests/ui-web` | xUnit (backend) e `node --test` (UI) |
 
 ---
 
