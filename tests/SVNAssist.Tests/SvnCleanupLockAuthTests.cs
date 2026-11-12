@@ -456,6 +456,7 @@ public class SvnCleanupLockAuthTests
         public Task<bool> ConfirmAsync(string message, CancellationToken ct) => Task.FromResult(true);
         public Task<SvnConflictChoice?> ChooseConflictResolutionAsync(string fileName, CancellationToken ct) => Task.FromResult<SvnConflictChoice?>(null);
         public Task<string?> AskTextAsync(string message, string label, string defaultValue, CancellationToken ct) { Asked++; return Task.FromResult(answers.Dequeue()); }
+        public Task<bool> AskAsync(string message, string yes, string no, CancellationToken ct) => Task.FromResult(false);
     }
 
     [Fact]

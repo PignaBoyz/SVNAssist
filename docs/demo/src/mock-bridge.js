@@ -55,7 +55,10 @@
     [/^Switch a (.+) completato \(revisione (\d+)\)\. Se Visual Studio lo chiede, ricarica la solution\.$/, 'Switched to $1 (revision $2). If Visual Studio asks, reload the solution.'], [/^La working copy è già su (.+)\.$/, 'The working copy is already on $1.'],
     [/^Elemento non valido: .*$/, 'Invalid item: refresh the list and try again.'], [/^"(.*)" non è una revisione valida: .*$/, '"$1" is not a valid revision: type a positive integer (e.g. 1234) or HEAD.'],
     [/^Merge da (.+)$/, 'Merge from $1'], [/^Lettura delle revisioni da unire\.\.\.$/, 'Reading the revisions to merge...'], [/^(\d+) revisioni da unire\.$/, '$1 revisions to merge.'],
-    [/^Nessuna revisione da unire: (.+) è già allineato\.$/, 'No revisions to merge: $1 is already up to date.'], [/^Anteprima completata\.$/, 'Preview completed.'], [/^Merge completato\.$/, 'Merge completed.'],
+    [/^Nessuna revisione da unire: (.+) è già allineato\.$/, 'No revisions to merge: $1 is already up to date.'], [/^Anteprima completata\.$/, 'Preview completed.'], [/^Merge eseguito, da committare\.$/, 'Merge done, ready to commit.'], [/^Merge eseguito, da committare\. Conflitti da risolvere in Changes: (\d+)\.$/, 'Merge done, ready to commit. Conflicts to resolve in Changes: $1.'],
+    [/^(\d+) file in conflitto: risolvili nella sezione Conflitti, poi committa\.$/, '$1 conflicted files: resolve them in the Conflicts section, then commit.'], [/^Conflitto risolto: (.+)$/, 'Conflict resolved: $1'],
+    [/^Editor di merge aperto \(vsDiffMerge\): .*$/, 'Merge editor opened (vsDiffMerge): save the result, then press "Mark as resolved".'], [/^Editor di merge chiuso senza salvare: .*$/, 'Merge editor closed without saving: the file still has the conflict markers.'],
+    [/^Merge completato\.$/, 'Merge completed.'],
     [/^Seleziona almeno una revisione da unire\.$/, 'Select at least one revision to merge.'], [/^Merge completato: rivedi le modifiche e committa\.$/, 'Merge completed: review the changes and commit.'],
     [/^Merge completato: (\d+) file in conflitto da risolvere\.$/, 'Merge completed: $1 conflicted files to resolve.'], [/^Merge annullato: (\d+) elementi ripristinati\.$/, 'Merge undone: $1 items restored.'],
     [/^Annullamento del merge in corso\.\.\.$/, 'Undoing the merge...'], [/^Merge (.+) da (\^\/.+): rivedi le modifiche e committa, oppure annulla il merge\.$/, 'Merge $1 from $2: review the changes and commit, or undo the merge.'],
@@ -119,9 +122,11 @@
   }
   function swSnap() {   // selettore di SVN Switch (stesse regole del backend)
     const s = S.vm.sw;
-    if (!s) return { open: false, mode: 'switch', loading: false, error: '', items: [] };
+    if (!s) return { open: false, mode: 'switch', loading: false, error: '', items: [], recent: [] };
     const merge = s.mode === 'merge';   // in modo merge il ramo corrente non e' tra le voci
-    return { open: true, mode: s.mode || 'switch', loading: !!s.loading, error: tr(s.error || ''), items: s.loading ? [] : SW_ITEMS.filter(([name]) => !merge || name !== S.branch).map(([name, kind]) => ({ name, kind, current: name === S.branch })) };
+    return { open: true, mode: s.mode || 'switch', loading: !!s.loading, error: tr(s.error || ''),
+      items: s.loading ? [] : SW_ITEMS.filter(([name]) => !merge || name !== S.branch).map(([name, kind, rev, author, days]) => ({ name, kind, current: name === S.branch, rev, author, date: new Date(Date.now() - days * 864e5).toISOString() })),
+      recent: (S.swRecent || []).filter(n => SW_ITEMS.some(i => i[0] === n && (!merge || n !== S.branch))) };
   }
   function snapshotChanges() {
     const v = S.vm;
@@ -133,7 +138,8 @@
         trace: (v.trace || []).map(t => ({ name: t.name, state: t.state, detail: t.detail || '' })), download: v.dl ? { pct: v.dl.pct, label: v.dl.label } : null,
         count: commitSet().files.length, all: commitSet().all },
       view: v.view, theme: { mode: theme.mode, kind: kindOf() }, sections, status: { msg: tr(msg), err: !!v.err || /^Errore/.test(msg), ...(/E155004/.test(msg) ? { action: { label: tr('Esegui Cleanup'), cmd: 'cleanup' } } : {}) }, prereq: prereq(), loading: !!v.loading, wizard: wizardSnap(), revPicker: rpSnap(), switchPicker: swSnap(),
-      ...(v.mergeBanner && commitSet().files.length ? { merge: { text: tr(v.mergeBanner.text), conflicts: v.mergeBanner.conflicts } } : {}),
+      ...(v.mergeBanner && commitSet().files.length ? { merge: { text: tr(v.mergeBanner.text), conflicts: S.files.filter(f => f.st === 'C').length } } : {}),
+      conflicts: S.files.filter(f => f.st === 'C').map(f => ({ key: key('changes', f.path), path: fwd(f.path), name: base(f.path), kind: 'text', files: cflAux(f).map(fwd) })),
     };
   }
   function logMatch(e) {   // stessi filtri del backend: sottostringhe senza maiuscole, date incluse
@@ -143,7 +149,7 @@
   }
   function mergeSnap(m) {   // il Log in modalita merge (come MergeStore)
     const el = mgEligible(m.name);
-    return { source: m.name, title: tr('Merge da ' + m.name), loading: !!m.loading, busy: !!m.busy, error: tr(m.error || ''), blocked: tr(m.blocked || ''), selected: m.sel.slice().sort((a, b) => a - b), eligible: el.length, result: m.result || null };
+    return { source: m.name, title: tr('Merge da ' + m.name), loading: !!m.loading, busy: !!m.busy, error: tr(m.error || ''), blocked: tr(m.blocked || ''), selected: m.sel.slice().sort((a, b) => a - b), eligible: el.length, result: m.result || null, pending: !!(S.vm.mergeBanner && commitSet().files.length) };
   }
   function snapshotLog() {
     const l = S.lvm;
@@ -222,6 +228,8 @@
     switchRefresh: () => vmSwitchOpen(true, S.vm.sw && S.vm.sw.mode),
     mergeOpen: () => vmSwitchOpen(false, 'merge'),
     mergeUndo: () => mgUndo(),
+    mergeResolve: () => { S.ui.statusOpen = true; S.ui.view = 'dock'; S.ui.seOpen = false; S.ui.menu = null; render(); },
+    conflictOp: a => conflictOp(a.op, a.key),
     mergeDismiss: () => { S.vm.mergeBanner = null; render(); },
     mergeToggle: a => { const m = S.lvm.merge; if (m && !m.busy && mgEligible(m.name).some(r => r.rev === +a.rev)) { m.sel = m.sel.includes(+a.rev) ? m.sel.filter(x => x !== +a.rev) : m.sel.concat(+a.rev); m.result = null; render(); } },
     mergeClear: () => { const m = S.lvm.merge; if (m) { m.sel = []; m.result = null; render(); } },

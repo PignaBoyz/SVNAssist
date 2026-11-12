@@ -53,5 +53,6 @@
   "loading": false,
   "wizard": {"open":false,"mode":"ai","step":1,"fromGenerate":false,"provider":"","busy":false,"feedback":"","providers":[],"items":[],"auth":"","authOk":false,"authDetail":"","endpoint":"","models":[],"model":"","canNext":false},
   "revPicker": {"open":false,"target":"","loading":false,"error":"","canMore":false,"items":[]},
-  "switchPicker": {"open":false,"mode":"switch","loading":false,"error":"","items":[]}
+  "switchPicker": {"open":false,"mode":"switch","loading":false,"error":"","items":[],"recent":[]},
+  "conflicts": []
 }

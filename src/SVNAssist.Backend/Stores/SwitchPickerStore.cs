@@ -11,22 +11,29 @@ namespace SVNAssist.Stores;
 internal sealed class SwitchPickerStore
 {
     /// <param name="Path">Percorso dalla radice del repository (<c>progetto/branches/x</c>, senza <c>^/</c>).</param>
-    internal sealed record Target(string Name, string Kind, string Url, bool Current, string Path);
+    internal sealed record Target(string Name, string Kind, string Url, bool Current, string Path, long Rev = 0, string Author = "", DateTimeOffset? Date = null);
+
+    /// <summary>Quanti nomi si ricordano per repository ("usati di recente").</summary>
+    internal const int MaxRecent = 8;
 
     private readonly ISvnService _svn;
     private readonly ISvnAssistSettings _settings;
+    private readonly string _recentFile;
     private readonly object _lock = new();
-    private readonly Dictionary<string, IReadOnlyList<string>> _cache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, IReadOnlyList<SvnListEntry>> _cache = new(StringComparer.OrdinalIgnoreCase);
     private bool _open, _loading;
     private string _error = string.Empty;
-    private string _workingCopy = string.Empty;
+    private string _workingCopy = string.Empty, _repoRoot = string.Empty;
     private string _mode = "switch";
     private IReadOnlyList<Target> _items = [];
+    private IReadOnlyList<string> _recent = [];
 
-    public SwitchPickerStore(ISvnService svn, ISvnAssistSettings settings)
+    /// <param name="recentFile">File JSON degli ultimi usati per repository (default <c>%LOCALAPPDATA%\SVNAssist\recent-targets.json</c>).</param>
+    public SwitchPickerStore(ISvnService svn, ISvnAssistSettings settings, string? recentFile = null)
     {
         _svn = svn;
         _settings = settings;
+        _recentFile = recentFile ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SVNAssist", "recent-targets.json");
     }
 
     public event Action? Changed;
@@ -36,7 +43,45 @@ internal sealed class SwitchPickerStore
     internal SwitchPickerDto GetSnapshot()
     {
         lock (_lock)
-            return new SwitchPickerDto(_open, _mode, _loading, _error, _items.Select(i => new SwitchItemDto(i.Name, i.Kind, i.Current)).ToList());
+            return new SwitchPickerDto(_open, _mode, _loading, _error,
+                _items.Select(i => new SwitchItemDto(i.Name, i.Kind, i.Current, i.Rev, i.Author, i.Date?.ToString("o", System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty)).ToList(),
+                _recent.Where(r => _items.Any(i => i.Name == r)).ToList());
+    }
+
+    /// <summary>Ricorda <paramref name="name"/> come ultimo usato per il repository corrente (in cima, senza doppioni, al massimo <see cref="MaxRecent"/>). Best effort.</summary>
+    internal void RememberUsed(string name)
+    {
+        string root;
+        lock (_lock)
+            root = _repoRoot;
+        if (root.Length == 0)
+            return;
+        try
+        {
+            var all = ReadRecent();
+            var list = all.TryGetValue(root, out var cur) ? cur : [];
+            all[root] = list.Where(n => n != name).Prepend(name).Take(MaxRecent).ToList();
+            Directory.CreateDirectory(Path.GetDirectoryName(_recentFile)!);
+            File.WriteAllText(_recentFile, System.Text.Json.JsonSerializer.Serialize(all));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            BackendLog.Warn("Ultimi usati non salvati: " + ex.Message);
+        }
+    }
+
+    private Dictionary<string, List<string>> ReadRecent()
+    {
+        try
+        {
+            return File.Exists(_recentFile)
+                ? System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, List<string>>>(File.ReadAllText(_recentFile)) ?? []
+                : [];
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        {
+            return []; // file assente o rovinato: si riparte da zero
+        }
     }
 
     /// <summary>Elemento dell'elenco con quel nome (<c>branches/x</c>), <c>null</c> se non c'e': e' l'unica via per ottenere l'URL di uno switch.</summary>
@@ -77,14 +122,19 @@ internal sealed class SwitchPickerStore
             await Task.WhenAll(top, branches, tags);
 
             var items = new List<Target>();
-            if ((await top).Contains(layout.Trunk))
-                items.Add(new Target(layout.Trunk, "trunk", UrlOf(root, Join(layout.Trunk)), pos.Kind == "trunk", Join(layout.Trunk)));
+            if ((await top).FirstOrDefault(e => e.Name == layout.Trunk) is { } trunk)
+                items.Add(new Target(layout.Trunk, "trunk", UrlOf(root, Join(layout.Trunk)), pos.Kind == "trunk", Join(layout.Trunk), trunk.Revision, trunk.Author, trunk.Date));
             foreach (var b in await branches)
-                items.Add(new Target(layout.Branches + "/" + b, "branch", UrlOf(root, Join(layout.Branches + "/" + b)), pos.Kind == "branch" && pos.Name == b, Join(layout.Branches + "/" + b)));
+                items.Add(new Target(layout.Branches + "/" + b.Name, "branch", UrlOf(root, Join(layout.Branches + "/" + b.Name)), pos.Kind == "branch" && pos.Name == b.Name, Join(layout.Branches + "/" + b.Name), b.Revision, b.Author, b.Date));
             foreach (var t in await tags)
-                items.Add(new Target(layout.Tags + "/" + t, "tag", UrlOf(root, Join(layout.Tags + "/" + t)), pos.Kind == "tag" && pos.Name == t, Join(layout.Tags + "/" + t)));
+                items.Add(new Target(layout.Tags + "/" + t.Name, "tag", UrlOf(root, Join(layout.Tags + "/" + t.Name)), pos.Kind == "tag" && pos.Name == t.Name, Join(layout.Tags + "/" + t.Name), t.Revision, t.Author, t.Date));
+            var recent = ReadRecent().GetValueOrDefault(root) ?? [];
             lock (_lock)
+            {
                 _items = mode == "merge" ? items.Where(i => !i.Current).ToList() : items; // non si unisce un ramo in se stesso
+                _repoRoot = root;
+                _recent = recent;
+            }
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
@@ -126,7 +176,7 @@ internal sealed class SwitchPickerStore
     internal static string UrlOf(string root, string path)
         => path.Length == 0 ? root : root + "/" + string.Join("/", path.Split('/', StringSplitOptions.RemoveEmptyEntries).Select(Uri.EscapeDataString));
 
-    private async Task<IReadOnlyList<string>> CachedAsync(string url, CancellationToken ct)
+    private async Task<IReadOnlyList<SvnListEntry>> CachedAsync(string url, CancellationToken ct)
     {
         lock (_lock)
         {
@@ -134,7 +184,7 @@ internal sealed class SwitchPickerStore
                 return hit;
         }
 
-        var list = await _svn.ListFoldersAsync(url, ct);
+        var list = await _svn.ListEntriesAsync(url, ct);
         lock (_lock)
             _cache[url] = list;
         return list;

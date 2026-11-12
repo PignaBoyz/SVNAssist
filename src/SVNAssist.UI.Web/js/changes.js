@@ -57,8 +57,28 @@
   const mergeOk = () => { const v = (st.workingCopy.svnVersion || '').split('.').map(Number); return !v[0] || v[0] > 1 || (v[0] === 1 && v[1] >= 8); };
   function mergeBanner(s) {
     const m = s.merge; if (!m) return '';
-    return `<div class="mb${m.conflicts ? ' warn' : ''}" role="status">${U.icon(m.conflicts ? 'warn' : 'branch')}<span>${esc(m.text)}${m.conflicts ? ' ' + esc(t('{0} elementi in conflitto: risolvili prima di committare.', m.conflicts)) : ''}</span><span class="fill"></span>` +
+    return `<div class="mb${m.conflicts ? ' warn' : ''}" role="status">${U.icon(m.conflicts ? 'warn' : 'branch')}<span>${esc(m.text)}${m.conflicts ? ' ' + esc(m.conflicts === 1 ? t('{0} conflitto: risolvilo qui sotto, poi committa.', m.conflicts) : t('{0} conflitti: risolvili qui sotto, poi committa.', m.conflicts)) : ''}</span><span class="fill"></span>` +
       U.btn('btn sm', t('Annulla merge'), null, 'mergeUndo', null, t("Annulla il merge: ripristina la working copy com'era (svn revert)")) + U.btn('ib', '', 'x', 'mergeDismiss', null, t('Nascondi questo avviso')) + `</div>`;
+  }
+  // Sezione Conflitti: un riquadro per file con le azioni esplicite (editor di merge a 3 vie, mia, loro, segna come risolto) e, sotto,
+  // i file di appoggio di svn (da svn info: .mine, .rNN, .merge-left/right, .working), che non compaiono tra i non versionati.
+  function conflictsHTML(s) {
+    const c = s.conflicts || []; if (!c.length) return '';
+    const off = s.loading ? 'disabled' : '';
+    const one = f => {
+      const A = (cls, label, icon, op, tip) => U.btn('btn sm' + cls, label, icon, 'conflictOp', { op, key: f.key }, tip, off);
+      const tree = f.kind === 'tree', text = f.kind === 'text';
+      const kind = tree ? t('Conflitto ad albero') : f.kind === 'property' ? t('Conflitto sulle proprietà') : t('Conflitto di testo');
+      return `<li class="cf"><div class="cf-t">${U.icon('warn')}<b class="cf-n" title="${esc(f.path)}">${esc(f.name)}</b><span class="chip">${esc(kind)}</span>${f.path !== f.name ? `<span class="muted small cf-p" title="${esc(f.path)}">${esc(f.path)}</span>` : ''}</div>` +
+        (tree ? `<p class="muted small">${t('Rinomina o cancellazione in conflitto: non ci sono versioni da scegliere. Sistema la struttura a mano, poi segna il conflitto come risolto.')}</p>` : '') +
+        `<div class="cf-a">` +
+        (text ? A(' primary', t('Apri editor di merge'), 'diff', 'edit', t('Apre un editor a 3 vie (base, mia, loro) con il risultato; salva, poi segna come risolto')) : '') +
+        (tree ? '' : A('', t('Usa la mia'), null, 'mine', t('Tiene la tua versione dell\'intero file e scarta le modifiche del server (resolve --accept mine-full)')) +
+          A('', t('Usa la loro'), null, 'theirs', t('Prende la versione del server dell\'intero file e scarta le tue modifiche (resolve --accept theirs-full)'))) +
+        A('', t('Segna come risolto'), 'check', 'resolved', tree ? t('Conferma di aver sistemato la struttura (resolve)') : t('Dopo aver sistemato il file a mano: segna il conflitto come risolto (resolve --accept working)')) + `</div>` +
+        (f.files && f.files.length ? `<p class="cf-f muted small">${t('File di appoggio di svn (spariscono dopo il resolve):')} ${f.files.map(x => `<code>${esc(x)}</code>`).join(' ')}</p>` : '') + `</li>`;
+    };
+    return `<section class="cfl" aria-label="${esc(t('Conflitti'))}"><div class="cfl-h">${U.icon('warn')}<b>${t('Conflitti')}</b><span class="pill">${c.length}</span><span class="muted small">${t('Svn non committa file in conflitto: risolvili qui.')}</span></div><ul class="cfl-l">${c.map(one).join('')}</ul></section>`;
   }
   function moreMenu() {
     return [
@@ -109,6 +129,7 @@
     U.setHTML(root.querySelector('#aist'), aiStat(st.commit));
     U.setHTML(root.querySelector('#prq'), U.prereqHTML(st.prereq));
     U.setHTML(root.querySelector('#mrg'), mergeBanner(st));
+    U.setHTML(root.querySelector('#cfl'), conflictsHTML(st));
     const ta = root.querySelector('#msg');
     if (ta.value !== st.commit.text && document.activeElement !== ta) ta.value = st.commit.text;
     const list = root.querySelector('#list'), had = list.contains(document.activeElement), cur = list.__cursor, top = list.scrollTop;
@@ -203,64 +224,134 @@
     if (e.shiftKey && (a === first || !box.contains(a))) { e.preventDefault(); last.focus(); }
     else if (!e.shiftKey && (a === last || !box.contains(a))) { e.preventDefault(); first.focus(); }
   }
-  // SVN Switch: modale con ricerca e elenco di trunk/branch/tag (l'elenco arriva dal backend; la ricerca e' solo della UI).
-  let swSel = '', swQ = '';
-  const swVisible = s => { const q = swQ.trim().toLowerCase(); return s.items.filter(i => !q || i.name.toLowerCase().includes(q)); };
+  // SVN Switch / Merge. Selettore veloce: ultimi usati + ricerca che filtra subito, al massimo SW_LIMIT risultati. Vista estesa: tabella con filtro per nome
+  // (contiene, senza maiuscole), filtro per tipo e ordine per nome o data; lista virtuale (nel DOM solo le righe visibili: 500+ voci scorrono senza blocchi).
+  // L'elenco arriva dal backend; ricerca, filtri e ordine sono solo della UI. Il focus resta nel campo di ricerca (aria-activedescendant).
+  const SW_LIMIT = 50, SW_ROW = 28;
+  let swSel = '', swQ = '', swExt = false, swKind = '', swSort = 'name', swDesc = false;
+  const swColl = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }), swCmp = (a, b) => swColl.compare(a.name, b.name);
+  // sort: 'name' | 'date' | '' (ordine del server: trunk, branch, tag); desc inverte
+  U.swFilter = (items, o) => {
+    const q = (o.q || '').trim().toLowerCase();
+    const r = items.filter(i => (!q || i.name.toLowerCase().includes(q)) && (!o.kind || i.kind === o.kind));
+    const t = o.sort === 'date' ? new Map(r.map(i => [i, Date.parse(i.date) || 0])) : null, k = o.desc ? -1 : 1;
+    if (o.sort === 'name') r.sort((a, b) => k * swCmp(a, b));
+    else if (t) r.sort((a, b) => k * (t.get(a) - t.get(b)) || swCmp(a, b));
+    return r;
+  };
+  // selettore veloce: usati di recente (solo senza ricerca) + il resto, al massimo `limit` righe in tutto; more = quante ne restano fuori
+  U.swQuick = (items, recent, q, limit) => {
+    const matches = U.swFilter(items, { q }), rec = q.trim() ? [] : (recent || []).map(n => items.find(i => i.name === n)).filter(Boolean);
+    const rest = matches.filter(i => !rec.includes(i)), room = Math.max(0, limit - rec.length);
+    return { recent: rec, rest: rest.slice(0, room), total: matches.length, more: Math.max(0, rest.length - room) };
+  };
+  // righe da disegnare in una lista alta n*row con la finestra visibile [top, top+h): start incluso, end escluso
+  U.swWindow = (n, top, h, row, over) => { const o = over == null ? 6 : over; return { start: Math.max(0, Math.floor(top / row) - o), end: Math.min(n, Math.ceil((top + h) / row) + o) }; };
+  const swCur = i => i.current ? `<span class="muted">${esc(t('(corrente)'))}</span>` : '';
+  const swRowQ = (i, sel, n) => `<div class="rp-row sw-row${sel === i.name ? ' sel' : ''}" id="sw-o${n}" role="option" aria-selected="${sel === i.name}" data-sw="${esc(i.name)}"><b class="rv">${esc(i.kind)}</b><span class="m" title="${esc(i.name)}">${esc(i.name)}</span>${swCur(i)}${i.rev ? `<span class="dtm muted">r${i.rev}</span>` : ''}</div>`;
+  U.swRowsHTML = (list, start, end, sel) => list.slice(start, end).map((i, k) => `<div class="rp-row sw-row sw-x${sel === i.name ? ' sel' : ''}" id="sw-o${start + k}" role="option" aria-selected="${sel === i.name}" aria-posinset="${start + k + 1}" aria-setsize="${list.length}" data-sw="${esc(i.name)}"><span class="m" title="${esc(i.name)}">${esc(i.name)} ${swCur(i)}</span><span class="kd">${esc(i.kind)}</span><span class="rvn muted">${i.rev ? 'r' + i.rev : ''}</span><span class="au" title="${esc(i.author)}">${esc(i.author)}</span><span class="dtm muted">${i.date ? U.fmtDate(i.date) : ''}</span></div>`).join('');
+  const swUi = () => ({ q: swQ, ext: swExt, kind: swKind, sort: swSort, desc: swDesc, sel: swSel });
+  // elenco su cui lavorano frecce e Invio: lo stesso che e' disegnato
+  const swList = (s, u) => { u = u || swUi(); return u.ext ? U.swFilter(s.items, u) : (q => q.recent.concat(q.rest))(U.swQuick(s.items, s.recent, u.q, SW_LIMIT)); };
   const swSelOk = s => s.items.some(i => i.name === swSel && !i.current);
-  function switchHTML(s) {
+  function switchHTML(s, ui) {
     if (!s || !s.open) return '';
-    const vis = swVisible(s), merge = s.mode === 'merge';
-    const row = i => `<div class="rp-row sw-row${swSel === i.name ? ' sel' : ''}" role="option" tabindex="${swSel === i.name ? 0 : -1}" aria-selected="${swSel === i.name}" data-sw="${esc(i.name)}"><b class="rv">${esc(i.kind)}</b><span class="m" title="${esc(i.name)}">${esc(i.name)}</span>${i.current ? `<span class="muted">${esc(t('(corrente)'))}</span>` : ''}</div>`;
-    const note = s.loading ? `<div class="rp-note muted"><span class="spin"></span> ${t('Caricamento di branch e tag…')}</div>`
-      : vis.length ? '' : `<div class="rp-note muted">${s.items.length ? t('Nessun elemento corrisponde alla ricerca.') : t('Nessun branch o tag trovato. Controlla il layout del repository in Tools > Options > SVNAssist.')}</div>`;
-    return `<div class="wiz-scrim"><div class="wiz rp" role="dialog" aria-modal="true" aria-labelledby="sw-t"><div class="wiz-h"><h3 id="sw-t" tabindex="-1">${merge ? 'SVN Merge' : 'SVN Switch'}</h3><span class="fill"></span>${U.btn('ib', '', 'x', 'switchCancel', null, t('Annulla (Esc)'))}</div>` +
-      `<div class="wiz-b"><p class="muted">${merge ? t('Scegli il branch, il trunk o il tag da cui unire le modifiche nella working copy.') : t('Scegli il branch o il tag su cui portare la working copy.')}</p>` +
-      `<input id="sw-q" type="text" autocomplete="off" spellcheck="false" placeholder="${esc(t('Cerca…'))}" aria-label="${esc(t('Cerca un branch o un tag'))}" value="${esc(swQ)}">` +
-      `<div class="rp-list" id="sw-list" role="listbox" aria-label="${esc(t('Branch e tag del repository'))}">${vis.map(row).join('')}${note}</div>` +
+    const u = Object.assign(swUi(), ui), merge = s.mode === 'merge';
+    const note = s.loading ? `<div class="rp-note muted"><span class="spin"></span> ${t('Caricamento di branch e tag…')}</div>` : '';
+    const none = s.items.length ? t('Nessun elemento corrisponde alla ricerca.') : t('Nessun branch o tag trovato. Controlla il layout del repository in Tools > Options > SVNAssist.');
+    const sortBtn = (k, label) => `<button type="button" class="sw-hb" data-sw-sort="${k}" aria-sort="${u.sort === k ? (u.desc ? 'descending' : 'ascending') : 'none'}" title="${esc(t('Ordina per {0}', label))}"><span>${esc(label)}</span>${u.sort === k ? U.icon(u.desc ? 'chev-d' : 'chev-r') : ''}</button>`;
+    let body;
+    if (u.ext) {
+      const list = swList(s, u), kinds = [['', t('Tutti i tipi')], ['trunk', 'trunk'], ['branch', 'branch'], ['tag', 'tag']];
+      body = `<div class="sw-bar"><input id="sw-q" type="text" role="combobox" aria-expanded="true" aria-controls="sw-list" autocomplete="off" spellcheck="false" placeholder="${esc(t('Filtra per nome…'))}" aria-label="${esc(t('Filtra per nome'))}" value="${esc(u.q)}">` +
+        `<select id="sw-k" aria-label="${esc(t('Filtra per tipo'))}">${kinds.map(([v, l]) => `<option value="${v}"${u.kind === v ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></div>` +
+        `<div class="sw-h sw-x" role="presentation">${sortBtn('name', t('Nome'))}<span>${t('Tipo')}</span><span>${t('Rev.')}</span><span>${t('Autore')}</span>${sortBtn('date', t('Data'))}</div>` +
+        (list.length ? `<div class="rp-list sw-vl" id="sw-list" role="listbox" aria-label="${esc(t('Branch e tag del repository'))}"><div id="sw-sp"><div id="sw-rows"></div></div></div>`
+          : `<div class="rp-list" id="sw-list" role="listbox" aria-label="${esc(t('Branch e tag del repository'))}">${note || `<div class="rp-note muted">${none}</div>`}</div>`) +
+        `<div class="muted small" role="status">${s.loading ? '' : t('{0} di {1}', list.length, s.items.length)}</div>`;
+    } else {
+      const q = U.swQuick(s.items, s.recent, u.q, SW_LIMIT);
+      let n = 0;
+      const grp = (label, arr) => (arr.length ? `<div class="sw-g muted" role="presentation">${esc(label)}</div>` : '') + arr.map(i => swRowQ(i, u.sel, n++)).join('');
+      const rows = q.recent.length ? grp(t('Usati di recente'), q.recent) + grp(t('Tutti i branch e i tag'), q.rest) : grp('', q.rest);
+      body = `<input id="sw-q" type="text" role="combobox" aria-expanded="true" aria-controls="sw-list" autocomplete="off" spellcheck="false" placeholder="${esc(t('Cerca…'))}" aria-label="${esc(t('Cerca un branch o un tag'))}" value="${esc(u.q)}">` +
+        `<div class="rp-list" id="sw-list" role="listbox" aria-label="${esc(t('Branch e tag del repository'))}">${rows}${note}${!s.loading && !n ? `<div class="rp-note muted">${none}</div>` : ''}` +
+        (q.more ? `<div class="rp-note muted">${t('Mostrati {0} di {1}: scrivi per filtrare oppure apri la vista estesa.', q.recent.length + q.rest.length, q.total)}</div>` : '') + `</div>`;
+    }
+    return `<div class="wiz-scrim"><div class="wiz rp${u.ext ? ' sw-wide' : ''}" role="dialog" aria-modal="true" aria-labelledby="sw-t"><div class="wiz-h"><h3 id="sw-t" tabindex="-1">${merge ? 'SVN Merge' : 'SVN Switch'}</h3><span class="fill"></span>${U.btn('ib', '', 'x', 'switchCancel', null, t('Annulla (Esc)'))}</div>` +
+      `<div class="wiz-b"><p class="muted">${merge ? t('Scegli il branch, il trunk o il tag da cui unire le modifiche nella working copy.') : t('Scegli il branch o il tag su cui portare la working copy.')}</p>${body}` +
       (s.error ? `<div class="rp-err" role="alert">${U.icon('warn')}<span>${esc(s.error)}</span></div>` : '') + `</div>` +
-      `<div class="wiz-f">${U.btn('btn ghost', t('Annulla'), null, 'switchCancel', null, merge ? t('Chiude senza unire nulla') : t('Chiude senza cambiare ramo'))}${U.btn('btn sm', t('Aggiorna'), 'refresh', 'switchRefresh', null, t("Rilegge l'elenco di branch e tag dal server"))}<span class="fill"></span>` +
+      `<div class="wiz-f">${U.btn('btn ghost', t('Annulla'), null, 'switchCancel', null, merge ? t('Chiude senza unire nulla') : t('Chiude senza cambiare ramo'))}${U.btn('btn sm', t('Aggiorna'), 'refresh', 'switchRefresh', null, t("Rilegge l'elenco di branch e tag dal server"))}` +
+      (s.items.length ? `<button type="button" class="btn sm" data-sw-ext aria-pressed="${!!u.ext}" title="${esc(u.ext ? t('Torna al selettore veloce') : t('Tabella con filtri per nome e tipo, revisione, autore e data'))}"><span>${u.ext ? t('Vista rapida') : t('Mostra tutti / vista estesa…')}</span></button>` : '') + `<span class="fill"></span>` +
       `<button type="button" class="btn primary" data-sw-ok ${swSelOk(s) && !s.loading ? '' : 'disabled'} title="${esc(merge ? t('Mostra le revisioni di questo ramo ancora da unire (svn mergeinfo)') : t('Porta la working copy sul ramo scelto (svn switch)'))}">${U.icon('branch')}<span>${merge ? 'Merge…' : 'Switch'}</span></button></div></div></div>`;
+  }
+  // vista estesa: disegna solo le righe nella finestra visibile (il resto e' lo spaziatore); stili via CSSOM (la CSP non ammette lo stile inline negli attributi)
+  function swFill() {
+    const box = document.getElementById('sw'), s = st && st.switchPicker; if (!box || !s || !s.open || !swExt) return;
+    const vl = box.querySelector('#sw-list'), sp = box.querySelector('#sw-sp'), rows = box.querySelector('#sw-rows'), q = box.querySelector('#sw-q'); if (!vl || !sp || !rows) return;
+    const list = swList(s), win = U.swWindow(list.length, vl.scrollTop, vl.clientHeight || 340, SW_ROW);
+    sp.style.height = list.length * SW_ROW + 'px'; rows.style.top = win.start * SW_ROW + 'px';
+    box.style.setProperty('--sbw', Math.max(0, vl.offsetWidth - vl.clientWidth - 2) + 'px');   // barra di scorrimento (meno i due bordi): l'intestazione resta allineata
+    U.setHTML(rows, U.swRowsHTML(list, win.start, win.end, swSel));
+    const on = rows.querySelector('.sel'); if (q) { if (on) q.setAttribute('aria-activedescendant', on.id); else q.removeAttribute('aria-activedescendant'); }
+  }
+  // porta la riga i in vista (vista estesa: scorre la lista; veloce: scrollIntoView)
+  function swReveal(i) {
+    const box = document.getElementById('sw'), vl = box && box.querySelector('#sw-list'); if (!vl) return;
+    if (swExt) { const top = i * SW_ROW; if (top < vl.scrollTop) vl.scrollTop = top; else if (top + SW_ROW > vl.scrollTop + vl.clientHeight) vl.scrollTop = top + SW_ROW - vl.clientHeight; swFill(); }
+    else { const r = box.querySelector('.sw-row.sel'); if (r) { r.scrollIntoView({ block: 'nearest' }); const q = box.querySelector('#sw-q'); if (q) q.setAttribute('aria-activedescendant', r.id); } }
   }
   function renderSw(app, anyModal) {
     const box = document.getElementById('sw'), s = st.switchPicker; if (!box) return;
     const open = !!(s && s.open), was = !!box.__open, a = document.activeElement;
-    if (open && !was) { swSel = ''; swQ = ''; box.__prev = a; }
+    if (open && !was) { swSel = ''; swQ = ''; swExt = false; swKind = ''; swSort = 'name'; swDesc = false; box.__prev = a; }
     if (open && swSel && !s.items.some(i => i.name === swSel)) swSel = '';
-    const inQ = box.contains(a) && a.id === 'sw-q', inRow = box.contains(a) && a.classList && a.classList.contains('sw-row');
-    const caret = inQ ? a.selectionStart : 0, top = box.querySelector('#sw-list') ? box.querySelector('#sw-list').scrollTop : 0;
+    const inBox = box.contains(a), focusKey = inBox ? (a.id || (a.dataset && ('swSort' in a.dataset ? 'sort:' + a.dataset.swSort : 'swExt' in a.dataset ? 'ext' : ''))) : '';
+    const caret = inBox && a.id === 'sw-q' ? a.selectionStart : 0, vl0 = box.querySelector('#sw-list'), top = vl0 ? vl0.scrollTop : 0;
     const changed = U.setHTML(box, switchHTML(s));
     app.classList.toggle('modal-open', anyModal); app.inert = anyModal;
     if (open && changed) {
-      const list = box.querySelector('#sw-list'); if (list) list.scrollTop = top;
-      if (!was || !box.contains(document.activeElement) || inRow) { const f = !was || !swSel ? box.querySelector('#sw-q') : box.querySelector('.sw-row[tabindex="0"]') || box.querySelector('#sw-q'); if (f) f.focus(); }
-      else if (inQ) { const n = box.querySelector('#sw-q'); n.focus(); n.setSelectionRange(caret, caret); }
+      const vl = box.querySelector('#sw-list'); if (vl) vl.scrollTop = top;
+      const f = !was || !focusKey ? box.querySelector('#sw-q') : focusKey.startsWith('sort:') ? box.querySelector(`[data-sw-sort="${focusKey.slice(5)}"]`) : focusKey === 'ext' ? box.querySelector('[data-sw-ext]') : box.querySelector('#' + CSS.escape(focusKey));
+      if (f) { f.focus(); if (f.id === 'sw-q' && was) f.setSelectionRange(caret, caret); }
     }
+    if (open) swFill();
     if (!open && was && box.__prev && box.__prev.isConnected) box.__prev.focus();
     box.__open = open;
   }
   const swOk = () => { if (st.switchPicker && swSelOk(st.switchPicker)) U.bridge.send('switchOk', { name: swSel }); };
   function swKeys(e) {
     const box = document.getElementById('sw'); if (!box || !box.__open) return;
-    const a = document.activeElement;
+    const s = st.switchPicker, a = document.activeElement;
     if (e.key === 'Escape') { e.preventDefault(); U.bridge.send('switchCancel'); return; }
-    const rows = [...box.querySelectorAll('.sw-row')], i = rows.indexOf(a);
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-      const to = i < 0 ? (e.key === 'ArrowDown' ? 0 : rows.length - 1) : i + (e.key === 'ArrowDown' ? 1 : -1);
-      if (rows[to]) { e.preventDefault(); swSel = rows[to].dataset.sw; renderSw(document.querySelector('.app'), true); const f = [...box.querySelectorAll('.sw-row')].find(x => x.dataset.sw === swSel); if (f) { f.focus(); f.scrollIntoView({ block: 'nearest' }); } }
+    if (a && a.id === 'sw-q' && ['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp'].includes(e.key)) {
+      const list = swList(s); if (!list.length) return; e.preventDefault();
+      const i = list.findIndex(x => x.name === swSel), step = e.key.startsWith('Page') ? 10 : 1, dir = e.key.endsWith('Down') ? 1 : -1;
+      const to = i < 0 ? (dir > 0 ? 0 : list.length - 1) : Math.max(0, Math.min(list.length - 1, i + dir * step));
+      swSel = list[to].name; renderSw(document.querySelector('.app'), true); swReveal(to);
       return;
     }
-    if (e.key === 'Enter' && a && (a.id === 'sw-q' || a.classList.contains('sw-row'))) {
+    if (e.key === 'Enter' && a && a.id === 'sw-q') {
       e.preventDefault();
-      if (a.classList.contains('sw-row')) swSel = a.dataset.sw;
-      else if (!swVisible(st.switchPicker).some(x => x.name === swSel) && rows[0]) swSel = rows[0].dataset.sw;
-      if (swSelOk(st.switchPicker)) swOk(); else renderSw(document.querySelector('.app'), true);
+      const list = swList(s);
+      if (!list.some(x => x.name === swSel) && list.length) swSel = list[0].name;
+      if (swSelOk(s)) swOk(); else renderSw(document.querySelector('.app'), true);
       return;
     }
     if (e.key !== 'Tab') return;
-    const f = [...box.querySelectorAll('button:not(:disabled),input,.sw-row[tabindex="0"]')]; if (!f.length) return;
+    const f = [...box.querySelectorAll('button:not(:disabled),input,select')]; if (!f.length) return;
     const first = f[0], last = f[f.length - 1];
     if (e.shiftKey && (a === first || !box.contains(a))) { e.preventDefault(); last.focus(); }
     else if (!e.shiftKey && (a === last || !box.contains(a))) { e.preventDefault(); first.focus(); }
+  }
+  function swClick(e, root) {
+    const app = root.querySelector('.app'), row = e.target.closest('.sw-row');
+    if (row) { swSel = row.dataset.sw; renderSw(app, true); const q = document.querySelector('#sw #sw-q'); if (q) q.focus(); return true; }
+    if (e.target.closest('[data-sw-ok]')) { swOk(); return true; }
+    if (e.target.closest('[data-sw-ext]')) { swExt = !swExt; renderSw(app, true); const l = document.querySelector('#sw #sw-list'); if (l) l.scrollTop = 0; swFill(); return true; }
+    const h = e.target.closest('[data-sw-sort]');
+    if (h) { const k = h.dataset.swSort; if (swSort === k) swDesc = !swDesc; else { swSort = k; swDesc = k === 'date'; } renderSw(app, true); return true; }   // la data parte dalla piu' recente
+    return false;
   }
   function wizKeys(e) {
     const box = document.getElementById('wiz'); if (!box || !box.__open) return;
@@ -272,13 +363,13 @@
     else if (!e.shiftKey && (a === last || !box.contains(a))) { e.preventDefault(); first.focus(); }
   }
 
-  U.changesHTML = { header, commitBar, foot, revHTML, switchHTML, mergeBanner };   // parti pure, provate senza DOM (tests/ui-web)
+  U.changesHTML = { header, commitBar, foot, revHTML, switchHTML, mergeBanner, conflictsHTML };   // parti pure, provate senza DOM (tests/ui-web)
 
   U.views.changes = {
     mount(root) {
       root.innerHTML = `<div class="app"><div class="prog" aria-hidden="true"></div><header class="bar" id="hdr"></header><div id="wcbox"></div>
         <section class="commit"><textarea id="msg" rows="3"></textarea>
-        <div class="bar" id="cbar"></div><div id="aist"></div></section><div id="prq"></div><div id="mrg"></div>
+        <div class="bar" id="cbar"></div><div id="aist"></div></section><div id="prq"></div><div id="mrg"></div><div id="cfl"></div>
         <div class="flt"><input id="flt" type="search" spellcheck="false" autocomplete="off"></div>
         <div class="list" id="list" role="tree"></div>
         <footer class="foot" id="foot"></footer></div><div id="wiz"></div><div id="rev"></div><div id="sw"></div>`;
@@ -289,13 +380,11 @@
       root.addEventListener('keydown', wizKeys);
       root.addEventListener('keydown', revKeys);
       root.addEventListener('keydown', swKeys);
-      root.addEventListener('click', e => {
-        const row = e.target.closest('.sw-row');
-        if (row) { swSel = row.dataset.sw; renderSw(root.querySelector('.app'), true); const f = [...root.querySelectorAll('#sw .sw-row')].find(x => x.dataset.sw === swSel); if (f) f.focus(); return; }
-        if (e.target.closest('[data-sw-ok]')) swOk();
-      });
+      root.addEventListener('click', e => { swClick(e, root); });
       root.addEventListener('dblclick', e => { const row = e.target.closest('.sw-row'); if (row) { swSel = row.dataset.sw; swOk(); } });
-      root.addEventListener('input', e => { if (e.target.id === 'sw-q') { swQ = e.target.value; renderSw(root.querySelector('.app'), true); } });
+      root.addEventListener('input', e => { if (e.target.id === 'sw-q') { swQ = e.target.value; renderSw(root.querySelector('.app'), true); const l = document.querySelector('#sw #sw-list'); if (l) l.scrollTop = 0; swFill(); } });
+      root.addEventListener('change', e => { if (e.target.id === 'sw-k') { swKind = e.target.value; renderSw(root.querySelector('.app'), true); } });
+      root.addEventListener('scroll', e => { if (e.target.id === 'sw-list') swFill(); }, true);   // lo scroll non risale: ascolto in cattura
       root.addEventListener('click', e => {
         const box = document.getElementById('rev'), row = e.target.closest('.rp-row');
         if (row && box && box.contains(row)) { revPick(box, row.dataset.rev, true); return; }

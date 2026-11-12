@@ -227,6 +227,63 @@
       }
     },
     {
+      "title": "conflictOp",
+      "description": "Sezione Conflitti: azione su un file in conflitto. edit = editor di merge a 3 vie (vsDiffMerge, poi TortoiseMerge, poi il file con i marcatori in VS); mine / theirs = svn resolve --accept mine-full / theirs-full (con conferma); resolved = svn resolve --accept working (rifiutato se restano i marcatori; con conferma per i conflitti ad albero). key = conflicts[].key.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "conflictOp"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "key"
+          ],
+          "properties": {
+            "op": {
+              "enum": [
+                "edit",
+                "mine",
+                "theirs",
+                "resolved"
+              ]
+            },
+            "key": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "mergeResolve",
+      "description": "Log in modalita merge: Risolvi i conflitti. Porta in primo piano la finestra Changes (sezione Conflitti).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "mergeResolve"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
       "title": "mergeOpen",
       "description": "SVN Merge: apre il selettore della sorgente (trunk, branch o tag, escluso il ramo corrente). Con OK il Log si apre in modalita merge sul sorgente scelto (switchOk).",
       "type": "object",

@@ -27,4 +27,7 @@ internal interface IDialogService
 
     /// <summary>Chiede una riga di testo (es. revisione, messaggio di lock). <c>null</c> se l'utente annulla.</summary>
     Task<string?> AskTextAsync(string message, string label, string defaultValue, CancellationToken ct);
+
+    /// <summary>Domanda con due pulsanti nominati (es. "Risolvi ora" / "Più tardi"). <c>false</c> con il secondo o se si chiude il dialogo.</summary>
+    Task<bool> AskAsync(string message, string yes, string no, CancellationToken ct);
 }

@@ -186,10 +186,16 @@ public interface ISvnService
     Task<Version?> GetSvnVersionAsync(CancellationToken ct);
 
     /// <summary>
-    /// Nomi delle cartelle direttamente sotto un URL (<c>svn list --xml</c>), per l'elenco di branch/tag.
+    /// Cartelle direttamente sotto un URL con l'ultima modifica (<c>svn list --xml</c>), per l'elenco di branch/tag.
     /// Un percorso che non esiste (es. repository senza <c>tags</c>) non e' un errore: elenco vuoto.
     /// </summary>
-    Task<IReadOnlyList<string>> ListFoldersAsync(string url, CancellationToken ct);
+    Task<IReadOnlyList<SvnListEntry>> ListEntriesAsync(string url, CancellationToken ct);
+
+    /// <summary>
+    /// Dati dei conflitti di testo/proprieta' dei file indicati (<c>svn info --xml</c>): tipo e file di appoggio.
+    /// La chiave e' il percorso completo (senza distinzione tra maiuscole e minuscole). Un file senza dati non compare; se svn fallisce, elenco vuoto.
+    /// </summary>
+    Task<IReadOnlyDictionary<string, SvnConflictInfo>> GetConflictInfoAsync(IReadOnlyList<string> paths, CancellationToken ct);
 
     /// <summary>Porta la working copy su un altro URL (<c>svn switch --accept postpone</c>), dalla sua radice. I conflitti restano da risolvere.</summary>
     Task<UpdateResult> SwitchAsync(string workingCopyPath, string url, CancellationToken ct);

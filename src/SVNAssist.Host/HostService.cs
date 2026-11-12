@@ -281,6 +281,8 @@ namespace SVNAssist.Host
 
         public Task ShowLogWindowAsync(string title) => _pkg.ShowViewAsync("log", title);
 
+        public Task ShowChangesWindowAsync() => _pkg.ShowViewAsync("changes");
+
         public async Task ShowFolderDiffAsync(string path)
         {
             await SendCommandAsync("log", "logFolder", new JObject { ["path"] = path }, LogTitle(path)).ConfigureAwait(false);

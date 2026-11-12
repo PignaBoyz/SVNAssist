@@ -347,7 +347,7 @@ function freshFiles() {
     F('Core\\Services\\OrderService.cs', 'M', T.orderBase, T.orderMod, 'il calcolo del totale con coupon', 'order total with coupon support'),
     F('Core\\Services\\PaymentGateway.cs', 'R', T.payBase, T.payNew, 'il gateway di pagamento (ora asincrono)', 'the payment gateway (now async)'),
     F('Web\\Controllers\\CartController.cs', 'M', T.cartBase, T.cartMod, "l'azione ApplyCoupon nel carrello", 'the ApplyCoupon cart action'),
-    F('Web\\Controllers\\CheckoutController.cs', 'C', T.checkoutBase, T.checkoutConf, 'il checkout (conflitto con la r125)', 'checkout (conflict with r125)'),
+    Object.assign(F('Web\\Controllers\\CheckoutController.cs', 'C', T.checkoutBase, T.checkoutConf, 'il checkout (conflitto con la r125)', 'checkout (conflict with r125)'), { cfl: { kind: 'update', old: 124, neu: 125 } }),
     F('Web\\Program.cs', 'N', T.progBase, T.progBase),
     F('Web\\Views\\Cart\\Index.cshtml', '!', T.cshtmlBase, null, 'la vista del carrello', 'the cart view'),
     F('docs\\notes.txt', '?', null, T.notes, 'gli appunti su coupon e scadenze', 'notes about coupons and expiry'),
@@ -545,7 +545,7 @@ function svnUpdate() {
     if (cart.st === 'M') {
       cart.merged = cart.text.replace('return View(order);', 'return View(order ?? new Order());');
       cart.text = cart.text.replace('            return View(order);', '<<<<<<< .mine\n            return View(order);\n=======\n            return View(order ?? new Order());\n>>>>>>> .r' + r);
-      cart.st = 'C'; out.push('C    Web/Controllers/CartController.cs');
+      cart.st = 'C'; cart.cfl = { kind: 'update', old: r - 1, neu: r }; out.push('C    Web/Controllers/CartController.cs');
     } else { cart.text = nt; out.push('U    Web/Controllers/CartController.cs'); }
     void oldBase;
   } else if (k === 2) {
@@ -855,6 +855,7 @@ async function vmUpdate() {
     const out = svnUpdate();
     toast('svn update (output demo): ' + out.join(' | '), 5500);
     await vmRefresh(updMsg(), true);
+    await offerResolve(out.filter(l => /^C /.test(l)).length);
   } catch (e) { setStatus('Errore update: ' + e.message); render(); }
 }
 
@@ -881,7 +882,52 @@ async function rpOk(a) {
   } catch (e) { setStatus('Errore update: ' + e.message); render(); }
 }
 // SVN Switch: elenco finto di trunk/branch/tag (come il backend: l'elemento corrente e' marcato, si passa solo a voci dell'elenco).
-const SW_ITEMS = [['trunk', 'trunk'], ['branches/feature-coupon', 'branch'], ['branches/release-2.1', 'branch'], ['tags/v1.0', 'tag'], ['tags/v2.0', 'tag']];
+// [nome, tipo, ultima revisione, autore, giorni fa]: come svn list --xml sulle cartelle del layout. 220+ branch finti per provare ricerca, filtri e scorrimento.
+const SW_ITEMS = (() => {
+  let seed = 7; const rnd = n => (seed = (seed * 48271) % 2147483647) % n;
+  const people = ['mrossi', 'lbianchi', 'gverdi', 'sneri', 'fconti'], topics = ['checkout', 'coupon', 'carrello', 'spedizioni', 'fatture', 'report', 'login', 'catalogo', 'resi', 'newsletter', 'ricerca', 'pagamenti', 'magazzino', 'api', 'ui'], kinds = ['feature', 'bugfix', 'hotfix', 'spike'];
+  const br = [['branches/feature-coupon', 'branch', 131, 'gverdi', 2], ['branches/release-2.1', 'branch', 125, 'mrossi', 8]], seen = new Set(br.map(b => b[0]));
+  while (br.length < 224) { const n = `branches/${kinds[rnd(kinds.length)]}-${topics[rnd(topics.length)]}-${1 + rnd(99)}`; if (!seen.has(n)) { seen.add(n); br.push([n, 'branch', 20 + rnd(110), people[rnd(people.length)], 1 + rnd(400)]); } }
+  const tags = []; for (let v = 1; v <= 3; v++) for (let m = 0; m < 8; m++) tags.push([`tags/v${v}.${m}`, 'tag', 10 + v * 8 + m, 'mrossi', 40 + v * 60 + m * 5]);
+  const byName = (a, b) => a[0].localeCompare(b[0], 'en', { numeric: true });
+  return [['trunk', 'trunk', 134, 'mrossi', 0], ...br.sort(byName), ...tags.sort(byName)];
+})();
+// SVN Update / Merge / Switch che lasciano conflitti: si propone di risolverli subito (porta in primo piano Changes) o piu' tardi (postpone).
+async function offerResolve(n) {
+  if (n <= 0) return;
+  const now = await modal({ title: 'SVNAssist', icon: '&#10067;', cancel: false,
+    body: `<p>${n} file in conflitto.\n\nVuoi risolverli ora? "Risolvi ora" apre la sezione Conflitti di Changes, con un editor di merge per ogni file. "Più tardi" lascia i conflitti come sono (svn non li risolve da solo): potrai risolverli quando vuoi, ma finché restano non si può committare.</p>`,
+    buttons: [{ label: 'Risolvi ora', value: true, primary: true }, { label: 'Più tardi', value: false }] });
+  if (!now) return;
+  S.ui.statusOpen = true; S.ui.view = 'dock'; S.ui.seOpen = false; S.ui.menu = null;
+  setStatus(`${n} file in conflitto: risolvili nella sezione Conflitti, poi committa.`); render();
+}
+// Sezione Conflitti: edit = editor di merge a 3 vie (nella demo un risultato di esempio), mine/theirs con conferma, resolved = resolve --accept working
+const cflAux = f => { const c = f.cfl || { kind: 'update', old: S.headRev - 1, neu: S.headRev }; return c.kind === 'merge' ? [f.path + '.working', f.path + '.merge-left.r' + c.old, f.path + '.merge-right.r' + c.neu] : [f.path + '.mine', f.path + '.r' + c.old, f.path + '.r' + c.neu]; };
+async function conflictOp(op, key) {
+  const row = getRow(key), f = row && row.file;
+  if (!f || f.st !== 'C') { setStatus('Seleziona un file in conflitto da risolvere.'); return render(); }
+  try {
+    if (op === 'edit') {
+      const [mine, left, right] = cflAux(f);
+      await svn(`vsDiffMerge.exe "${fwd(right)}" "${fwd(mine)}" "${fwd(left)}" "${fwd(f.path)}" /m`, 500);
+      const ok = await modal({ title: 'vsDiffMerge', icon: '&#10067;', cancel: false, wide: true,
+        body: `<p>Qui si apre l'editor di merge a 3 vie di Visual Studio con base, mia, loro e il risultato di "${esc(base(f.path))}".\n\nNella demo il risultato è già pronto: "Accetta il merge" lo salva sul file (senza marcatori); poi premi "Segna come risolto".</p>`,
+        buttons: [{ label: 'Accetta il merge', value: true, primary: true }, { label: 'Chiudi senza salvare', value: false }] });
+      if (ok) { f.text = f.merged || T.checkoutMerged; S.ui.buf[f.path] = undefined; setStatus('Editor di merge aperto (vsDiffMerge): salva il risultato, poi premi "Segna come risolto".'); }
+      else setStatus('Editor di merge chiuso senza salvare: il file ha ancora i marcatori di conflitto.');
+      return render();
+    }
+    if (op === 'mine' || op === 'theirs') {
+      const text = op === 'mine' ? `Tenere la TUA versione di "${f.path}"? Le modifiche arrivate dal server su questo file vengono scartate.` : `Prendere la versione LORO (del server) di "${f.path}"? Le TUE modifiche locali su questo file vengono scartate.`;
+      if (!await confirmBox(text)) return;
+    }
+    const mode = { mine: 'mine-full', theirs: 'theirs-full', resolved: 'working' }[op];
+    setStatus('Risoluzione conflitto in corso...'); render();
+    await svn(`resolve --accept ${mode} "${fwd(f.path)}"`, 400); svnResolve(f.path, mode);
+    await vmRefresh(`Conflitto risolto: ${f.path}`);
+  } catch (e) { setStatus(`Errore resolve: ${e.message}`); render(); }
+}
 async function vmSwitchOpen(refresh, mode) {
   if (!S.vm.wcPath.trim()) { setStatus('Nessuna working copy configurata.'); return render(); }
   if (refresh) S.swCache = false;
@@ -893,6 +939,7 @@ async function swOk(a) {
   const sw = S.vm.sw; if (!sw) return;
   const name = String(a.name || ''), item = SW_ITEMS.find(([n]) => n === name);
   if (!item || (sw.mode === 'merge' && name === S.branch)) { sw.error = "Elemento non valido: aggiorna l'elenco e riprova."; return render(); }
+  (S.swRecent = (S.swRecent || []).filter(n => n !== name)).unshift(name); S.swRecent.length = Math.min(S.swRecent.length, 8);
   if (sw.mode === 'merge') return mgStart(name);
   if (name === S.branch) { sw.error = `La working copy è già su ${name}.`; return render(); }
   const local = S.files.filter(f => f.st !== 'N' && f.st !== '?').length;
@@ -956,15 +1003,16 @@ async function mgRun(all) {
       let f = fileBy(p);
       if (k === 'A') { if (!f) S.files.push(F(p, 'A', null, `// ${base(p)}: aggiunto dal merge di ${m.name}\n`)); else f.st = 'A'; }
       else if (f && k === 'D') { f.st = 'D'; f.text = null; }
-      else if (f && k === 'C') { f.st = 'C'; f.text = T.checkoutConf; }
+      else if (f && k === 'C') { f.st = 'C'; f.text = T.checkoutConf; f.merged = T.checkoutMerged; f.cfl = { kind: 'merge', old: Math.min(...revs) - 1, neu: r.rev }; }
       else if (f && f.st !== 'C') { f.st = 'M'; f.text = (f.base || '') + `\n// unito da ${m.name}`; }
     }
     (S.mgDone = S.mgDone || []).push({ name: m.name, revs });
     const text = `Merge ${label} da ^/${m.name}`;
     S.vm.mergeBanner = { text: `${text}: rivedi le modifiche e committa, oppure annulla il merge.`, conflicts: res.counts.conflicted, commit: text };
     if (!S.vm.commitMsg.trim()) S.vm.commitMsg = text;
-    m.sel = []; m.msg = 'Merge completato.';
+    m.sel = []; m.msg = res.counts.conflicted ? `Merge eseguito, da committare. Conflitti da risolvere in Changes: ${res.counts.conflicted}.` : 'Merge eseguito, da committare.';
     await vmRefresh(res.counts.conflicted ? `Merge completato: ${res.counts.conflicted} file in conflitto da risolvere.` : 'Merge completato: rivedi le modifiche e committa.', false);
+    await offerResolve(res.counts.conflicted);
   } catch (e) { m.error = 'Errore: ' + e.message; }
   m.busy = false; render();
 }

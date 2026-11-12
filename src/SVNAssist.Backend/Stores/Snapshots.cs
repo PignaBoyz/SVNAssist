@@ -78,11 +78,19 @@ internal sealed record RevItemDto(long Rev, string Author, string Date, string M
 internal sealed record RevPickerDto(bool Open, string Target, bool Loading, string Error, bool CanMore, IReadOnlyList<RevItemDto> Items);
 
 /// <param name="Kind"><c>trunk</c> | <c>branch</c> | <c>tag</c>.</param>
-internal sealed record SwitchItemDto(string Name, string Kind, bool Current);
+/// <param name="Rev">Ultima revisione che ha toccato il ramo (0 = sconosciuta).</param>
+/// <param name="Date">ISO 8601, vuota se sconosciuta.</param>
+internal sealed record SwitchItemDto(string Name, string Kind, bool Current, long Rev, string Author, string Date);
 
 /// <summary>Selettore di "SVN Switch...": <c>Name</c> degli elementi e' relativo alla base (<c>trunk</c>, <c>branches/x</c>, <c>tags/1.0</c>).</summary>
 /// <param name="Mode"><c>switch</c> (SVN Switch) o <c>merge</c> (SVN Merge: sorgente da cui unire, senza il ramo corrente).</param>
-internal sealed record SwitchPickerDto(bool Open, string Mode, bool Loading, string Error, IReadOnlyList<SwitchItemDto> Items);
+/// <param name="Recent">Ultimi nomi scelti per questo repository (piu' recente per primo), solo quelli ancora in elenco.</param>
+internal sealed record SwitchPickerDto(bool Open, string Mode, bool Loading, string Error, IReadOnlyList<SwitchItemDto> Items, IReadOnlyList<string> Recent);
+
+/// <summary>Un conflitto da risolvere (sezione Conflitti di Changes). <c>Key</c> e' la chiave di riga (<c>changes:percorso</c>).</summary>
+/// <param name="Kind"><c>text</c> | <c>property</c> | <c>tree</c>.</param>
+/// <param name="Files">File di appoggio di svn (nomi), da <c>svn info --xml</c>: spariscono dopo il resolve.</param>
+internal sealed record ConflictDto(string Key, string Path, string Name, string Kind, IReadOnlyList<string> Files);
 
 /// <summary>Banner dopo un merge non ancora committato (con "Annulla merge").</summary>
 internal sealed record MergeBannerDto(string Text, int Conflicts);
@@ -100,7 +108,8 @@ internal sealed record ChangesState(
     WizardDto Wizard,
     RevPickerDto RevPicker,
     SwitchPickerDto SwitchPicker,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] MergeBannerDto? Merge = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] MergeBannerDto? Merge = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ConflictDto>? Conflicts = null);
 
 /// <param name="K"><c>dir</c> per le cartelle (non si aprono nel diff); assente altrimenti.</param>
 internal sealed record LogPathDto(string A, string P, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? K = null);
@@ -118,7 +127,8 @@ internal sealed record MergeCountsDto(int Updated, int Added, int Deleted, int M
 /// <summary>Esito dell'anteprima (<c>preview</c>) o del merge (<c>merge</c>): conteggi, file e conflitti. <c>Revs</c> = "r120-r135" o "r120, r124".</summary>
 internal sealed record MergeResultDto(string Mode, string Revs, MergeCountsDto Counts, IReadOnlyList<LogPathDto> Items, int Skipped);
 
-/// <summary>Il Log in modalita' merge: <c>Selected</c> = revisioni scelte per il cherry-pick; <c>Blocked</c> = perche' non si puo' fare il merge (working copy sporca), vuoto se si puo'.</summary>
+/// <summary>Il Log in modalita' merge: <c>Selected</c> = revisioni scelte per il cherry-pick; <c>Blocked</c> = perche' non si puo' fare il merge (working copy sporca), vuoto se si puo'.
+/// <c>Pending</c> = merge eseguito e non ancora committato ne' annullato (le revisioni "da unire" non vanno mostrate come zero).</summary>
 internal sealed record MergeDto(
     string Source,
     string Title,
@@ -128,7 +138,8 @@ internal sealed record MergeDto(
     string Blocked,
     IReadOnlyList<long> Selected,
     int Eligible,
-    MergeResultDto? Result);
+    MergeResultDto? Result,
+    bool Pending = false);
 
 /// <summary>Snapshot della vista <c>log</c> (log-state.schema.json).</summary>
 internal sealed record LogState(

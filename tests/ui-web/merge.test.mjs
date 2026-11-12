@@ -23,7 +23,8 @@ test('banner: assente = niente markup; con conflitti avvisa; Annulla merge e Nas
   assert.equal(U.changesHTML.mergeBanner(s), '');
   s.merge = { text: 'Merge r120-r135 da ^/branches/x: rivedi.', conflicts: 2 };
   const h = U.changesHTML.mergeBanner(s);
-  assert.match(h, /class="mb warn"/); assert.match(h, /2 elementi in conflitto/); assert.match(h, /Annulla merge/);
+  assert.match(h, /class="mb warn"/); assert.match(h, /2 conflitti: risolvili qui sotto, poi committa/); assert.match(h, /Annulla merge/);
+  s.merge.conflicts = 1; assert.match(U.changesHTML.mergeBanner(s), /1 conflitto: risolvilo qui sotto, poi committa/); s.merge.conflicts = 2;
   assert.deepEqual(args(h).map(c => c.name), ['mergeUndo', 'mergeDismiss']);
   args(h).forEach(c => assert.deepEqual(validate(cmds, c), [], c.name));
   s.merge.conflicts = 0;
@@ -134,6 +135,7 @@ test('mock: apri (senza il ramo corrente), scegli, anteprima, cherry-pick con co
   assert.match(m.blocked, /modifiche locali/, 'la working copy della demo parte sporca: il merge e bloccato');
 
   await run("S.files.forEach(f => { if (f.st !== '?') { f.st = 'N'; f.text = f.base; } })", 't');   // working copy pulita
+  await run('modal = async () => true', 't');   // dialoghi (proposta "Risolvi ora", conferma dell'annullamento): senza DOM non esistono
   await send('log', 'mergePreview', {}); ok();
   m = last('log').merge;
   assert.equal(m.blocked, ''); assert.equal(m.result.mode, 'preview'); assert.equal(m.result.revs, 'r126-r131');
@@ -153,12 +155,17 @@ test('mock: apri (senza il ramo corrente), scegli, anteprima, cherry-pick con co
   assert.equal(c.merge.text, 'Merge r128, r129 da ^/branches/feature-coupon: rivedi le modifiche e committa, oppure annulla il merge.'); assert.equal(c.merge.conflicts, 1);
   assert.equal(c.commit.text, 'Merge r128, r129 da ^/branches/feature-coupon');
   assert.ok(c.sections.some(s => s.rows.some(r => r.status === 'C')), 'il conflitto compare in Changes');
+  assert.deepEqual(c.conflicts.map(x => [x.name, x.kind]), [['CheckoutController.cs', 'text']]);
+  assert.deepEqual(c.conflicts[0].files, ['Web/Controllers/CheckoutController.cs.working', 'Web/Controllers/CheckoutController.cs.merge-left.r127', 'Web/Controllers/CheckoutController.cs.merge-right.r129'], 'file di appoggio del merge, raggruppati sotto il file');
+  assert.equal(m.pending, true, 'merge eseguito e non committato: "da committare", non "0 da unire"');
+  assert.match(last('log').msg, /Merge eseguito, da committare. Conflitti da risolvere in Changes: 1/);
+  await send('log', 'mergeResolve', {}); ok();
 
-  await run('modal = async () => true', 't');   // conferma dell'annullamento (senza DOM il dialogo non esiste)
   await send('changes', 'mergeUndo', {}); ok();
   assert.ok(!last('changes').merge); assert.equal(last('changes').commit.text, '');
   assert.match(last('changes').status.msg, /Merge annullato/);
   assert.equal(last('log').merge.eligible, 4, 'dopo l\'annullamento le revisioni tornano da unire');
+  assert.equal(last('log').merge.pending, false);
 
   await send('log', 'mergeClose', {}); ok();
   assert.ok(!last('log').merge);

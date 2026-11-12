@@ -13,10 +13,12 @@
     return to == null ? null : revs[Math.max(0, Math.min(revs.length - 1, to))];
   };
   const fld =(name, label, val, ph, type) => `<label for="lf-${name}">${label}</label><input id="lf-${name}" name="${name}" type="${type || 'text'}" value="${esc(val)}"${ph ? ` placeholder="${esc(ph)}"` : ''} spellcheck="false">`;
+  // finche' il merge non e' committato o annullato non e' "0 da unire": le revisioni da unire sono gia' ricalcolate
+  const mgState = m => m.pending ? t('Merge eseguito, da committare') : t('{0} revisioni da unire', m.eligible);
   let mcur = null;   // revisione col focus nella tabella del merge (roving tabindex): sopravvive ai ridisegni
   U.logHTML = {
     top(s) {
-      if (s.merge) return `<div class="mh"><b>${esc(s.merge.title)}</b><span class="muted">· ${t('{0} revisioni da unire', s.merge.eligible)}</span><span class="fill"></span>` +
+      if (s.merge) return `<div class="mh"><b>${esc(s.merge.title)}</b><span class="muted">· ${mgState(s.merge)}</span><span class="fill"></span>` +
         U.btn('btn sm', t('Chiudi merge'), 'x', 'mergeClose', null, t('Torna al log della working copy')) + `</div>`;
       return `<form class="wc" id="logform"><label for="logp">Working copy</label><input id="logp" type="text" value="${esc(s.path)}" placeholder="${esc(t('C:\\percorso\\della\\working copy'))}" spellcheck="false">` +
         `<button class="btn" type="submit" title="${esc(t('Carica le ultime revisioni (svn log)'))}">${U.icon('refresh')}<span>${t('Carica log')}</span></button>` +
@@ -45,7 +47,8 @@
     },
     // tabella (ARIA grid): intestazioni fisse e ridimensionabili, una riga per revisione, "Carica altre" in fondo
     list(s) {
-      if (s.merge && !s.entries.length) return `<div class="empty-state"><b>${s.merge.loading ? t('Lettura delle revisioni da unire…') : t('Nessuna revisione da unire')}</b><span class="muted">${s.merge.loading ? '' : t('Il ramo scelto non ha modifiche che la working copy non abbia già.')}</span></div>`;
+      if (s.merge && !s.entries.length) return s.merge.pending ? `<div class="empty-state"><b>${t('Merge eseguito, da committare')}</b><span class="muted">${t('Le modifiche sono nella working copy: committale o annulla il merge in Changes.')}</span></div>`
+        : `<div class="empty-state"><b>${s.merge.loading ? t('Lettura delle revisioni da unire…') : t('Nessuna revisione da unire')}</b><span class="muted">${s.merge.loading ? '' : t('Il ramo scelto non ha modifiche che la working copy non abbia già.')}</span></div>`;
       if (!s.entries.length) return `<div class="empty-state"><b>${t('Nessuna revisione caricata')}</b><span class="muted">${t('Inserisci il percorso e premi Carica log.')}</span></div>`;
       const h = (c, label) => `<span role="columnheader">${label}<i class="rz" data-c="${c}" aria-hidden="true"></i></span>`;
       const picked = s.merge ? new Set(s.merge.selected) : null, cur = s.merge ? (s.entries.some(e => e.rev === mcur) ? mcur : s.entries[0].rev) : (s.sel == null ? s.entries[0].rev : s.sel);
@@ -62,11 +65,12 @@
         `<span class="muted">· ${t('{0} aggiornati · {1} aggiunti · {2} eliminati · {3} uniti · {4} in conflitto', c.updated, c.added, c.deleted, c.merged, c.conflicted)}</span>` +
         `<p class="muted">${r.mode === 'preview' ? t("L'anteprima non prevede sempre i conflitti ad albero e di proprietà: possono comparire solo con il merge vero.") : t('Le modifiche sono nella working copy, non ancora committate: rivedile in Changes (i conflitti compaiono lì).')}</p>` +
         (r.skipped ? `<p class="muted">${t('{0} percorsi saltati da svn.', r.skipped)}</p>` : '') +
+        (r.mode === 'merge' && r.counts.conflicted ? `<div class="mb warn" role="alert">${U.icon('warn')}<span>${t('{0} in conflitto: vanno risolti prima di committare.', r.counts.conflicted)}</span><span class="fill"></span>${U.btn('btn sm primary', t('Risolvi i conflitti'), 'diff', 'mergeResolve', null, t('Apre Changes, sezione Conflitti, con le azioni per ogni file'))}</div>` : '') +
         (r.items.length ? `<div class="pth">${t('Azione')} / ${t('Percorso')} · ${t('{0} file', r.items.length)}</div><ul class="paths">${r.items.map(U.logHTML.mergeRow).join('')}</ul>` : `<p class="muted">${t('Nessun file da mostrare.')}</p>`) + `</div>`;
     },
     mergePanel(s) {
       const m = s.merge, n = m.selected.length, off = m.busy || m.loading || !m.eligible ? 'disabled' : '';
-      return `<div class="ld-h mp"><b>${esc(m.title)}</b> <span class="muted">· ${t('{0} revisioni da unire', m.eligible)}${n ? ' · ' + t('{0} scelte', n) : ''}</span>` +
+      return `<div class="ld-h mp"><b>${esc(m.title)}</b> <span class="muted">· ${mgState(m)}${n && !m.pending ? ' · ' + t('{0} scelte', n) : ''}</span>` +
         `<p class="muted">${t('Clic su una revisione per sceglierla (cherry-pick). Senza scelta, Anteprima e Merge tutto valgono per tutte le revisioni da unire.')}</p>` +
         (m.blocked ? `<div class="mb warn" role="alert">${U.icon('warn')}<span>${esc(m.blocked)}</span></div>` : '') +
         (m.error ? `<div class="rp-err" role="alert">${U.icon('x')}<span>${esc(m.error)}</span></div>` : '') +

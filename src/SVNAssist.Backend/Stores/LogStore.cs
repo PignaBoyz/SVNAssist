@@ -163,6 +163,10 @@ internal sealed class LogStore : ViewStore
                 if (Merge is not null)
                     await Merge.RunAsync(all: false, ct);
                 break;
+            case "mergeResolve":
+                if (Merge is not null)
+                    await Merge.ShowConflictsAsync();
+                break;
             case "mergeClose":
                 await CloseMergeAsync(ct);
                 break;

@@ -882,7 +882,7 @@ public class SvnService : ISvnService
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<string>> ListFoldersAsync(string url, CancellationToken ct)
+    public async Task<IReadOnlyList<SvnListEntry>> ListEntriesAsync(string url, CancellationToken ct)
     {
         try
         {
@@ -895,6 +895,44 @@ public class SvnService : ISvnService
         }
     }
 
+    /// <inheritdoc />
+    public async Task<IReadOnlyDictionary<string, SvnConflictInfo>> GetConflictInfoAsync(IReadOnlyList<string> paths, CancellationToken ct)
+    {
+        if (paths.Count == 0)
+            return new Dictionary<string, SvnConflictInfo>();
+        try
+        {
+            var parsed = ParseConflictInfoXml(await RunSvnWithTargetsAsync(["info", "--xml"], paths, workingDirectory: null, ct));
+            // Chiavi come i percorsi chiesti (svn li riscrive, qui si confrontano normalizzati).
+            return paths.Where(p => parsed.ContainsKey(Path.GetFullPath(p)))
+                .ToDictionary(p => p, p => parsed[Path.GetFullPath(p)], StringComparer.OrdinalIgnoreCase);
+        }
+        catch (InvalidOperationException ex)
+        {
+            // Un conflitto senza dati (svn vecchio, file sparito) non deve fermare il refresh: le azioni restano, senza i file di appoggio.
+            BackendLog.Warn("svn info sui conflitti: " + ex.Message);
+            return new Dictionary<string, SvnConflictInfo>();
+        }
+    }
+
+    /// <summary>Elementi <c>&lt;entry&gt;</c> di <c>svn info --xml</c> con un <c>&lt;conflict&gt;</c>; i percorsi dei file di appoggio sono completi.</summary>
+    internal static IReadOnlyDictionary<string, SvnConflictInfo> ParseConflictInfoXml(string xml)
+    {
+        var result = new Dictionary<string, SvnConflictInfo>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in XDocument.Parse(xml).Descendants("entry"))
+        {
+            var conflict = entry.Element("conflict");
+            var path = entry.Attribute("path")?.Value;
+            if (conflict is null || string.IsNullOrEmpty(path))
+                continue;
+            string? File(string name) => conflict.Element(name)?.Value is { Length: > 0 } f ? Path.GetFullPath(f) : null;
+            result[Path.GetFullPath(path)] = new SvnConflictInfo(conflict.Attribute("type")?.Value ?? "text",
+                File("prev-base-file"), File("prev-wc-file"), File("cur-base-file"), File("prop-file"));
+        }
+
+        return result;
+    }
+
     /// <summary>E170000 (URL inesistente), E200009 (alcuni target non esistono), "non-existent", "path not found".</summary>
     internal static bool IsPathNotFound(string? text)
         => !string.IsNullOrEmpty(text)
@@ -903,11 +941,18 @@ public class SvnService : ISvnService
                || text.Contains("path not found", StringComparison.OrdinalIgnoreCase)
                || text.Contains("doesn't exist", StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>Nomi delle sole cartelle di <c>svn list --xml</c>, in ordine alfabetico.</summary>
-    internal static IReadOnlyList<string> ParseListXml(string xml)
+    /// <summary>Le sole cartelle di <c>svn list --xml</c> con revisione, autore e data dell'ultima modifica, in ordine alfabetico.</summary>
+    internal static IReadOnlyList<SvnListEntry> ParseListXml(string xml)
         => XDocument.Parse(xml).Descendants("entry").Where(e => e.Attribute("kind")?.Value == "dir")
-            .Select(e => e.Element("name")?.Value ?? string.Empty).Where(n => n.Length > 0)
-            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
+            .Select(e =>
+            {
+                var commit = e.Element("commit");
+                return new SvnListEntry(e.Element("name")?.Value ?? string.Empty,
+                    long.TryParse(commit?.Attribute("revision")?.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var r) ? r : 0,
+                    commit?.Element("author")?.Value ?? string.Empty,
+                    DateTimeOffset.TryParse(commit?.Element("date")?.Value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var d) ? d : null);
+            })
+            .Where(e => e.Name.Length > 0).OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase).ToList();
 
     /// <inheritdoc />
     public async Task<UpdateResult> SwitchAsync(string workingCopyPath, string url, CancellationToken ct)

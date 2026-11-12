@@ -624,8 +624,69 @@
               "current": {
                 "type": "boolean",
                 "description": "E' il ramo su cui si trova la working copy."
+              },
+              "rev": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Ultima revisione che ha toccato il ramo (svn list --xml); 0 = sconosciuta."
+              },
+              "author": {
+                "type": "string"
+              },
+              "date": {
+                "type": "string",
+                "description": "ISO 8601 dell'ultima modifica, vuota se sconosciuta."
               }
             }
+          }
+        },
+        "recent": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Ultimi nomi usati per questo repository (piu recente per primo), solo quelli ancora in elenco."
+        }
+      }
+    },
+    "conflicts": {
+      "type": "array",
+      "description": "Sezione Conflitti: un elemento per file in conflitto, con le azioni conflictOp (edit solo per kind text, mine/theirs solo per text e property; resolved sempre, con conferma per tree).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "path",
+          "name",
+          "kind",
+          "files"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Chiave di riga (changes:percorso) da passare a conflictOp."
+          },
+          "path": {
+            "type": "string",
+            "description": "Percorso relativo alla working copy."
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "text",
+              "property",
+              "tree"
+            ]
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "File di appoggio di svn (da svn info --xml), relativi alla working copy: spariscono dopo il resolve."
           }
         }
       }

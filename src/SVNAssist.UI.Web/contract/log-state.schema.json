@@ -238,6 +238,10 @@
           "minimum": 0,
           "description": "Numero di revisioni da unire."
         },
+        "pending": {
+          "type": "boolean",
+          "description": "Merge eseguito e non ancora committato ne annullato: la UI mostra Merge eseguito, da committare al posto di 0 revisioni da unire."
+        },
         "result": {
           "type": [
             "object",

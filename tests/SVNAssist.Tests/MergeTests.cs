@@ -143,7 +143,7 @@ public class MergeTests
                 new SvnLogEntry(7, "gverdi", new DateTimeOffset(2026, 11, 4, 9, 0, 0, TimeSpan.Zero), "feat: elimina b", [new SvnLogPath("D", "/branches/feature-x/b.txt", "file")]),
             ];
             Changes = new ChangesStore(Settings, Svn, new FakeAiFactory(), new NoopAiPrompt(), Dialogs, Host,
-                new PrereqStore(new PrerequisitesService(Settings, new PrerequisiteProbes())))
+                new PrereqStore(new PrerequisitesService(Settings, new PrerequisiteProbes())), recentTargetsFile: Path.Combine(Path.GetTempPath(), "SVNAssist_Recent_" + Guid.NewGuid().ToString("N")[..8] + ".json"))
             { WorkingCopyPath = @"C:\wc", TempRoot = Path.Combine(Path.GetTempPath(), "SVNAssist_Mg_" + Guid.NewGuid().ToString("N")[..8]) };
             Log = new LogStore(Svn, Settings, Host, null, Changes);
             Changes.StartMerge = Log.StartMergeAsync;

@@ -69,6 +69,9 @@ namespace SVNAssist.Rpc
         /// </summary>
         Task ShowLogWindowAsync(string title);
 
+        /// <summary>Porta in primo piano la finestra SVN Changes (es. dopo un merge con conflitti da risolvere).</summary>
+        Task ShowChangesWindowAsync();
+
         /// <summary>Apre Tools > Options > SVNAssist ("Faccio io").</summary>
         Task OpenSettingsAsync();
 

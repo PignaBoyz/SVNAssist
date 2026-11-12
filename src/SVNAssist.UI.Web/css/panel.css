@@ -246,3 +246,31 @@ html[data-view=diff] body,html[data-view=log] body,html[data-view=changes] body{
 .rp-note{padding:6px 8px;text-align:center}
 .rp-err{display:flex;align-items:center;gap:6px;color:var(--chip-fail-fg);background:var(--chip-fail-bg);border-radius:4px;padding:4px 8px;margin-top:4px}
 .wiz-b input[type=text]{background:var(--bg1);border:1px solid var(--bd2);border-radius:4px;padding:5px 8px;width:100%;color:var(--fg)}
+
+/* sezione Conflitti (Changes): un riquadro per file con le azioni esplicite */
+.cfl{margin:0 8px 6px;border:1px solid var(--bd2);border-left:3px solid var(--warn);border-radius:4px;background:var(--bg3);flex:none;max-height:42vh;overflow:auto}
+.cfl-h{display:flex;align-items:center;gap:8px;padding:6px 8px;flex-wrap:wrap}
+.cfl-h .ic,.cf-t .ic{color:var(--warn)}
+.cfl-l{list-style:none;margin:0;padding:0}
+.cf{padding:6px 8px;border-top:1px solid var(--bd);display:flex;flex-direction:column;gap:4px}
+.cf p{margin:0}
+.cf-t{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap}
+.cf-n,.cf-p{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.cf-a{display:flex;gap:6px;flex-wrap:wrap}
+.cf-f code{background:var(--bg1);border:1px solid var(--bd);border-radius:3px;padding:0 4px;font-family:var(--mono)}
+
+/* selettore Switch/Merge: gruppi, vista estesa a tabella con lista virtuale */
+.sw-g{flex:none;padding:4px 8px 2px;font-size:.88em;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--bd)}
+.wiz.rp.sw-wide{width:min(940px,100%)}
+.sw-bar{display:flex;gap:6px}
+.sw-bar select{width:auto;min-width:130px;background:var(--bg1);border:1px solid var(--bd2);border-radius:4px;padding:5px 8px;color:var(--fg)}
+.sw-x{display:grid;grid-template-columns:minmax(0,1fr) 56px 64px 110px 128px;gap:8px;align-items:center}
+@media (max-width:720px){.sw-x{grid-template-columns:minmax(0,1fr) 52px 56px 118px}.sw-h>:nth-child(4),.sw-x .au{display:none}}   /* tool window stretta: senza la colonna Autore */
+.rp-row.sw-x{height:28px;padding:0 8px;align-items:center}
+.rp-row.sw-x .au{max-width:none}
+.sw-h{padding:2px calc(9px + var(--sbw,0px)) 2px 9px;font-weight:600;color:var(--fg2)}   /* --sbw: larghezza della barra di scorrimento, misurata da swFill, per allineare le colonne */
+.sw-hb{display:inline-flex;align-items:center;gap:4px;background:none;border:0;padding:0;font-weight:600;color:var(--fg);text-align:left}
+.sw-hb:hover{color:var(--acc2)}
+.rp-list.sw-vl{display:block;height:min(380px,50vh);max-height:none;position:relative}
+#sw-sp{position:relative}
+#sw-rows{position:absolute;left:0;right:0}

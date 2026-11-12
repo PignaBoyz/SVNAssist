@@ -102,7 +102,9 @@ internal sealed class FakeSvnService : ISvnService
     public Task ResolveAsync(string path, SvnConflictChoice accept, CancellationToken ct) { Resolved.Add((path, accept)); return Task.CompletedTask; }
     public Task AddToIgnoreListAsync(string path, CancellationToken ct) { Ignored.Add(path); return Task.CompletedTask; }
     public Task<UpdateResult> UpdateAsync(string workingCopyPath, CancellationToken ct)
-        => UpdateError is not null ? throw new InvalidOperationException(UpdateError) : Task.FromResult(new UpdateResult(7, []));
+        => UpdateError is not null ? throw new InvalidOperationException(UpdateError) : Task.FromResult(new UpdateResult(7, UpdateConflicts));
+
+    public IReadOnlyList<string> UpdateConflicts { get; set; } = [];
 
     public List<(string Path, string Revision)> UpdatedToRevision { get; } = [];
     public List<string> CleanedUp { get; } = [];
@@ -204,15 +206,24 @@ internal sealed class FakeSvnService : ISvnService
 
     public Task<Version?> GetSvnVersionAsync(CancellationToken ct) => Task.FromResult(SvnVersion);
 
-    /// <summary>Cartelle per URL (come le restituirebbe svn list); un URL assente = elenco vuoto.</summary>
+    /// <summary>Cartelle per URL (come le restituirebbe svn list); un URL assente = elenco vuoto. <see cref="Entries"/> ha la precedenza (con revisione, autore, data).</summary>
     public Dictionary<string, string[]> Folders { get; } = [];
+    public Dictionary<string, SvnListEntry[]> Entries { get; } = [];
     public List<string> Listed { get; } = [];
 
-    public Task<IReadOnlyList<string>> ListFoldersAsync(string url, CancellationToken ct)
+    public Task<IReadOnlyList<SvnListEntry>> ListEntriesAsync(string url, CancellationToken ct)
     {
         Listed.Add(url);
-        return Task.FromResult<IReadOnlyList<string>>(Folders.GetValueOrDefault(url) ?? []);
+        if (Entries.TryGetValue(url, out var rich))
+            return Task.FromResult<IReadOnlyList<SvnListEntry>>(rich);
+        return Task.FromResult<IReadOnlyList<SvnListEntry>>((Folders.GetValueOrDefault(url) ?? []).Select(n => new SvnListEntry(n, 0, string.Empty, null)).ToList());
     }
+
+    /// <summary>Dati dei conflitti per percorso completo (come svn info --xml); un percorso assente = nessun dato.</summary>
+    public Dictionary<string, SvnConflictInfo> ConflictInfos { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public Task<IReadOnlyDictionary<string, SvnConflictInfo>> GetConflictInfoAsync(IReadOnlyList<string> paths, CancellationToken ct)
+        => Task.FromResult<IReadOnlyDictionary<string, SvnConflictInfo>>(paths.Where(ConflictInfos.ContainsKey).ToDictionary(p => p, p => ConflictInfos[p], StringComparer.OrdinalIgnoreCase));
 
     public List<(string Path, string Url)> Switched { get; } = [];
     public string? SwitchError { get; set; }
@@ -274,6 +285,16 @@ internal sealed class FakeDialogs : IDialogService
     /// <summary>Testo restituito da <see cref="AskTextAsync"/> (null = annullato).</summary>
     public string? TextResult { get; set; } = "";
     public List<string> TextPrompts { get; } = [];
+
+    /// <summary>Risposta di <see cref="AskAsync"/> ("Risolvi ora" = true, "Più tardi" = false) e domande ricevute.</summary>
+    public bool AskResult { get; set; }
+    public List<string> Asked { get; } = [];
+
+    public Task<bool> AskAsync(string message, string yes, string no, CancellationToken ct)
+    {
+        Asked.Add(message);
+        return Task.FromResult(AskResult);
+    }
 
     public Task<string?> AskTextAsync(string message, string label, string defaultValue, CancellationToken ct)
     {

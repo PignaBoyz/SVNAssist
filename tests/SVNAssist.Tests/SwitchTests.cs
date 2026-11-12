@@ -55,7 +55,7 @@ public class SwitchTests
             </list></lists>
             """;
 
-        Assert.Equal(["Alfa", "zeta"], SvnService.ParseListXml(xml));
+        Assert.Equal(["Alfa", "zeta"], SvnService.ParseListXml(xml).Select(e => e.Name));
     }
 
     [Theory]
@@ -133,27 +133,27 @@ public class SwitchTests
     }
 
     [Fact]
-    public async Task ListFoldersAsync_PercorsoInesistente_ElencoVuotoNonErrore()
+    public async Task ListEntriesAsync_PercorsoInesistente_ElencoVuotoNonErrore()
     {
         var runner = new Runner { Respond = _ => new ProcessResult(1, "", "svn: E170000: URL 'https://x/repo/tags' doesn't exist") };
 
-        Assert.Empty(await new SvnService(FakeSvnPath, runner).ListFoldersAsync("https://x/repo/tags", Ct));
+        Assert.Empty(await new SvnService(FakeSvnPath, runner).ListEntriesAsync("https://x/repo/tags", Ct));
     }
 
     [Fact]
-    public async Task ListFoldersAsync_AltriErrori_Propagano()
+    public async Task ListEntriesAsync_AltriErrori_Propagano()
     {
         var runner = new Runner { Respond = _ => new ProcessResult(1, "", "svn: E170013: Unable to connect to a repository") };
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => new SvnService(FakeSvnPath, runner).ListFoldersAsync("https://x/repo/tags", Ct));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new SvnService(FakeSvnPath, runner).ListEntriesAsync("https://x/repo/tags", Ct));
     }
 
     [Fact]
-    public async Task ListFoldersAsync_UsaListXml()
+    public async Task ListEntriesAsync_UsaListXml()
     {
         var runner = new Runner { Respond = _ => new ProcessResult(0, "<lists><list><entry kind=\"dir\"><name>a</name></entry></list></lists>", "") };
 
-        Assert.Equal(["a"], await new SvnService(FakeSvnPath, runner).ListFoldersAsync("https://x/repo/branches", Ct));
+        Assert.Equal(["a"], (await new SvnService(FakeSvnPath, runner).ListEntriesAsync("https://x/repo/branches", Ct)).Select(e => e.Name));
         Assert.Equal(["list", "--non-interactive", "--xml", "https://x/repo/branches"], runner.Calls[0].Args);
     }
 
@@ -195,7 +195,7 @@ public class SwitchTests
             Svn.Folders["file:///repo/branches"] = ["feature-x", "con spazio"];
             Svn.Folders["file:///repo/tags"] = ["1.0"];
             Store = new ChangesStore(Settings, Svn, new FakeAiFactory(), new NoopAiPrompt(), Dialogs, new FakeHost(),
-                new PrereqStore(new PrerequisitesService(Settings, new PrerequisiteProbes())))
+                new PrereqStore(new PrerequisitesService(Settings, new PrerequisiteProbes())), recentTargetsFile: Path.Combine(Path.GetTempPath(), "SVNAssist_Recent_" + Guid.NewGuid().ToString("N")[..8] + ".json"))
             { WorkingCopyPath = @"C:\wc", TempRoot = Path.Combine(Path.GetTempPath(), "SVNAssist_Sw_" + Guid.NewGuid().ToString("N")[..8]) };
         }
 

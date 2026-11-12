@@ -25,6 +25,8 @@ Questo file è pensato per essere **modificato da te** e restituito per pianific
 - Stile Git Changes: albero con tastiera (frecce, Spazio, Invio, Canc con conferma), filtro, vista Albero/Lista, sezioni **Staged / Modifiche / Non versionati / Conflitti** con contatori.
 - **Commit All** se Staged è vuoto, **Commit Staged (n)** altrimenti; niente auto-stage; mostra la revisione creata; bloccato con conflitti.
 - Add, Delete, Revert (con conferma ed elenco), Add to Ignore List, Risolvi conflitto (Working / Mine-full / Theirs-full / Base; tree-conflict con conferma).
+- **Sezione Conflitti** con pulsanti per file: editor di merge a 3 vie (vsDiffMerge di VS, poi TortoiseMerge, poi il file con i marcatori), Usa la mia, Usa la loro, Segna come risolto; file di appoggio di svn raggruppati sotto il file (non tra i non versionati); proposta "Risolvi ora / Più tardi" dopo merge, update e switch con conflitti.
+- **Switch / Merge su repository grandi**: selettore veloce (ultimi usati per repository, ricerca, al massimo 50 righe) e vista estesa (tabella con revisione, autore, data, filtri per nome e tipo, ordine, scorrimento virtuale per 500+ rami).
 - **Update**, **Update to revision…** (con elenco revisioni), **Cleanup** (anche come pulsante quando la WC è bloccata), **Lock / Unlock** (conferma per rubare il lock, lucchetto sui file tuoi).
 - Rilevamento automatico della WC dalla solution, refresh con debounce; "Working Copy Path" nelle impostazioni ha la precedenza.
 - **Login SVN** solo se le credenziali in cache mancano; cache standard di Subversion (condivisa con TortoiseSVN); con accesso integrato Windows non compare.

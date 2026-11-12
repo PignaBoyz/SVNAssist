@@ -84,7 +84,8 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         IDialogService dialogs,
         IHost host,
         PrereqStore prerequisites,
-        WizardStore? wizard = null)
+        WizardStore? wizard = null,
+        string? recentTargetsFile = null)
     {
         _settingsService = settingsService;
         _svnService = svnService;
@@ -103,7 +104,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         CommitMessage.Changed += NotifyChanged;
         RevPicker = new RevisionPickerStore(svnService);
         RevPicker.Changed += NotifyChanged;
-        Switch = new SwitchPickerStore(svnService, settingsService);
+        Switch = new SwitchPickerStore(svnService, settingsService, recentTargetsFile);
         Switch.Changed += NotifyChanged;
         _debouncer = new RefreshDebouncer(RefreshQuietPeriod, AutoRefreshAsync);
     }
@@ -129,15 +130,13 @@ internal sealed class ChangesStore : ViewStore, IDisposable
 
     // Merge eseguito e non ancora committato: banner con "Annulla merge" e testo del messaggio precompilato.
     private string? _mergeBanner, _mergeCommitText;
-    private int _mergeConflicts;
 
     /// <summary>Dopo un merge: messaggio di commit precompilato (se vuoto, senza auto-stage) e banner con "Annulla merge".</summary>
-    internal void AfterMerge(string commitText, string bannerText, int conflicts)
+    internal void AfterMerge(string commitText, string bannerText)
     {
         lock (_stateLock)
         {
             _mergeBanner = bannerText;
-            _mergeConflicts = conflicts;
             _mergeCommitText = commitText;
         }
 
@@ -154,6 +153,43 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             _mergeBanner = null;
             _mergeCommitText = null;
         }
+    }
+
+    /// <summary>Merge eseguito e non ancora committato ne' annullato (c'e' ancora qualcosa da committare): il Log in modalita' merge lo mostra al posto di "0 da unire".</summary>
+    internal bool MergePending
+    {
+        get
+        {
+            lock (_stateLock)
+                return _mergeBanner is not null && CommitSet().Entries.Count > 0;
+        }
+    }
+
+    // Conflitti di testo/proprieta' con i dati di svn info (tipo e file di appoggio): chiave = percorso completo.
+    private IReadOnlyDictionary<string, SvnConflictInfo> _conflictInfo = new Dictionary<string, SvnConflictInfo>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Avvia l'editor di merge a 3 vie (di default vsDiffMerge, poi TortoiseMerge); ritorna il suo nome o <c>null</c> se non c'e' (iniettabile nei test).</summary>
+    internal Func<MergeEditorFiles, string?> MergeEditorLauncher { get; set; } = MergeEditor.TryLaunch;
+
+    /// <summary>Porta in primo piano la finestra Changes (dal Log: "Risolvi i conflitti").</summary>
+    internal Task ShowWindowAsync() => _host.ShowChangesWindowAsync();
+
+    /// <summary>
+    /// Dopo un merge/update/switch che lascia conflitti: propone di risolverli subito (porta in primo piano Changes, dove c'e' la sezione Conflitti)
+    /// oppure piu' tardi (i conflitti restano come sono, postpone).
+    /// </summary>
+    internal async Task OfferResolveConflictsAsync(int conflicts, CancellationToken ct)
+    {
+        if (conflicts <= 0)
+            return;
+        var now = await _dialogs.AskAsync(
+            Loc.T("{0} file in conflitto.\n\nVuoi risolverli ora? \"Risolvi ora\" apre la sezione Conflitti di Changes, con un editor di merge per ogni file. " +
+                  "\"Più tardi\" lascia i conflitti come sono (svn non li risolve da solo): potrai risolverli quando vuoi, ma finché restano non si può committare.", conflicts),
+            Loc.T("Risolvi ora"), Loc.T("Più tardi"), ct);
+        if (!now)
+            return;
+        await _host.ShowChangesWindowAsync();
+        SetStatus(Loc.T("{0} file in conflitto: risolvili nella sezione Conflitti, poi committa.", conflicts));
     }
 
     /// <summary>Checklist dei prerequisiti.</summary>
@@ -222,6 +258,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             var download = Prerequisites.Download;
             var mode = _themeMode;
             var commit = CommitSet();
+            var conflicts = BuildConflicts();
             return new ChangesState(
                 new WorkingCopyDto(_workingCopyPath, _showWorkingCopyInput, _branchName, SvnVersion: _svnVersion),
                 CommitMessage.GetSnapshot(download, commit.Entries.Count, commit.All),
@@ -235,8 +272,22 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 RevPicker.GetSnapshot(),
                 Switch.GetSnapshot(),
                 // Il banner sparisce da solo se non resta nessuna modifica (annullata a mano, committata altrove).
-                _mergeBanner is not null && commit.Entries.Count > 0 ? new MergeBannerDto(_mergeBanner, _mergeConflicts) : null);
+                _mergeBanner is not null && commit.Entries.Count > 0 ? new MergeBannerDto(_mergeBanner, conflicts.Count) : null,
+                conflicts);
         }
+    }
+
+    /// <summary>Elementi in conflitto con tipo e file di appoggio (da <c>svn info</c>, mai indovinati dal nome).</summary>
+    private List<ConflictDto> BuildConflicts()
+    {
+        var wc = _workingCopyPath;
+        return _entries.Where(e => e.Status == SvnStatusKind.Conflicted).Select(e =>
+        {
+            _conflictInfo.TryGetValue(e.FullPath, out var info);
+            var kind = e.IsTreeConflict ? "tree" : info?.Type == "property" ? "property" : "text";
+            return new ConflictDto("changes:" + e.RelativePath, e.RelativePath, e.Name, kind,
+                (info?.Files ?? []).Select(f => Path.GetRelativePath(wc, f).Replace('\\', '/')).ToList());
+        }).ToList();
     }
 
     private static string SectionCollapseKey(string sectionId) => "sec:" + sectionId;
@@ -374,6 +425,9 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 break;
             case "switchOk":
                 await SwitchOkAsync(Args.Str(args, "name"), ct);
+                break;
+            case "conflictOp":
+                await RunExclusiveAsync(() => ConflictOpAsync(Args.OneOf(args, "op", "edit", "mine", "theirs", "resolved"), Args.Str(args, "key"), ct));
                 break;
             case "showLog":
                 if (string.IsNullOrWhiteSpace(WorkingCopyPath))
@@ -781,6 +835,16 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 .Select(e => e!)
                 .ToList();
 
+            // I file di appoggio di un conflitto (.mine, .rNN, .merge-left/right, .working, .prej) sono non versionati: si leggono da svn info
+            // (mai indovinati dal nome) e si tolgono dall'elenco, restano sotto il file in conflitto.
+            var conflictedPaths = newEntries.Where(e => e.Status == SvnStatusKind.Conflicted && !e.IsTreeConflict).Select(e => e.FullPath).ToList();
+            var conflictInfo = conflictedPaths.Count > 0
+                ? await _svnService.GetConflictInfoAsync(conflictedPaths, ct)
+                : new Dictionary<string, SvnConflictInfo>();
+            var auxFiles = conflictInfo.Values.SelectMany(i => i.Files).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (auxFiles.Count > 0)
+                newEntries.RemoveAll(e => e.Status == SvnStatusKind.Unversioned && auxFiles.Contains(e.FullPath));
+
             lock (_stateLock)
             {
                 if (branch is { } b)
@@ -795,6 +859,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                     return;
 
                 _entries = newEntries;
+                _conflictInfo = conflictInfo;
                 // Una working copy digitata a mano resta modificabile; una rilevata dalla solution nasconde il campo.
                 _showWorkingCopyInput = !_autoDetected;
                 UpdateStagedAfterRefresh();
@@ -1164,6 +1229,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             await RefreshAsync(ct, reloadBranch: true, update.ConflictedPaths.Count > 0
                 ? Loc.T("{0}: {1} file in conflitto.", updated, update.ConflictedPaths.Count)
                 : $"{updated}.");
+            await OfferResolveConflictsAsync(update.ConflictedPaths.Count, ct);
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
@@ -1217,6 +1283,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             await RefreshAsync(ct, reloadBranch: true, conflicts > 0
                 ? Loc.T("{0}: {1} file in conflitto.", updated, conflicts)
                 : $"{updated}.");
+            await OfferResolveConflictsAsync(conflicts, ct);
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
@@ -1257,6 +1324,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         if (Switch.Mode == "merge")
         {
             // Sorgente scelta: il resto (revisioni, anteprima, merge) sta nel Log in modalita' merge.
+            Switch.RememberUsed(target.Name);
             Switch.Close();
             if (StartMerge is not null)
                 await StartMerge(WorkingCopyPath, target, ct);
@@ -1276,6 +1344,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 Loc.T("La working copy ha {0} elementi con modifiche locali: lo switch le porta su {1} e può generare conflitti. Continuare?", local, target.Name), ct))
             return;
 
+        Switch.RememberUsed(target.Name);
         Switch.Close();
         await RunExclusiveAsync(() => SwitchCoreAsync(target, ct));
     }
@@ -1290,6 +1359,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             await RefreshAsync(ct, reloadBranch: true, (result.ConflictedPaths.Count > 0
                 ? Loc.T("{0}: {1} file in conflitto.", done, result.ConflictedPaths.Count)
                 : $"{done}.") + " " + Loc.T("Se Visual Studio lo chiede, ricarica la solution."));
+            await OfferResolveConflictsAsync(result.ConflictedPaths.Count, ct);
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
@@ -1596,9 +1666,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         SvnConflictChoice choice;
         if (entry.IsTreeConflict)
         {
-            if (!await _dialogs.ConfirmAsync(
-                    Loc.T("Conflitto ad albero su \"{0}\" (rinomina/cancellazione). " +
-                          "Sistema prima la struttura a mano, poi conferma per segnarlo come risolto.", entry.RelativePath), ct))
+            if (!await ConfirmTreeConflictAsync(entry, ct))
                 return;
             choice = SvnConflictChoice.Working;
         }
@@ -1610,6 +1678,15 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             choice = picked;
         }
 
+        await ApplyResolveAsync(entry, choice, ct);
+    }
+
+    private Task<bool> ConfirmTreeConflictAsync(ChangeEntry entry, CancellationToken ct) => _dialogs.ConfirmAsync(
+        Loc.T("Conflitto ad albero su \"{0}\" (rinomina/cancellazione). " +
+              "Sistema prima la struttura a mano, poi conferma per segnarlo come risolto.", entry.RelativePath), ct);
+
+    private async Task ApplyResolveAsync(ChangeEntry entry, SvnConflictChoice choice, CancellationToken ct)
+    {
         try
         {
             SetStatus(Loc.T("Risoluzione conflitto in corso..."));
@@ -1620,6 +1697,62 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         {
             SetStatus(Loc.T("Errore resolve: {0}", ex.Message));
         }
+    }
+
+    /// <summary>
+    /// Pulsanti della sezione Conflitti: <c>edit</c> = editor di merge a 3 vie (vsDiffMerge, poi TortoiseMerge, poi il file con i marcatori in VS),
+    /// <c>mine</c> / <c>theirs</c> = tieni tutto il mio / tutto il loro (con conferma: scartano l'altra parte), <c>resolved</c> = segna come risolto (working;
+    /// rifiutato se restano i marcatori). Un conflitto ad albero ammette solo <c>resolved</c>, con conferma.
+    /// </summary>
+    private async Task ConflictOpAsync(string op, string key, CancellationToken ct)
+    {
+        var target = ResolveKey(key);
+        if (target.SingleFile is not { Status: SvnStatusKind.Conflicted } entry)
+        {
+            SetStatus(Loc.T("Seleziona un file in conflitto da risolvere."));
+            return;
+        }
+
+        if (entry.IsTreeConflict && op != "resolved")
+        {
+            SetStatus(Loc.T("Conflitto ad albero: non ci sono versioni da scegliere. Sistema la struttura a mano, poi segnalo come risolto."));
+            return;
+        }
+
+        switch (op)
+        {
+            case "edit":
+                await OpenMergeEditorAsync(entry);
+                break;
+            case "mine":
+                if (await _dialogs.ConfirmAsync(Loc.T("Tenere la TUA versione di \"{0}\"? Le modifiche arrivate dal server su questo file vengono scartate.", entry.RelativePath), ct))
+                    await ApplyResolveAsync(entry, SvnConflictChoice.MineFull, ct);
+                break;
+            case "theirs":
+                if (await _dialogs.ConfirmAsync(Loc.T("Prendere la versione LORO (del server) di \"{0}\"? Le TUE modifiche locali su questo file vengono scartate.", entry.RelativePath), ct))
+                    await ApplyResolveAsync(entry, SvnConflictChoice.TheirsFull, ct);
+                break;
+            default:
+                if (!entry.IsTreeConflict || await ConfirmTreeConflictAsync(entry, ct))
+                    await ApplyResolveAsync(entry, SvnConflictChoice.Working, ct);
+                break;
+        }
+    }
+
+    private async Task OpenMergeEditorAsync(ChangeEntry entry)
+    {
+        SvnConflictInfo? info;
+        lock (_stateLock)
+            _conflictInfo.TryGetValue(entry.FullPath, out info);
+        if (info is { Type: "text", Base: { } b, Mine: { } m, Theirs: { } t } && MergeEditorLauncher(new MergeEditorFiles(b, m, t, entry.FullPath)) is { } editor)
+        {
+            SetStatus(Loc.T("Editor di merge aperto ({0}): salva il risultato, poi premi \"Segna come risolto\".", editor));
+            return;
+        }
+
+        // Nessun editor a 3 vie (o conflitto senza dati): il file con i marcatori nell'editor di VS.
+        await _host.OpenFileAsync(entry.FullPath);
+        SetStatus(Loc.T("Nessun editor di merge a 3 vie disponibile: aperto il file con i marcatori di conflitto (<<<<<<<, =======, >>>>>>>). Sistemalo e rimuovili, poi premi \"Segna come risolto\"."));
     }
 
     /// <summary>

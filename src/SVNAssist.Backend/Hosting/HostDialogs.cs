@@ -24,6 +24,10 @@ internal sealed class HostDialogs : IDialogService
         => _host.PromptTextAsync(message, label, defaultValue);
 
     /// <inheritdoc />
+    public async Task<bool> AskAsync(string message, string yes, string no, CancellationToken ct)
+        => await _host.PromptAsync(message, [yes, no]) == 0;
+
+    /// <inheritdoc />
     public async Task<SvnConflictChoice?> ChooseConflictResolutionAsync(string fileName, CancellationToken ct)
     {
         // Una scelta per pulsante, con il significato dell'opzione di svn resolve --accept.

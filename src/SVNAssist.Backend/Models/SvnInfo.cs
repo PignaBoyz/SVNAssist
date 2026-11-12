@@ -60,3 +60,21 @@ public sealed record RepoLayout(string Trunk, string Branches, string Tags)
     internal static string[] Segments(string relativeUrl)
         => Uri.UnescapeDataString(relativeUrl.Trim()).TrimStart('^').Split('/', StringSplitOptions.RemoveEmptyEntries);
 }
+
+/// <summary>Una cartella di <c>svn list --xml</c> con l'ultima modifica (revisione, autore, data): per la vista estesa di Switch/Merge.</summary>
+public sealed record SvnListEntry(string Name, long Revision, string Author, DateTimeOffset? Date);
+
+/// <summary>
+/// Dati di un conflitto da <c>svn info --xml</c> (elemento <c>&lt;conflict&gt;</c>), con i percorsi completi dei file di appoggio
+/// che svn crea accanto al file (<c>.mine</c>/<c>.working</c>, <c>.rNN</c>/<c>.merge-left.rNN</c>, <c>.merge-right.rNN</c>, <c>.prej</c>).
+/// </summary>
+/// <param name="Type"><c>text</c> | <c>property</c> | <c>tree</c>.</param>
+/// <param name="Base">Versione di partenza (<c>prev-base-file</c>: <c>.rOLD</c> / <c>.merge-left.rN</c>).</param>
+/// <param name="Mine">La mia versione (<c>prev-wc-file</c>: <c>.mine</c> / <c>.working</c>).</param>
+/// <param name="Theirs">La loro versione (<c>cur-base-file</c>: <c>.rNEW</c> / <c>.merge-right.rN</c>).</param>
+/// <param name="Prop">File dei conflitti sulle proprieta' (<c>.prej</c>).</param>
+public sealed record SvnConflictInfo(string Type, string? Base, string? Mine, string? Theirs, string? Prop)
+{
+    /// <summary>Tutti i file di appoggio presenti nei dati.</summary>
+    public IEnumerable<string> Files => new[] { Base, Mine, Theirs, Prop }.Where(f => !string.IsNullOrEmpty(f))!;
+}

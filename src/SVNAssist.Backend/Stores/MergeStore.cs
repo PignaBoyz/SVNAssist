@@ -27,6 +27,7 @@ internal sealed class MergeStore
     {
         _svn = svn;
         _changes = changes;
+        _changes.Changed += () => { if (Active) Changed?.Invoke(); }; // "da committare" cambia con le modifiche della working copy
     }
 
     public event Action? Changed;
@@ -48,11 +49,15 @@ internal sealed class MergeStore
 
     internal string Title(SwitchPickerStore.Target source) => Loc.T("Merge da {0}", source.Name);
 
+    /// <summary>"Risolvi i conflitti": porta in primo piano Changes, dove c'e' la sezione Conflitti.</summary>
+    internal Task ShowConflictsAsync() => _changes.ShowWindowAsync();
+
     internal MergeDto? GetSnapshot()
     {
+        var pending = _changes.MergePending; // prima del lock: prende il lock di ChangesStore
         lock (_lock)
             return !_active || _source is null ? null
-                : new MergeDto(_source.Name, Title(_source), _loading, _busy, _error, _blocked, _selected.Order().ToList(), _entries.Count, _result);
+                : new MergeDto(_source.Name, Title(_source), _loading, _busy, _error, _blocked, _selected.Order().ToList(), _entries.Count, _result, pending);
     }
 
     internal void Close()
@@ -215,7 +220,7 @@ internal sealed class MergeStore
                     lock (_lock)
                         _result = summary;
                     _changes.AfterMerge(Loc.T("Merge {0} da {1}", label, "^/" + source.Path),
-                        Loc.T("Merge {0} da {1}: rivedi le modifiche e committa, oppure annulla il merge.", label, "^/" + source.Path), output.Conflicts);
+                        Loc.T("Merge {0} da {1}: rivedi le modifiche e committa, oppure annulla il merge.", label, "^/" + source.Path));
                     await _changes.RefreshAsync(ct, reloadBranch: false, output.Conflicts > 0
                         ? Loc.T("Merge completato: {0} file in conflitto da risolvere.", output.Conflicts)
                         : Loc.T("Merge completato: rivedi le modifiche e committa."));
@@ -232,7 +237,10 @@ internal sealed class MergeStore
                 await ReloadEligibleAsync(ct);
                 lock (_lock)
                     _selected.Clear();
-                Say(Loc.T("Merge completato."));
+                Say(output.Conflicts > 0
+                    ? Loc.T("Merge eseguito, da committare. Conflitti da risolvere in Changes: {0}.", output.Conflicts)
+                    : Loc.T("Merge eseguito, da committare."));
+                await _changes.OfferResolveConflictsAsync(output.Conflicts, ct);
             }
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
