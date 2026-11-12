@@ -42,15 +42,15 @@ DECISIONI DELL'UTENTE (non rimetterle in discussione):
 - Release solo quando tutto è pronto e provato dall'utente con la checklist; la 0.1.0 è deprecata, tag v0.1.0 NON va cancellato.
 - L'utente lavora in azienda con SVN e accesso integrato di Windows: il login SVN deve comparire solo su errore di autenticazione.
 
-DA FARE (0.3.0 = Merge da VS, specifica e stime in docs/ROADMAP.md §4):
-1. Fondamenta: F-INFO (svn info --xml), layout repo trunk/branches/tags (anche "/ (radice)"), elenco branch/tag, Switch,
-   Crea branch/tag, D10/D11. Un agente.
-2. Merge: revisioni da unire con `svn mergeinfo --show-revs eligible` nella tabella del Log, anteprima --dry-run, merge automatico
-   (sync da trunk / reintegrazione), cherry-pick -c, conflitti nel pannello Changes, messaggio precompilato, annulla con conferma,
-   procedura guidata (stile wizard AI). Un agente (dopo il punto 1).
-3. Avanzamento/annullamento per repo lenti + test di integrazione con repo file:// reali (tools/setup-local-svn.ps1).
-4. Checklist docs/verifica/0.3.0/checklist-F5.md, VSIX in SvnHost, ASPETTA l'esito dell'utente.
-5. Release: docs/release-notes/v0.3.0.md, aggiorna Directory.Build.props (versione) e manifest, README/FUNZIONALITA/ROADMAP,
+DA FARE (0.3.0 = Merge da VS, AMBITO MINIMO deciso dall'utente, ~30-40 h; dettagli in docs/ROADMAP.md §4):
+1. Fondamenta: F-INFO (svn info --xml), layout repo trunk/branches/tags (anche "/ (radice)"), elenco branch/tag
+   (`svn ls ^/branches`, `^/tags`), Switch. Un agente.
+2. Merge da un branch: revisioni da unire con `svn mergeinfo --show-revs eligible` nella tabella del Log esistente, anteprima
+   --dry-run, merge vero, cherry-pick `-c REV` sulle revisioni selezionate, conflitti nel pannello Changes esistente, annulla =
+   Revert esistente con conferma, messaggio di commit precompilato. Pannello semplice (niente wizard dedicato). Un agente dopo il 1.
+   FUORI dalla 0.3.0: Crea branch/tag, wizard merge, avanzamento per repo lenti, test di integrazione estesi, D10/D11.
+3. Checklist docs/verifica/0.3.0/checklist-F5.md, VSIX in SvnHost, ASPETTA l'esito dell'utente.
+4. Release: docs/release-notes/v0.3.0.md, aggiorna Directory.Build.props (versione) e manifest, README/FUNZIONALITA/ROADMAP,
    tag v0.3.0 → la CI (release.yml) pubblica .vsix + zip demo + note. Verifica la Release su GitHub (API).
 Poi pianifica la 0.4.0 con l'utente dai candidati di ROADMAP §5.
 

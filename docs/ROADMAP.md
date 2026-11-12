@@ -291,6 +291,8 @@ Prerequisiti comuni: D16 (limiti e `maxTokens` per provider) e un metodo pubblic
 
 ## 4. Piano 0.3.0 — Merge da Visual Studio
 
+> **Ambito DECISO dall'utente (2026-11-12): 0.3.0 minima, ~30-40 h.** Dentro: elenco branch (`svn ls ^/branches`, `^/tags`) + **Switch**; **Merge da un branch** con revisioni da unire (`svn mergeinfo --show-revs eligible`) nella tabella del Log, anteprima `--dry-run`, merge vero; **cherry-pick** (`-c REV` sulle revisioni selezionate); conflitti nel pannello Changes esistente; annulla = Revert esistente (con conferma); messaggio di commit precompilato. **Fuori (rimandato):** Crea branch/tag, procedura guidata dedicata al merge (basta un pannello semplice), avanzamento/annullamento per repo lenti, test di integrazione estesi, D10/D11. Lo studio sotto resta come riferimento; le ore di 4.x valgono per l'ambito completo.
+
 Obiettivo: fare da Visual Studio il flusso quotidiano "porto le modifiche tra trunk e branch" senza uscire dall'IDE né aprire TortoiseSVN. Sviluppo in tre blocchi: fondamenta (info, switch, branch/tag), merge, rifinitura (avanzamento, test).
 
 ### 4.1 Studio di fattibilità
