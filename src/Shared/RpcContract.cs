@@ -60,7 +60,7 @@ namespace SVNAssist.Rpc
         /// <summary>Apre un file nell'editor.</summary>
         Task OpenFileAsync(string path);
 
-        /// <summary>Mostra la finestra SVN Log su un percorso.</summary>
+        /// <summary>Apre il Log come documento nell'area editor (titolo "Log: nome") su un percorso.</summary>
         Task ShowLogAsync(string path);
 
         /// <summary>Apre Tools > Options > SVNAssist ("Faccio io").</summary>

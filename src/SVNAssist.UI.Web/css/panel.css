@@ -122,16 +122,30 @@ pre.cmd{background:var(--bg0);border:1px solid var(--bd);padding:6px 8px;font:12
 
 /* log */
 .app.log .wc{padding-top:6px}
-.llist{flex:0 1 38%;min-height:90px;overflow:auto;background:var(--bg1);border-top:1px solid var(--bd)}
-.lr{display:grid;grid-template-columns:56px 90px 126px 1fr;gap:8px;padding:4px 10px;border-bottom:1px solid var(--bd);cursor:default}
+.lbody{flex:1;min-height:0;display:flex;flex-direction:column}
+.llist{--c1:64px;--c2:120px;--c3:140px;flex:none;height:45%;min-height:120px;overflow:auto;resize:vertical;background:var(--bg1);border-top:1px solid var(--bd)}
+.lh,.lr{display:grid;grid-template-columns:var(--c1) var(--c2) var(--c3) minmax(0,1fr);gap:0;min-width:520px}
+.lh{position:sticky;top:0;z-index:1;background:var(--bg3);border-bottom:1px solid var(--bd2);font-weight:600;color:var(--fg2)}
+.lh>span{position:relative;padding:4px 10px;border-right:1px solid var(--bd)}
+.lh .rz{position:absolute;right:-3px;top:0;bottom:0;width:7px;cursor:col-resize;z-index:2}
+.lh .rz:hover{background:var(--acc2);opacity:.4}
+.lr>*{padding:5px 10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lr:nth-child(even){background:var(--bg2)}
+.lr{border-bottom:1px solid var(--bd);cursor:default}
 .lr:hover{background:var(--bg3)}
-.lr.sel{background:var(--acc-bg)}
-.lr .m,.lr .au{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lr.sel,.lr.sel:hover{background:var(--acc-bg);box-shadow:inset 3px 0 0 var(--acc)}
+.lmore{padding:8px 10px;position:sticky;left:0}
 .ldet{flex:1;min-height:0;overflow:auto;background:var(--bg1);border-top:1px solid var(--bd)}
 .ld-h{padding:8px 12px;border-bottom:1px solid var(--bd);background:var(--bg2)}
 .ld-h p{margin:4px 0;white-space:pre-wrap}
+.ld-h .lmsg{font-size:1.05em;margin:8px 0;padding:8px 10px;background:var(--bg1);border:1px solid var(--bd);border-radius:4px}
+.pth{margin-top:8px;color:var(--fg2);font-size:.85em;text-transform:uppercase;letter-spacing:.05em}
 .paths{list-style:none;margin:6px 0 0;padding:0;font:12px/1.5 var(--mono)}
-.paths li{display:flex;gap:8px}
+.paths li{display:flex;gap:8px;align-items:baseline;padding:2px 6px;border-bottom:1px solid var(--bd)}
+.paths li:hover{background:var(--bg3)}
+.paths .st{border-radius:3px;background:var(--bg4)}
+.paths .sn{width:84px;flex:none;color:var(--fg2);font:12px var(--font)}
+.paths .pt{min-width:0}
 .lf{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:0 8px 6px}
 .lf label{color:var(--fg2,inherit);opacity:.8;white-space:nowrap}
 .lf input[type=text]{width:auto;flex:1 1 90px;min-width:70px}
@@ -139,7 +153,8 @@ pre.cmd{background:var(--bg0);border:1px solid var(--bd);padding:6px 8px;font:12
 .lf.on input:not([value=""]){border-color:var(--acc)}
 .paths .pl{background:none;border:0;padding:0;color:var(--acc2);font:inherit;cursor:pointer;text-align:left;word-break:break-all}
 .paths .pl:hover{text-decoration:underline}
-@container (max-width:520px){.lr{grid-template-columns:50px 1fr}.lr .dtm,.lr .au{display:none}}
+@container (min-width:1100px){.lbody{flex-direction:row}.llist{height:auto;width:55%;min-width:420px;resize:horizontal;border-right:1px solid var(--bd)}.ldet{border-top:1px solid var(--bd)}}
+@container (max-width:520px){.lh,.lr{grid-template-columns:50px minmax(0,1fr);min-width:0}.lh>:nth-child(2),.lh>:nth-child(3),.lr .dtm,.lr .au{display:none}}
 
 /* diff affiancato */
 .df{margin:0 0 14px}

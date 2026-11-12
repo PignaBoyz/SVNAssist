@@ -267,6 +267,7 @@ namespace SVNAssist
             ["non è una working copy SVN."] = "not an SVN working copy.",
             ["Lettura delle modifiche..."] = "Reading the changes...",
             ["Modifiche in {0}"] = "Changes in {0}",
+            ["Log: {0}"] = "Log: {0}",
             ["Nessuna modifica nella cartella."] = "No changes in the folder.",
             ["{0} file modificati."] = "{0} files modified.",
             ["file non presente nell'elenco."] = "file not in the list.",

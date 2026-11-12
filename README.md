@@ -232,9 +232,9 @@ Il pulsante in basso apre la checklist: **svn.exe** (obbligatorio; "Installa con
 
 ### Log / History
 
-**Extensions → Log / History**: rileva la working copy dalla solution, mostra le ultime 50 revisioni (autore, data, messaggio), il diff al clic su una revisione e **Carica altre 50**.
+**Extensions → Log / History** (e Log da Esplora soluzioni): si apre come **documento nell'area editor**, come i diff, con titolo `Log: <cartella o file>`. Rileva la working copy dalla solution e mostra le ultime 50 revisioni in una **tabella** (Rev. | Autore | Data | Messaggio; righe alternate, intestazioni fisse, colonne ridimensionabili, frecce/Home/End/Invio) con sotto, o a destra se la finestra è larga, il messaggio completo e i file cambiati (azione A/M/D/R colorata + percorso), e **Carica altre 50** in fondo alla tabella. Una sola finestra Log: un nuovo percorso ne aggiorna titolo e contenuto.
 
-- **Filtri**: per autore, testo del messaggio, percorso e intervallo di date (**Filtra** / **Azzera**); valgono anche per "Altre 50".
+- **Filtri**: per autore, testo del messaggio, percorso e intervallo di date (**Filtra** / **Azzera**); valgono anche per "Carica altre 50".
 - **File della revisione**: l'elenco dei file modificati è cliccabile: il clic apre il **diff a due pannelli di Visual Studio** (`r-1 ↔ r`, titolo tipo `Program.cs r12 ↔ r13`).
 - **Confronto tra due revisioni**: Ctrl+clic (o Maiusc+clic) su un'altra revisione elenca i file cambiati tra le due; clic su un file = diff nativo `a ↔ b`.
 - **Diff di cartella** (tasto destro in Esplora soluzioni → Diff): invece di un unico `.diff`, la finestra Log elenca i file modificati; clic = diff nativo, **Apri come patch** = il vecchio `.diff` unico.

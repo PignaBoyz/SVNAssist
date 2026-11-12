@@ -40,7 +40,7 @@ test('ogni file della revisione e\' un pulsante logOpenFile; le cartelle no', ()
   const found = args(h).filter(x => x.name === 'logOpenFile');
   assert.deepEqual(found.map(x => x.args), [{ rev: 123, i: 0 }, { rev: 123, i: 1 }]);
   found.forEach(valid);
-  assert.match(h, /<span class="muted" title="Cartella">\/trunk\/Core/);
+  assert.match(h, /<span class="muted pt" title="Cartella">\/trunk\/Core/);
 });
 
 test('Ctrl/Maiusc+clic su un\'altra revisione = confronto; clic semplice o stessa revisione = selezione', () => {
@@ -76,4 +76,39 @@ test('lo stato con filter e files rispetta lo schema', () => {
   assert.deepEqual(validate(S, s), []);
   s.files.kind = 'altro';
   assert.notDeepEqual(validate(S, s), []);
+});
+
+test('tabella revisioni: grid con intestazioni Rev./Autore/Data/Messaggio, una riga per revisione, solo prima riga del messaggio', () => {
+  const s = fx(); s.sel = s.entries[1].rev; s.entries[0].msg = 'Prima riga\nseconda riga';
+  const h = U.logHTML.list(s);
+  assert.equal((h.match(/role="columnheader"/g) || []).length, 4);
+  assert.equal((h.match(/class="lr/g) || []).length, s.entries.length);
+  assert.match(h, /<span class="m" role="gridcell" title="Prima riga\nseconda riga">Prima riga<\/span>/);
+  assert.match(h, new RegExp(`class="lr sel" role="row" aria-selected="true" tabindex="0" data-rev="${s.sel}"`));
+  assert.equal((h.match(/tabindex="0"/g) || []).length, 1);
+});
+
+test('"Carica altre 50" in fondo alla tabella solo se canMore; il dettaglio mostra messaggio completo e azione dei file', () => {
+  const s = fx(); s.canMore = false;
+  assert.doesNotMatch(U.logHTML.list(s), /logMore/);
+  s.canMore = true;
+  const h = U.logHTML.list(s);
+  assert.ok(h.indexOf('logMore') > h.lastIndexOf('class="lr'));
+  valid(args(h).find(x => x.name === 'logMore'));
+  s.sel = s.entries[0].rev; s.entries[0].msg = 'riga1\nriga2';
+  const d = U.logHTML.detail(s);
+  assert.match(d, /class="lmsg">riga1\nriga2</);
+  assert.match(d, /class="sn">/);
+});
+
+test('tastiera: frecce/Home/End spostano la selezione entro i limiti, Invio la conferma, altri tasti ignorati', () => {
+  const r = [124, 123, 120];
+  assert.equal(U.logKey('ArrowDown', r, 124), 123);
+  assert.equal(U.logKey('ArrowDown', r, 120), 120);
+  assert.equal(U.logKey('ArrowUp', r, 124), 124);
+  assert.equal(U.logKey('End', r, 124), 120);
+  assert.equal(U.logKey('Home', r, 120), 124);
+  assert.equal(U.logKey('Enter', r, 123), 123);
+  assert.equal(U.logKey('x', r, 123), null);
+  assert.equal(U.logKey('ArrowDown', r, 999), null);
 });

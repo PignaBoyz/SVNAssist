@@ -89,9 +89,9 @@ namespace SVNAssist.Host
         /// Comando generato dall'host (menu): apre la finestra, aspetta il "ready" della pagina e inoltra
         /// {v:1,id,type:"cmd",name,args} al backend come se l'avesse mandato la UI.
         /// </summary>
-        public async Task SendCommandAsync(string view, string name, JObject args)
+        public async Task SendCommandAsync(string view, string name, JObject args, string title = null)
         {
-            await _pkg.ShowViewAsync(view).ConfigureAwait(false);
+            await _pkg.ShowViewAsync(view, title).ConfigureAwait(false);
             TaskCompletionSource<bool> tcs;
             lock (_gate)
             {
@@ -267,15 +267,21 @@ namespace SVNAssist.Host
             VsShellUtilities.OpenDocument(_pkg, path);
         }
 
+        private static string LogTitle(string path)
+        {
+            var leaf = string.IsNullOrEmpty(path) ? null : Path.GetFileName(path.TrimEnd('\\', '/'));
+            return Loc.T("Log: {0}", string.IsNullOrEmpty(leaf) ? path : leaf);
+        }
+
         public async Task ShowLogAsync(string path)
         {
-            // Mostra la finestra e fa caricare il percorso (logLoad) come se l'avesse chiesto la UI.
-            await SendCommandAsync("log", "logLoad", new JObject { ["path"] = path }).ConfigureAwait(false);
+            // Apre il documento Log e fa caricare il percorso (logLoad) come se l'avesse chiesto la UI.
+            await SendCommandAsync("log", "logLoad", new JObject { ["path"] = path }, LogTitle(path)).ConfigureAwait(false);
         }
 
         public async Task ShowFolderDiffAsync(string path)
         {
-            await SendCommandAsync("log", "logFolder", new JObject { ["path"] = path }).ConfigureAwait(false);
+            await SendCommandAsync("log", "logFolder", new JObject { ["path"] = path }, LogTitle(path)).ConfigureAwait(false);
         }
 
         public Task RunInTerminalAsync(string command, string workingDir)

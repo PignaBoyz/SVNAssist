@@ -17,7 +17,7 @@ namespace SVNAssist.Host
     [Guid(Ids.PackageGuid)]
     [ProvideMenuResource("Menus.ctmenu", 1)]
     [ProvideToolWindow(typeof(ChangesToolWindow), Style = VsDockStyle.Tabbed, Window = ToolWindowGuids80.SolutionExplorer, Orientation = ToolWindowOrientation.Left)]
-    [ProvideToolWindow(typeof(LogToolWindow), Style = VsDockStyle.Tabbed, Window = ToolWindowGuids80.SolutionExplorer, Orientation = ToolWindowOrientation.Left)]
+    [ProvideToolWindow(typeof(LogToolWindow), Style = VsDockStyle.MDI, Transient = true)] // il Log e' un documento nell'area editor, come i diff
     [ProvideOptionPage(typeof(SvnAssistOptions), "SVNAssist", "General", 0, 0, true)]
     // Serve per i solution events (SolutionChanged al backend); il backend parte solo alla prima vista/comando.
     [ProvideAutoLoad(VSConstants.UICONTEXT.NoSolution_string, PackageAutoLoadFlags.BackgroundLoad)]
@@ -68,15 +68,16 @@ namespace SVNAssist.Host
 
         // ---- finestre ----
 
-        internal async Task ShowViewAsync(string view)
+        internal async Task ShowViewAsync(string view, string title = null)
         {
             await JoinableTaskFactory.SwitchToMainThreadAsync(DisposalToken);
             var type = view == "log" ? typeof(LogToolWindow) : typeof(ChangesToolWindow);
-            await ShowToolWindowAsync(type, 0, true, DisposalToken);
+            var pane = await ShowToolWindowAsync(type, 0, true, DisposalToken);
+            if (title != null && pane != null) pane.Caption = title; // una sola finestra Log: il titolo segue l'ultimo percorso
         }
 
         protected override string GetToolWindowTitle(Type toolWindowType, int id) =>
-            toolWindowType == typeof(LogToolWindow) ? "SVN Log" : "SVN Changes";
+            toolWindowType == typeof(LogToolWindow) ? "Log" : "SVN Changes";
 
         protected override Task<object> InitializeToolWindowAsync(Type toolWindowType, int id, CancellationToken ct) => Task.FromResult<object>(null);
 

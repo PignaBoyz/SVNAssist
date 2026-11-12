@@ -65,6 +65,6 @@ namespace SVNAssist.Host
     [Guid(Ids.LogWindowGuid)]
     public sealed class LogToolWindow : WebToolWindow
     {
-        public LogToolWindow() : base("log", "SVN Log") { }
+        public LogToolWindow() : base("log", "Log") { }
     }
 }

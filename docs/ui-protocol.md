@@ -132,6 +132,7 @@ Le righe sono **già piatte e ordinate** (albero calcolato dal backend con `Chan
 
 ### `log` (`log-state.schema.json`)
 `{path, msg, err, loading, canMore, sel, entries[{rev, author, date (ISO 8601), msg, paths[{a,p,k?}]}], diff, filter{author,text,path,from,to}, files}`
+Layout (solo UI, il contratto non cambia): filtri in alto; tabella ARIA `grid` (Rev. | Autore | Data | Messaggio = prima riga, intestazioni sticky, colonne ridimensionabili, `ArrowUp/Down/Home/End` selezionano via `logSelect`, `Enter` conferma, Ctrl/Maiusc+clic = `logCompare`) con "Carica altre 50" (`logMore`) in fondo; dettaglio sotto, o a destra se il contenitore e' largo >= 1100px, con messaggio completo e file (azione + percorso, clic = `logOpenFile`). Nell'host la vista e' un documento dell'area editor.
 (`paths[].k = "dir"` per le cartelle; `files` = `null` oppure `{kind: "folder"|"compare", title, items[{a,p}]}`: elenco di file con diff a due pannelli, al posto del dettaglio revisione. `filter`/`files` sono facoltativi nello schema: una UI li tratta come assenti.)
 
 ### `diff` (`diff-state.schema.json`)
