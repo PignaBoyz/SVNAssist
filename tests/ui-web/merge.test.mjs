@@ -153,7 +153,7 @@ test('mock: apri (senza il ramo corrente), scegli, anteprima, cherry-pick con co
   assert.deepEqual(m.selected, []); assert.deepEqual(last('log').entries.map(e => e.rev), [131, 126], 'le revisioni unite non sono piu da unire');
   const c = last('changes');
   assert.equal(c.merge.text, 'Merge r128, r129 da ^/branches/feature-coupon: rivedi le modifiche e committa, oppure annulla il merge.'); assert.equal(c.merge.conflicts, 1);
-  assert.equal(c.commit.text, 'Merge r128, r129 da ^/branches/feature-coupon');
+  assert.equal(c.commit.text, 'Unite le revisioni 128-129 da branches/feature-coupon:\n........\nr128 | mrossi | OrderService applica il coupon al totale\n........\nr129 | lbianchi | Checkout: mostra lo sconto sul riepilogo');   // formato TortoiseSVN
   assert.ok(c.sections.some(s => s.rows.some(r => r.status === 'C')), 'il conflitto compare in Changes');
   assert.deepEqual(c.conflicts.map(x => [x.name, x.kind]), [['CheckoutController.cs', 'text']]);
   assert.deepEqual(c.conflicts[0].files, ['Web/Controllers/CheckoutController.cs.working', 'Web/Controllers/CheckoutController.cs.merge-left.r127', 'Web/Controllers/CheckoutController.cs.merge-right.r129'], 'file di appoggio del merge, raggruppati sotto il file');

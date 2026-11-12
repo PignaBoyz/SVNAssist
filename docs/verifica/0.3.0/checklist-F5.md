@@ -1,54 +1,63 @@
-# Checklist manuale 0.3.0 — Switch e Merge
+# Checklist 0.3.0 — collaudo sulla simulazione
 
-VSIX 0.3.0 già installato nell'istanza `SvnHost`. Repo di prova con trunk/branches/tags (`%TEMP%\svnmerge`):
-- `trunk` = working copy `%TEMP%\svnmerge\wc` (r7)
-- `branches/feature-demo` con 3 revisioni da unire: r4 (Program.cs), r5 (aggiunge Nuovo.cs), r6 (README.txt, **va in conflitto** con r7 del trunk)
-
-Avvio (da PowerShell):
+## Preparazione (da PowerShell, nella cartella del repo SVNAssist)
 
 ```
-& "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\devenv.exe" /rootsuffix SvnHost C:\Users\andre\AppData\Local\Temp\svnmerge\wc\DemoApp.sln
+.\tools\setup-sim.ps1 -Force
 ```
-Poi Extensions > SVNAssist > Changes. Log host: `%LOCALAPPDATA%\SVNAssist\host-log.txt`.
-Per ricominciare da zero: `.\tools\setup-local-svn.ps1 -Root $env:TEMP\svnmerge -Force` (poi vanno ricreate r4-r7: chiedimelo).
+Crea `%TEMP%\svnsim` (circa 1 minuto):
+- `wc` — trunk con **lavoro in corso** (Catalog.cs modificato in 4 punti, Order.cs modificato, Payment.cs aggiunto, Invoice.cs cancellato, Note.txt non versionato) e **una revisione indietro** (un collega ha committato dopo).
+- `wc-merge` — trunk **pulita**, per Switch e Merge.
+- Branch `feature-coupon` (r8 aggiunge Coupon.cs e modifica Order.cs; r9 README **in conflitto**; r10 cancella docs/old-setup.md → **tree conflict**), `hotfix-login` (1 revisione), 150 branch `feature-<area>-NNN`, 20 tag `v1.N.0`. Storico con 4 autori.
+
+Avvio:
+```
+& "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\devenv.exe" /rootsuffix SvnHost $env:TEMP\svnsim\wc\Shop.sln
+```
+Extensions > SVNAssist > Changes. Log host: `%LOCALAPPDATA%\SVNAssist\host-log.txt`. Per ricominciare: chiudi VS e rilancia `setup-sim.ps1 -Force`.
 
 Segna ✅ / ❌ (+ una riga su cosa vedi).
 
-**Ramo corrente e Switch**
-1. [ ] In Changes si vede il ramo corrente `trunk`.
-2. [ ] "Switch..." (in Changes e in Extensions > SVNAssist) apre l'elenco: `trunk`, `branches/feature-demo`, nessun tag; la ricerca filtra; "Aggiorna" ricarica.
-3. [ ] Con un file modificato, lo Switch chiede conferma; Annulla lascia tutto com'è.
-4. [ ] Switch su `feature-demo` (WC pulita): il ramo diventa `branches/feature-demo`, compaiono `Nuovo.cs` e la riga "BRANCH" nel README; VS può chiedere di ricaricare la solution.
-5. [ ] Switch di nuovo su `trunk`: tutto torna come prima.
-6. [ ] Tools > Options > SVNAssist > Generale: c'è il layout repository (`trunk/branches/tags`).
+## A. Lavoro in corso (`wc\Shop.sln`)
 
-**Merge** (su `trunk`, WC pulita)
-7. [ ] Extensions > SVNAssist > "SVN Merge..." apre il selettore senza il ramo corrente; scegli `feature-demo`.
-8. [ ] Si apre il Log come documento "Merge da branches/feature-demo" con r4, r5, r6 (autore, data, messaggio).
-9. [ ] "Anteprima": elenco file (Program.cs U, Nuovo.cs A, README.txt C) con conteggi; la WC NON cambia (Changes resta vuoto).
-10. [ ] Con un file modificato in WC, Merge è bloccato con spiegazione (fai prima Commit o Revert).
-11. [ ] Seleziona solo r4 e r5 → "Merge selezionate (2)": Changes mostra Program.cs e Nuovo.cs; messaggio di commit precompilato "Merge r4, r5 da ^/branches/feature-demo" (o simile); niente in Staged.
-12. [ ] Banner "Annulla merge": chiede conferma con l'elenco dei file, poi la WC torna pulita.
-13. [ ] "Merge tutto": README.txt compare nella sezione Conflitti, il commit è bloccato finché non risolvi.
-14. [ ] Risolvi il conflitto (con gli strumenti esistenti), poi "Commit All" va a buon fine; riaprendo SVN Merge da `feature-demo` non c'è più nulla da unire.
+**Finestra Changes e revisione**
+1. [ ] Changes mostra il ramo `trunk`, i file M/A/D e `Note.txt` tra i non versionati. Le finestre di SVNAssist si aprono senza errori anche se erano aperte alla chiusura di VS.
+2. [ ] In basso a sinistra l'indicatore della revisione è **arancio**: `rN · disponibile rN+1 — SVN Update` (il commit del collega). Tooltip chiaro.
+3. [ ] Tools > Options > SVNAssist > Generale: "Controllo nuove revisioni (minuti)" = 5; con `0` l'indicatore diventa neutro. Rimetti 5.
+4. [ ] Doppio clic su `Payment.cs` (A) e su `Note.txt` (?): si apre il **file intero** nell'editor. Su `Invoice.cs` (D): diff con il contenuto BASE a sinistra. Su `Order.cs` (M): diff.
 
-**Rischi rimasti dalla 0.2.0** (se ti capita, non serve cercarli)
-15. [ ] Log come documento MDI: si apre, si chiude, si riapre senza errori.
-16. [ ] Chiudi VS: in Task Manager non resta nessun `SVNAssist.Backend.exe`.
-17. [ ] (in azienda) Switch/Merge su un repo vero con accesso integrato di Windows: nessun login chiesto se le credenziali vanno.
+**Diff, navigazione e annulla righe**
+5. [ ] Doppio clic su `Catalog.cs`: diff nell'area documenti (non sopra la finestra Changes). **Ctrl+Alt+Giù / Ctrl+Alt+Su** saltano tra le 4 modifiche; Alt+Su/Giù nell'editor normale spostano ancora la riga.
+6. [ ] Nel pannello destro seleziona le 2 righe aggiunte (`Nuovo1`, `Nuovo2`) > clic destro > **SVN: Revert Selected Changes**: "Annullate 2 righe", spariscono solo quelle; le altre 3 modifiche restano.
+7. [ ] Metti il cursore sulla riga `Item016 (modificato)` senza selezione > stesso comando: la riga torna `Articolo 16`. Ripeti sulla riga cancellata (dove era `Item296`): ricompare.
+8. [ ] Annulla anche l'ultima modifica: `Catalog.cs` sparisce da Changes (nessuna modifica rimasta).
+9. [ ] Clic destro su file/cartella in Solution Explorer: **nessun** sottomenu "SVN".
 
-**Correzioni dal primo collaudo: conflitti e repository grandi** (VSIX da reinstallare in `SvnHost`)
-18. [ ] "Merge tutto" da `feature-demo`: a merge finito compare il dialogo "1 file in conflitto. Vuoi risolverli ora?" con **Risolvi ora** / **Più tardi**. "Più tardi" lascia tutto com'è; "Risolvi ora" porta in primo piano SVN Changes.
-19. [ ] In Changes, sopra l'elenco, c'è il riquadro **Conflitti (1)** con `README.txt`, il tipo "Conflitto di testo" e i pulsanti **Apri editor di merge**, **Usa la mia**, **Usa la loro**, **Segna come risolto**. Sotto: "File di appoggio di svn": `README.txt.merge-left.r3`, `.merge-right.r6`, `.working`. Quei file **non** sono nei Non versionati.
-20. [ ] Il banner del merge dice "1 conflitto: risolvilo qui sotto, poi committa."
-21. [ ] **Apri editor di merge** apre l'editor a 3 vie di Visual Studio (vsDiffMerge) con base, mia, loro e risultato. Dopo aver salvato, **Segna come risolto** toglie il conflitto, il banner passa a "senza conflitti" e i file di appoggio spariscono dal disco. Con i marcatori ancora nel file, Segna come risolto rifiuta e lo dice.
-22. [ ] Rifai il merge (Annulla merge, poi di nuovo) e prova **Usa la mia** (tiene il file del trunk) e **Usa la loro** (prende quello del branch): entrambi chiedono conferma.
-23. [ ] Nel Log "Merge da branches/feature-demo", dopo il merge l'intestazione dice **"Merge eseguito, da committare"** (non "0 revisioni da unire") e il risultato con conflitti ha **Risolvi i conflitti**, che porta a Changes. Dopo il commit (o Annulla merge) torna "N revisioni da unire" / "Nessuna revisione da unire".
-24. [ ] SVN Update che lascia un conflitto propone lo stesso "Risolvi ora / Più tardi".
-25. [ ] Switch / Merge: scegli un ramo, richiudi e riapri: compare il gruppo **Usati di recente** con l'ultimo scelto in cima; digitando nel campo l'elenco si filtra subito.
-26. [ ] **Mostra tutti / vista estesa…** (con un repository con molti rami): tabella Nome / Tipo / Rev. / Autore / Data, filtro per nome e per tipo, clic su Nome o Data per ordinare, scorrimento fluido. La stessa vista c'è in "SVN Merge...".
+**SVN Update e commit**
+10. [ ] Clic sull'indicatore arancio (o SVN Update): arriva il commit del collega (`MainWindow.cs`), l'indicatore diventa **verde**; il messaggio verde di esito sparisce dopo ~5 s.
+11. [ ] Genera con AI (Copilot): durante la generazione vedi l'avanzamento; il messaggio ha un titolo e un elenco puntato che descrive **davvero** le modifiche (Order.cs TODO, Payment.cs, Invoice.cs rimosso).
+12. [ ] **Commit All**: va a buon fine; il messaggio di esito sparisce da solo; con la WC pulita lo stato vuoto "Nessuna modifica" sta **sotto** la sezione Staged.
+13. [ ] Tendina **Recenti** accanto al messaggio: c'è il messaggio appena committato; un clic lo reinserisce.
 
-**Revert di singole righe, scorciatoie del diff, menu**
-27. [ ] Apri il diff di un file con piu' modifiche (da Changes). Nel pannello destro, seleziona 2-3 righe modificate/aggiunte, clic destro > **SVN: Revert Selected Changes**: compare "Annullate N righe", il file torna com'era per quelle righe e le altre modifiche restano; il diff e Changes si aggiornano. Prova anche con il solo cursore su una riga, con una riga cancellata (cursore sulla riga adiacente), in un editor normale del file e con modifiche non salvate (viene salvato prima). Se tutte le modifiche spariscono, il file esce da Changes.
-28. [ ] Nel diff di un file lungo premi **Ctrl+Alt+Giu'** (poi **Ctrl+Alt+Su'**): si salta alla differenza successiva (precedente). Alt+Su/Giu' nell'editor normale continuano a spostare la riga. (Se non funziona: Tools > Options > Environment > Keyboard, comandi `SVNAssist.NextChange` / `SVNAssist.PreviousChange`.)
-29. [ ] Il clic destro su file/cartella/progetto in Solution Explorer non mostra piu' il sottomenu "SVN".
+## B. Switch e Merge (`wc-merge\Shop.sln`)
+
+**Switch**
+14. [ ] **Switch...**: in cima "Usati di recente" (vuoto al primo uso), la ricerca filtra subito (scrivi `login`), al massimo 50 righe con "Mostrati N di M".
+15. [ ] **Mostra tutti / vista estesa…**: tabella Nome / Tipo / Rev. / Autore / Data con 152 branch + 20 tag; filtro per nome e per tipo, clic su Nome o Data ordina, scorrimento fluido.
+16. [ ] Switch su `branches/hotfix-login`: il ramo cambia, `Customer.cs` ha `Locked`; torna su `trunk` e verifica che compaia tra i recenti.
+
+**Merge con conflitti**
+17. [ ] Extensions > SVNAssist > **SVN Merge...** > `feature-coupon`: il Log si apre **come documento** "Merge da branches/feature-coupon" con r8, r9, r10 (autore, data, messaggio).
+18. [ ] **Anteprima**: Coupon.cs A, Order.cs U, README.txt C, docs/old-setup.md conflitto ad albero; la WC non cambia.
+19. [ ] Seleziona solo r8 > **Merge selezionate (1)**: Coupon.cs e Order.cs in Changes, nessun conflitto; messaggio precompilato in formato TortoiseSVN (`Unite le revisioni 8 da branches/feature-coupon:` + `........` + `r8 | mrossi | ...`). **Annulla merge** (conferma con elenco) riporta la WC pulita.
+20. [ ] **Merge tutto**: dialogo "2 elementi in conflitto: risolverli ora?" → **Risolvi ora** porta in primo piano Changes.
+21. [ ] Riquadro **Conflitti (2)**: README.txt (testo) con **Apri editor di merge / Usa la mia / Usa la loro / Segna come risolto**; docs/old-setup.md (albero) con spiegazione e Segna come risolto. I file di appoggio (`.merge-left.r…`, `.merge-right.r…`, `.working`) sono sotto README.txt, **non** tra i non versionati.
+22. [ ] **Apri editor di merge**: si apre l'editor a 3 vie di VS; sistema il file, salva, **Segna come risolto**: il conflitto sparisce e i file di appoggio pure. (Con i marcatori ancora nel file deve rifiutare.)
+23. [ ] Tree conflict: **Segna come risolto** con conferma. Il banner dice "senza conflitti"; nel Log la vista merge dice **"Merge eseguito, da committare"** (non "0 revisioni da unire").
+24. [ ] Commit All: va a buon fine. Riaprendo SVN Merge da `feature-coupon` non c'è più nulla da unire.
+25. [ ] (facoltativo) Rifai il setup e prova **Usa la mia** / **Usa la loro** su README.txt: chiedono conferma e tengono la versione giusta (trunk `1.0.1` / branch `1.1-coupon`).
+
+## C. In azienda (se puoi)
+26. [ ] Repo vero con accesso integrato di Windows: Switch, Merge e controllo revisione senza richieste di login; indicatore neutro (senza popup) se la rete non c'è.
+27. [ ] Genera con AI su un merge grande (decine di file): nessun errore "No response" / "invalid start of a value"; messaggio completo.
+28. [ ] Chiudi VS: in Task Manager non resta nessun `SVNAssist.Backend.exe`.

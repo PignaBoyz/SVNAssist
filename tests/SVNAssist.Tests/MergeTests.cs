@@ -273,7 +273,7 @@ public class MergeTests
 
         Assert.Equal(["- False"], Fixture.Calls(f));
         var c = f.ChangesSnap;
-        Assert.Equal("Merge r4-r7 da ^/branches/feature-x", c.Commit.Text);
+        Assert.Equal("Unite le revisioni 4-5,7 da branches/feature-x:\n........\nr4 | mrossi | feat: modifica a\n........\nr5 | lbianchi | feat: aggiunge new\ndettaglio\n........\nr7 | gverdi | feat: elimina b", c.Commit.Text);
         Assert.Contains("annulla il merge", c.Merge!.Text);
         Assert.Equal(0, c.Merge.Conflicts);
         Assert.True(c.Commit.All);   // regola di sempre: Staged vuoto = Commit All, nulla finisce in Staged da solo
@@ -299,7 +299,7 @@ public class MergeTests
         await f.LogCmd("mergeSelected");
 
         Assert.Equal(["4,7 False"], Fixture.Calls(f));
-        Assert.Equal("Merge r4, r7 da ^/branches/feature-x", f.ChangesSnap.Commit.Text);
+        Assert.Equal("Unite le revisioni 4,7 da branches/feature-x:\n........\nr4 | mrossi | feat: modifica a\n........\nr7 | gverdi | feat: elimina b", f.ChangesSnap.Commit.Text);
         Assert.Equal([5L], f.LogSnap.Entries.Select(e => e.Rev));
         Assert.Empty(f.Merge.Selected);
         Assert.Equal("", f.Merge.Error);

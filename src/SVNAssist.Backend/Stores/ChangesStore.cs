@@ -61,6 +61,9 @@ internal sealed class ChangesStore : ViewStore, IDisposable
     private bool _loading = true;
     private string _branchName = string.Empty;
     private string? _svnVersion;
+    private string? _branchUrl, _repoRoot, _lastCommitWc;
+    private long? _wcRev, _lastCommitRev;
+    private int _statusSeq;
     private string _themeMode = "auto";
     private string _vsThemeKind = "dark";
     private string? _solutionRoot;
@@ -107,6 +110,21 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         Switch = new SwitchPickerStore(svnService, settingsService, recentTargetsFile);
         Switch.Changed += NotifyChanged;
         _debouncer = new RefreshDebouncer(RefreshQuietPeriod, AutoRefreshAsync);
+        HeadCheck = new HeadWatcher(FetchHeadAsync, () => OperationRunning, settingsService.GetHeadCheckMinutesAsync, NotifyChanged);
+    }
+
+    /// <summary>Controllo periodico "altri hanno committato?" (indicatore della revisione nella barra di stato).</summary>
+    internal HeadWatcher HeadCheck { get; }
+
+    /// <summary>Ultimi messaggi di commit per repository (tendina "Recenti"); <c>null</c> = funzione spenta (test).</summary>
+    internal RecentMessages? Recent { get; set; }
+
+    private async Task<long?> FetchHeadAsync(CancellationToken ct)
+    {
+        string? url;
+        lock (_stateLock)
+            url = _branchUrl;
+        return string.IsNullOrEmpty(url) ? null : await _svnService.GetHeadRevisionAsync(url, ct);
     }
 
     /// <summary>Refresh automatico (watcher): salta se non c'e' una working copy o se un'operazione dell'utente e' in corso.</summary>
@@ -260,8 +278,8 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             var commit = CommitSet();
             var conflicts = BuildConflicts();
             return new ChangesState(
-                new WorkingCopyDto(_workingCopyPath, _showWorkingCopyInput, _branchName, SvnVersion: _svnVersion),
-                CommitMessage.GetSnapshot(download, commit.Entries.Count, commit.All),
+                BuildWorkingCopy(),
+                CommitMessage.GetSnapshot(download, commit.Entries.Count, commit.All) with { Recent = RecentFor(_repoRoot) },
                 _isTreeView ? "tree" : "list",
                 new ThemeDto(mode, mode == "auto" ? _vsThemeKind : mode),
                 sections,
@@ -275,6 +293,21 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 _mergeBanner is not null && commit.Entries.Count > 0 ? new MergeBannerDto(_mergeBanner, conflicts.Count) : null,
                 conflicts);
         }
+    }
+
+    private IReadOnlyList<string> RecentFor(string? repo) => Recent is null || string.IsNullOrEmpty(repo) ? [] : Recent.Get(repo);
+
+    /// <summary>Working copy con l'indicatore della revisione: verde alla HEAD del ramo, arancio se il server ha di piu', neutro se non si sa (con il perche').</summary>
+    private WorkingCopyDto BuildWorkingCopy()
+    {
+        var head = HeadCheck.Head;
+        var state = RevisionIndicator.Compute(_wcRev, head);
+        string? note = null;
+        if (state == "unknown" && _wcRev is > 0)
+            note = HeadCheck.Error is { } err ? Loc.T("Impossibile controllare le nuove revisioni: {0}", FirstLine(err))
+                : HeadCheck.Disabled ? Loc.T("Controllo delle nuove revisioni spento (Tools > Options > SVNAssist > Controllo nuove revisioni).")
+                : Loc.T("Controllo delle nuove revisioni in corso...");
+        return new WorkingCopyDto(_workingCopyPath, _showWorkingCopyInput, _branchName, _wcRev, _svnVersion, head, _wcRev is > 0 ? state : null, note);
     }
 
     /// <summary>Elementi in conflitto con tipo e file di appoggio (da <c>svn info</c>, mai indovinati dal nome).</summary>
@@ -341,7 +374,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 Dir: entry.IsDirectory, Expanded: null, Count: null,
                 Status: StatusPresentation.ShortCode(entry.Status), StatusText: statusText,
                 Can: new CanDto(
-                    Diff: CanDiff(entry),
+                    Diff: CanDiff(entry) || (entry.Status == SvnStatusKind.Unversioned && !entry.IsDirectory),
                     Stage: section != ChangeSection.Staged && entry.Status is not (SvnStatusKind.Conflicted or SvnStatusKind.Normal),
                     Unstage: section == ChangeSection.Staged,
                     Add: entry.Status == SvnStatusKind.Unversioned,
@@ -444,6 +477,18 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             case "setCommitText":
                 CommitMessage.SetTextQuietly(Args.Str(args, "text"));
                 break;
+            case "useRecentMessage":
+                {
+                    // L'indice si rivalida contro l'elenco corrente (potrebbe essere cambiato dopo un commit).
+                    string? repo;
+                    lock (_stateLock)
+                        repo = _repoRoot;
+                    var recent = RecentFor(repo);
+                    var i = Args.Long(args, "i");
+                    if (i >= 0 && i < recent.Count)
+                        CommitMessage.Text = recent[(int)i];
+                    break;
+                }
             case "genAi":
                 await CommitMessage.GenerateAsync(ct);
                 break;
@@ -583,6 +628,9 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         {
             _ = _debouncer.RunAsync(ct);
             await InitializeAsync(ct);
+            // Il controllo delle nuove revisioni parte con la finestra (prima apertura) e non blocca il resto.
+            if (EnableWatcher)
+                _ = Task.Run(() => HeadCheck.RunAsync(ct), ct);
             await ApplyAutoDetectedWorkingCopyAsync(SolutionRootOrNull(), ct);
         }
         catch (OperationCanceledException)
@@ -629,6 +677,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         lock (_stateLock)
             _themeMode = theme is "light" or "dark" or "blue" ? theme : "auto";
 
+        HeadCheck.Nudge(); // intervallo cambiato (o acceso/spento): rilegge subito l'impostazione
         if (Volatile.Read(ref _started) == 1)
         {
             // Rilegge anche i testi che dipendono dalla lingua dell'interfaccia (checklist, procedura guidata, riepilogo).
@@ -824,9 +873,10 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             var branchTask = needBranch ? LoadBranchAsync(path, ct) : null;
 
             var statuses = await statusTask;
-            (string Label, string? Version)? branch = null;
+            BranchInfo? branch = null;
             if (branchTask is not null)
                 branch = await branchTask;
+            var urlChanged = false;
 
             var newEntries = statuses
                 .Where(s => s.Status != SvnStatusKind.Normal || s.IsLocked)
@@ -852,6 +902,12 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                     _branchName = b.Label;
                     _svnVersion = b.Version;
                     _branchLoadedFor = path;
+                    // La revisione di un nostro commit conta come minimo: il commit non porta la radice della working copy alla nuova revisione.
+                    var floor = string.Equals(_lastCommitWc, path, StringComparison.OrdinalIgnoreCase) ? _lastCommitRev : null;
+                    _wcRev = b.Rev is null ? null : Math.Max(b.Rev.Value, floor ?? 0);
+                    _repoRoot = b.Root;
+                    urlChanged = !string.Equals(_branchUrl, b.Url, StringComparison.Ordinal);
+                    _branchUrl = b.Url;
                 }
 
                 // La working copy puo' essere cambiata mentre svn girava: il risultato vecchio si scarta.
@@ -863,6 +919,13 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 // Una working copy digitata a mano resta modificabile; una rilevata dalla solution nasconde il campo.
                 _showWorkingCopyInput = !_autoDetected;
                 UpdateStagedAfterRefresh();
+            }
+
+            if (urlChanged)
+            {
+                // Altro ramo (switch) o altra working copy: l'esito vecchio non vale piu', se ne chiede uno nuovo.
+                HeadCheck.Reset();
+                HeadCheck.Nudge();
             }
 
             if (statusMessage is not null)
@@ -1168,8 +1231,19 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 .Where(e => e.Status == SvnStatusKind.Unversioned && e.IsDirectory).Select(e => e.FullPath).ToList();
 
             var paths = commitEntries.Select(e => e.FullPath).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-            var revision = await _svnService.CommitAsync(paths, CommitMessage.Text.Trim(), ct, wholeFolders);
+            var message = CommitMessage.Text.Trim();
+            var revision = await _svnService.CommitAsync(paths, message, ct, wholeFolders);
 
+            string? repo;
+            lock (_stateLock)
+            {
+                repo = _repoRoot;
+                _lastCommitWc = _workingCopyPath;
+                _lastCommitRev = revision;
+            }
+
+            if (!string.IsNullOrEmpty(repo))
+                Recent?.Add(repo, message);
             CommitMessage.Clear();
             ClearMergeBanner();
 
@@ -1292,13 +1366,16 @@ internal sealed class ChangesStore : ViewStore, IDisposable
     }
 
     /// <summary>Ramo corrente (dall'URL di <c>svn info</c> e dal layout del repository) e versione di svn. Un errore non blocca lo stato: ramo vuoto ("—").</summary>
-    private async Task<(string Label, string? Version)> LoadBranchAsync(string path, CancellationToken ct)
+    private async Task<BranchInfo> LoadBranchAsync(string path, CancellationToken ct)
     {
         var label = string.Empty;
+        string? url = null, root = null;
+        long? rev = null;
         try
         {
             var info = await _svnService.GetInfoAsync(path, ct);
             label = RepoLayout.Parse(await _settingsService.GetRepoLayoutAsync(ct)).Deduce(info.RelativeUrl).Label;
+            (url, root, rev) = (info.Url, info.RepositoryRoot, info.Revision);
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
@@ -1306,8 +1383,11 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         }
 
         var version = await _svnService.GetSvnVersionAsync(ct);
-        return (label, version?.ToString());
+        return new BranchInfo(label, version?.ToString(), url, root, rev);
     }
+
+    /// <summary>Ramo corrente, versione di svn e dati di <c>svn info</c> (URL, radice del repository, revisione della working copy).</summary>
+    private sealed record BranchInfo(string Label, string? Version, string? Url, string? Root, long? Rev);
 
     /// <summary>OK nel selettore: l'URL viene solo dall'elenco (mai dalla UI); con modifiche locali chiede conferma, poi <c>svn switch</c>.</summary>
     private async Task SwitchOkAsync(string name, CancellationToken ct)
@@ -1436,7 +1516,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         // "Errore..." (it) e "Error..." (en) iniziano uguale: il test non dipende dalla lingua.
         var isError = _statusMessage.StartsWith("Error", StringComparison.Ordinal);
         return new StatusDto(_statusMessage, isError,
-            isError && SvnErrors.IsWorkingCopyLocked(_statusMessage) ? new StatusActionDto(Loc.T("Esegui Cleanup"), "cleanup") : null);
+            isError && SvnErrors.IsWorkingCopyLocked(_statusMessage) ? new StatusActionDto(Loc.T("Esegui Cleanup"), "cleanup") : null, _statusSeq);
     }
 
     // ── Operazioni su file, cartelle e sezioni ───────────────────────
@@ -1863,6 +1943,23 @@ internal sealed class ChangesStore : ViewStore, IDisposable
     private async Task ShowDiffAsync(string key, CancellationToken ct)
     {
         var target = ResolveKey(key);
+        // Come Git Changes: un file nuovo (A) o non versionato (?) non ha una versione precedente, quindi si apre il documento intero nell'editor
+        // (un diff contro il vuoto non serve). Un file eliminato (D) o mancante (!) resta un diff: il contenuto BASE a sinistra, vuoto a destra.
+        if (target.SingleFile is { Status: SvnStatusKind.Unversioned or SvnStatusKind.Added } added)
+        {
+            try
+            {
+                await _host.OpenFileAsync(added.FullPath);
+                SetStatus(Loc.T("File aperto: {0}", added.RelativePath));
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                SetStatus(Loc.T("Errore apertura file: {0}", ex.Message));
+            }
+
+            return;
+        }
+
         if (target.SingleFile is not { } entry || !CanDiff(entry))
         {
             SetStatus(target.SingleFile is { Status: SvnStatusKind.Unversioned }
@@ -2055,7 +2152,11 @@ internal sealed class ChangesStore : ViewStore, IDisposable
     {
         _statusIsAuto = false;
         lock (_stateLock)
+        {
             _statusMessage = message;
+            _statusSeq++;
+        }
+
         NotifyChanged();
     }
 

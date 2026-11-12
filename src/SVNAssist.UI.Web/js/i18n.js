@@ -5,6 +5,16 @@
 (function (w) {
   const U = w.SVNUI = w.SVNUI || { views: {} };
   const EN = {
+    "Qualcuno ha committato: sul server c'è la r{0}, la tua working copy è alla r{1}. Clic per fare SVN Update.": "Someone has committed: the server is at r{0}, your working copy is at r{1}. Click to run SVN Update.",
+    "disponibile r{0} — SVN Update": "r{0} available — SVN Update",
+    "La working copy è all'ultima revisione del ramo (r{0}).": "The working copy is at the latest revision of the branch (r{0}).",
+    "Revisione della working copy: r{0}.": "Working copy revision: r{0}.",
+    "Messaggi recenti: riusa un messaggio già committato in questo repository": "Recent messages: reuse a message already committed in this repository",
+    "Recenti": "Recent",
+    "Messaggi recenti": "Recent messages",
+    "Nessun messaggio recente": "No recent messages",
+    "Apri file": "Open file",
+    "Apri il file nell'editor (Invio)": "Open the file in the editor (Enter)",
     "Auto (lingua del codice)": "Auto (code language)",
     "Auto (segue Visual Studio)": "Auto (follows Visual Studio)",
     "Chiaro": "Light",

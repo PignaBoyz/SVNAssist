@@ -182,6 +182,12 @@ public interface ISvnService
     /// <summary><c>svn info --xml</c> sulla radice della working copy: URL, URL relativo, radice del repository, revisioni.</summary>
     Task<SvnInfo> GetInfoAsync(string workingCopyPath, CancellationToken ct);
 
+    /// <summary>
+    /// Ultima revisione che ha cambiato l'URL (<c>svn info --show-item last-changed-revision --non-interactive URL</c>): serve a sapere se altri hanno committato.
+    /// Sola lettura e mai interattiva: con credenziali mancanti o rete assente fallisce (eccezione) senza aprire nessun login.
+    /// </summary>
+    Task<long> GetHeadRevisionAsync(string url, CancellationToken ct);
+
     /// <summary>Versione di svn (<c>svn --version --quiet</c>); <c>null</c> se non si riesce a leggerla. Le funzioni che richiedono svn &lt; 1.8 si nascondono.</summary>
     Task<Version?> GetSvnVersionAsync(CancellationToken ct);
 

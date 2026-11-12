@@ -54,7 +54,7 @@
     [/^Update alla revisione (\w+) in corso\.\.\.$/, 'Updating to revision $1...'], [/^Switch a (.+) in corso\.\.\.$/, 'Switching to $1...'],
     [/^Switch a (.+) completato \(revisione (\d+)\)\. Se Visual Studio lo chiede, ricarica la solution\.$/, 'Switched to $1 (revision $2). If Visual Studio asks, reload the solution.'], [/^La working copy è già su (.+)\.$/, 'The working copy is already on $1.'],
     [/^Elemento non valido: .*$/, 'Invalid item: refresh the list and try again.'], [/^"(.*)" non è una revisione valida: .*$/, '"$1" is not a valid revision: type a positive integer (e.g. 1234) or HEAD.'],
-    [/^Merge da (.+)$/, 'Merge from $1'], [/^Lettura delle revisioni da unire\.\.\.$/, 'Reading the revisions to merge...'], [/^(\d+) revisioni da unire\.$/, '$1 revisions to merge.'],
+    [/^File aperto: (.+)$/, 'File opened: $1'], [/^Merge da (.+)$/, 'Merge from $1'], [/^Lettura delle revisioni da unire\.\.\.$/, 'Reading the revisions to merge...'], [/^(\d+) revisioni da unire\.$/, '$1 revisions to merge.'],
     [/^Nessuna revisione da unire: (.+) è già allineato\.$/, 'No revisions to merge: $1 is already up to date.'], [/^Anteprima completata\.$/, 'Preview completed.'], [/^Merge eseguito, da committare\.$/, 'Merge done, ready to commit.'], [/^Merge eseguito, da committare\. Conflitti da risolvere in Changes: (\d+)\.$/, 'Merge done, ready to commit. Conflicts to resolve in Changes: $1.'],
     [/^(\d+) file in conflitto: risolvili nella sezione Conflitti, poi committa\.$/, '$1 conflicted files: resolve them in the Conflicts section, then commit.'], [/^Conflitto risolto: (.+)$/, 'Conflict resolved: $1'],
     [/^Editor di merge aperto \(vsDiffMerge\): .*$/, 'Merge editor opened (vsDiffMerge): save the result, then press "Mark as resolved".'], [/^Editor di merge chiuso senza salvare: .*$/, 'Merge editor closed without saving: the file still has the conflict markers.'],
@@ -133,11 +133,11 @@
     const sections = SECS.map(([id, title]) => { const items = secItems(id); return { id, title: tr(title), count: items.length, expanded: !v.collapsed['sec:' + id], rows: rowsOf(id, items) }; });
     const msg = v.statusMsg || '';
     return {
-      workingCopy: { path: v.wcPath || '', showInput: !!v.showInput, branch: v.branch || '', rev: S.wcRev || 0, svnVersion: '1.14.3' },
+      workingCopy: { path: v.wcPath || '', showInput: !!v.showInput, branch: v.branch || '', rev: S.wcRev || 0, svnVersion: '1.14.3', ...(S.wcRev ? { head: S.headRev, revState: S.headRev > S.wcRev ? 'behind' : 'current' } : {}) },
       commit: { text: v.commitMsg || '', aiStatus: tr(v.aiMsg || ''), aiLevel: aiLevel(v), aiSeq: v.aiSeq || 0, busy: !!v.aiBusy, lang: String(v.lang || S.settings.defaultlanguage || 'auto').toLowerCase(),
         trace: (v.trace || []).map(t => ({ name: t.name, state: t.state, detail: t.detail || '' })), download: v.dl ? { pct: v.dl.pct, label: v.dl.label } : null,
-        count: commitSet().files.length, all: commitSet().all },
-      view: v.view, theme: { mode: theme.mode, kind: kindOf() }, sections, status: { msg: tr(msg), err: !!v.err || /^Errore/.test(msg), ...(/E155004/.test(msg) ? { action: { label: tr('Esegui Cleanup'), cmd: 'cleanup' } } : {}) }, prereq: prereq(), loading: !!v.loading, wizard: wizardSnap(), revPicker: rpSnap(), switchPicker: swSnap(),
+        count: commitSet().files.length, all: commitSet().all, recent: (S.recentMsgs || []).slice() },
+      view: v.view, theme: { mode: theme.mode, kind: kindOf() }, sections, status: { msg: tr(msg), err: !!v.err || /^Errore/.test(msg), seq: v.statusSeq || 0, ...(/E155004/.test(msg) ? { action: { label: tr('Esegui Cleanup'), cmd: 'cleanup' } } : {}) }, prereq: prereq(), loading: !!v.loading, wizard: wizardSnap(), revPicker: rpSnap(), switchPicker: swSnap(),
       ...(v.mergeBanner && commitSet().files.length ? { merge: { text: tr(v.mergeBanner.text), conflicts: S.files.filter(f => f.st === 'C').length } } : {}),
       conflicts: S.files.filter(f => f.st === 'C').map(f => ({ key: key('changes', f.path), path: fwd(f.path), name: base(f.path), kind: 'text', files: cflAux(f).map(fwd) })),
     };
@@ -213,6 +213,8 @@
       return openDiffTab('__diff:' + k, 'Diff ' + (row.key ? base(row.key) : row.name), `${fwd(row.key || '.')} · ${fs.length} file`, fs.map(f => f.path));
     }
     const it = row.file; if (!it || !it.canDiff) return;
+    // come Git Changes: un file nuovo (A) o non versionato (?) si apre intero nell'editor, senza diff contro il vuoto
+    if (it.st === 'A' || it.st === '?') { await sleep(150); toast('File aperto nell\'editor di Visual Studio: ' + it.path); setStatus('File aperto: ' + fwd(it.path)); return render(); }
     if (S.env.tortoise) { await sleep(250); toast('Diff aperto in TortoiseSVN: ' + it.path); logCmd('TortoiseProc.exe /command:diff /path:"' + WC + '\\' + it.path + '"'); return; }
     await svn(`diff "${fwd(it.path)}"`, 300);
     openDiffTab('__diff:' + it.path, 'Diff ' + base(it.path), `${fwd(it.path)} · BASE ⇄ working copy`, [it.path]);
@@ -245,6 +247,7 @@
     },
     cleanup: () => vmCleanup(),
     commit: () => vmCommit(),
+    useRecentMessage: a => { const m = (S.recentMsgs || [])[+a.i]; if (m != null) { S.vm.commitMsg = m; render(); } },
     setCommitText: a => { S.vm.commitMsg = String(a.text || ''); },   // niente render: e' la UI a tenere il testo
     genAi: () => vmAi('gen'),
     improveAi: () => vmAi('improve'),

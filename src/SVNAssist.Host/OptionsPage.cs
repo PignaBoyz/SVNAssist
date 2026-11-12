@@ -103,7 +103,7 @@ namespace SVNAssist.Host
 
         // chiave del setting (come in SettingsService, camelCase) -> proprieta'
         internal static readonly string[] Keys =
-            { "aiProvider", "claudeModel", "anthropicApiKey", "copilotModel", "aiEndpoint", "aiApiKey", "aiModel", "defaultLanguage", "workingCopyPath", "repoLayout", "windowTheme", "uiLanguage" };
+            { "aiProvider", "claudeModel", "anthropicApiKey", "copilotModel", "aiEndpoint", "aiApiKey", "aiModel", "defaultLanguage", "workingCopyPath", "repoLayout", "headCheckMinutes", "windowTheme", "uiLanguage" };
 
         [LCategory("Commit message AI"), LDisplayName("Provider AI per i commit message"), DefaultValue("auto"), TypeConverter(typeof(AiProviderConverter))]
         [LDescription("Automatico prova Copilot, Claude Code, Claude API e OpenAI-compatibile in quest'ordine.")]
@@ -141,6 +141,10 @@ namespace SVNAssist.Host
         [LCategory("Generale"), LDisplayName("Layout del repository"), DefaultValue("trunk/branches/tags")]
         [LDescription("Nomi delle cartelle del tronco, dei branch e dei tag, separati da / (default trunk/branches/tags). Servono a SVN Switch per trovare i rami.")]
         public string RepoLayout { get; set; } = "trunk/branches/tags";
+
+        [LCategory("Generale"), LDisplayName("Controllo nuove revisioni (minuti)"), DefaultValue(5)]
+        [LDescription("Ogni quanti minuti SVNAssist chiede al server l'ultima revisione del ramo (una sola richiesta piccola, in sola lettura) per avvisarti se altri hanno committato. 0 = spento.")]
+        public int HeadCheckMinutes { get; set; } = 5;
 
         [LCategory("Generale"), LDisplayName("Tema delle finestre SVNAssist"), DefaultValue("auto"), TypeConverter(typeof(WindowThemeConverter))]
         [LDescription("Automatico usa i colori del tema di Visual Studio (chiaro, scuro, blu, alto contrasto).")]
@@ -219,6 +223,7 @@ namespace SVNAssist.Host
                 ["defaultLanguage"] = Pick(DefaultLanguage, new LanguageConverter(), "auto"),
                 ["workingCopyPath"] = WorkingCopyPath ?? "",
                 ["repoLayout"] = string.IsNullOrWhiteSpace(RepoLayout) ? "trunk/branches/tags" : RepoLayout,
+                ["headCheckMinutes"] = Math.Max(0, Math.Min(24 * 60, HeadCheckMinutes)).ToString(System.Globalization.CultureInfo.InvariantCulture),
                 ["windowTheme"] = Pick(WindowTheme, new WindowThemeConverter(), "auto"),
                 ["uiLanguage"] = Pick(UiLanguage, new UiLanguageConverter(), "auto"),
                 ["uiLanguageEffective"] = EffectiveLanguage,
@@ -249,6 +254,7 @@ namespace SVNAssist.Host
                 case "defaultLanguage": DefaultLanguage = value; break;
                 case "workingCopyPath": WorkingCopyPath = value; break;
                 case "repoLayout": RepoLayout = value; break;
+                case "headCheckMinutes": { int n; HeadCheckMinutes = int.TryParse(value, out n) ? n : 5; break; }
                 case "windowTheme": WindowTheme = value; break;
                 case "uiLanguage": UiLanguage = value; break;
                 default: return false;

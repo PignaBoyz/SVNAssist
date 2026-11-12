@@ -65,6 +65,7 @@ internal sealed class ReloadableSvnService : ISvnService
     public Task ExportBaseAsync(string path, string destination, CancellationToken ct) => Current.ExportBaseAsync(path, destination, ct);
     public Task<bool> OpenNativeDiffAsync(string filePath, CancellationToken ct) => Current.OpenNativeDiffAsync(filePath, ct);
     public Task<string> GetBranchNameAsync(string workingCopyPath, CancellationToken ct) => Current.GetBranchNameAsync(workingCopyPath, ct);
+    public Task<long> GetHeadRevisionAsync(string url, CancellationToken ct) => Current.GetHeadRevisionAsync(url, ct);
     public Task<SvnInfo> GetInfoAsync(string workingCopyPath, CancellationToken ct) => Current.GetInfoAsync(workingCopyPath, ct);
     public Task<Version?> GetSvnVersionAsync(CancellationToken ct) => Current.GetSvnVersionAsync(ct);
     public Task<IReadOnlyList<SvnListEntry>> ListEntriesAsync(string url, CancellationToken ct) => Current.ListEntriesAsync(url, ct);

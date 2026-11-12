@@ -219,7 +219,10 @@ internal sealed class MergeStore
                     var summary = ToResult("merge", label, output);
                     lock (_lock)
                         _result = summary;
-                    _changes.AfterMerge(Loc.T("Merge {0} da {1}", label, "^/" + source.Path),
+                    IReadOnlyList<LogEntryDto> shown;
+                    lock (_lock)
+                        shown = _entries;
+                    _changes.AfterMerge(MergeCommitMessage(revs is null ? shown.Select(e => e.Rev).ToList() : revs, shown, source.Path),
                         Loc.T("Merge {0} da {1}: rivedi le modifiche e committa, oppure annulla il merge.", label, "^/" + source.Path));
                     await _changes.RefreshAsync(ct, reloadBranch: false, output.Conflicts > 0
                         ? Loc.T("Merge completato: {0} file in conflitto da risolvere.", output.Conflicts)
@@ -305,6 +308,52 @@ internal sealed class MergeStore
         }
 
         return first == last ? $"r{first}" : $"r{first}-r{last}";
+    }
+
+    /// <summary>Intervalli come TortoiseSVN: <c>1,3-5</c> (revisioni consecutive unite in un intervallo).</summary>
+    internal static string RevRanges(IEnumerable<long> revs)
+    {
+        var parts = new List<string>();
+        long? start = null, prev = null;
+        void Flush()
+        {
+            if (start is { } s)
+                parts.Add(s == prev ? $"{s}" : $"{s}-{prev}");
+        }
+
+        foreach (var r in revs.Distinct().Order())
+        {
+            if (prev is { } p && r == p + 1)
+            {
+                prev = r;
+                continue;
+            }
+
+            Flush();
+            start = prev = r;
+        }
+
+        Flush();
+        return string.Join(",", parts);
+    }
+
+    /// <summary>
+    /// Messaggio di commit dopo un merge, nel formato di TortoiseSVN: <c>Merged revision(s) 4-6 from branches/x:</c> e, per ogni revisione,
+    /// una riga <c>........</c> seguita da <c>rN | autore | messaggio originale</c>. In italiano <c>Unite le revisioni 4-6 da branches/x:</c>.
+    /// Una revisione senza dettagli (il log non l'ha restituita) resta solo <c>rN</c>.
+    /// </summary>
+    internal static string MergeCommitMessage(IReadOnlyList<long> revs, IReadOnlyList<LogEntryDto> entries, string sourcePath)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append(Loc.T("Unite le revisioni {0} da {1}:", RevRanges(revs), sourcePath));
+        foreach (var r in revs.Distinct().Order())
+        {
+            sb.Append("\n........\n").Append('r').Append(r);
+            if (entries.FirstOrDefault(e => e.Rev == r) is { } e && (e.Author.Length > 0 || e.Msg.Trim().Length > 0))
+                sb.Append(" | ").Append(e.Author).Append(" | ").Append(e.Msg.Trim());
+        }
+
+        return sb.ToString();
     }
 
     /// <summary>Revisioni scelte per il messaggio di commit: <c>r120, r124</c>; oltre 6, l'intervallo con il numero di revisioni scelte.</summary>

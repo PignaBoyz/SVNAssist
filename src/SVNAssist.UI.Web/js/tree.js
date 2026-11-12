@@ -11,7 +11,7 @@
   const guides = depth => '<span class="gd"></span>'.repeat(Math.max(0, depth));
   function rowActs(sec, r) {
     const a = [], k = { key: r.key };
-    if (r.kind === 'file' && r.can.diff) a.push(['diff', 'showDiff', k, t("Mostra le differenze nell'editor (Invio)")]);
+    if (r.kind === 'file' && r.can.diff) a.push([r.status === 'A' || r.status === '?' ? 'file' : 'diff', 'showDiff', k, r.status === 'A' || r.status === '?' ? t("Apri il file nell'editor (Invio)") : t("Mostra le differenze nell'editor (Invio)")]);
     if (r.kind === 'folder' && r.can.diff) a.push(['diff', 'showFolderDiff', k, t('Mostra le differenze della cartella')]);
     if (sec !== 'staged' && r.can.revert) a.push(['undo', 'rowOp', { op: 'revert', key: r.key }, t('Annulla le modifiche (revert)')]);
     if (r.can.unstage) a.push(['minus', 'unstage', k, t('Rimuovi dai file da committare (Spazio)')]);

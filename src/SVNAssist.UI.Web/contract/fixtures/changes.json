@@ -1,5 +1,5 @@
 {
-  "workingCopy": { "path": "C:\\dev\\Acme.Shop", "showInput": false, "branch": "trunk", "rev": 124 },
+  "workingCopy": { "path": "C:\\dev\\Acme.Shop", "showInput": false, "branch": "trunk", "rev": 124, "head": 124, "revState": "current" },
   "commit": {
     "text": "Aggiunge il calcolo del totale con coupon",
     "aiStatus": "Messaggio generato con AI (Claude Code).", "aiLevel": "", "aiSeq": 0,
@@ -11,6 +11,7 @@
     ],
     "download": null,
     "count": 2,
+    "recent": ["Corregge il totale del carrello", "Aggiunge i coupon"],
     "all": false
   },
   "view": "tree",
