@@ -39,6 +39,7 @@
       <Button guid="guidSVNAssistCmdSet" id="CmdCommit" priority="0x0010" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainPrimary" /><Strings><CommandName>SVNAssist.Commit</CommandName><ButtonText>Commit...</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdUpdate" priority="0x0000" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainSecondary" /><Strings><CommandName>SVNAssist.Update</CommandName><ButtonText>Update</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdLog" priority="0x0010" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainSecondary" /><Strings><CommandName>SVNAssist.Log</CommandName><ButtonText>Log / History</ButtonText></Strings></Button>
+      <Button guid="guidSVNAssistCmdSet" id="CmdAiSetup" priority="0x0020" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainSecondary" /><Strings><CommandName>SVNAssist.AiSetup</CommandName><ButtonText>Cambia provider AI...</ButtonText></Strings></Button>
 
       <Button guid="guidSVNAssistCmdSet" id="CmdSeUpdate" priority="0x0000" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeSync" /><Strings><CommandName>SVNAssist.SeUpdate</CommandName><ButtonText>SVN Update</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdSeCommit" priority="0x0010" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSeSync" /><Strings><CommandName>SVNAssist.SeCommit</CommandName><ButtonText>SVN Commit...</ButtonText></Strings></Button>
@@ -73,6 +74,7 @@
       <IDSymbol name="CmdCommit" value="0x0101" />
       <IDSymbol name="CmdUpdate" value="0x0102" />
       <IDSymbol name="CmdLog" value="0x0103" />
+      <IDSymbol name="CmdAiSetup" value="0x0104" />
       <IDSymbol name="CmdSeUpdate" value="0x0110" />
       <IDSymbol name="CmdSeCommit" value="0x0111" />
       <IDSymbol name="CmdSeDiff" value="0x0112" />

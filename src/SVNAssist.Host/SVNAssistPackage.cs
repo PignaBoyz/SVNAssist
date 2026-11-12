@@ -88,6 +88,7 @@ namespace SVNAssist.Host
             Add(Ids.CmdCommit, () => ShowViewAsync("changes"));
             Add(Ids.CmdLog, () => ShowViewAsync("log"));
             Add(Ids.CmdUpdate, () => Host.SendCommandAsync("changes", "update", null));
+            Add(Ids.CmdAiSetup, () => Host.SendCommandAsync("changes", "wizardOpen", null));
 
             // Solution Explorer: i percorsi selezionati sono un dato dell'host (non vengono dalla pagina) e vanno
             // al backend con IBackend.RunPathCommandAsync(command, paths). Vedi docs/host.md.

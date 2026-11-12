@@ -88,7 +88,7 @@ namespace SVNAssist.Host
         public string ClaudeModel { get; set; } = "claude-sonnet-5-5";
 
         [Category(Ai), DisplayName("API key Anthropic (solo Claude API)"), PasswordPropertyText(true)]
-        [Description("Vuota = variabile d'ambiente ANTHROPIC_API_KEY. Salvata in chiaro nelle impostazioni di Visual Studio.")]
+        [Description("Vuota = variabile d'ambiente ANTHROPIC_API_KEY. Salvata cifrata (DPAPI, solo per il tuo utente Windows) nelle impostazioni di Visual Studio.")]
         public string AnthropicApiKey { get; set; } = "";
 
         [Category(Ai), DisplayName("Modello Copilot (solo Copilot)"), DefaultValue("default"), TypeConverter(typeof(CopilotModelConverter))]
@@ -100,7 +100,7 @@ namespace SVNAssist.Host
         public string AiEndpoint { get; set; } = GitHubModelsEndpoint;
 
         [Category(Ai), DisplayName("API key o GitHub PAT (solo OpenAI-compatibile)"), PasswordPropertyText(true)]
-        [Description("Salvata in chiaro nelle impostazioni di Visual Studio.")]
+        [Description("Salvata cifrata (DPAPI, solo per il tuo utente Windows) nelle impostazioni di Visual Studio.")]
         public string AiApiKey { get; set; } = "";
 
         [Category(Ai), DisplayName("Modello (solo OpenAI-compatibile / GitHub Models)"), DefaultValue("openai/gpt-4o-mini"), TypeConverter(typeof(AiModelConverter))]

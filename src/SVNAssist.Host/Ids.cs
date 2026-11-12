@@ -13,7 +13,7 @@ namespace SVNAssist.Host
 
         public static readonly Guid CmdSet = new Guid(CmdSetGuid);
 
-        public const int CmdChanges = 0x0100, CmdCommit = 0x0101, CmdUpdate = 0x0102, CmdLog = 0x0103;
+        public const int CmdChanges = 0x0100, CmdCommit = 0x0101, CmdUpdate = 0x0102, CmdLog = 0x0103, CmdAiSetup = 0x0104;
         public const int CmdSeUpdate = 0x0110, CmdSeCommit = 0x0111, CmdSeDiff = 0x0112, CmdSeLog = 0x0113,
             CmdSeAdd = 0x0114, CmdSeRevert = 0x0115, CmdSeIgnore = 0x0116;
     }

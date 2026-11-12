@@ -12,7 +12,8 @@
     "sections",
     "status",
     "prereq",
-    "loading"
+    "loading",
+    "wizard"
   ],
   "properties": {
     "workingCopy": {
@@ -47,6 +48,8 @@
       "required": [
         "text",
         "aiStatus",
+        "aiLevel",
+        "aiSeq",
         "busy",
         "lang",
         "trace",
@@ -126,6 +129,22 @@
               }
             }
           ]
+        },
+        "aiLevel": {
+          "enum": [
+            "",
+            "busy",
+            "ok",
+            "warn",
+            "err",
+            "info"
+          ],
+          "description": "Gravita del messaggio AI (colore/icona)."
+        },
+        "aiSeq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Cresce a ogni messaggio AI (rende visibile un messaggio ripetuto)."
         }
       }
     },
@@ -288,6 +307,173 @@
     },
     "loading": {
       "type": "boolean"
+    },
+    "wizard": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Procedura guidata (AI o prerequisiti).",
+      "required": [
+        "open",
+        "mode",
+        "step",
+        "fromGenerate",
+        "provider",
+        "busy",
+        "feedback",
+        "providers",
+        "items",
+        "auth",
+        "authOk",
+        "authDetail",
+        "endpoint",
+        "models",
+        "model",
+        "canNext"
+      ],
+      "properties": {
+        "open": {
+          "type": "boolean"
+        },
+        "mode": {
+          "enum": [
+            "ai",
+            "prereq"
+          ]
+        },
+        "step": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4
+        },
+        "fromGenerate": {
+          "type": "boolean"
+        },
+        "provider": {
+          "enum": [
+            "",
+            "copilot",
+            "claudecode",
+            "claude",
+            "openai"
+          ]
+        },
+        "busy": {
+          "type": "boolean"
+        },
+        "feedback": {
+          "type": "string"
+        },
+        "providers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "title",
+              "cost"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "cost": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "group",
+              "title",
+              "ok",
+              "detail",
+              "instructions",
+              "primary",
+              "secondary"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "group": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "ok": {
+                "type": "boolean"
+              },
+              "detail": {
+                "type": "string"
+              },
+              "instructions": {
+                "type": "string"
+              },
+              "primary": {
+                "type": "string",
+                "description": "Etichetta del pulsante principale (\"\" = nessuno)."
+              },
+              "secondary": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "auth": {
+          "enum": [
+            "",
+            "github",
+            "claudecode",
+            "key",
+            "openai"
+          ]
+        },
+        "authOk": {
+          "type": "boolean"
+        },
+        "authDetail": {
+          "type": "string"
+        },
+        "endpoint": {
+          "type": "string"
+        },
+        "models": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "value",
+              "label"
+            ],
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "model": {
+          "type": "string"
+        },
+        "canNext": {
+          "type": "boolean"
+        }
+      }
     }
   },
   "$defs": {

@@ -40,6 +40,14 @@ internal sealed class FakeHost : IHost
         return Task.CompletedTask;
     }
 
+    public int SettingsOpened { get; private set; }
+
+    public Task OpenSettingsAsync()
+    {
+        SettingsOpened++;
+        return Task.CompletedTask;
+    }
+
     public Task OpenUrlAsync(string url)
     {
         Urls.Add(url);

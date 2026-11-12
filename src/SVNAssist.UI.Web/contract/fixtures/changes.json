@@ -2,7 +2,7 @@
   "workingCopy": { "path": "C:\\dev\\Acme.Shop", "showInput": false, "branch": "trunk", "rev": 124 },
   "commit": {
     "text": "Aggiunge il calcolo del totale con coupon",
-    "aiStatus": "Messaggio generato con AI (Claude Code).",
+    "aiStatus": "Messaggio generato con AI (Claude Code).", "aiLevel": "", "aiSeq": 0,
     "busy": false,
     "lang": "auto",
     "trace": [
@@ -48,5 +48,6 @@
       { "id": "gh-cli", "group": "Provider AI (ne basta uno)", "title": "GitHub CLI (gh)", "ok": false, "detail": "gh.exe non trovato.", "instructions": "winget install --id GitHub.cli -e", "primary": "Installa GitHub CLI", "secondary": "" }
     ]
   },
-  "loading": false
+  "loading": false,
+  "wizard": {"open":false,"mode":"ai","step":1,"fromGenerate":false,"provider":"","busy":false,"feedback":"","providers":[],"items":[],"auth":"","authOk":false,"authDetail":"","endpoint":"","models":[],"model":"","canNext":false}
 }

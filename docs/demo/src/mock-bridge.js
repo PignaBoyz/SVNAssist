@@ -44,15 +44,19 @@
     return { open: !!S.ui.prereq, summary: S.prq.init ? P.summary : 'Prerequisiti', ai: P.ai, feedback: S.prq.feedback || '',
       items: P.items.map(i => ({ id: i.id, group: i.g, title: i.title, ok: !!i.ok, detail: i.detail, instructions: i.ok ? '' : (i.instr || ''), primary: i.p1 || '', secondary: i.p2 || '' })) };
   }
+  function aiLevel(v) {
+    const m = v.aiMsg || '';
+    return v.aiBusy ? 'busy' : !m ? '' : /^Errore/.test(m) ? 'err' : /^(Nessun|Metti almeno|Scrivi prima|Operazione)/.test(m) ? 'warn' : /^Messaggio/.test(m) ? 'ok' : 'info';
+  }
   function snapshotChanges() {
     const v = S.vm;
     const sections = SECS.map(([id, title]) => { const items = secItems(id); return { id, title, count: items.length, expanded: !v.collapsed['sec:' + id], rows: rowsOf(id, items) }; });
     const msg = v.statusMsg || '';
     return {
       workingCopy: { path: v.wcPath || '', showInput: !!v.showInput, branch: v.branch || '', rev: S.wcRev || 0 },
-      commit: { text: v.commitMsg || '', aiStatus: v.aiMsg || '', busy: !!v.aiBusy, lang: String(v.lang || S.settings.defaultlanguage || 'auto').toLowerCase(),
+      commit: { text: v.commitMsg || '', aiStatus: v.aiMsg || '', aiLevel: aiLevel(v), aiSeq: v.aiSeq || 0, busy: !!v.aiBusy, lang: String(v.lang || S.settings.defaultlanguage || 'auto').toLowerCase(),
         trace: (v.trace || []).map(t => ({ name: t.name, state: t.state, detail: t.detail || '' })), download: v.dl ? { pct: v.dl.pct, label: v.dl.label } : null },
-      view: v.view, theme: { mode: theme.mode, kind: kindOf() }, sections, status: { msg, err: !!v.err || /^Errore/.test(msg) }, prereq: prereq(), loading: !!v.loading,
+      view: v.view, theme: { mode: theme.mode, kind: kindOf() }, sections, status: { msg, err: !!v.err || /^Errore/.test(msg) }, prereq: prereq(), loading: !!v.loading, wizard: wizardSnap(),
     };
   }
   function snapshotLog() {
@@ -136,6 +140,7 @@
     prereqToggle: () => ACT.prereqToggle(),
     prereqRecheck: () => prqRecheck(),
     prereqRun: a => prqRun(a.id + '|' + (a.primary ? 1 : 2)),
+    ...Object.fromEntries(['wizardOpen', 'wizardOpenPrereq', 'wizardCancel', 'wizardPick', 'wizardBack', 'wizardNext', 'wizardRecheck', 'wizardRun', 'wizardLogin', 'wizardSetAuth', 'wizardFinish', 'openOptions'].map(n => [n, a => WIZ[n](a)])),   // WIZ e' definito in demo.js (caricato dopo)
     logLoad: a => { S.lvm.path = String(a.path || ''); return lvmLoad(50); },
     logMore: () => lvmMore(),
     logSelect: a => lvmSelect(+a.rev),

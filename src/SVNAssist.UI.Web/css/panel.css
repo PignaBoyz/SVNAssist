@@ -56,7 +56,15 @@ textarea{resize:vertical;min-height:62px;max-height:40vh;font-family:var(--font)
 progress{display:block;width:100%;height:8px;margin:4px 0;accent-color:var(--acc2)}
 .foot{display:flex;align-items:center;gap:8px;padding:4px 8px;border-top:1px solid var(--bd);background:var(--bg3);flex:none;min-height:30px}
 .foot .msg{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-.foot .msg.err{color:var(--err)}
+.foot .msg{display:inline-flex;align-items:center;gap:5px}
+.foot .msg.ok,.foot .msg.err{font-weight:600;padding:1px 8px;border-radius:10px;animation:flash 2.4s ease-out}
+.foot .msg.ok{background:var(--chip-ok-bg);color:var(--chip-ok-fg)}
+.foot .msg.err{background:var(--chip-fail-bg);color:var(--chip-fail-fg)}
+@keyframes flash{0%,35%{box-shadow:0 0 0 3px var(--acc2)}100%{box-shadow:0 0 0 3px transparent}}
+.prq-st{border-color:transparent;font-weight:600}
+.prq-st.ok{background:var(--chip-ok-bg);color:var(--chip-ok-fg)}
+.prq-st.bad{background:var(--chip-fail-bg);color:var(--chip-fail-fg)}
+.prq-st.bad:hover:not(:disabled),.prq-st.ok:hover:not(:disabled){border-color:currentColor}
 .prog{position:absolute;top:0;left:0;right:0;height:2px;overflow:hidden;display:none;z-index:5}
 .loading>.prog{display:block;background:var(--bg4)}
 .prog::after{content:"";display:block;height:100%;width:30%;background:var(--acc2);animation:ld 1s ease-in-out infinite}
@@ -153,3 +161,36 @@ html[data-view=diff] body,html[data-view=log] body,html[data-view=changes] body{
 #toast{position:fixed;left:50%;bottom:40px;transform:translateX(-50%);background:var(--acc);color:var(--acc-fg);padding:6px 14px;border-radius:4px;box-shadow:0 4px 16px var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s;max-width:90vw;z-index:200}
 #toast.on{opacity:1}
 .flt{padding:4px 8px;border-top:1px solid var(--bd)}.flt input{padding:3px 8px}
+
+/* messaggi AI per gravita' (stessa dimensione del testo: cambiano colore, icona e peso) */
+.ai-s{display:flex;gap:6px;align-items:flex-start;border-radius:4px}
+.ai-s .ic{flex:none;margin-top:2px}
+.ai-s.lv-warn,.ai-s.lv-err,.ai-s.lv-ok{padding:4px 8px;font-weight:600;animation:flash 2.4s ease-out}
+.ai-s.lv-warn{background:var(--warn-bg);color:var(--warn-fg)}
+.ai-s.lv-err{background:var(--chip-fail-bg);color:var(--chip-fail-fg)}
+.ai-s.lv-ok{background:var(--chip-ok-bg);color:var(--chip-ok-fg)}
+.ai-s.lv-busy{color:var(--fg)}
+@media (prefers-reduced-motion:reduce){.ai-s.lv-warn,.ai-s.lv-err,.ai-s.lv-ok,.foot .msg.ok,.foot .msg.err{animation:none}}
+
+/* procedura guidata (dialogo modale) */
+.wiz-scrim{position:fixed;inset:0;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:10px;z-index:150}
+.wiz{background:var(--bg2);border:1px solid var(--bd2);border-radius:8px;box-shadow:0 12px 32px var(--shadow);width:min(560px,100%);max-height:100%;display:flex;flex-direction:column;overflow:hidden}
+.wiz-h{display:flex;align-items:center;gap:6px;padding:10px 12px 4px}
+.wiz-h h3{margin:0;font-size:1.1em;outline:none}
+.wiz-steps{display:flex;gap:4px;list-style:none;margin:0;padding:4px 12px 8px;flex-wrap:wrap;color:var(--fg2);font-size:.92em}
+.wiz-steps li{display:flex;align-items:center;gap:5px;flex:1;min-width:max-content}
+.wiz-steps .n{width:20px;height:20px;border-radius:50%;border:1px solid var(--bd2);display:inline-flex;align-items:center;justify-content:center;font-size:.9em}
+.wiz-steps .n .ic{width:12px;height:12px}
+.wiz-steps li.cur{color:var(--fg);font-weight:600}.wiz-steps li.cur .n{background:var(--acc);border-color:var(--acc);color:var(--acc-fg)}
+.wiz-steps li.done .n{background:var(--chip-ok-bg);color:var(--chip-ok-fg);border-color:transparent}
+.wiz-b{padding:4px 12px 8px;overflow:auto;flex:1;display:flex;flex-direction:column;gap:4px}
+.wiz-b p{margin:2px 0 6px}
+.wiz-cards{display:flex;flex-direction:column;gap:6px}
+.wiz-card{display:flex;flex-direction:column;gap:2px;text-align:left;background:var(--bg3);border:1px solid var(--bd2);border-radius:6px;padding:8px 10px;color:var(--fg)}
+.wiz-card:hover{border-color:var(--acc2)}
+.wiz-card.sel{border-color:var(--acc2);background:var(--acc-bg);box-shadow:inset 3px 0 0 var(--acc2)}
+.wiz-form{display:flex;flex-direction:column;gap:4px;margin:6px 0}
+.wiz-form label,.wiz-b label{font-weight:600}
+.wiz-b input[type=password],.wiz-b select{background:var(--bg1);border:1px solid var(--bd2);border-radius:4px;padding:5px 8px;width:100%;color:var(--fg)}
+.wiz-f{display:flex;align-items:center;gap:6px;padding:8px 12px;border-top:1px solid var(--bd);background:var(--bg3);flex-wrap:wrap}
+.app.modal-open{pointer-events:none}

@@ -216,6 +216,12 @@ namespace SVNAssist.Host
             if (key == "windowTheme") { foreach (var v in Views()) Find(v)?.RefreshTheme(); NotifyBackendTheme(); }
         }
 
+        public async Task OpenSettingsAsync()
+        {
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            _pkg.ShowOptionPage(typeof(SvnAssistOptions));
+        }
+
         public Task OpenUrlAsync(string url)
         {
             if (!Uri.TryCreate(url, UriKind.Absolute, out var u) || u.Scheme != Uri.UriSchemeHttps)

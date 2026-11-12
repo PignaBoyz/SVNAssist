@@ -60,6 +60,9 @@ namespace SVNAssist.Rpc
         /// <summary>Mostra la finestra SVN Log su un percorso.</summary>
         Task ShowLogAsync(string path);
 
+        /// <summary>Apre Tools > Options > SVNAssist ("Faccio io").</summary>
+        Task OpenSettingsAsync();
+
         /// <summary>Apre un terminale con un comando (es. "gh auth login --web").</summary>
         Task RunInTerminalAsync(string command, string workingDir);
     }

@@ -32,3 +32,12 @@ Segna ✅ / ❌ (+ una riga su cosa vedi).
 14. [ ] Chiudi VS: in Task Manager non resta nessun `SVNAssist.Backend.exe`.
 15. [ ] (facoltativo) Su una macchina/VM senza .NET 10: compare il dialogo "Installa automaticamente / Apri pagina download" e dopo l'installazione la finestra funziona.
 16. [ ] (facoltativo) VS 2022, se lo hai: installa `src\SVNAssist.Host\bin\Release\net472\SVNAssist.vsix` e apri Changes.
+
+**Procedura guidata AI e feedback** (con un provider NON configurato: Tools > Options > Provider AI = "Automatico", niente `gh`/Claude/chiavi)
+17. [ ] "Genera con AI" apre la procedura guidata (non un prompt); Esc la chiude, Tab resta dentro il dialogo; Avanti è disabilitato finché non scegli un provider.
+18. [ ] Scegli un provider: al passo 2 compaiono solo i suoi prerequisiti; installa ciò che manca dal pulsante (si apre il terminale) e, tornando in VS, lo stato diventa verde da solo (o con Ricontrolla). Passo 3: login o API key; passo 4: modello consigliato preselezionato; Fine salva (verifica in Tools > Options) e genera il messaggio.
+19. [ ] Extensions > SVNAssist > "Cambia provider AI..." apre Changes con la procedura; "Faccio io" apre Tools > Options > SVNAssist; Annulla non cambia nessuna impostazione.
+20. [ ] "Genera con AI" con 0 file in Staged: banner giallo ben visibile con icona (a ogni clic si ridisegna e lampeggia); durante la generazione il pulsante è disabilitato con spinner e "Generazione in corso…"; un errore del provider compare in rosso.
+21. [ ] Pulsante in alto "SVN Update"; dopo l'update il messaggio in basso ("Aggiornato alla revisione N.") è verde con icona e un breve alone che sfuma.
+22. [ ] Barra in basso: "Prerequisiti" verde se tutto ok; senza svn o senza provider AI è rosso con icona di avviso e, cliccandolo, apre la procedura sui prerequisiti mancanti (con "Configura l'AI" e "Faccio io").
+23. [ ] Repo `file://` senza trunk/branches: l'header mostra "/ (radice)" invece di "unknown".

@@ -410,7 +410,7 @@ function freshState(mode) {
     watch: { pending: false, last: 0, fire: 0, note: '' },
     f: { svnPromptDone: false, svnPromptChoice: null, wcLoaded: false, aiNone: false, aiPromptShown: false, tourCommits: 0, optionsSaved: false },
     tour: { on: false, step: 0, done: false },
-    toasts: [], pending: {}, prq: { snap: null, feedback: '', init: false, busy: false },
+    wiz: freshWiz(), toasts: [], pending: {}, prq: { snap: null, feedback: '', init: false, busy: false },
   };
   if (!free) {  // primo utilizzo: macchina "vergine"
     Object.assign(s.env, { svn: false, ghInstalled: false, gh: false, claudeInstalled: false, claudeLogin: false, anthropicKey: false, copilotRuntime: false, tortoise: false });
@@ -710,18 +710,13 @@ function improveMessage(draft, lang) {
 async function aiCore(kind, ui) {
   const r = resolveChain();
   if (!r.chain.length) {
-    ui.status(ui.noProv); ui.trace([]); S.f.aiNone = true;
-    if (!S.sess.aiPrompted) {
-      S.sess.aiPrompted = true; S.f.aiPromptShown = true;
-      const ok = await prompt("Nessun provider AI trovato per generare i commit. Basta UNA di queste opzioni:\n\n• GitHub Copilot o GitHub CLI: esegui 'gh auth login'\n• Claude: installa Claude Code e fai login, oppure inserisci una Anthropic API Key\n• Gratis: crea un token GitHub e incollalo in Tools > Options > SVNAssist > AI API Key\n\nVuoi aprire la pagina per creare il token GitHub gratuito?", 'okcancel');
-      if (ok) toast('Apertura nel browser: https://github.com/settings/tokens/new?description=SVNAssist&scopes=', 4500);
-    }
-    render(); return;
+    ui.trace([]); S.f.aiNone = true; S.f.aiPromptShown = true;
+    ui.status('Nessun provider AI configurato: completa la procedura guidata.'); wizOpen(true); return;
   }
   if (kind === 'improve' && !ui.draft().trim()) { ui.status(ui.noDraft); return; }
   if (!S.vm.wcPath) { ui.status('Nessuna working copy configurata.'); return; }
   const selAll = S.vm.files.filter(f => f.sel);
-  if (!selAll.length) { ui.status(kind === 'improve' ? 'Seleziona almeno un file per migliorare il messaggio.' : 'Seleziona almeno un file per generare il messaggio.'); return; }
+  if (!selAll.length) { ui.status(kind === 'improve' ? 'Metti almeno un file in Staged per migliorare il messaggio.' : 'Metti almeno un file in Staged per generare il messaggio.'); return; }
   const selPaths = selAll.filter(f => !f.dir && ['M', 'A', 'D', 'R', 'C'].includes(f.st)).map(f => f.path);
   ui.busy(true);
   const trace = r.auto ? r.all.map(a => ({ name: a.name, k: a.k, state: a.ok ? 'wait' : 'skip', detail: a.ok ? '' : a.why })) : r.chain.map(a => ({ name: a.name, k: a.k, state: 'wait', detail: '' }));
@@ -761,9 +756,9 @@ async function aiCore(kind, ui) {
   finally { ui.busy(false); render(); ui.after && ui.after(); }
 }
 const vmAiUi = () => ({
-  noProv: 'Nessun provider AI disponibile (Copilot, Claude o token GitHub).', noDraft: 'Scrivi prima una bozza del messaggio da migliorare.', noDiff: 'Nessun diff disponibile.',
+  wizard: true, noProv: 'Nessun provider AI disponibile (Copilot, Claude o token GitHub).', noDraft: 'Scrivi prima una bozza del messaggio da migliorare.', noDiff: 'Nessun diff disponibile.',
   generating: 'Generazione in corso...', improving: 'Miglioramento in corso...', generated: 'Messaggio generato con AI.', improved: 'Messaggio migliorato.', err: 'Errore AI: ',
-  status: t => { S.vm.aiMsg = t; render(); }, busy: b => { S.vm.aiBusy = b; render(); }, draft: () => S.vm.commitMsg, set: t => { S.vm.commitMsg = t; },
+  status: t => { S.vm.aiMsg = t; S.vm.aiSeq = (S.vm.aiSeq || 0) + 1; render(); }, busy: b => { S.vm.aiBusy = b; render(); }, draft: () => S.vm.commitMsg, set: t => { S.vm.commitMsg = t; },
   lang: () => S.vm.lang || S.settings.defaultlanguage, trace: t => { S.vm.trace = t.map(x => ({ ...x })); render(); }, dl: d => { S.vm.dl = d; render(); },
 });
 
@@ -1068,7 +1063,7 @@ const STEPS = [
   { t: 'Apri una solution', p: 'Menu File > Apri progetto/soluzione. Scegli Acme.Shop (dentro una working copy SVN).', hint: 'Prova anche l\'altra solution: fuori da una working copy il pannello lo segnala.', doLabel: 'Apri Acme.Shop', done: () => !!S.solution, doIt: () => openSolDlg() },
   { t: 'Primo comando: manca svn.exe', p: 'Apri Estensioni > SVNAssist > SVN Changes. Se svn.exe non c\'è, SVNAssist chiede (una volta per sessione) se installarlo. Prova OK (winget) oppure Annulla.', doLabel: 'Apri SVN Changes', done: () => S.f.svnPromptDone, doIt: () => openStatus(), extra: () => S.f.svnPromptChoice === 'cancel' ? `<div class="hint">Hai scelto Annulla: il pannello resta vuoto e il prompt non ricompare nella sessione. <button class="btn sm" data-act="tourRetrySvn">Riprova con OK</button></div>` : '' },
   { t: 'Working copy rilevata', p: "Con svn installato premi Ricontrolla nei Prerequisiti (il pannello si apre da solo se svn manca): SVNAssist trova la working copy risalendo dalla solution fino alla cartella .svn e mostra branch e file modificati.", doLabel: 'Ricontrolla', done: () => S.f.wcLoaded, doIt: async () => { await openStatus(); if (Object.keys(S.pending).length) await prqRecheck(); } },
-  { t: 'Primo clic su Genera con AI', p: 'Senza nessun provider AI configurato compare il prompt di aiuto (una volta per sessione) con le opzioni disponibili.', doLabel: 'Clicca Genera con AI', done: () => S.f.aiNone, doIt: () => vmAi('gen') },
+  { t: 'Primo clic su Genera con AI', p: 'Senza nessun provider AI configurato si apre la procedura guidata: provider, prerequisiti, accesso e modello (si riapre anche da Cambia provider AI...).', doLabel: 'Clicca Genera con AI', done: () => S.f.aiNone, doIt: () => vmAi('gen') },
   { t: 'Configura un provider in Tools > Options', p: 'Apri Strumenti > Opzioni > SVNAssist. Esempio: AI Provider = claude e una Anthropic API Key qualsiasi (la demo non la invia da nessuna parte). Oppure imposta "GitHub CLI loggato" nel Pannello simulazione.', doLabel: 'Apri Opzioni', done: () => resolveChain().chain.length > 0, doIt: () => optionsDlg() },
   { t: 'Genera il messaggio e committa', p: 'Premi Genera con AI: il messaggio nasce dai file realmente modificati. Poi, con i file giusti nella sezione Staged (il + li sposta), premi Commit e controlla la nuova revisione in Log / History.', hint: 'I file in conflitto non possono andare in Staged: risolvili (clic destro > Risolvi conflitto...) prima di committare. I non versionati messi in Staged vengono aggiunti e i mancanti eliminati in automatico.', doLabel: 'Genera con AI', done: () => S.f.tourCommits > 0, doIt: () => vmAi('gen') },
 ];
@@ -1206,6 +1201,93 @@ async function prqRecheck() {
   render();
 }
 function prereqOpen() { S.ui.statusOpen = true; S.ui.prereq = true; S.ui.view = 'dock'; prqInit(); render(); const d = $('.prq'); if (d) d.scrollIntoView({ block: 'nearest' }); }
+
+// ---------- procedura guidata (specchio di WizardStore del backend) ----------
+const WIZ_PROV = [
+  { id: 'copilot', title: 'GitHub Copilot', cost: 'GitHub Copilot: serve un abbonamento Copilot (le richieste possono consumare "premium request"), GitHub CLI con login (gh auth login) e il runtime Copilot (~100 MB, scaricato al primo uso).' },
+  { id: 'claudecode', title: 'Claude Code (abbonamento Claude)', cost: 'Claude Code: serve Claude Code installato e il login (/login) con un abbonamento Claude Pro/Max; usa la quota del tuo abbonamento.' },
+  { id: 'claude', title: 'Claude API (API key, a consumo)', cost: 'Claude API: serve una API key Anthropic; l\'uso è a pagamento a consumo (Haiku costa meno di Sonnet, Sonnet meno di Opus).' },
+  { id: 'openai', title: 'GitHub Models / OpenAI-compatibile', cost: 'OpenAI-compatibile: con GitHub Models (default) basta il login GitHub (gh auth login) o un token, gratis entro i limiti; con altri endpoint serve la loro API key (a pagamento, tranne Ollama in locale).' },
+];
+const WIZ_MODELS = {
+  claude: [['claude-sonnet-5-5', 'Sonnet (consigliato, equilibrato)'], ['claude-haiku-5-5', 'Haiku (il più economico e veloce)'], ['claude-opus-5-5', 'Opus (il più potente, costoso)']],
+  copilot: [['default', 'Predefinito di Copilot (consigliato)'], ['gpt-4.1', 'GPT-4.1'], ['gpt-5-mini', 'GPT-5 mini'], ['claude-sonnet-4.5', 'Claude Sonnet 4.5']],
+  openai: [['openai/gpt-4o-mini', 'GPT-4o mini (consigliato, gratuito su GitHub Models)'], ['openai/gpt-4o', 'GPT-4o'], ['openai/gpt-4.1-mini', 'GPT-4.1 mini'], ['openai/gpt-4.1', 'GPT-4.1']],
+};
+WIZ_MODELS.claudecode = WIZ_MODELS.claude;
+const WIZ_MODEL_KEY = { copilot: 'copilotmodel', claude: 'claudemodel', claudecode: 'claudemodel', openai: 'aimodel' };
+const WIZ_INSTALL = { copilot: ['gh-cli', 'copilot-runtime'], claudecode: ['claude-code'], claude: [], openai: [] };
+const freshWiz = () => ({ open: false, mode: 'ai', step: 1, from: false, provider: '', busy: false, model: '' });
+const wizItem = i => ({ id: i.id, group: i.g, title: i.title, ok: !!i.ok, detail: i.detail, instructions: i.ok ? '' : (i.instr || ''), primary: i.ok ? '' : (i.p1 || ''), secondary: i.ok ? '' : (i.p2 || '') });
+function wizCompute() {
+  const W = S.wiz, P = prqCompute(), byId = id => P.items.find(i => i.id === id), e = S.env;
+  if (W.mode === 'prereq') {
+    const ai = P.usable.length > 0, items = [wizItem(byId('svn')), { id: 'ai', group: 'Provider AI', title: 'Provider AI per i commit message', ok: ai, detail: ai ? P.usable.join(' → ') : 'Nessun provider AI utilizzabile: serve per generare i messaggi di commit.', instructions: ai ? '' : 'La procedura guidata ti accompagna nella scelta e nell\'accesso.', primary: ai ? '' : 'Configura l\'AI', secondary: '' }];
+    return { items, auth: '', authOk: false, authDetail: '', canNext: items.every(i => i.ok) };
+  }
+  const items = W.step === 2 ? (WIZ_INSTALL[W.provider] || []).map(id => wizItem(byId(id))) : [];
+  const all = (WIZ_INSTALL[W.provider] || []).map(id => byId(id).ok);
+  const ghModels = isGhModels(S.settings.aiendpoint);
+  const authOk = { copilot: byId('gh-login').ok, claude: byId('anthropic-key').ok, openai: !!S.settings.aiapikey.trim() || (ghModels && e.gh), claudecode: false }[W.provider] || false;
+  const authDetail = W.provider === 'claudecode' ? 'Il login a Claude Code non si può verificare da qui: se non l\'hai mai fatto, aprilo e digita /login.'
+    : W.provider === 'copilot' ? byId('gh-login').detail : W.provider === 'claude' ? byId('anthropic-key').detail : (S.settings.aiapikey.trim() ? 'chiave in Tools > Options' : authOk ? 'token GitHub rilevato (GitHub Models)' : 'nessuna chiave né token GitHub.');
+  const canNext = !W.busy && ({ 1: !!W.provider, 2: all.every(Boolean), 3: authOk || W.provider === 'claudecode', 4: !!W.model }[W.step]);
+  return { items, auth: { copilot: 'github', claudecode: 'claudecode', claude: 'key', openai: 'openai' }[W.provider] || '', authOk, authDetail, canNext };
+}
+function wizardSnap() {
+  const W = S.wiz, c = W.open ? wizCompute() : { items: [], auth: '', authOk: false, authDetail: '', canNext: false };
+  return { open: W.open, mode: W.mode, step: W.step, fromGenerate: W.from, provider: W.provider, busy: W.busy, feedback: W.open ? (S.prq.feedback || '') : '',
+    providers: WIZ_PROV.map(p => ({ ...p })), items: c.items, auth: c.auth, authOk: c.authOk, authDetail: c.authDetail, endpoint: S.settings.aiendpoint,
+    models: W.step === 4 && W.mode === 'ai' ? (WIZ_MODELS[W.provider] || []).map(([value, label]) => ({ value, label })) : [], model: W.model, canNext: !!c.canNext };
+}
+function wizOpen(from) { const p = (S.settings.aiprovider || '').toLowerCase(); S.wiz = Object.assign(freshWiz(), { open: true, from: !!from, provider: WIZ_INSTALL[p] ? p : '' }); S.prq.feedback = ''; render(); }
+function wizOpenPrereq() { S.wiz = Object.assign(freshWiz(), { open: true, mode: 'prereq' }); S.prq.feedback = ''; render(); }
+function wizApplyPending() { Object.keys(S.pending).forEach(k => CONSOLES[k].apply()); S.pending = {}; prqRefresh(); }
+const WIZ = {
+  wizardOpen: () => wizOpen(false), wizardOpenPrereq: () => wizOpenPrereq(),
+  wizardCancel: () => { S.wiz.open = false; render(); },
+  wizardPick: a => { if (!WIZ_INSTALL[a.provider]) throw new Error('Provider sconosciuto: ' + a.provider); if (S.wiz.step === 1) S.wiz.provider = a.provider; render(); },
+  wizardBack: () => { if (S.wiz.step > 1) S.wiz.step--; render(); },
+  wizardNext: () => {
+    const W = S.wiz; if (W.step === 2 || W.step === 3) wizApplyPending();
+    if (!wizCompute().canNext || W.step >= 4) return render();
+    W.step++; if (W.step === 4) W.model = WIZ_MODELS[W.provider][0][0]; render();
+  },
+  wizardRecheck: () => { wizApplyPending(); render(); },
+  wizardRun: async a => {
+    const W = S.wiz, it = wizCompute().items.find(x => x.id === a.id); if (!it || W.busy) return;
+    if (a.id === 'ai') { wizOpen(false); return; }
+    W.busy = true; render();
+    try { await prqRun(a.id + '|' + (a.primary ? 1 : 2)); wizApplyPending(); } finally { W.busy = false; render(); }
+  },
+  wizardLogin: async () => {
+    const W = S.wiz; W.busy = true; render();
+    try {
+      if (W.provider === 'claudecode') await prqLaunch('claudelogin', 'Si è aperto un terminale con Claude Code: se richiesto esegui /login, poi torna qui.');
+      else if (S.env.ghInstalled) await prqLaunch('ghlogin', 'Si è aperto un terminale: conferma il codice nel browser, poi torna qui.');
+      else await prqLaunch('ghcli', 'Si è aperto un terminale con l\'installazione di GitHub CLI: al termine premi di nuovo Accedi (se gh non viene trovato, riavvia VS).');
+    } finally { W.busy = false; render(); }
+  },
+  wizardSetAuth: a => {
+    const W = S.wiz, ep = String(a.endpoint || '').trim(), key = String(a.key || '').trim();
+    if (W.provider === 'openai' && ep) {
+      let ok = false; try { const u = new URL(ep); ok = u.protocol === 'https:' || (u.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname)); } catch (e) { ok = false; }
+      if (!ok) throw new Error('L\'endpoint deve essere un URL https (o http://localhost).');
+      S.settings.aiendpoint = ep;
+    }
+    if (key && W.provider === 'claude') S.settings.anthropicapikey = key;
+    if (key && W.provider === 'openai') S.settings.aiapikey = key;
+    prqRefresh(); render();
+  },
+  wizardFinish: async a => {
+    const W = S.wiz; if (W.step !== 4) throw new Error('La procedura non è arrivata al passo del modello.');
+    if (!WIZ_MODELS[W.provider].some(m => m[0] === a.model)) throw new Error('Modello non valido: ' + a.model);
+    S.settings.aiprovider = W.provider; S.settings[WIZ_MODEL_KEY[W.provider]] = a.model; S.f.optionsSaved = true;
+    const from = W.from; W.open = false; prqRefresh(); render();
+    if (from) await vmAi('gen');
+  },
+  openOptions: () => { S.wiz.open = false; render(); return optionsDlg(); },
+};
 
 // =====================================================================
 //  ELENCO FILE STILE "GIT CHANGES" (come ChangeRowFactory / ChangesTreeBuilder)

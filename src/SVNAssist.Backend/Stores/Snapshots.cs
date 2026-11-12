@@ -12,7 +12,9 @@ internal sealed record TraceDto(string Name, string State, string Detail);
 
 internal sealed record DownloadDto(double Pct, string Label);
 
-internal sealed record CommitDto(string Text, string AiStatus, bool Busy, string Lang, IReadOnlyList<TraceDto> Trace, DownloadDto? Download);
+/// <param name="AiLevel">Gravita' di <c>AiStatus</c> per la UI: busy | ok | warn | err | info (vuoto se nessun messaggio).</param>
+/// <param name="AiSeq">Cresce a ogni messaggio AI: la UI lo usa per rendere visibile anche un messaggio ripetuto.</param>
+internal sealed record CommitDto(string Text, string AiStatus, string AiLevel, int AiSeq, bool Busy, string Lang, IReadOnlyList<TraceDto> Trace, DownloadDto? Download);
 
 internal sealed record ThemeDto(string Mode, string Kind);
 
@@ -40,6 +42,29 @@ internal sealed record PrereqItemDto(string Id, string Group, string Title, bool
 
 internal sealed record PrereqDto(bool Open, string Summary, string Ai, string Feedback, IReadOnlyList<PrereqItemDto> Items);
 
+internal sealed record WizardProviderDto(string Id, string Title, string Cost);
+
+internal sealed record WizardModelDto(string Value, string Label);
+
+/// <summary>Procedura guidata "Configura l'AI": passo 1 provider, 2 prerequisiti, 3 accesso, 4 modello.</summary>
+internal sealed record WizardDto(
+    bool Open,
+    string Mode,
+    int Step,
+    bool FromGenerate,
+    string Provider,
+    bool Busy,
+    string Feedback,
+    IReadOnlyList<WizardProviderDto> Providers,
+    IReadOnlyList<PrereqItemDto> Items,
+    string Auth,
+    bool AuthOk,
+    string AuthDetail,
+    string Endpoint,
+    IReadOnlyList<WizardModelDto> Models,
+    string Model,
+    bool CanNext);
+
 /// <summary>Snapshot della vista <c>changes</c> (changes-state.schema.json).</summary>
 internal sealed record ChangesState(
     WorkingCopyDto WorkingCopy,
@@ -49,7 +74,8 @@ internal sealed record ChangesState(
     IReadOnlyList<SectionDto> Sections,
     StatusDto Status,
     PrereqDto Prereq,
-    bool Loading);
+    bool Loading,
+    WizardDto Wizard);
 
 internal sealed record LogPathDto(string A, string P);
 

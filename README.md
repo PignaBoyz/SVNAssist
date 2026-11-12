@@ -112,8 +112,16 @@ Scrivi per esempio: *"Messaggi di commit in inglese, prima riga max 72 caratteri
 sui messaggi di commit; ogni file è limitato a 4.000 caratteri (8.000 in totale). Quando sono applicate, lo stato sotto il campo
 messaggio lo dice. Il contenuto dei file viene inviato al provider AI insieme al diff.
 
-Se non hai alcun provider pronto, "Genera con AI" propone il login nel terminale (`gh auth login --web`; per Claude Code `claude`),
-oppure, annullando, la pagina per creare un token.
+Se non hai alcun provider pronto, "Genera con AI" apre la **procedura guidata** (dialogo a 4 passi, sempre con Indietro/Annulla):
+1. **Provider**: GitHub Copilot, Claude Code (abbonamento), Claude API (API key, a consumo), GitHub Models / OpenAI-compatibile, ognuno con costi e requisiti;
+2. **Prerequisiti**: solo quelli del provider scelto, con stato live e pulsante di installazione (winget, installer di Claude Code, runtime Copilot);
+   si ricontrolla da soli quando torni dal terminale (o con **Ricontrolla**);
+3. **Accesso**: login GitHub / Claude Code nel terminale, oppure la API key (salvata cifrata, mai mostrata);
+4. **Modello**: tendina con il consigliato preselezionato. **Fine** salva provider e modello (stesse impostazioni di *Tools → Options*) e genera subito il messaggio.
+
+La stessa procedura si apre da **Extensions → SVNAssist → Cambia provider AI…** (e dal menu ▾ accanto a "Genera con AI").
+**Faccio io** chiude la procedura e apre *Tools → Options → SVNAssist* per chi preferisce configurare a mano.
+Il pulsante **Prerequisiti** in basso è verde se tutto è a posto, rosso se manca qualcosa: cliccandolo si apre la stessa procedura sui prerequisiti mancanti.
 
 ---
 

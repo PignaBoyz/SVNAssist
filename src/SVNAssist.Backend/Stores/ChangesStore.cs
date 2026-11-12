@@ -82,7 +82,8 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         IAiSetupPrompt aiSetupPrompt,
         IDialogService dialogs,
         IHost host,
-        PrereqStore prerequisites)
+        PrereqStore prerequisites,
+        WizardStore? wizard = null)
     {
         _settingsService = settingsService;
         _svnService = svnService;
@@ -91,6 +92,8 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         Prerequisites = prerequisites;
         Prerequisites.SvnBecameAvailable = ct => RefreshAsync(ct, reloadBranch: true);
         Prerequisites.Changed += NotifyChanged;
+        Wizard = wizard ?? new WizardStore(prerequisites, settingsService);
+        Wizard.Changed += NotifyChanged;
         CommitMessage = new CommitStore(
             settingsService, svnService, aiServiceFactory, aiSetupPrompt,
             stagedPaths: () => StagedEntries().Select(e => e.FullPath).ToList(),
@@ -109,6 +112,9 @@ internal sealed class ChangesStore : ViewStore, IDisposable
 
     /// <summary>Checklist dei prerequisiti.</summary>
     internal PrereqStore Prerequisites { get; }
+
+    /// <summary>Procedura guidata per configurare l'AI.</summary>
+    internal WizardStore Wizard { get; }
 
     /// <summary>Se <c>true</c> un FileSystemWatcher sulla working copy rinfresca lo stato da solo (spento nei test).</summary>
     internal bool EnableWatcher { get; set; }
@@ -169,7 +175,8 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 sections,
                 new StatusDto(_statusMessage, _statusMessage.StartsWith("Errore", StringComparison.Ordinal)),
                 Prerequisites.GetSnapshot(),
-                _loading);
+                _loading,
+                Wizard.GetSnapshot());
         }
     }
 
@@ -325,6 +332,44 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 break;
             case "prereqRun":
                 await Prerequisites.RunActionAsync(Args.Str(args, "id"), Args.Bool(args, "primary"), ct);
+                break;
+            case "wizardOpen":
+                await Wizard.OpenAsync(false, ct);
+                break;
+            case "wizardOpenPrereq":
+                await Wizard.OpenPrereqAsync(ct);
+                break;
+            case "openOptions":
+                Wizard.Cancel();
+                await _host.OpenSettingsAsync();
+                break;
+            case "wizardCancel":
+                Wizard.Cancel();
+                break;
+            case "wizardPick":
+                Wizard.Pick(Args.Str(args, "provider"));
+                break;
+            case "wizardBack":
+                Wizard.Back();
+                break;
+            case "wizardNext":
+                await Wizard.NextAsync(ct);
+                break;
+            case "wizardRecheck":
+                await Wizard.RefreshAsync(ct);
+                break;
+            case "wizardRun":
+                await Wizard.RunAsync(Args.Str(args, "id"), Args.Bool(args, "primary"), ct);
+                break;
+            case "wizardLogin":
+                await Wizard.LoginAsync(ct);
+                break;
+            case "wizardSetAuth":
+                await Wizard.SetAuthAsync(Args.Str(args, "endpoint"), Args.Str(args, "key"), ct);
+                break;
+            case "wizardFinish":
+                if (await Wizard.FinishAsync(Args.Str(args, "model"), ct))
+                    await CommitMessage.GenerateAsync(ct);
                 break;
             default:
                 throw new ArgumentException($"Comando sconosciuto: {name}");
