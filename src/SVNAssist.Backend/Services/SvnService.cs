@@ -355,14 +355,69 @@ public class SvnService : ISvnService
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<SvnLogEntry>> GetLogAsync(string targetPath, int maxEntries, CancellationToken ct)
+    public Task<IReadOnlyList<SvnLogEntry>> GetLogAsync(string targetPath, int maxEntries, CancellationToken ct)
+        => GetLogAsync(targetPath, maxEntries, new SvnLogFilter(), ct);
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<SvnLogEntry>> GetLogAsync(string targetPath, int maxEntries, SvnLogFilter filter, CancellationToken ct)
     {
-        // svn log --xml -l N <target> restituisce le ultime N revisioni in XML.
-        // Passiamo targetPath come argomento (supporta sia path locali che URL).
-        var xml = await RunSvnAsync(
-            ["log", "--xml", "-v", "-l", maxEntries.ToString(), SafeTarget(targetPath)], workingDirectory: null, ct);
-        return ParseLogXml(xml);
+        var xml = await RunSvnAsync(BuildLogArgs(targetPath, maxEntries, filter), workingDirectory: null, ct);
+        return ParseLogXml(xml).Where(filter.Matches).ToList();
     }
+
+    /// <summary>
+    /// Argomenti di <c>svn log</c>: le date diventano un intervallo di revisioni (<c>-r {A}:{B}</c>, dalla piu' recente),
+    /// autore/testo/percorso un <c>--search</c> (svn &gt;= 1.8, glob; cerca anche in altri campi: e' un sovrainsieme,
+    /// il filtro esatto lo fa <see cref="SvnLogFilter.Matches"/>). Con <c>-l</c> svn conta le revisioni gia' filtrate.
+    /// </summary>
+    internal static List<string> BuildLogArgs(string targetPath, int maxEntries, SvnLogFilter filter)
+    {
+        var args = new List<string> { "log", "--xml", "-v", "-l", maxEntries.ToString(CultureInfo.InvariantCulture) };
+        static string D(DateOnly d, string time) => "{" + d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + "T" + time + "}";
+        if (filter.From is { } f && filter.To is { } t)
+            args.AddRange(["-r", D(t, "23:59:59") + ":" + D(f, "00:00:00")]);
+        else if (filter.From is { } f2)
+            args.AddRange(["-r", "HEAD:" + D(f2, "00:00:00")]);
+        else if (filter.To is { } t2)
+            args.AddRange(["-r", D(t2, "23:59:59") + ":1"]);
+
+        var first = true;
+        foreach (var term in new[] { filter.Author, filter.Text, filter.Path?.Replace('\\', '/') })
+        {
+            if (string.IsNullOrWhiteSpace(term))
+                continue;
+            args.Add(first ? "--search" : "--search-and");
+            args.Add("*" + Regex.Replace(term.Trim(), @"([\\*?\[])", @"\$1") + "*");
+            first = false;
+        }
+
+        args.Add(SafeTarget(targetPath));
+        return args;
+    }
+
+    /// <inheritdoc />
+    public async Task<string> GetRepositoryRootAsync(string target, CancellationToken ct)
+        => (await RunSvnAsync(["info", "--show-item", "repos-root-url", Peg(SafeTarget(target))], workingDirectory: null, ct)).Trim();
+
+    /// <inheritdoc />
+    public async Task ExportRevisionAsync(string target, long revision, string destination, CancellationToken ct)
+    {
+        var rev = revision.ToString(CultureInfo.InvariantCulture);
+        await RunSvnAsync(["export", "-r", rev, "--force", "--quiet", SafeTarget(target) + "@" + rev, destination], workingDirectory: null, ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<SvnChange>> GetChangedBetweenAsync(string target, long fromRevision, long toRevision, CancellationToken ct)
+    {
+        var xml = await RunSvnAsync(["diff", "--summarize", "--xml", "-r", $"{fromRevision}:{toRevision}", SafeTarget(target)], workingDirectory: null, ct);
+        return ParseSummarizeXml(xml);
+    }
+
+    internal static IReadOnlyList<SvnChange> ParseSummarizeXml(string xml)
+        => XDocument.Parse(xml).Descendants("path")
+            .Where(p => p.Attribute("kind")?.Value == "file")
+            .Select(p => new SvnChange(p.Attribute("item")?.Value switch { "added" => "A", "deleted" => "D", "replaced" => "R", _ => "M" }, p.Value))
+            .ToList();
 
     /// <summary>
     /// Converte l'XML di <c>svn log --xml</c>. Le date ISO-8601 di svn si leggono sempre con la
@@ -384,7 +439,7 @@ public class SvnService : ISvnService
             var message = entry.Element("msg")?.Value ?? string.Empty;
 
             var paths = entry.Element("paths")?.Elements("path")
-                .Select(p => new SvnLogPath(p.Attribute("action")?.Value ?? "M", p.Value))
+                .Select(p => new SvnLogPath(p.Attribute("action")?.Value ?? "M", p.Value, p.Attribute("kind")?.Value ?? ""))
                 .ToList() ?? [];
 
             results.Add(new SvnLogEntry(revision, author, date, message, paths));

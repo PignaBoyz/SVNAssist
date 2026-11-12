@@ -252,6 +252,11 @@ namespace SVNAssist.Host
             await SendCommandAsync("log", "logLoad", new JObject { ["path"] = path }).ConfigureAwait(false);
         }
 
+        public async Task ShowFolderDiffAsync(string path)
+        {
+            await SendCommandAsync("log", "logFolder", new JObject { ["path"] = path }).ConfigureAwait(false);
+        }
+
         public Task RunInTerminalAsync(string command, string workingDir)
         {
             var psi = new ProcessStartInfo("cmd.exe", "/k " + command) { UseShellExecute = true };

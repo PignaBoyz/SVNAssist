@@ -68,6 +68,14 @@ internal sealed class FakeHost : IHost
 
     public Task ShowLogAsync(string path) => Task.CompletedTask;
 
+    public List<string> FolderDiffs { get; } = [];
+
+    public Task ShowFolderDiffAsync(string path)
+    {
+        FolderDiffs.Add(path);
+        return Task.CompletedTask;
+    }
+
     public Task RunInTerminalAsync(string command, string workingDir)
     {
         Terminal.Add((command, workingDir));

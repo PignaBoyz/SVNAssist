@@ -141,7 +141,7 @@ public class SnapshotSchemaTests
             [new SvnLogPath("M", "/trunk/A.cs"), new SvnLogPath("A", "/trunk/B.cs")]);
         var state = new LogState(@"C:\wc", "1 revisioni caricate.", false, false, false, 5,
             [new LogEntryDto(entry.Revision, entry.Author, entry.Date.ToString("o"), entry.Message,
-                entry.Paths!.Select(p => new LogPathDto(p.Action, p.Path)).ToList())], "Index: x");
+                entry.Paths!.Select(p => new LogPathDto(p.Action, p.Path)).ToList())], "Index: x", new LogFilterDto("", "", "", "", ""), null);
 
         AssertValid("log-state", UiJson.Serialize(state));
     }

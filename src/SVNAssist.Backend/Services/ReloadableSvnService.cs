@@ -51,6 +51,10 @@ internal sealed class ReloadableSvnService : ISvnService
     public Task AddToIgnoreListAsync(string path, CancellationToken ct) => Current.AddToIgnoreListAsync(path, ct);
     public Task<UpdateResult> UpdateAsync(string workingCopyPath, CancellationToken ct) => Current.UpdateAsync(workingCopyPath, ct);
     public Task<IReadOnlyList<SvnLogEntry>> GetLogAsync(string targetPath, int maxEntries, CancellationToken ct) => Current.GetLogAsync(targetPath, maxEntries, ct);
+    public Task<IReadOnlyList<SvnLogEntry>> GetLogAsync(string targetPath, int maxEntries, SvnLogFilter filter, CancellationToken ct) => Current.GetLogAsync(targetPath, maxEntries, filter, ct);
+    public Task<string> GetRepositoryRootAsync(string target, CancellationToken ct) => Current.GetRepositoryRootAsync(target, ct);
+    public Task ExportRevisionAsync(string target, long revision, string destination, CancellationToken ct) => Current.ExportRevisionAsync(target, revision, destination, ct);
+    public Task<IReadOnlyList<SvnChange>> GetChangedBetweenAsync(string target, long fromRevision, long toRevision, CancellationToken ct) => Current.GetChangedBetweenAsync(target, fromRevision, toRevision, ct);
     public Task<string> GetDiffAsync(string targetPath, long revision, CancellationToken ct) => Current.GetDiffAsync(targetPath, revision, ct);
     public Task<string> GetDiffForAiAsync(IReadOnlyList<string> paths, string? workingCopyPath, CancellationToken ct) => Current.GetDiffForAiAsync(paths, workingCopyPath, ct);
     public Task<string> GetFileDiffAsync(string filePath, CancellationToken ct) => Current.GetFileDiffAsync(filePath, ct);

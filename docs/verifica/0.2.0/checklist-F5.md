@@ -41,3 +41,10 @@ Segna ✅ / ❌ (+ una riga su cosa vedi).
 21. [ ] Pulsante in alto "SVN Update"; dopo l'update il messaggio in basso ("Aggiornato alla revisione N.") è verde con icona e un breve alone che sfuma.
 22. [ ] Barra in basso: "Prerequisiti" verde se tutto ok; senza svn o senza provider AI è rosso con icona di avviso e, cliccandolo, apre la procedura sui prerequisiti mancanti (con "Configura l'AI" e "Faccio io").
 23. [ ] Repo `file://` senza trunk/branches: l'header mostra "/ (radice)" invece di "unknown".
+
+**Log e diff**
+24. [ ] Extensions > Log: i campi Autore / Messaggio / Percorso / Dal / al filtrano le revisioni (Filtra); Azzera le ripristina; "Altre 50" con filtro attivo carica altre revisioni che lo rispettano. Prova almeno un filtro per testo e uno per percorso con la tua versione di svn (`--search` richiede svn >= 1.8: con una più vecchia il caricamento dà errore).
+25. [ ] Clic su una revisione e poi su un file dell'elenco: si apre nell'editor di VS il diff a due pannelli nativo, titolo "Program.cs r12 ↔ r13"; un file aggiunto ha il pannello sinistro vuoto, uno eliminato il destro; una cartella nell'elenco non è cliccabile.
+26. [ ] Ctrl+clic su un'altra revisione: compare "File cambiati tra rA e rB" con l'elenco; clic su un file = diff nativo rA ↔ rB; Chiudi (o clic semplice su una revisione) torna al dettaglio.
+27. [ ] Esplora soluzioni > cartella > SVN > Diff: la finestra Log mostra "Modifiche in <cartella>" con i file modificati; clic su un file = diff nativo BASE ↔ working copy; "Apri come patch" apre un unico .diff.
+28. [ ] Diff di un file (Changes o Esplora soluzioni) = diff nativo di VS anche con TortoiseSVN disinstallato; dopo aver chiuso VS la cartella %TEMP%\SVNAssist\diff non contiene più le sottocartelle di questa sessione.

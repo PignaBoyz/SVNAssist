@@ -231,6 +231,12 @@ Il pulsante in basso apre la checklist: **svn.exe** (obbligatorio; "Installa con
 
 **Extensions → Log / History**: rileva la working copy dalla solution, mostra le ultime 50 revisioni (autore, data, messaggio), il diff al clic su una revisione e **Carica altre 50**.
 
+- **Filtri**: per autore, testo del messaggio, percorso e intervallo di date (**Filtra** / **Azzera**); valgono anche per "Altre 50".
+- **File della revisione**: l'elenco dei file modificati è cliccabile: il clic apre il **diff a due pannelli di Visual Studio** (`r-1 ↔ r`, titolo tipo `Program.cs r12 ↔ r13`).
+- **Confronto tra due revisioni**: Ctrl+clic (o Maiusc+clic) su un'altra revisione elenca i file cambiati tra le due; clic su un file = diff nativo `a ↔ b`.
+- **Diff di cartella** (tasto destro in Esplora soluzioni → Diff): invece di un unico `.diff`, la finestra Log elenca i file modificati; clic = diff nativo, **Apri come patch** = il vecchio `.diff` unico.
+- Tutti i diff usano solo `svn.exe` (file temporanei in `%TEMP%\SVNAssist\diff`, tolti alla chiusura): TortoiseSVN non serve.
+
 ---
 
 ## ⚙️ Impostazioni

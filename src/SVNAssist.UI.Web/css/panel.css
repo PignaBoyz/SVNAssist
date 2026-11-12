@@ -131,6 +131,13 @@ pre.cmd{background:var(--bg0);border:1px solid var(--bd);padding:6px 8px;font:12
 .ld-h p{margin:4px 0;white-space:pre-wrap}
 .paths{list-style:none;margin:6px 0 0;padding:0;font:12px/1.5 var(--mono)}
 .paths li{display:flex;gap:8px}
+.lf{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:0 8px 6px}
+.lf label{color:var(--fg2,inherit);opacity:.8;white-space:nowrap}
+.lf input[type=text]{width:auto;flex:1 1 90px;min-width:70px}
+.lf input[type=date]{background:var(--bg1);border:1px solid var(--bd2);border-radius:4px;padding:4px 6px;color:var(--fg)}
+.lf.on input:not([value=""]){border-color:var(--acc)}
+.paths .pl{background:none;border:0;padding:0;color:var(--acc2);font:inherit;cursor:pointer;text-align:left;word-break:break-all}
+.paths .pl:hover{text-decoration:underline}
 @container (max-width:520px){.lr{grid-template-columns:50px 1fr}.lr .dtm,.lr .au{display:none}}
 
 /* diff affiancato */

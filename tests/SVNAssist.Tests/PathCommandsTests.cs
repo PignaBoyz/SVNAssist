@@ -89,6 +89,16 @@ public class PathCommandsTests : IDisposable
     }
 
     [Fact]
+    public async Task Diff_Cartella_MostraLElencoNelLog_NonUnSoloDiff()
+    {
+        await Run("diff", P("wc", "src"));
+
+        Assert.Equal(P("wc", "src"), _host.FolderDiffs.Single());
+        Assert.Empty(_host.Diffs);
+        Assert.Empty(_host.OpenedFiles);
+    }
+
+    [Fact]
     public async Task ComandoSconosciuto_DiventaUnDialogoNonUnaEccezione()
     {
         await Run("boom", P("wc", "src", "a.cs"));

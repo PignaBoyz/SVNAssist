@@ -79,7 +79,21 @@ Stato e logica nel backend (`WizardStore`); la UI mostra `wizard` e invia solo q
 Menu di VS: `Extensions > SVNAssist > Cambia provider AI...` (comando `CmdAiSetup` 0x0104) mostra Changes e invia `wizardOpen`.
 
 ### Log
-`logLoad{path}` (ultime 50), `logMore` (altre 50), `logSelect{rev}` (carica il diff della revisione).
+`logLoad{path}` (ultime 50), `logMore` (altre 50), `logSelect{rev}` (carica il diff della revisione; chiude l'elenco `files`).
+
+Filtri e diff nativo (tutti i diff si aprono nell'editor di VS, a due pannelli, con file temporanei da `svn export -r`; TortoiseSVN non serve):
+
+| Comando | Args | Effetto |
+|---|---|---|
+| `logFilter` | `author, text, path, from, to` (tutti facoltativi, stringhe; date `aaaa-mm-gg`) | imposta i filtri e ricarica da capo (50); `logMore` li mantiene. Tutto vuoto = nessun filtro. Date invertite si scambiano |
+| `logOpenFile` | `rev, i` | diff `r-1 ↔ r` del file `entries[rev].paths[i]` (file aggiunto: sinistra vuota; eliminato: destra vuota; cartelle rifiutate). Titolo: `Program.cs r12 ↔ r13` |
+| `logCompare` | `a, b` | (Ctrl/Maiusc+clic su un'altra revisione) riempie `files` con i file cambiati tra le due (`svn diff --summarize`) |
+| `logFolder` | `path` | diff di cartella (lo invia l'host da Solution Explorer, `IHost.ShowFolderDiffAsync`): riempie `files` con i file modificati (`svn status`) |
+| `logFileOpen` | `i` | diff nativo del file `files.items[i]`: BASE ↔ working copy (`folder`) oppure `a ↔ b` (`compare`) |
+| `logFilesPatch` | – | `files.kind = folder`: apre il vecchio `.diff` unico come documento |
+| `logFilesClose` | – | chiude `files` |
+
+Filtri: `svn log --xml -v -l N` con `-r {data}:{data}` per le date e `--search`/`--search-and` (svn ≥ 1.8, glob con `*` e `\` `?` `[` protetti) per autore, testo e percorso; poi il backend applica comunque il filtro esatto (sottostringa senza maiuscole) sulle revisioni lette, quindi `--search` è solo una riduzione. `-l` conta le revisioni già filtrate: "Altre 50" funziona anche con i filtri.
 
 ### Novità rispetto al piano (`webview2-plan.md` §3)
 - **Staged** (stile Git Changes): SVN non ha uno staging, è un insieme tenuto dall'estensione. Sostituisce le caselle di selezione:
@@ -114,7 +128,8 @@ Le righe sono **già piatte e ordinate** (albero calcolato dal backend con `Chan
 `sections` contiene sempre le tre sezioni; la UI nasconde quelle vuote tranne Staged.
 
 ### `log` (`log-state.schema.json`)
-`{path, msg, err, loading, canMore, sel, entries[{rev, author, date (ISO 8601), msg, paths[{a,p}]}], diff}`
+`{path, msg, err, loading, canMore, sel, entries[{rev, author, date (ISO 8601), msg, paths[{a,p,k?}]}], diff, filter{author,text,path,from,to}, files}`
+(`paths[].k = "dir"` per le cartelle; `files` = `null` oppure `{kind: "folder"|"compare", title, items[{a,p}]}`: elenco di file con diff a due pannelli, al posto del dettaglio revisione. `filter`/`files` sono facoltativi nello schema: una UI li tratta come assenti.)
 
 ### `diff` (`diff-state.schema.json`)
 `{title, subtitle, diff}` — `diff` è il testo di `svn diff` (uno o più file, righe `Index:`); la pagina lo mostra affiancato.

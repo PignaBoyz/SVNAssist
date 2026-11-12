@@ -101,6 +101,18 @@ public interface ISvnService
     /// <param name="ct">Token per annullare l'operazione.</param>
     Task<IReadOnlyList<SvnLogEntry>> GetLogAsync(string targetPath, int maxEntries, CancellationToken ct);
 
+    /// <summary>Come <see cref="GetLogAsync(string,int,CancellationToken)"/> ma con filtri (autore, testo, percorso, date).</summary>
+    Task<IReadOnlyList<SvnLogEntry>> GetLogAsync(string targetPath, int maxEntries, SvnLogFilter filter, CancellationToken ct);
+
+    /// <summary>URL della radice del repository di un percorso o URL (<c>svn info --show-item repos-root-url</c>).</summary>
+    Task<string> GetRepositoryRootAsync(string target, CancellationToken ct);
+
+    /// <summary>Esporta un file alla revisione indicata (<c>svn export -r REV target@REV</c>); <paramref name="target"/> e' un URL o un percorso locale.</summary>
+    Task ExportRevisionAsync(string target, long revision, string destination, CancellationToken ct);
+
+    /// <summary>File cambiati tra due revisioni (<c>svn diff --summarize --xml -r A:B</c>).</summary>
+    Task<IReadOnlyList<SvnChange>> GetChangedBetweenAsync(string target, long fromRevision, long toRevision, CancellationToken ct);
+
     /// <summary>
     /// Restituisce il diff testuale per una specifica revisione.
     /// </summary>

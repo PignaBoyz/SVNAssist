@@ -59,10 +59,16 @@
       view: v.view, theme: { mode: theme.mode, kind: kindOf() }, sections, status: { msg, err: !!v.err || /^Errore/.test(msg) }, prereq: prereq(), loading: !!v.loading, wizard: wizardSnap(),
     };
   }
+  function logMatch(e) {   // stessi filtri del backend: sottostringhe senza maiuscole, date incluse
+    const f = S.lvm.filter; if (!f) return true;
+    const has = (h, n) => !n || String(h).toLowerCase().includes(String(n).toLowerCase()), day = e.date.toISOString().slice(0, 10);
+    return has(e.author, f.author) && has(e.msg, f.text) && (!f.path || e.paths.some(p => has(p.p, f.path.replace(/\\/g, '/')))) && (!f.from || day >= f.from) && (!f.to || day <= f.to);
+  }
   function snapshotLog() {
     const l = S.lvm;
     return { path: l.path || '', msg: l.msg || '', err: /^Errore/.test(l.msg || ''), loading: /^Caricamento/.test(l.msg || ''), canMore: !!l.canMore, sel: l.sel == null ? null : l.sel,
-      entries: l.entries.map(e => ({ rev: e.rev, author: e.author, date: e.date.toISOString(), msg: e.msg, paths: e.paths.map(p => ({ a: p.a, p: p.p })) })), diff: l.diff || '' };
+      entries: l.entries.filter(logMatch).map(e => ({ rev: e.rev, author: e.author, date: e.date.toISOString(), msg: e.msg, paths: e.paths.map(p => ({ a: p.a, p: p.p })) })), diff: l.diff || '',
+      filter: l.filter || { author: '', text: '', path: '', from: '', to: '' }, files: l.files || null };
   }
   function snapshotDiff(id) {
     const d = S.ui.diffs.find(x => x.id === id); if (!d) return { title: 'Diff', subtitle: '', diff: '' };
@@ -143,7 +149,22 @@
     ...Object.fromEntries(['wizardOpen', 'wizardOpenPrereq', 'wizardCancel', 'wizardPick', 'wizardBack', 'wizardNext', 'wizardRecheck', 'wizardRun', 'wizardLogin', 'wizardSetAuth', 'wizardFinish', 'openOptions'].map(n => [n, a => WIZ[n](a)])),   // WIZ e' definito in demo.js (caricato dopo)
     logLoad: a => { S.lvm.path = String(a.path || ''); return lvmLoad(50); },
     logMore: () => lvmMore(),
-    logSelect: a => lvmSelect(+a.rev),
+    logSelect: a => { S.lvm.files = null; return lvmSelect(+a.rev); },
+    logFilter: a => {
+      const f = { author: '', text: '', path: '', from: '', to: '', ...Object.fromEntries(Object.entries(a || {}).filter(([k]) => ['author', 'text', 'path', 'from', 'to'].includes(k)).map(([k, v]) => [k, String(v).trim()])) };
+      if (f.from && f.to && f.from > f.to) [f.from, f.to] = [f.to, f.from];
+      S.lvm.filter = f; S.lvm.msg = S.lvm.entries.filter(logMatch).length + ' revisioni caricate' + (Object.values(f).some(Boolean) ? ' (filtro attivo).' : '.'); render();
+    },
+    logOpenFile: a => { const e = S.lvm.entries.find(x => x.rev === +a.rev), p = e && e.paths[+a.i]; if (p) toast('Diff a due pannelli aperto in Visual Studio: ' + p.p.split('/').pop() + ' r' + (e.rev - 1) + ' ↔ r' + e.rev); },
+    logCompare: a => {
+      const lo = Math.min(+a.a, +a.b), hi = Math.max(+a.a, +a.b), seen = new Set(), items = [];
+      for (const e of S.lvm.entries) if (e.rev > lo && e.rev <= hi) for (const p of e.paths) if (!seen.has(p.p)) { seen.add(p.p); items.push({ a: p.a, p: p.p }); }
+      S.lvm.files = { kind: 'compare', title: `File cambiati tra r${lo} e r${hi}`, items }; S.lvm.msg = items.length + ` file cambiati tra r${lo} e r${hi}.`; render();
+    },
+    logFolder: a => { S.lvm.files = { kind: 'folder', title: 'Modifiche in ' + String(a.path || ''), items: [{ a: 'M', p: 'Services\\OrderService.cs' }, { a: 'A', p: 'Services\\PaymentLog.cs' }] }; S.lvm.msg = '2 file modificati.'; render(); },
+    logFileOpen: a => { const p = S.lvm.files && S.lvm.files.items[+a.i]; if (p) toast('Diff a due pannelli aperto in Visual Studio: ' + p.p.split('/').pop()); },
+    logFilesPatch: () => toast('Patch aperta come documento (.diff).'),
+    logFilesClose: () => { S.lvm.files = null; render(); },
   };
 
   w.__mockBridge = {

@@ -77,7 +77,14 @@ internal sealed record ChangesState(
     bool Loading,
     WizardDto Wizard);
 
-internal sealed record LogPathDto(string A, string P);
+/// <param name="K"><c>dir</c> per le cartelle (non si aprono nel diff); assente altrimenti.</param>
+internal sealed record LogPathDto(string A, string P, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? K = null);
+
+/// <summary>Filtri del log come scritti dall'utente (date <c>aaaa-mm-gg</c>).</summary>
+internal sealed record LogFilterDto(string Author, string Text, string Path, string From, string To);
+
+/// <summary>Elenco di file con diff a due pannelli: <c>folder</c> (modifiche di una cartella) o <c>compare</c> (due revisioni).</summary>
+internal sealed record LogFilesDto(string Kind, string Title, IReadOnlyList<LogPathDto> Items);
 
 internal sealed record LogEntryDto(long Rev, string Author, string Date, string Msg, IReadOnlyList<LogPathDto> Paths);
 
@@ -90,7 +97,9 @@ internal sealed record LogState(
     bool CanMore,
     long? Sel,
     IReadOnlyList<LogEntryDto> Entries,
-    string Diff);
+    string Diff,
+    LogFilterDto Filter,
+    LogFilesDto? Files);
 
 /// <summary>Snapshot della vista <c>diff</c> (diff-state.schema.json).</summary>
 internal sealed record DiffState(string Title, string Subtitle, string Diff);

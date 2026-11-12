@@ -108,7 +108,7 @@ internal sealed class BackendServer : IBackend, IDisposable
             EnableWatcher = services.EnableWatcher,
         };
         Changes.CommitMessage.OpenAiWizard = ct => Changes.Wizard.OpenAsync(fromGenerate: true, ct);
-        Log = new LogStore(services.Svn, services.Settings);
+        Log = new LogStore(services.Svn, services.Settings, host, Changes.TempRoot);
         _pathCommands = new PathCommands(services.Svn, host, () => Changes.RefreshAsync(_lifetime.Token), Changes.TempRoot);
         _channels = new Dictionary<string, Channel>
         {
@@ -341,6 +341,8 @@ internal sealed class BackendServer : IBackend, IDisposable
     public void Dispose()
     {
         _lifetime.Cancel();
+        Log.CleanTemp();
+        _pathCommands.CleanTemp();
         Changes.Dispose();
         _lifetime.Dispose();
     }

@@ -664,6 +664,217 @@
       }
     },
     {
+      "title": "logFilter",
+      "description": "Filtra il log (svn log --search): autore, testo del messaggio, percorso, date aaaa-mm-gg. Tutti vuoti = nessun filtro.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "logFilter"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {
+            "author": {
+              "type": "string",
+              "description": "Autore."
+            },
+            "text": {
+              "type": "string",
+              "description": "Testo nel messaggio."
+            },
+            "path": {
+              "type": "string",
+              "description": "Percorso toccato."
+            },
+            "from": {
+              "type": "string",
+              "description": "Dal (aaaa-mm-gg)."
+            },
+            "to": {
+              "type": "string",
+              "description": "Al (aaaa-mm-gg)."
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "logOpenFile",
+      "description": "Apre nell'editor di VS il diff a due pannelli r-1 <-> r del file i-esimo della revisione.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "logOpenFile"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "rev",
+            "i"
+          ],
+          "properties": {
+            "rev": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Revisione."
+            },
+            "i": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Indice in entries[].paths."
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "logCompare",
+      "description": "Elenca i file cambiati tra due revisioni dell'elenco (Ctrl+clic): riempisce files.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "logCompare"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "a",
+            "b"
+          ],
+          "properties": {
+            "a": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Prima revisione."
+            },
+            "b": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Seconda revisione."
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "logFolder",
+      "description": "Mostra i file modificati di una cartella (diff di cartella): riempisce files.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "logFolder"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path"
+          ],
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Cartella dentro una working copy."
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "logFileOpen",
+      "description": "Apre il diff nativo del file i-esimo di files.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "logFileOpen"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "i"
+          ],
+          "properties": {
+            "i": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Indice in files.items."
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "logFilesPatch",
+      "description": "Apre come documento .diff unico le modifiche della cartella (files.kind = folder).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "logFilesPatch"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "logFilesClose",
+      "description": "Chiude l'elenco files e torna al dettaglio della revisione.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "logFilesClose"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
       "title": "wizardOpen",
       "description": "Apre la procedura guidata dell'AI (Cambia provider AI).",
       "type": "object",

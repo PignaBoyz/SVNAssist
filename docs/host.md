@@ -18,6 +18,7 @@ msbuild src/SVNAssist.Host/SVNAssist.Host.csproj -p:Configuration=Release       
 - Tema: `ThemeBridge` manda `theme{kind,vars}` al `ready`, a `VSColorTheme.ThemeChanged`, a cambio `windowTheme`; solo le variabili derivabili da VS (sfondi, testi, bordi, selezione, link, font): colori di stato/diff/sintassi restano quelli di `tokens.css` per il `kind`. Alto contrasto: colori di sistema.
 - Impostazioni: Tools > Options > SVNAssist (chiavi camelCase del contratto; `GetSettingsAsync` ritorna anche gli alias minuscoli della 0.1.0). Le API key sono cifrate con DPAPI nel registro.
 - `IHost.ShowLogAsync(path)` mostra la finestra Log e inoltra `logLoad{path}`.
+- `IHost.ShowFolderDiffAsync(path)` mostra la finestra Log e inoltra `logFolder{path}` (elenco dei file modificati della cartella; clic = diff nativo). `OpenDiffAsync` (`IVsDifferenceService.OpenComparisonWindow2`) apre ogni diff: file della working copy (BASE ↔ working copy), file di una revisione (`r-1 ↔ r`) e confronto tra due revisioni, con file temporanei in `%TEMP%\SVNAssist\diff` (esportati con `svn export -r`, cancellati alla chiusura del backend, quelli orfani dopo un giorno). TortoiseSVN non e' mai necessario.
 - Menu: Extensions > SVNAssist (Changes, Commit..., Update, Log); Solution Explorer > SVN (Update, Commit..., Diff, Log, Add, Revert, Ignore). "Update" del menu Extensions invia il cmd `update` alla vista `changes`.
 
 ## Aggiunte al contratto (rispetto alla prima versione)

@@ -86,6 +86,13 @@
                 },
                 "p": {
                   "type": "string"
+                },
+                "k": {
+                  "enum": [
+                    "dir",
+                    "file"
+                  ],
+                  "description": "dir: cartella (non si apre nel diff). Assente = file."
                 }
               }
             }
@@ -96,6 +103,89 @@
     "diff": {
       "type": "string",
       "description": "Diff unificato (svn diff -c) della revisione selezionata; \"\" se nessuna."
+    },
+    "filter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "author",
+        "text",
+        "path",
+        "from",
+        "to"
+      ],
+      "description": "Filtri attivi come scritti dall'utente; date aaaa-mm-gg.",
+      "properties": {
+        "author": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        }
+      }
+    },
+    "files": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "title",
+        "items"
+      ],
+      "description": "Elenco di file con diff a due pannelli: folder (modifiche di una cartella) o compare (due revisioni). Sostituisce il dettaglio revisione.",
+      "properties": {
+        "kind": {
+          "enum": [
+            "folder",
+            "compare"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "a",
+              "p"
+            ],
+            "properties": {
+              "a": {
+                "enum": [
+                  "A",
+                  "M",
+                  "D",
+                  "R"
+                ]
+              },
+              "p": {
+                "type": "string"
+              },
+              "k": {
+                "enum": [
+                  "dir",
+                  "file"
+                ]
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

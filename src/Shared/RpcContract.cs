@@ -54,6 +54,9 @@ namespace SVNAssist.Rpc
         /// <summary>Apre il diff nell'editor di VS (IVsDifferenceService), come Git Changes.</summary>
         Task OpenDiffAsync(string leftPath, string rightPath, string leftLabel, string rightLabel, string caption);
 
+        /// <summary>Mostra la finestra SVN Log con l'elenco dei file modificati di una cartella (clic = diff nativo, "Apri come patch" = .diff unico).</summary>
+        Task ShowFolderDiffAsync(string path);
+
         /// <summary>Apre un file nell'editor.</summary>
         Task OpenFileAsync(string path);
 

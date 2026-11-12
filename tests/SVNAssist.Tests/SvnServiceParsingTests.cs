@@ -120,7 +120,7 @@ public class SvnServiceParsingTests : IDisposable
 
         var entries = SvnService.ParseLogXml(xml);
 
-        Assert.Equal([new SvnLogPath("M", "/trunk/Core/A.cs"), new SvnLogPath("A", "/trunk/Core/B.cs")], entries[0].Paths);
+        Assert.Equal([new SvnLogPath("M", "/trunk/Core/A.cs", "file"), new SvnLogPath("A", "/trunk/Core/B.cs", "file")], entries[0].Paths);
         Assert.Empty(entries[1].Paths!);
     }
 

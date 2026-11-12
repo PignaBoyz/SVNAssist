@@ -102,12 +102,35 @@ internal sealed class FakeSvnService : ISvnService
     public Task<UpdateResult> UpdateAsync(string workingCopyPath, CancellationToken ct) => Task.FromResult(new UpdateResult(7, []));
 
     public Task<IReadOnlyList<SvnLogEntry>> GetLogAsync(string targetPath, int maxEntries, CancellationToken ct)
+        => GetLogAsync(targetPath, maxEntries, new SvnLogFilter(), ct);
+
+    public SvnLogFilter? LastLogFilter { get; private set; }
+    public List<SvnLogPath> LogPaths { get; } = [];
+
+    public Task<IReadOnlyList<SvnLogEntry>> GetLogAsync(string targetPath, int maxEntries, SvnLogFilter filter, CancellationToken ct)
     {
         LogRequestedLimit = maxEntries;
+        LastLogFilter = filter;
         IReadOnlyList<SvnLogEntry> list = Enumerable.Range(1, Math.Min(maxEntries, LogEntryCount))
-            .Select(i => new SvnLogEntry(i, "u", DateTimeOffset.UnixEpoch, $"m{i}")).ToList();
+            .Select(i => new SvnLogEntry(i, "u", DateTimeOffset.UnixEpoch, $"m{i}", LogPaths.ToList())).ToList();
         return Task.FromResult(list);
     }
+
+    public Task<string> GetRepositoryRootAsync(string target, CancellationToken ct) => Task.FromResult("file:///repo");
+
+    public List<(string Target, long Rev, string Destination)> ExportedRevisions { get; } = [];
+
+    public Task ExportRevisionAsync(string target, long revision, string destination, CancellationToken ct)
+    {
+        ExportedRevisions.Add((target, revision, destination));
+        File.WriteAllText(destination, $"{target}@{revision}");
+        return Task.CompletedTask;
+    }
+
+    public List<SvnChange> Changed { get; } = [];
+
+    public Task<IReadOnlyList<SvnChange>> GetChangedBetweenAsync(string target, long fromRevision, long toRevision, CancellationToken ct)
+        => Task.FromResult<IReadOnlyList<SvnChange>>(Changed.ToList());
 
     public Task<string> GetDiffAsync(string targetPath, long revision, CancellationToken ct) => Task.FromResult("diff");
 

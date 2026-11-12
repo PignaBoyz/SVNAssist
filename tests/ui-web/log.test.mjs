@@ -1,0 +1,79 @@
+// Vista Log: filtri, elenco file cliccabili (diff nativo), confronto tra revisioni, diff di cartella.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { contract, readJson, validate, loadUi } from './helpers.mjs';
+
+const U = loadUi();
+const j = x => JSON.parse(JSON.stringify(x)); // oggetti creati nel contesto vm: niente confronto per realm
+const S = contract('log-state.schema.json');
+const fx = () => structuredClone(readJson('src/SVNAssist.UI.Web/contract/fixtures/log.json'));
+const cmds = contract('commands.schema.json');
+const args = h => [...h.matchAll(/data-cmd="(\w+)"(?: data-args="([^"]*)")?/g)].map(([, name, a]) => ({ name, args: a ? JSON.parse(a.replace(/&quot;/g, '"')) : {} }));
+const valid = c => assert.deepEqual(validate(cmds, c), [], JSON.stringify(c));
+
+test('barra filtri: autore, messaggio, percorso, date; valori riportati e scappati', () => {
+  const s = fx(); s.filter = { author: 'm"rossi', text: 'bug', path: 'src/Core', from: '2024-01-02', to: '' };
+  const h = U.logHTML.filter(s);
+  for (const n of ['author', 'text', 'path', 'from', 'to']) assert.match(h, new RegExp(`name="${n}"`));
+  assert.match(h, /type="date"[^>]*value="2024-01-02"/);
+  assert.match(h, /value="m&quot;rossi"/);
+  assert.match(h, /class="lf on"/);
+  assert.match(h, /Azzera/);
+});
+
+test('senza filtri attivi non c\'e\' Azzera; lo stato senza "filter" (vecchi snapshot) non rompe la UI', () => {
+  const s = fx();
+  assert.doesNotMatch(U.logHTML.filter(s), /Azzera/);
+  s.filter = { author: '', text: '', path: '', from: '', to: '' };
+  assert.doesNotMatch(U.logHTML.filter(s), /Azzera|class="lf on"/);
+});
+
+test('Azzera invia logFilter con args vuoti (valido per lo schema)', () => {
+  const s = fx(); s.filter = { author: 'x', text: '', path: '', from: '', to: '' };
+  const c = args(U.logHTML.filter(s)).find(x => x.name === 'logFilter');
+  assert.ok(c); valid(c);
+});
+
+test('ogni file della revisione e\' un pulsante logOpenFile; le cartelle no', () => {
+  const s = fx(); s.sel = 123; s.entries[1].paths.push({ a: 'M', p: '/trunk/Core', k: 'dir' });
+  const h = U.logHTML.detail(s);
+  const found = args(h).filter(x => x.name === 'logOpenFile');
+  assert.deepEqual(found.map(x => x.args), [{ rev: 123, i: 0 }, { rev: 123, i: 1 }]);
+  found.forEach(valid);
+  assert.match(h, /<span class="muted" title="Cartella">\/trunk\/Core/);
+});
+
+test('Ctrl/Maiusc+clic su un\'altra revisione = confronto; clic semplice o stessa revisione = selezione', () => {
+  assert.deepEqual(j(U.logClick(124, 120, true)), { cmd: 'logCompare', args: { a: 124, b: 120 } });
+  assert.deepEqual(j(U.logClick(124, 120, false)), { cmd: 'logSelect', args: { rev: 120 } });
+  assert.deepEqual(j(U.logClick(124, 124, true)), { cmd: 'logSelect', args: { rev: 124 } });
+  assert.deepEqual(j(U.logClick(null, 120, true)), { cmd: 'logSelect', args: { rev: 120 } });
+  valid({ name: 'logCompare', args: { a: 1, b: 2 } });
+});
+
+test('elenco file di cartella: titolo, conteggio, Apri come patch, Chiudi, un pulsante per file', () => {
+  const s = fx(); s.files = { kind: 'folder', title: 'Modifiche in C:\\wc\\src', items: [{ a: 'M', p: 'a.cs' }, { a: 'A', p: 'b.cs' }] };
+  const h = U.logHTML.detail(s);
+  assert.match(h, /Modifiche in C:\\wc\\src/);
+  assert.match(h, /2 file/);
+  const c = args(h);
+  assert.deepEqual(c.map(x => x.name), ['logFilesPatch', 'logFilesClose', 'logFileOpen', 'logFileOpen']);
+  assert.deepEqual(c.filter(x => x.name === 'logFileOpen').map(x => x.args), [{ i: 0 }, { i: 1 }]);
+  c.forEach(valid);
+});
+
+test('confronto tra revisioni: niente "Apri come patch"; elenco vuoto = messaggio', () => {
+  const s = fx(); s.files = { kind: 'compare', title: 'File cambiati tra r1 e r3', items: [] };
+  const h = U.logHTML.detail(s);
+  assert.doesNotMatch(h, /logFilesPatch/);
+  assert.match(h, /Nessun file da mostrare/);
+});
+
+test('lo stato con filter e files rispetta lo schema', () => {
+  const s = fx(); s.filter = { author: 'a', text: '', path: '', from: '2024-01-01', to: '2024-02-01' };
+  s.files = { kind: 'compare', title: 't', items: [{ a: 'M', p: 'x.cs' }] };
+  s.entries[0].paths[0].k = 'file';
+  assert.deepEqual(validate(S, s), []);
+  s.files.kind = 'altro';
+  assert.notDeepEqual(validate(S, s), []);
+});

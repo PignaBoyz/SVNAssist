@@ -14,15 +14,18 @@ internal sealed class PathCommands
     private readonly ISvnService _svn;
     private readonly IHost _host;
     private readonly Func<Task> _refresh;
-    private readonly string _tempRoot;
+    private readonly DiffOpener _diffs;
 
     public PathCommands(ISvnService svn, IHost host, Func<Task> refresh, string tempRoot)
     {
         _svn = svn;
         _host = host;
         _refresh = refresh;
-        _tempRoot = tempRoot;
+        _diffs = new DiffOpener(svn, host, tempRoot);
     }
+
+    /// <summary>Cancella i file temporanei dei diff aperti (chiusura del backend).</summary>
+    internal void CleanTemp() => _diffs.Dispose();
 
     public async Task RunAsync(string command, string[] paths, CancellationToken ct)
     {
@@ -143,37 +146,11 @@ internal sealed class PathCommands
 
     private async Task DiffAsync(SvnTarget t, CancellationToken ct)
     {
-        var dir = Path.Combine(_tempRoot, Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(dir);
-        var name = Path.GetFileName(t.Path.TrimEnd('\\', '/'));
+        // Cartella: elenco dei file modificati nella finestra SVN Log (clic = diff nativo; "Apri come patch" = vecchio .diff unico).
         if (t.IsDirectory)
-        {
-            var text = await _svn.GetFileDiffAsync(t.Path, ct);
-            if (string.IsNullOrWhiteSpace(text))
-            {
-                await InfoAsync("Nessuna modifica.");
-                return;
-            }
-
-            var file = Path.Combine(dir, $"Diff {name}.diff");
-            await File.WriteAllTextAsync(file, text, ct);
-            await _host.OpenFileAsync(file);
-            return;
-        }
-
-        var left = Path.Combine(Directory.CreateDirectory(Path.Combine(dir, "BASE")).FullName, name);
-        try
-        {
-            await _svn.ExportBaseAsync(t.Path, left, ct);
-        }
-        catch (Exception ex) when (!ct.IsCancellationRequested)
-        {
-            // senza BASE (file non versionato/aggiunto): lato sinistro vuoto
-            BackendLog.Info($"BASE non disponibile per {t.Path}: {ex.Message}");
-            await File.WriteAllBytesAsync(left, [], ct);
-        }
-
-        await _host.OpenDiffAsync(left, t.Path, $"{name} (BASE)", $"{name} (working copy)", $"{name} — BASE ⇄ working copy");
+            await _host.ShowFolderDiffAsync(t.Path);
+        else
+            await _diffs.OpenWorkingAsync(t.Path, ct);
     }
 
     private async Task IgnoreAsync(List<SvnTarget> targets, CancellationToken ct)
