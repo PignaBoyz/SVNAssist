@@ -1,0 +1,33 @@
+name: VSIX temporanea
+on:
+  push:
+    branches: ['claude/vsix-build']
+permissions:
+  contents: write
+jobs:
+  vsix:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: microsoft/setup-msbuild@v2
+      - name: Build
+        shell: pwsh
+        run: |
+          dotnet publish src/SVNAssist.Backend -c Release -o src/SVNAssist.Backend/bin/publish
+          dotnet restore src/SVNAssist.Host
+          msbuild src/SVNAssist.Host/SVNAssist.Host.csproj -p:Configuration=Release -v:m
+      - name: Pubblica la VSIX su un branch
+        shell: pwsh
+        run: |
+          $v = Get-ChildItem src/SVNAssist.Host/bin/Release -Recurse -Filter *.vsix | Select-Object -First 1
+          New-Item -ItemType Directory -Force out | Out-Null
+          Copy-Item $v.FullName out/SVNAssist-0.3.2.vsix
+          git config user.name ci; git config user.email ci@example.invalid
+          git checkout --orphan vsix-out
+          git rm -rq --cached .
+          git add -f out/SVNAssist-0.3.2.vsix
+          git commit -qm "vsix 0.3.2"
+          git push -f origin HEAD:refs/heads/claude/vsix-out
