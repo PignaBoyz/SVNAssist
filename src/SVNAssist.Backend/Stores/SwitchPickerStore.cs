@@ -11,7 +11,8 @@ namespace SVNAssist.Stores;
 internal sealed class SwitchPickerStore
 {
     /// <param name="Path">Percorso dalla radice del repository (<c>progetto/branches/x</c>, senza <c>^/</c>).</param>
-    internal sealed record Target(string Name, string Kind, string Url, bool Current, string Path, long Rev = 0, string Author = "", DateTimeOffset? Date = null);
+    /// <param name="Incomplete">Destinazione di uno switch interrotto a meta': non e' "corrente" (la working copy e' mista), sceglierla completa lo switch.</param>
+    internal sealed record Target(string Name, string Kind, string Url, bool Current, string Path, long Rev = 0, string Author = "", DateTimeOffset? Date = null, bool Incomplete = false);
 
     /// <summary>Quanti nomi si ricordano per repository ("usati di recente").</summary>
     internal const int MaxRecent = 8;
@@ -38,13 +39,16 @@ internal sealed class SwitchPickerStore
 
     public event Action? Changed;
 
+    /// <summary>URL della destinazione di uno switch non completato sulla working copy (o <c>null</c>): quella voce non e' "corrente".</summary>
+    internal Func<string, string?>? PendingUrl { get; set; }
+
     internal bool IsOpen { get { lock (_lock) return _open; } }
 
     internal SwitchPickerDto GetSnapshot()
     {
         lock (_lock)
             return new SwitchPickerDto(_open, _mode, _loading, _error,
-                _items.Select(i => new SwitchItemDto(i.Name, i.Kind, i.Current, i.Rev, i.Author, i.Date?.ToString("o", System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty)).ToList(),
+                _items.Select(i => new SwitchItemDto(i.Name, i.Kind, i.Current, i.Rev, i.Author, i.Date?.ToString("o", System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty, i.Incomplete ? true : null)).ToList(),
                 _recent.Where(r => _items.Any(i => i.Name == r)).ToList());
     }
 
@@ -128,6 +132,16 @@ internal sealed class SwitchPickerStore
                 items.Add(new Target(layout.Branches + "/" + b.Name, "branch", UrlOf(root, Join(layout.Branches + "/" + b.Name)), pos.Kind == "branch" && pos.Name == b.Name, Join(layout.Branches + "/" + b.Name), b.Revision, b.Author, b.Date));
             foreach (var t in await tags)
                 items.Add(new Target(layout.Tags + "/" + t.Name, "tag", UrlOf(root, Join(layout.Tags + "/" + t.Name)), pos.Kind == "tag" && pos.Name == t.Name, Join(layout.Tags + "/" + t.Name), t.Revision, t.Author, t.Date));
+            // Switch interrotto: la radice dice gia' "ramo nuovo" ma parte della working copy e' sul vecchio. Quella voce non e' la corrente.
+            if (PendingUrl?.Invoke(workingCopy) is { } pending)
+            {
+                for (var i = 0; i < items.Count; i++)
+                {
+                    if (string.Equals(items[i].Url, pending, StringComparison.Ordinal))
+                        items[i] = items[i] with { Current = false, Incomplete = true };
+                }
+            }
+
             var recent = ReadRecent().GetValueOrDefault(root) ?? [];
             lock (_lock)
             {

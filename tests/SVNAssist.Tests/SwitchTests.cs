@@ -188,18 +188,22 @@ public class SwitchTests
         public StubSettings Settings { get; } = new();
         public ChangesStore Store { get; }
 
-        public Fixture(string relativeUrl = "^/trunk")
+        public string RecentFile { get; }
+
+        public Fixture(string relativeUrl = "^/trunk", string? recentFile = null)
         {
+            RecentFile = recentFile ?? Path.Combine(Path.GetTempPath(), "SVNAssist_Recent_" + Guid.NewGuid().ToString("N")[..8] + ".json");
             Svn.InfoRelativeUrl = relativeUrl;
             Svn.Folders["file:///repo"] = ["branches", "tags", "trunk"];
             Svn.Folders["file:///repo/branches"] = ["feature-x", "con spazio"];
             Svn.Folders["file:///repo/tags"] = ["1.0"];
             Store = new ChangesStore(Settings, Svn, new FakeAiFactory(), new NoopAiPrompt(), Dialogs, new FakeHost(),
-                new PrereqStore(new PrerequisitesService(Settings, new PrerequisiteProbes())), recentTargetsFile: Path.Combine(Path.GetTempPath(), "SVNAssist_Recent_" + Guid.NewGuid().ToString("N")[..8] + ".json"))
-            { WorkingCopyPath = @"C:\wc", TempRoot = Path.Combine(Path.GetTempPath(), "SVNAssist_Sw_" + Guid.NewGuid().ToString("N")[..8]) };
+                new PrereqStore(new PrerequisitesService(Settings, new PrerequisiteProbes())), recentTargetsFile: RecentFile)
+            { WorkingCopyPath = @"C:\wc", SwitchRetryDelay = TimeSpan.Zero, TempRoot = Path.Combine(Path.GetTempPath(), "SVNAssist_Sw_" + Guid.NewGuid().ToString("N")[..8]) };
         }
 
         public SwitchPickerDto Picker => ((ChangesState)Store.GetSnapshot()).SwitchPicker;
+        public ChangesState State => (ChangesState)Store.GetSnapshot();
         public Task Cmd(string name, object? args = null) => Store.DispatchAsync(name, JsonSerializer.SerializeToElement(args ?? new { }), Ct);
         public void Dispose() => Store.Dispose();
     }
@@ -344,5 +348,128 @@ public class SwitchTests
         var wc = ((ChangesState)f.Store.GetSnapshot()).WorkingCopy;
         Assert.Equal("branches/x", wc.Branch);
         Assert.Equal("1.14.2", wc.SvnVersion);
+    }
+
+    // ── 0.3.2: switch interrotto a meta' (E155009, cartella tenuta aperta da VS) ──
+
+    private const string WorkQueueError = "svn switch failed (exit code 1): svn: E155009: Failed to run the WC DB work queue associated with 'C:\\wc\\managed', work item 19759 (dir-remove managed/Views/CommandBar)";
+
+    [Fact]
+    public void SvnErrors_E155009_ChiedeCleanup()
+    {
+        Assert.True(SvnErrors.IsWorkingCopyLocked(WorkQueueError));
+        Assert.True(SvnErrors.IsWorkingCopyLocked("svn: Failed to run the WC DB work queue associated with 'x'"));
+    }
+
+    [Fact]
+    public async Task Switch_ErroreDaCleanup_RiprovaDaSoloDopoIlCleanup()
+    {
+        using var f = new Fixture();
+        f.Svn.SwitchError = WorkQueueError;
+        f.Svn.SwitchFailTimes = 1;
+        await f.Cmd("switchOpen");
+
+        await f.Cmd("switchOk", new { name = "tags/1.0" });
+
+        Assert.Equal(["switch file:///repo/tags/1.0", "cleanup", "switch file:///repo/tags/1.0"], f.Svn.SwitchLog);
+        Assert.False(f.State.Status.Err);
+        Assert.Contains("tags/1.0", f.State.Status.Msg);
+        Assert.Null(f.State.Status.Action);
+        Assert.DoesNotContain("incompleto", f.State.WorkingCopy.Branch);
+    }
+
+    [Fact]
+    public async Task Switch_InterrottoAMeta_ErroreCompletoConCompletaSwitch_PoiCompleta()
+    {
+        using var f = new Fixture();
+        f.Svn.SwitchError = WorkQueueError;
+        f.Svn.InfoAfterFailedSwitch = "^/tags/1.0";   // svn ha gia' spostato la radice
+        await f.Cmd("switchOpen");
+
+        await f.Cmd("switchOk", new { name = "tags/1.0" });
+
+        var st = f.State;
+        Assert.True(st.Status.Err);
+        Assert.Contains("work item 19759 (dir-remove managed/Views/CommandBar)", st.Status.Msg);   // testo intero, non troncato
+        Assert.Contains("Revert", st.Status.Msg);
+        Assert.Equal("switchResume", st.Status.Action?.Cmd);
+        Assert.Contains("switch incompleto", st.WorkingCopy.Branch);   // intestazione riletta, non piu' il ramo vecchio
+
+        // Il selettore non dice "(corrente)" sulla destinazione: e' incompleta e si puo' scegliere
+        await f.Cmd("switchOpen");
+        var item = f.Picker.Items.Single(i => i.Name == "tags/1.0");
+        Assert.False(item.Current);
+        Assert.True(item.Incomplete);
+        await f.Cmd("switchCancel");
+
+        f.Svn.SwitchError = null;
+        f.Svn.SwitchLog.Clear();
+        await f.Cmd("switchResume");
+
+        Assert.Equal(["cleanup", "switch file:///repo/tags/1.0"], f.Svn.SwitchLog);
+        Assert.False(f.State.Status.Err);
+        Assert.Null(f.State.Status.Action);
+        Assert.DoesNotContain("incompleto", f.State.WorkingCopy.Branch);
+        await f.Cmd("switchOpen");
+        Assert.True(f.Picker.Items.Single(i => i.Name == "tags/1.0").Current);
+    }
+
+    [Fact]
+    public async Task Switch_Interrotto_SceltaDellaVoceIncompleta_CompletaSenzaConferma()
+    {
+        using var f = new Fixture();
+        f.Svn.SwitchError = WorkQueueError;
+        f.Svn.InfoAfterFailedSwitch = "^/tags/1.0";
+        await f.Cmd("switchOpen");
+        await f.Cmd("switchOk", new { name = "tags/1.0" });
+        f.Svn.Statuses.Add(new SvnFileStatus(@"C:\wc\managed", SvnStatusKind.Incomplete));   // cartelle "!" lasciate da svn
+        await f.Store.RefreshAsync(Ct);
+
+        f.Svn.SwitchError = null;
+        f.Svn.SwitchLog.Clear();
+        await f.Cmd("switchOpen");
+        await f.Cmd("switchOk", new { name = "tags/1.0" });
+
+        Assert.Empty(f.Dialogs.Messages);   // niente "hai modifiche locali": non sono lavoro dell'utente
+        Assert.Equal(["cleanup", "switch file:///repo/tags/1.0"], f.Svn.SwitchLog);
+        Assert.Equal("", f.Picker.Error);
+    }
+
+    [Fact]
+    public async Task Switch_ErroreSenzaToccareLaWc_ErroreNormale_NienteDaCompletare()
+    {
+        using var f = new Fixture();
+        f.Svn.SwitchError = "svn: E170001: Authorization failed";
+        await f.Cmd("switchOpen");
+
+        await f.Cmd("switchOk", new { name = "tags/1.0" });
+
+        Assert.Equal(["switch file:///repo/tags/1.0"], f.Svn.SwitchLog);   // nessun nuovo tentativo: non e' un errore da cleanup
+        Assert.Contains("E170001", f.State.Status.Msg);
+        Assert.NotEqual("switchResume", f.State.Status.Action?.Cmd);
+        Assert.DoesNotContain("incompleto", f.State.WorkingCopy.Branch);
+        await f.Cmd("switchOpen");
+        Assert.All(f.Picker.Items, i => Assert.Null(i.Incomplete));
+    }
+
+    [Fact]
+    public async Task Switch_Interrotto_SiRicordaAncheDopoIlRiavvio()
+    {
+        string recent;
+        using (var f = new Fixture())
+        {
+            recent = f.RecentFile;
+            f.Svn.SwitchError = WorkQueueError;
+            f.Svn.InfoAfterFailedSwitch = "^/tags/1.0";
+            await f.Cmd("switchOpen");
+            await f.Cmd("switchOk", new { name = "tags/1.0" });
+        }
+
+        using var g = new Fixture("^/tags/1.0", recent);   // nuova sessione di VS, stessa working copy
+        await g.Store.RefreshAsync(Ct, reloadBranch: true);
+
+        Assert.True(g.State.Status.Err);
+        Assert.Contains("tags/1.0", g.State.Status.Msg);
+        Assert.Equal("switchResume", g.State.Status.Action?.Cmd);
     }
 }

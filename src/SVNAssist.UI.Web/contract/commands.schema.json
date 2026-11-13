@@ -564,6 +564,27 @@
       }
     },
     {
+      "title": "switchResume",
+      "description": "Completa uno switch interrotto a meta': svn cleanup + lo stesso svn switch (la destinazione la sa il backend).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "switchResume"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
       "title": "cleanup",
       "description": "SVN Cleanup della working copy (svn cleanup).",
       "type": "object",

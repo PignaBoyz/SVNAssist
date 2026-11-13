@@ -1,6 +1,6 @@
 # SVNAssist — Funzionalità: cosa c'è, cosa manca
 
-**Versione:** 0.3.1 · **Data:** 2026-11-12
+**Versione:** 0.3.2 · **Data:** 2026-11-13
 
 ## Come usare questo file
 
@@ -13,6 +13,10 @@ Questo file è pensato per essere **modificato da te** e restituito per pianific
 - Legenda: **P0** = sicurezza/blocca l'uso · **P1** = valore alto · **P2** = nice to have. Le ore sono stime (sviluppo + test automatici, senza collaudo manuale in VS); dettagli in `docs/ROADMAP.md`.
 
 ---
+
+## ✅ Cosa c'è nella 0.3.2
+
+Switch robusto su working copy grandi (dettagli in `docs/release-notes/v0.3.2.md`): se svn si ferma a metà (E155009, cartella tenuta aperta da VS) fa da solo cleanup + nuovo tentativo; se non basta lo dice chiaramente, con **Completa switch** (cleanup + switch) anche dopo un riavvio di VS; intestazione e selettore non mentono più sul ramo corrente; errori su più righe, leggibili per intero.
 
 ## ✅ Cosa c'è nella 0.3.0
 

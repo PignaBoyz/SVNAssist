@@ -84,7 +84,7 @@ internal sealed record RevPickerDto(bool Open, string Target, bool Loading, stri
 /// <param name="Kind"><c>trunk</c> | <c>branch</c> | <c>tag</c>.</param>
 /// <param name="Rev">Ultima revisione che ha toccato il ramo (0 = sconosciuta).</param>
 /// <param name="Date">ISO 8601, vuota se sconosciuta.</param>
-internal sealed record SwitchItemDto(string Name, string Kind, bool Current, long Rev, string Author, string Date);
+internal sealed record SwitchItemDto(string Name, string Kind, bool Current, long Rev, string Author, string Date, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Incomplete = null);
 
 /// <summary>Selettore di "SVN Switch...": <c>Name</c> degli elementi e' relativo alla base (<c>trunk</c>, <c>branches/x</c>, <c>tags/1.0</c>).</summary>
 /// <param name="Mode"><c>switch</c> (SVN Switch) o <c>merge</c> (SVN Merge: sorgente da cui unire, senza il ramo corrente).</param>

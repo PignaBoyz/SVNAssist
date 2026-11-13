@@ -33,11 +33,16 @@ public static class SvnErrors
                || text.Contains("Authorization failed", StringComparison.OrdinalIgnoreCase)
                || text.Contains("No more credentials", StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>Working copy bloccata da un'operazione interrotta (serve cleanup): E155004, E155037, "run 'cleanup'".</summary>
+    /// <summary>
+    /// Working copy bloccata da un'operazione interrotta (serve cleanup): E155004, E155037, E155009 (coda di lavoro del
+    /// wc.db non eseguita: tipicamente un file o una cartella tenuti aperti da un altro programma), "run 'cleanup'".
+    /// </summary>
     public static bool IsWorkingCopyLocked(string? text)
         => !string.IsNullOrEmpty(text)
            && (text.Contains("E155004", StringComparison.Ordinal)
                || text.Contains("E155037", StringComparison.Ordinal)
+               || text.Contains("E155009", StringComparison.Ordinal)
+               || text.Contains("WC DB work queue", StringComparison.OrdinalIgnoreCase)
                || text.Contains("run 'cleanup'", StringComparison.OrdinalIgnoreCase)
                || text.Contains("performing 'cleanup'", StringComparison.OrdinalIgnoreCase));
 

@@ -67,6 +67,11 @@ progress{display:block;width:100%;height:8px;margin:4px 0;accent-color:var(--acc
 .foot .msg.ok,.foot .msg.err{font-weight:600;padding:1px 8px;border-radius:10px;animation:flash 2.4s ease-out}
 .foot .msg.ok{background:var(--chip-ok-bg);color:var(--chip-ok-fg)}
 .foot .msg.err{background:var(--chip-fail-bg);color:var(--chip-fail-fg)}
+/* Errori: testo intero su piu' righe (gli errori di svn sono lunghi), selezionabile; pulsante d'azione sotto se non c'e' posto */
+.foot-r1.err{flex-wrap:wrap;align-items:flex-start}
+.foot .msg.err{align-items:flex-start;padding:3px 8px;border-radius:6px;user-select:text;cursor:text}
+.foot .msg.err>svg{flex:none;margin-top:2px}
+.foot .msg.err>span{white-space:pre-wrap;overflow-wrap:anywhere;text-overflow:clip;max-height:9.5em;overflow:auto}
 @keyframes flash{0%,35%{box-shadow:0 0 0 3px var(--acc2)}100%{box-shadow:0 0 0 3px transparent}}
 /* Revisione in cui e' la working copy: neutro = non si sa, verde = e' l'ultima del ramo, arancio = il server ne ha una piu' recente */
 .rev{display:inline-flex;align-items:center;gap:5px;min-width:0;padding:1px 8px;border-radius:10px;border:1px solid transparent;background:none;font:inherit;color:var(--fg2)}

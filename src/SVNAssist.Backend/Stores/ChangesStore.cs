@@ -45,6 +45,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
     // Un'operazione dell'utente alla volta (commit, update, revert...): il doppio click non la ripete e il refresh
     // automatico non gira mentre svn tiene il lock della working copy.
     private int _operationRunning;
+    private readonly PendingSwitch _pendingSwitch;
     private int _started;
 
     private List<ChangeEntry> _entries = [];
@@ -109,6 +110,9 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         RevPicker.Changed += NotifyChanged;
         Switch = new SwitchPickerStore(svnService, settingsService, recentTargetsFile);
         Switch.Changed += NotifyChanged;
+        // Accanto agli ultimi usati (nei test: un file temporaneo per test).
+        _pendingSwitch = new PendingSwitch(recentTargetsFile is null ? null : recentTargetsFile + ".pending-switch.json");
+        Switch.PendingUrl = wc => _pendingSwitch.Get(wc)?.Url;
         _debouncer = new RefreshDebouncer(RefreshQuietPeriod, AutoRefreshAsync);
         HeadCheck = new HeadWatcher(FetchHeadAsync, () => OperationRunning, settingsService.GetHeadCheckMinutesAsync, NotifyChanged);
     }
@@ -302,7 +306,9 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             note = HeadCheck.Error is { } err ? Loc.T("Impossibile controllare le nuove revisioni: {0}", FirstLine(err))
                 : HeadCheck.Disabled ? Loc.T("Controllo delle nuove revisioni spento (Tools > Options > SVNAssist > Controllo nuove revisioni).")
                 : Loc.T("Controllo delle nuove revisioni in corso...");
-        return new WorkingCopyDto(_workingCopyPath, _showWorkingCopyInput, _branchName, _wcRev, _svnVersion, head, _wcRev is > 0 ? state : null, note);
+        // Switch interrotto: la radice e' gia' sul ramo nuovo ma il resto no, il nome da solo ingannerebbe.
+        var branch = _branchName.Length > 0 && _pendingSwitch.Get(_workingCopyPath) is not null ? Loc.T("{0} (switch incompleto)", _branchName) : _branchName;
+        return new WorkingCopyDto(_workingCopyPath, _showWorkingCopyInput, branch, _wcRev, _svnVersion, head, _wcRev is > 0 ? state : null, note);
     }
 
     /// <summary>Elementi in conflitto con tipo e file di appoggio (da <c>svn info</c>, mai indovinati dal nome).</summary>
@@ -453,6 +459,9 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 break;
             case "switchOk":
                 await SwitchOkAsync(Args.Str(args, "name"), ct);
+                break;
+            case "switchResume":
+                await RunExclusiveAsync(() => ResumeSwitchCoreAsync(ct));
                 break;
             case "conflictOp":
                 await RunExclusiveAsync(() => ConflictOpAsync(Args.OneOf(args, "op", "edit", "mine", "theirs", "resolved"), Args.Str(args, "key"), ct));
@@ -987,6 +996,10 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         lock (_stateLock)
             entries = _entries;
 
+        // Uno switch rimasto a meta' (anche da una sessione precedente di VS) conta piu' del riepilogo.
+        if (_pendingSwitch.Get(WorkingCopyPath) is { } pending)
+            return Loc.T("Errore: lo switch a {0} non è completo. Non fare Revert: premi \"Completa switch\" (cleanup + switch).", pending.Name);
+
         if (entries.Count == 0)
             return Loc.T("Nessuna modifica.");
 
@@ -1415,9 +1428,10 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             return;
         }
 
+        // Completare uno switch interrotto non porta altrove le modifiche: le cartelle "incomplete" non sono lavoro dell'utente.
         int local;
         lock (_stateLock)
-            local = _entries.Count(e => e.Status is not (SvnStatusKind.Unversioned or SvnStatusKind.Normal or SvnStatusKind.Ignored));
+            local = target.Incomplete ? 0 : _entries.Count(e => e.Status is not (SvnStatusKind.Unversioned or SvnStatusKind.Normal or SvnStatusKind.Ignored or SvnStatusKind.Incomplete));
         if (local > 0 && !await _dialogs.ConfirmAsync(
                 Loc.T("La working copy ha {0} elementi con modifiche locali: lo switch le porta su {1} e può generare conflitti. Continuare?", local, target.Name), ct))
             return;
@@ -1427,12 +1441,44 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         await RunExclusiveAsync(() => SwitchCoreAsync(target, ct));
     }
 
+    /// <summary>Attesa prima di riprovare uno switch interrotto (un antivirus o VS che tiene aperto un file di solito lo rilascia in fretta).</summary>
+    internal TimeSpan SwitchRetryDelay { get; set; } = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    /// <c>svn switch</c>. Prima di partire segna lo switch come "in corso" (<see cref="PendingSwitch"/>): se svn si ferma a meta'
+    /// (es. E155009, cartella tenuta aperta da un altro programma) la working copy resta mista e il segno resta, con "Completa switch".
+    /// Su un errore da cleanup ci riprova da solo una volta (cleanup + stesso switch, che svn riprende da dove era rimasto).
+    /// </summary>
     private async Task SwitchCoreAsync(SwitchPickerStore.Target target, CancellationToken ct)
     {
+        var wc = WorkingCopyPath;
+        var resuming = _pendingSwitch.Get(wc) is not null;
+        _pendingSwitch.Set(wc, new PendingSwitch.Entry(target.Name, target.Url));
         try
         {
+            if (resuming)
+            {
+                SetStatus(Loc.T("Cleanup prima dello switch..."));
+                await _svnService.CleanupAsync(wc, ct);
+            }
+
             SetStatus(Loc.T("Switch a {0} in corso...", target.Name));
-            var result = await _svnService.SwitchAsync(WorkingCopyPath, target.Url, ct);
+            UpdateResult result;
+            try
+            {
+                result = await _svnService.SwitchAsync(wc, target.Url, ct);
+            }
+            catch (Exception first) when (!ct.IsCancellationRequested && SvnErrors.IsWorkingCopyLocked(first.Message))
+            {
+                BackendLog.Warn("Switch interrotto, cleanup e nuovo tentativo: " + first.Message);
+                SetStatus(Loc.T("Switch a {0} interrotto: cleanup e nuovo tentativo...", target.Name));
+                await _svnService.CleanupAsync(wc, ct);
+                if (SwitchRetryDelay > TimeSpan.Zero)
+                    await Task.Delay(SwitchRetryDelay, ct);
+                result = await _svnService.SwitchAsync(wc, target.Url, ct);
+            }
+
+            _pendingSwitch.Clear(wc);
             var done = result.Revision is { } rev ? Loc.T("Switch a {0} completato (revisione {1})", target.Name, rev) : Loc.T("Switch a {0} completato", target.Name);
             await RefreshAsync(ct, reloadBranch: true, (result.ConflictedPaths.Count > 0
                 ? Loc.T("{0}: {1} file in conflitto.", done, result.ConflictedPaths.Count)
@@ -1441,9 +1487,41 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            SetStatus(Loc.T("Errore switch: {0}", ex.Message));
+            BackendLog.Warn("Switch fallito: " + ex.Message);
+            // Si rilegge il ramo vero (l'intestazione non deve restare sul vecchio) e si guarda se svn ha gia' toccato la working copy.
+            await RefreshAsync(ct, reloadBranch: true);
+            bool halfway;
+            lock (_stateLock)
+                halfway = SameUrl(_branchUrl, target.Url) || _entries.Any(e => e.Status == SvnStatusKind.Incomplete);
+            if (halfway || resuming)
+            {
+                SetStatus(Loc.T("Errore: lo switch a {0} si è interrotto a metà, parte della working copy è ancora sul ramo di prima. Non fare Revert: chiudi ciò che tiene aperti i file citati da svn (es. la solution) e premi \"Completa switch\" (cleanup + switch).\n{1}", target.Name, ex.Message));
+            }
+            else
+            {
+                _pendingSwitch.Clear(wc); // svn non ha cambiato nulla (es. URL o credenziali): niente da completare
+                SetStatus(Loc.T("Errore switch: {0}", ex.Message));
+            }
         }
     }
+
+    /// <summary>"Completa switch": cleanup + lo stesso <c>svn switch</c> verso la destinazione dello switch interrotto.</summary>
+    private Task ResumeSwitchCoreAsync(CancellationToken ct)
+    {
+        var pending = _pendingSwitch.Get(WorkingCopyPath);
+        if (pending is null)
+        {
+            SetStatus(Loc.T("Nessuno switch da completare."));
+            return Task.CompletedTask;
+        }
+
+        return SwitchCoreAsync(new SwitchPickerStore.Target(pending.Name, string.Empty, pending.Url, false, string.Empty, Incomplete: true), ct);
+    }
+
+    /// <summary>Stesso URL a meno di codifica (%20) e barra finale: svn info e l'elenco dei rami codificano in modo diverso.</summary>
+    private static bool SameUrl(string? a, string? b)
+        => a is not null && b is not null
+           && string.Equals(Uri.UnescapeDataString(a).TrimEnd('/'), Uri.UnescapeDataString(b).TrimEnd('/'), StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// "Annulla merge": revert ricorsivo della working copy (era pulita quando il merge e' partito, quindi non porta via altro lavoro).
@@ -1526,6 +1604,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         var isError = _statusMessage.StartsWith("Error", StringComparison.Ordinal);
         return new StatusDto(_statusMessage, isError,
             !isError ? null
+                : _pendingSwitch.Get(_workingCopyPath) is not null ? new StatusActionDto(Loc.T("Completa switch"), "switchResume")
                 : SvnErrors.IsWorkingCopyLocked(_statusMessage) ? new StatusActionDto(Loc.T("Esegui Cleanup"), "cleanup")
                 : SvnErrors.SuggestsUpdate(_statusMessage) ? new StatusActionDto(Loc.T("SVN Update ora"), "update") : null, _statusSeq);
     }

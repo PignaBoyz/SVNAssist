@@ -27,7 +27,7 @@
     'Inserisci il percorso della working copy e premi Carica log.': 'Enter the path of the working copy and press Load log.',
     'La solution corrente non è una working copy SVN.': 'The current solution is not an SVN working copy.',
     'Working copy SVN rilevata automaticamente, aggiornamento...': 'SVN working copy detected automatically, updating...',
-    'Nessuna modifica.': 'No changes.', 'Nessuna working copy configurata.': 'No working copy configured.',
+    'Nessuna modifica.': 'No changes.', 'Nessuna working copy configurata.': 'No working copy configured.', 'Nessuno switch da completare.': 'No switch to complete.',
     'Nessuna modifica da committare.': 'No changes to commit.', 'Scrivi un messaggio di commit.': 'Write a commit message.',
     'Commit in corso...': 'Commit in progress...', 'Update in corso...': 'Update in progress...', 'Cleanup in corso...': 'Cleanup in progress...',
     'Cleanup completato.': 'Cleanup completed.',
@@ -244,6 +244,7 @@
     mergeClose: () => { S.lvm.merge = null; return lvmLoad(50); },
     switchCancel: () => { S.vm.sw = null; render(); },
     switchOk: a => swOk(a),
+    switchResume: () => { setStatus('Nessuno switch da completare.'); render(); },   // la demo non simula switch interrotti
     showLog: () => {
       if (!S.vm.wcPath.trim()) { setStatus('Nessuna working copy configurata.'); return render(); }
       return openLog().then(() => { if (!S.lvm.entries.length) { S.lvm.path = S.vm.wcPath; return lvmLoad(50); } });

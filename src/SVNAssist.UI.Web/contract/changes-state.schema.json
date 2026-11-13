@@ -290,7 +290,9 @@
             },
             "cmd": {
               "enum": [
-                "cleanup"
+                "cleanup",
+                "update",
+                "switchResume"
               ]
             }
           }
@@ -653,6 +655,10 @@
               "current": {
                 "type": "boolean",
                 "description": "E' il ramo su cui si trova la working copy."
+              },
+              "incomplete": {
+                "type": "boolean",
+                "description": "Destinazione di uno switch interrotto a meta' (facoltativo, solo true): sceglierla completa lo switch."
               },
               "rev": {
                 "type": "integer",

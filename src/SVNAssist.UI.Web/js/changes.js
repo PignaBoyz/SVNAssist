@@ -62,13 +62,17 @@
     const tip = ok ? t('La working copy è all\'ultima revisione del ramo (r{0}).', r) : (wc.revNote || t('Revisione della working copy: r{0}.', r));
     return `<span class="rev${ok ? ' ok' : ''}" title="${esc(tip)}">${ok ? U.icon('check') : ''}<span>r${r}</span></span>`;
   }
+  const actTip = cmd => cmd === 'update' ? t('Esegue svn update sulla working copy')
+    : cmd === 'switchResume' ? t('Esegue svn cleanup e ripete lo switch: svn riprende da dove si era fermato')
+    : t('Esegue svn cleanup sulla working copy');
   function foot(s) {
     const p = s.prereq, bad = !!(p.summary && /da sistemare|to fix/.test(p.summary));
     const m = statusKey(s) === goneKey ? '' : (s.status.msg || ''), kind = statusKind(m, s.status.err);
     const act = s.status.action;
-    // Riga 1 (solo se c'e' un messaggio): messaggio a tutta larghezza (ellissi + tooltip col testo completo); riga 2: revisione a sinistra, prerequisiti a destra.
-    return `<div class="foot-r1">` + (m ? `<span class="msg ${kind}" role="status" title="${esc(m)}">${kind ? U.icon(kind === 'err' ? 'x' : 'check') : ''}<span>${esc(m)}</span></span>` : '') +
-      (m && act ? `<button type="button" class="btn sm" ${U.cmd(act.cmd)} title="${esc(t('Esegue svn cleanup sulla working copy'))}">${esc(act.label)}</button>` : '') + `</div><div class="foot-r2">${revIndicator(s)}<span class="fill"></span>` +
+    // Riga 1 (solo se c'e' un messaggio): messaggio a tutta larghezza (ellissi + tooltip col testo completo; un errore va a capo per intero,
+    // selezionabile e copiabile, con scorrimento se lunghissimo); riga 2: revisione a sinistra, prerequisiti a destra.
+    return `<div class="foot-r1${kind === 'err' ? ' err' : ''}">` + (m ? `<span class="msg ${kind}" role="status" title="${esc(m)}">${kind ? U.icon(kind === 'err' ? 'x' : 'check') : ''}<span>${esc(m)}</span></span>` : '') +
+      (m && act ? `<button type="button" class="btn sm" ${U.cmd(act.cmd)} title="${esc(actTip(act.cmd))}">${esc(act.label)}</button>` : '') + `</div><div class="foot-r2">${revIndicator(s)}<span class="fill"></span>` +
       (bad ? `<button type="button" class="btn sm prq-st bad" ${U.cmd('wizardOpenPrereq')} title="${esc(t('Manca qualcosa: apre la procedura guidata per sistemarlo'))}">${U.icon('warn')}<span>${esc(p.summary)}</span></button>`
         : `<button type="button" class="btn sm prq-st ok" ${U.cmd('prereqToggle')} aria-expanded="${!!p.open}" title="${esc(t('Tutto a posto. Mostra/nasconde la checklist: svn, TortoiseSVN, provider AI'))}">${U.icon('check')}<span>${esc((p.summary || t('Prerequisiti')).replace(/\s*✓/, ''))}</span></button>`) + `</div>`;
   }
@@ -359,7 +363,8 @@
   };
   // righe da disegnare in una lista alta n*row con la finestra visibile [top, top+h): start incluso, end escluso
   U.swWindow = (n, top, h, row, over) => { const o = over == null ? 6 : over; return { start: Math.max(0, Math.floor(top / row) - o), end: Math.min(n, Math.ceil((top + h) / row) + o) }; };
-  const swCur = i => i.current ? `<span class="muted">${esc(t('(corrente)'))}</span>` : '';
+  const swCur = i => i.current ? `<span class="muted">${esc(t('(corrente)'))}</span>`
+    : i.incomplete ? `<span class="muted" title="${esc(t('Lo switch verso questo ramo si è interrotto: sceglilo per completarlo'))}">${esc(t('(switch incompleto)'))}</span>` : '';
   const swRowQ = (i, sel, n) => `<div class="rp-row sw-row${sel === i.name ? ' sel' : ''}" id="sw-o${n}" role="option" aria-selected="${sel === i.name}" data-sw="${esc(i.name)}"><b class="rv">${esc(i.kind)}</b><span class="m" title="${esc(i.name)}">${esc(i.name)}</span>${swCur(i)}${i.rev ? `<span class="dtm muted">r${i.rev}</span>` : ''}</div>`;
   U.swRowsHTML = (list, start, end, sel) => list.slice(start, end).map((i, k) => `<div class="rp-row sw-row sw-x${sel === i.name ? ' sel' : ''}" id="sw-o${start + k}" role="option" aria-selected="${sel === i.name}" aria-posinset="${start + k + 1}" aria-setsize="${list.length}" data-sw="${esc(i.name)}"><span class="m" title="${esc(i.name)}">${esc(i.name)} ${swCur(i)}</span><span class="kd">${esc(i.kind)}</span><span class="rvn muted">${i.rev ? 'r' + i.rev : ''}</span><span class="au" title="${esc(i.author)}">${esc(i.author)}</span><span class="dtm muted">${i.date ? U.fmtDate(i.date) : ''}</span></div>`).join('');
   const swUi = () => ({ q: swQ, ext: swExt, kind: swKind, sort: swSort, desc: swDesc, sel: swSel, author: swAuthor, from: swFrom, to: swTo, preset: swPreset });

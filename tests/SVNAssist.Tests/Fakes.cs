@@ -140,7 +140,7 @@ internal sealed class FakeSvnService : ISvnService
         return Task.FromResult(new UpdateResult(long.TryParse(revision, out var n) ? n : 9, []));
     }
 
-    public Task CleanupAsync(string path, CancellationToken ct) { CleanedUp.Add(path); return Task.CompletedTask; }
+    public Task CleanupAsync(string path, CancellationToken ct) { CleanedUp.Add(path); SwitchLog.Add("cleanup"); return Task.CompletedTask; }
 
     public Task LockAsync(IEnumerable<string> paths, string? message, bool force, CancellationToken ct)
     {
@@ -258,11 +258,22 @@ internal sealed class FakeSvnService : ISvnService
 
     public List<(string Path, string Url)> Switched { get; } = [];
     public string? SwitchError { get; set; }
+    /// <summary>Quante volte lo switch fallisce con <see cref="SwitchError"/> prima di riuscire (<c>null</c> = sempre).</summary>
+    public int? SwitchFailTimes { get; set; }
+    /// <summary>URL relativo che <c>svn info</c> mostra dopo uno switch fallito (la radice gia' spostata: switch a meta').</summary>
+    public string? InfoAfterFailedSwitch { get; set; }
+    /// <summary>Ordine delle chiamate cleanup/switch (per verificare "cleanup prima di riprovare").</summary>
+    public List<string> SwitchLog { get; } = [];
 
     public Task<UpdateResult> SwitchAsync(string workingCopyPath, string url, CancellationToken ct)
     {
-        if (SwitchError is not null)
+        SwitchLog.Add("switch " + url);
+        if (SwitchError is not null && (SwitchFailTimes is null || SwitchFailTimes-- > 0))
+        {
+            if (InfoAfterFailedSwitch is not null)
+                InfoRelativeUrl = InfoAfterFailedSwitch;
             throw new InvalidOperationException(SwitchError);
+        }
         Switched.Add((workingCopyPath, url));
         return Task.FromResult(new UpdateResult(9, []));
     }
