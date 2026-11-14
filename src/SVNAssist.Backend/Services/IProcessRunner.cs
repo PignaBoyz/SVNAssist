@@ -46,6 +46,14 @@ public interface IProcessRunner
         IReadOnlyDictionary<string, string>? environment = null);
 }
 
+/// <summary>Runner che consegna lo stdout riga per riga mentre il processo gira (finestra di avanzamento); gli altri (test) no.</summary>
+public interface ILineProcessRunner : IProcessRunner
+{
+    Task<ProcessResult> RunStreamingAsync(
+        string fileName, IReadOnlyList<string> arguments, string? workingDirectory, CancellationToken ct,
+        string? standardInput, IReadOnlyDictionary<string, string>? environment, Action<string> onStdoutLine);
+}
+
 internal static class ProcessRunnerExtensions
 {
     /// <summary>

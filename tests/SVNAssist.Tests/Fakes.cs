@@ -141,6 +141,8 @@ internal sealed class FakeSvnService : ISvnService
     }
 
     public Task CleanupAsync(string path, CancellationToken ct) { CleanedUp.Add(path); SwitchLog.Add("cleanup"); return Task.CompletedTask; }
+    public List<CleanupOptions> CleanupOptionsUsed { get; } = [];
+    public Task CleanupAsync(string path, CleanupOptions options, CancellationToken ct) { CleanupOptionsUsed.Add(options); return CleanupAsync(path, ct); }
 
     public Task LockAsync(IEnumerable<string> paths, string? message, bool force, CancellationToken ct)
     {
@@ -265,9 +267,9 @@ internal sealed class FakeSvnService : ISvnService
     /// <summary>Ordine delle chiamate cleanup/switch (per verificare "cleanup prima di riprovare").</summary>
     public List<string> SwitchLog { get; } = [];
 
-    public Task<UpdateResult> SwitchAsync(string workingCopyPath, string url, CancellationToken ct)
+    public Task<UpdateResult> SwitchAsync(string workingCopyPath, string url, CancellationToken ct, long? revision = null)
     {
-        SwitchLog.Add("switch " + url);
+        SwitchLog.Add("switch " + url + (revision is { } rv ? "@" + rv : ""));
         if (SwitchError is not null && (SwitchFailTimes is null || SwitchFailTimes-- > 0))
         {
             if (InfoAfterFailedSwitch is not null)

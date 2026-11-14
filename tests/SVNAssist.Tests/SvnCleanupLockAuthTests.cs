@@ -464,9 +464,14 @@ public class SvnCleanupLockAuthTests
     {
         using var f = new Fx();
 
-        await f.Cmd("cleanup");
+        await f.Cmd("cleanup");   // apre la finestra delle opzioni
+        Assert.NotNull(f.Snap.Cleanup);
+        Assert.Empty(f.Svn.CleanedUp);
+        await f.Cmd("cleanupOk", Opts());
 
         Assert.Equal([@"C:\wc"], f.Svn.CleanedUp);
+        Assert.Equal(CleanupOptions.Default, f.Svn.CleanupOptionsUsed.Single());
+        Assert.Equal("Cleanup completato.", f.Snap.Progress!.Summary);
         Assert.Contains("Cleanup completato", f.Snap.Status.Msg);
     }
 
@@ -484,7 +489,113 @@ public class SvnCleanupLockAuthTests
         Assert.Equal("Esegui Cleanup", status.Action?.Label);
 
         await f.Cmd("cleanup");
+        await f.Cmd("cleanupOk", Opts());
         Assert.Null(f.Snap.Status.Action);
+    }
+
+    private static object Opts(bool status = true, bool vacuum = false, bool externals = false, bool unversioned = false, bool ignored = false, bool revert = false, bool confirmed = false)
+        => new { status, vacuum, externals, unversioned, ignored, revert, confirmed };
+
+    [Fact]
+    public async Task Store_CleanupDistruttivo_SenzaConfermaEsplicita_Rifiutato()
+    {
+        using var f = new Fx();
+        await f.Cmd("cleanup");
+
+        await Assert.ThrowsAsync<ArgumentException>(() => f.Cmd("cleanupOk", Opts(unversioned: true)));
+        await Assert.ThrowsAsync<ArgumentException>(() => f.Cmd("cleanupOk", Opts(revert: true)));
+        Assert.NotNull(f.Snap.Cleanup);   // la finestra resta aperta
+        Assert.Empty(f.Svn.CleanupOptionsUsed);
+
+        await f.Cmd("cleanupOk", Opts(unversioned: true, ignored: true, revert: true, confirmed: true));
+        Assert.Equal(new CleanupOptions(true, false, false, true, true, true), f.Svn.CleanupOptionsUsed.Single());
+    }
+
+    [Fact]
+    public async Task Store_CleanupOpzioniOltreIl19_SvnVecchio_Rifiutate()
+    {
+        using var f = new Fx();
+        f.Svn.SvnVersion = new Version(1, 8, 11);
+        await f.Store.RefreshAsync(Ct, reloadBranch: true);
+        await f.Cmd("cleanup");
+
+        Assert.False(f.Snap.Cleanup!.Extras);
+        await Assert.ThrowsAsync<ArgumentException>(() => f.Cmd("cleanupOk", Opts(vacuum: true)));
+        await Assert.ThrowsAsync<ArgumentException>(() => f.Cmd("cleanupOk", Opts(status: false)));   // niente da fare
+        await f.Cmd("cleanupOk", Opts());   // il cleanup semplice resta possibile
+        Assert.Single(f.Svn.CleanupOptionsUsed);
+    }
+
+    [Fact]
+    public void CleanupOptions_Argomenti()
+    {
+        Assert.Equal(["cleanup"], CleanupOptions.Default.ToArgs());
+        Assert.Equal(["cleanup", "--remove-unversioned", "--remove-ignored", "--vacuum-pristines", "--include-externals"],
+            new CleanupOptions(true, true, true, true, true).ToArgs());
+        Assert.False(new CleanupOptions(false, RevertAll: true).RunsCleanup);
+        Assert.True(CleanupOptions.ExtrasSupported(new Version(1, 9)));
+        Assert.False(CleanupOptions.ExtrasSupported(new Version(1, 8, 19)));
+    }
+
+    [Fact]
+    public async Task SvnService_CleanupConOpzioni_ArgomentiERevert()
+    {
+        var r = new Runner();
+        r.Respond = (a, _) => new ProcessResult(0, a[0] == "cleanup" ? "D         C:\\wc\\tmp.txt\n" : "Reverted 'C:\\wc\\a.cs'\n", "");
+        var svn = new SvnService(FakeSvnPath, r);
+        var lines = new List<string>();
+        await SvnProgress.RunAsync(lines.Add, async () => { await svn.CleanupAsync(@"C:\wc", new CleanupOptions(true, true, false, true, false, true), Ct); return 0; });
+        Assert.Equal(["cleanup", "--non-interactive", "--remove-unversioned", "--vacuum-pristines"], r.Calls[^2].Args);
+        Assert.Equal("revert", r.Calls[^1].Args[0]);
+        Assert.Equal(["D         C:\\wc\\tmp.txt", "Reverted 'C:\\wc\\a.cs'"], lines);   // senza streaming (runner finto) le righe arrivano a fine comando
+    }
+
+    [Fact]
+    public async Task ProcessRunner_Streaming_ConsegnaLeRighePrimaDellaFine()
+    {
+        var lines = new List<string>();
+        var r = await new ProcessRunner().RunStreamingAsync("cmd.exe", ["/c", "echo U    a.cs& echo C    b.cs"], null, Ct, null, null, lines.Add);
+        Assert.Equal(0, r.ExitCode);
+        Assert.Equal(["U    a.cs", "C    b.cs"], lines);
+        Assert.Contains("b.cs", r.StandardOutput);
+    }
+
+    [Theory]
+    [InlineData("U    src/a.cs", "U", "src/a.cs")]
+    [InlineData("A    src/new file.cs", "A", "src/new file.cs")]
+    [InlineData("C    src/a.cs", "C", "src/a.cs")]
+    [InlineData(" U   src", "U", "src")]
+    [InlineData("   C src/tree", "C", "src/tree")]
+    [InlineData("D         tmp/x.txt", "D", "tmp/x.txt")]
+    [InlineData("G    merged.txt", "G", "merged.txt")]
+    [InlineData("Reverted 'src/a.cs'", "R", "src/a.cs")]
+    [InlineData("Updating '.':", "i", "")]
+    [InlineData("--- Merging r3 into '.':", "i", "")]
+    [InlineData("Updated to revision 12.", "i", "")]
+    [InlineData("  Text conflicts: 1", "i", "")]
+    public void Progress_ClassificaLeRigheDiNotifica(string line, string kind, string path)
+        => Assert.Equal((kind, path), OperationProgress.Classify(line));
+
+    [Fact]
+    public void Progress_ContaElementiEConflitti_TieneLeUltimeRighe()
+    {
+        var p = new OperationProgress();
+        p.Begin("update", "t", "fase");
+        p.Line("Updating '.':");
+        p.Line("U    a");
+        p.Line("C    b");
+        for (var i = 0; i < OperationProgress.MaxLines + 10; i++)
+            p.Line($"A    f{i}");
+        var s = p.GetSnapshot()!;
+        Assert.Equal(OperationProgress.MaxLines + 12, s.Processed);   // le righe informative non contano
+        Assert.Equal(1, s.Conflicts);
+        Assert.Equal(["b"], s.ConflictPaths);
+        Assert.Equal(OperationProgress.MaxLines, s.Lines.Count);
+        Assert.Equal(13, s.Omitted);
+        p.Done(true, "ok");
+        Assert.False(p.GetSnapshot()!.Running);
+        p.Close();
+        Assert.Null(p.GetSnapshot());
     }
 
     // ── Solution Explorer (PathCommands) ─────────────────────────────

@@ -52,6 +52,7 @@ internal sealed class ReloadableSvnService : ISvnService
     public Task<UpdateResult> UpdateAsync(string workingCopyPath, CancellationToken ct) => Current.UpdateAsync(workingCopyPath, ct);
     public Task<UpdateResult> UpdateToRevisionAsync(string workingCopyPath, string revision, CancellationToken ct) => Current.UpdateToRevisionAsync(workingCopyPath, revision, ct);
     public Task CleanupAsync(string path, CancellationToken ct) => Current.CleanupAsync(path, ct);
+    public Task CleanupAsync(string path, CleanupOptions options, CancellationToken ct) => Current.CleanupAsync(path, options, ct);
     public Task LockAsync(IEnumerable<string> paths, string? message, bool force, CancellationToken ct) => Current.LockAsync(paths, message, force, ct);
     public Task UnlockAsync(IEnumerable<string> paths, CancellationToken ct) => Current.UnlockAsync(paths, ct);
     public Task<IReadOnlyList<SvnLogEntry>> GetLogAsync(string targetPath, int maxEntries, CancellationToken ct) => Current.GetLogAsync(targetPath, maxEntries, ct);
@@ -71,7 +72,7 @@ internal sealed class ReloadableSvnService : ISvnService
     public Task<IReadOnlyList<SvnListEntry>> ListEntriesAsync(string url, CancellationToken ct) => Current.ListEntriesAsync(url, ct);
 
     public Task<IReadOnlyDictionary<string, SvnConflictInfo>> GetConflictInfoAsync(IReadOnlyList<string> paths, CancellationToken ct) => Current.GetConflictInfoAsync(paths, ct);
-    public Task<UpdateResult> SwitchAsync(string workingCopyPath, string url, CancellationToken ct) => Current.SwitchAsync(workingCopyPath, url, ct);
+    public Task<UpdateResult> SwitchAsync(string workingCopyPath, string url, CancellationToken ct, long? revision = null) => Current.SwitchAsync(workingCopyPath, url, ct, revision);
     public Task<IReadOnlyList<long>> GetEligibleRevisionsAsync(string workingCopyPath, string sourceUrl, CancellationToken ct) => Current.GetEligibleRevisionsAsync(workingCopyPath, sourceUrl, ct);
     public Task<IReadOnlyList<SvnLogEntry>> GetLogRangeAsync(string url, long min, long max, CancellationToken ct) => Current.GetLogRangeAsync(url, min, max, ct);
     public Task<MergeOutput> MergeAsync(string workingCopyPath, string sourceUrl, IReadOnlyList<long>? revisions, bool dryRun, CancellationToken ct) => Current.MergeAsync(workingCopyPath, sourceUrl, revisions, dryRun, ct);

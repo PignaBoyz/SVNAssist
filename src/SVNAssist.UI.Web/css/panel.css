@@ -311,3 +311,32 @@ html[data-view=diff] body,html[data-view=log] body,html[data-view=changes] body{
 .rp-list.sw-vl{display:block;height:min(380px,50vh);max-height:none;position:relative}
 #sw-sp{position:relative}
 #sw-rows{position:absolute;left:0;right:0}
+
+/* finestre delle operazioni lunghe: avanzamento (righe svn in streaming), avviso switch, opzioni Cleanup */
+.wiz.ops{width:min(720px,100%);height:min(560px,100%)}
+.ophase{display:flex;align-items:center;gap:8px}
+.obar{position:relative;height:6px;border-radius:3px;background:var(--bg4);overflow:hidden;margin:4px 0}
+.obar i{position:absolute;top:0;bottom:0;width:30%;background:var(--acc2);border-radius:3px;animation:ld 1.1s ease-in-out infinite}
+.obar.ok i{width:100%;animation:none;background:var(--ok)}
+.obar.err i{width:100%;animation:none;background:var(--chip-fail-fg)}
+.olines{list-style:none;margin:0;padding:4px 0;flex:1;min-height:120px;overflow:auto;background:var(--bg1);border:1px solid var(--bd2);border-radius:4px;font-family:Consolas,monospace;font-size:.92em}
+.olines.empty{display:flex;align-items:center;justify-content:center}
+.ol{display:flex;gap:8px;padding:1px 8px;white-space:pre}
+.ol .st{width:1.2em;text-align:center;flex:none}
+.ol .pt{overflow:hidden;text-overflow:ellipsis}
+.ol.c{background:var(--chip-fail-bg);color:var(--chip-fail-fg);font-weight:600}
+.ol.i{color:var(--fg3)}
+.osum{display:flex;gap:6px;align-items:center;padding:4px 8px;border-radius:4px;background:var(--chip-ok-bg);color:var(--chip-ok-fg);margin-top:4px}
+.rp-err.warnb{background:var(--warn-bg);color:var(--fg)}
+.ochips{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 6px}
+.ock{display:flex;gap:8px;align-items:flex-start;padding:5px 6px;border-radius:4px;cursor:pointer}
+.ock:hover{background:var(--bg3)}
+.ock small{display:block}
+.ock.off{opacity:.55;cursor:default}
+.ock.danger{border-left:3px solid var(--chip-fail-fg)}
+.ock.danger b{color:var(--chip-fail-fg)}
+.ock.confirm{background:var(--chip-fail-bg)}
+.osep{margin-top:6px;padding-top:6px;border-top:1px solid var(--bd2);color:var(--fg2)}
+.osep.on{color:var(--chip-fail-fg);font-weight:600}
+.btn.danger{background:var(--chip-fail-fg);border-color:var(--chip-fail-fg);color:var(--bg1);font-weight:600}
+.btn.danger:disabled{opacity:.5}

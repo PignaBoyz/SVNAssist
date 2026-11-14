@@ -64,6 +64,7 @@
   }
   const actTip = cmd => cmd === 'update' ? t('Esegue svn update sulla working copy')
     : cmd === 'switchResume' ? t('Esegue svn cleanup e ripete lo switch: svn riprende da dove si era fermato')
+    : cmd === 'switchBack' ? t('Esegue svn cleanup e riporta la working copy al ramo e alla revisione di prima dello switch; le modifiche locali restano')
     : t('Esegue svn cleanup sulla working copy');
   function foot(s) {
     const p = s.prereq, bad = !!(p.summary && /da sistemare|to fix/.test(p.summary));
@@ -72,7 +73,8 @@
     // Riga 1 (solo se c'e' un messaggio): messaggio a tutta larghezza (ellissi + tooltip col testo completo; un errore va a capo per intero,
     // selezionabile e copiabile, con scorrimento se lunghissimo); riga 2: revisione a sinistra, prerequisiti a destra.
     return `<div class="foot-r1${kind === 'err' ? ' err' : ''}">` + (m ? `<span class="msg ${kind}" role="status" title="${esc(m)}">${kind ? U.icon(kind === 'err' ? 'x' : 'check') : ''}<span>${esc(m)}</span></span>` : '') +
-      (m && act ? `<button type="button" class="btn sm" ${U.cmd(act.cmd)} title="${esc(actTip(act.cmd))}">${esc(act.label)}</button>` : '') + `</div><div class="foot-r2">${revIndicator(s)}<span class="fill"></span>` +
+      (m && act ? `<button type="button" class="btn sm" ${U.cmd(act.cmd)} title="${esc(actTip(act.cmd))}">${esc(act.label)}</button>` : '') +
+      (m && act && s.status.action2 ? `<button type="button" class="btn sm" ${U.cmd(s.status.action2.cmd)} title="${esc(actTip(s.status.action2.cmd))}">${esc(s.status.action2.label)}</button>` : '') + `</div><div class="foot-r2">${revIndicator(s)}<span class="fill"></span>` +
       (bad ? `<button type="button" class="btn sm prq-st bad" ${U.cmd('wizardOpenPrereq')} title="${esc(t('Manca qualcosa: apre la procedura guidata per sistemarlo'))}">${U.icon('warn')}<span>${esc(p.summary)}</span></button>`
         : `<button type="button" class="btn sm prq-st ok" ${U.cmd('prereqToggle')} aria-expanded="${!!p.open}" title="${esc(t('Tutto a posto. Mostra/nasconde la checklist: svn, TortoiseSVN, provider AI'))}">${U.icon('check')}<span>${esc((p.summary || t('Prerequisiti')).replace(/\s*✓/, ''))}</span></button>`) + `</div>`;
   }
@@ -247,11 +249,12 @@
     if (changed) { list.scrollTop = top; if (had) { const r = list.querySelector(`.tr[data-key="${CSS.escape(cursor)}"]`); if (r) r.focus(); } }
     list.setAttribute('aria-busy', !!st.loading);
     U.setHTML(root.querySelector('#foot'), foot(st));
-    const anyModal = !!(st.wizard && st.wizard.open) || !!(st.revPicker && st.revPicker.open) || !!(st.switchPicker && st.switchPicker.open);
+    const anyModal = !!(st.wizard && st.wizard.open) || !!(st.revPicker && st.revPicker.open) || !!(st.switchPicker && st.switchPicker.open) || !!(st.progress || st.switchWarn || st.cleanup);
     if (anyModal) rcClose(false); else rcRefresh();
     renderWizard(root, anyModal);
     renderRev(root, anyModal);
     renderSw(root, anyModal);
+    U.ops.render(root.querySelector("#ops"), st);
   }
 
   // Procedura guidata: dialogo modale (il resto e' inert), il testo digitato e il focus sopravvivono ai ridisegni.
@@ -497,7 +500,7 @@
         <div class="bar" id="cbar"></div><div id="aist"></div></section><div id="prq"></div><div id="mrg"></div><div id="cfl"></div>
         <div class="flt"><input id="flt" type="search" spellcheck="false" autocomplete="off"></div>
         <div class="list" id="list" role="tree"></div>
-        <footer class="foot" id="foot"></footer></div><div id="wiz"></div><div id="rev"></div><div id="sw"></div><div id="rec" hidden></div>`;
+        <footer class="foot" id="foot"></footer></div><div id="wiz"></div><div id="rev"></div><div id="sw"></div><div id="ops"></div><div id="rec" hidden></div>`;
       U.views.changes.relang(root);
       const ta = root.querySelector('#msg');
       ta.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => U.bridge.send('setCommitText', { text: ta.value }), 150); });
@@ -505,6 +508,7 @@
       root.addEventListener('keydown', wizKeys);
       root.addEventListener('keydown', revKeys);
       root.addEventListener('keydown', swKeys);
+      U.ops.wire(root.querySelector("#ops"), () => st);
       root.addEventListener('keydown', rcKeys);
       root.addEventListener('click', e => {   // pannello Recenti: apri/chiudi dal pulsante, scegli una voce, chiudi con un clic fuori
         const b = e.target.closest('[data-recent]'), row = e.target.closest('#rec .rc-row');

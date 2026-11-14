@@ -47,7 +47,8 @@ internal sealed record SectionDto(string Id, string Title, int Count, bool Expan
 /// <summary>Pulsante d'azione accanto al messaggio di stato (es. "Esegui Cleanup" quando la working copy è bloccata).</summary>
 internal sealed record StatusActionDto(string Label, string Cmd);
 
-internal sealed record StatusDto(string Msg, bool Err, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] StatusActionDto? Action = null, int Seq = 0);
+internal sealed record StatusDto(string Msg, bool Err, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] StatusActionDto? Action = null, int Seq = 0,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] StatusActionDto? Action2 = null);
 
 internal sealed record PrereqItemDto(string Id, string Group, string Title, bool Ok, string Detail, string Instructions, string Primary, string Secondary);
 
@@ -113,7 +114,10 @@ internal sealed record ChangesState(
     RevPickerDto RevPicker,
     SwitchPickerDto SwitchPicker,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] MergeBannerDto? Merge = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ConflictDto>? Conflicts = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ConflictDto>? Conflicts = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ProgressDto? Progress = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SwitchWarnDto? SwitchWarn = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CleanupDialogDto? Cleanup = null);
 
 /// <param name="K"><c>dir</c> per le cartelle (non si aprono nel diff); assente altrimenti.</param>
 internal sealed record LogPathDto(string A, string P, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? K = null);
@@ -159,7 +163,17 @@ internal sealed record LogState(
     string Diff,
     LogFilterDto Filter,
     LogFilesDto? Files,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] MergeDto? Merge = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] MergeDto? Merge = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ProgressDto? Progress = null);
+
+/// <summary>Riepilogo della working copy sporca prima di uno switch: conteggi per tipo (i non versionati non portano modifiche ma si contano).</summary>
+internal sealed record DirtyCountsDto(int Modified, int Added, int Deleted, int Conflicted, int Unversioned);
+
+/// <summary>Avviso prima dello switch su una working copy sporca: Continua comunque / Apri Cleanup / Annulla. <c>Total</c> 0 = ora e' pulita.</summary>
+internal sealed record SwitchWarnDto(string Target, DirtyCountsDto Counts, int Total);
+
+/// <summary>Finestra delle opzioni del Cleanup. <c>Extras</c> falso = svn &lt; 1.9: le opzioni oltre il cleanup semplice si disabilitano.</summary>
+internal sealed record CleanupDialogDto(bool Extras, string SvnVersion, string From);
 
 /// <summary>Snapshot della vista <c>diff</c> (diff-state.schema.json).</summary>
 internal sealed record DiffState(string Title, string Subtitle, string Diff);

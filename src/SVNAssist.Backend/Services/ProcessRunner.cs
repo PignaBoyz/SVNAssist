@@ -13,7 +13,7 @@ namespace SVNAssist.Services;
 /// stdout e stderr vengono letti in parallelo per evitare deadlock: se leggessimo
 /// un flusso alla volta, il buffer dell'altro potrebbe riempirsi e bloccare il processo figlio.
 /// </remarks>
-public sealed class ProcessRunner : IProcessRunner
+public sealed class ProcessRunner : ILineProcessRunner
 {
     /// <summary>Tetto predefinito dell'output catturato (caratteri) per ciascuno di stdout e stderr.</summary>
     public const int DefaultMaxOutputChars = 16 * 1024 * 1024;
@@ -27,13 +27,24 @@ public sealed class ProcessRunner : IProcessRunner
     public ProcessRunner(int maxOutputChars = DefaultMaxOutputChars) => _maxOutputChars = maxOutputChars;
 
     /// <inheritdoc />
-    public async Task<ProcessResult> RunAsync(
+    public Task<ProcessResult> RunAsync(
         string fileName,
         IReadOnlyList<string> arguments,
         string? workingDirectory,
         CancellationToken ct,
         string? standardInput = null,
         IReadOnlyDictionary<string, string>? environment = null)
+        => RunStreamingAsync(fileName, arguments, workingDirectory, ct, standardInput, environment, null);
+
+    /// <inheritdoc />
+    public async Task<ProcessResult> RunStreamingAsync(
+        string fileName,
+        IReadOnlyList<string> arguments,
+        string? workingDirectory,
+        CancellationToken ct,
+        string? standardInput,
+        IReadOnlyDictionary<string, string>? environment,
+        Action<string>? onStdoutLine)
     {
         using var process = new Process();
         process.StartInfo = new ProcessStartInfo
@@ -73,8 +84,8 @@ public sealed class ProcessRunner : IProcessRunner
             catch (InvalidOperationException) { /* già terminato */ }
         });
 
-        var outputTask = ReadCappedAsync(process.StandardOutput, fileName, KillTree, ct);
-        var errorTask = ReadCappedAsync(process.StandardError, fileName, KillTree, ct);
+        var outputTask = ReadCappedAsync(process.StandardOutput, fileName, KillTree, ct, onStdoutLine);
+        var errorTask = ReadCappedAsync(process.StandardError, fileName, KillTree, ct, null);
 
         void KillTree()
         {
@@ -98,9 +109,10 @@ public sealed class ProcessRunner : IProcessRunner
     }
 
     /// <summary>Legge fino a <see cref="_maxOutputChars"/> caratteri; oltre, termina il processo e solleva l'errore.</summary>
-    private async Task<string> ReadCappedAsync(StreamReader reader, string fileName, Action kill, CancellationToken ct)
+    private async Task<string> ReadCappedAsync(StreamReader reader, string fileName, Action kill, CancellationToken ct, Action<string>? onLine)
     {
         var builder = new System.Text.StringBuilder();
+        var line = new System.Text.StringBuilder();
         var buffer = new char[8192];
         int read;
         while ((read = await reader.ReadAsync(buffer.AsMemory(), ct)) > 0)
@@ -114,8 +126,23 @@ public sealed class ProcessRunner : IProcessRunner
             }
 
             builder.Append(buffer, 0, read);
+            if (onLine is null)
+                continue;
+            for (var i = 0; i < read; i++)
+            {
+                if (buffer[i] != '\n')
+                {
+                    line.Append(buffer[i]);
+                    continue;
+                }
+
+                onLine(line.ToString().TrimEnd('\r'));
+                line.Clear();
+            }
         }
 
+        if (line.Length > 0)
+            onLine?.Invoke(line.ToString().TrimEnd('\r'));
         return builder.ToString();
     }
 }

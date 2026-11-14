@@ -859,10 +859,11 @@ async function vmUpdate() {
     await svn('update', 900);
     S.mixed = false;   // dopo l'update la working copy e' tutta alla stessa revisione
     const out = svnUpdate();
-    toast('svn update (output demo): ' + out.join(' | '), 5500);
+    await progRun('update', 'SVN Update', 'Update in corso...', ["Updating '.':", ...out, `Updated to revision ${S.headRev}.`]);
     await vmRefresh(updMsg(), true);
+    progDone(true, updMsg(), out.filter(l => /^C /.test(l)).length);
     await offerResolve(out.filter(l => /^C /.test(l)).length);
-  } catch (e) { setStatus('Errore update: ' + e.message); render(); }
+  } catch (e) { setStatus('Errore update: ' + e.message); progDone(false, 'Errore update: ' + e.message); render(); }
 }
 
 // Update to revision: scelta guidata (modale con le ultime revisioni, HEAD, numero) come nel prodotto.
@@ -953,15 +954,50 @@ async function swOk(a) {
   (S.swRecent = (S.swRecent || []).filter(n => n !== name)).unshift(name); S.swRecent.length = Math.min(S.swRecent.length, 8);
   if (sw.mode === 'merge') return mgStart(name);
   if (name === S.branch) { sw.error = `La working copy è già su ${name}.`; return render(); }
-  const local = S.files.filter(f => f.st !== 'N' && f.st !== '?').length;
-  if (local && !await confirmBox(`La working copy ha ${local} elementi con modifiche locali: lo switch le porta su ${name} e può generare conflitti. Continuare?`)) return;
-  S.vm.sw = null;
+  if (S.files.some(f => f.st !== 'N')) { S.vm.sw = null; S.vm.warn = { name }; return render(); }   // working copy sporca: avviso con il riepilogo
+  return swGo(name);
+}
+async function swGo(name) {
+  S.vm.sw = null; S.vm.warn = null;
   try {
     setStatus(`Switch a ${name} in corso...`); render();
-    await svn(`switch --accept postpone ^/${name}`, 900);
+    await svn(`switch --accept postpone ^/${name}`, 300);
+    const paths = S.files.slice(0, 14).map(f => fwd(f.path));
+    const lines = ["Updating '.':", ...paths.map((p, i) => (name === 'branches/feature-coupon' && i === 2 ? 'C    ' : i % 5 === 4 ? 'A    ' : 'U    ') + p)];
+    for (let i = 0; i < 18; i++) lines.push('U    Web/Content/site-' + i + '.css');
+    await progRun('switch', 'Switch a ' + name, 'Switch in corso...', [...lines, `Updated to revision ${S.headRev}.`]);
     S.branch = name; S.wcRev = S.headRev;
+    const n = S.prog.conflicts;
     await vmRefresh(`Switch a ${name} completato (revisione ${S.wcRev}). Se Visual Studio lo chiede, ricarica la solution.`, true);
-  } catch (e) { setStatus('Errore switch: ' + e.message); render(); }
+    progDone(true, n ? `Switch a ${name} completato (revisione ${S.wcRev}): completato con ${n} conflitti.` : `Switch a ${name} completato (revisione ${S.wcRev}).`, n);
+  } catch (e) { setStatus('Errore switch: ' + e.message); progDone(false, 'Errore switch: ' + e.message); render(); }
+}
+// Avanzamento modale (switch, merge, update, cleanup): righe di svn in streaming, barra indeterminata + contatore, resta aperta con il riepilogo.
+const progKind = l => { const m = /^([ ADUCGER][ UCGM][ B][ C])\s+\S/.exec(l); return m ? (m[1].includes('C') ? 'C' : /^[ADGR]/.test(m[1]) ? m[1][0] : 'U') : /^Reverted /.test(l) ? 'R' : 'i'; };
+async function progRun(op, title, phase, lines) {
+  S.prog = { op, title, phase, running: true, ok: false, processed: 0, conflicts: 0, omitted: 0, lines: [], summary: '', conflictPaths: [] }; render();
+  for (const l of lines) {
+    await sleep(60);
+    const p = S.prog, k = progKind(l);
+    if (k !== 'i') p.processed++;
+    if (k === 'C') { p.conflicts++; p.conflictPaths.push(l.replace(/^\S+\s+/, '')); }
+    p.lines.push({ k, t: l }); if (p.lines.length > 300) { p.lines.shift(); p.omitted++; }
+    render();
+  }
+}
+function progDone(ok, summary, conflicts) { const p = S.prog; if (!p) return; p.running = false; p.ok = ok; p.phase = ''; p.summary = summary; if (conflicts != null) p.conflicts = conflicts; render(); }
+function vmProgressClose(a) {
+  S.prog = null;
+  if (S.vm.cleanupBack) { S.vm.warn = { name: S.vm.cleanupBack }; S.vm.cleanupBack = null; }
+  if (a && a.conflicts) { S.ui.statusOpen = true; S.ui.view = 'dock'; S.ui.seOpen = false; S.ui.menu = null; }
+  render();
+}
+function vmWarn(act) {
+  const w = S.vm.warn; if (!w) return;
+  if (act === 'go') return swGo(w.name);
+  S.vm.warn = null;
+  if (act === 'cleanup') { S.vm.cl = { from: w.name }; S.vm.cleanupBack = w.name; }
+  render();
 }
 // SVN Merge: revisioni finte per sorgente (come mergeinfo + log); U aggiorna, A aggiunge, D elimina, C va in conflitto. Il merge parte solo da una working copy pulita.
 const MG = {
@@ -1030,7 +1066,11 @@ async function mgRun(all) {
     if (S.mixed) throw new Error(MIXED_ERR);
     const pick = all ? [] : m.sel.slice(), revs = all ? mgEligible(m.name).map(r => r.rev).sort((a, b) => a - b) : pick.sort((a, b) => a - b);
     const probe = { name: m.name, sel: pick }, label = mgLabel(probe, revs);
-    await svn(`merge --accept postpone ${all ? '' : '-c ' + revs.join(',') + ' '}^/${m.name}`, 900);
+    await svn(`merge --accept postpone ${all ? '' : '-c ' + revs.join(',') + ' '}^/${m.name}`, 300);
+    const mlines = [`--- Merging r${revs[0]} through r${revs[revs.length - 1]} into '.':`];
+    for (const r of MG[m.name]) if (revs.includes(r.rev)) for (const [k, p] of r.files) mlines.push((k === 'C' ? 'C    ' : k === 'A' ? 'A    ' : k === 'D' ? 'D    ' : 'U    ') + fwd(p));
+    mlines.push("--- Recording mergeinfo for merge of r" + revs[0] + " into '.':", ' U   .');
+    await progRun('merge', 'Merge da ' + m.name, 'Merge in corso...', mlines);
     const res = mgResult(probe, 'merge', revs); m.result = res;
     for (const r of MG[m.name]) if (revs.includes(r.rev)) for (const [k, p] of r.files) {
       let f = fileBy(p);
@@ -1045,8 +1085,8 @@ async function mgRun(all) {
     S.recentMsgs = [ctext].concat(S.recentMsgs.filter(x => x !== ctext)).slice(0, 25);   // il messaggio (stile TortoiseSVN) va in cima ai Recenti, non nel campo
     m.sel = []; m.msg = res.counts.conflicted ? `Merge eseguito, da committare. Conflitti da risolvere in Changes: ${res.counts.conflicted}.` : 'Merge eseguito, da committare.';
     await vmRefresh(res.counts.conflicted ? `Merge completato: ${res.counts.conflicted} file in conflitto da risolvere.` : 'Merge completato: rivedi le modifiche e committa.', false);
-    await offerResolve(res.counts.conflicted);
-  } catch (e) { m.error = 'Errore: ' + e.message; }
+    progDone(true, res.counts.conflicted ? `Merge completato con ${res.counts.conflicted} conflitti: vanno risolti prima di committare.` : 'Merge completato: rivedi le modifiche e committa.', res.counts.conflicted);
+  } catch (e) { m.error = 'Errore: ' + e.message; progDone(false, 'Errore: ' + e.message); }
   m.busy = false; render();
 }
 async function mgUndo() {
@@ -1059,12 +1099,32 @@ async function mgUndo() {
   const m = S.lvm.merge; if (m) { m.result = null; m.sel = []; m.blocked = mgBlocked(); }
   await vmRefresh(`Merge annullato: ${t.length} elementi ripristinati.`, false);
 }
-async function vmCleanup() {
+async function vmCleanup() {   // un solo punto d'ingresso: la finestra delle opzioni
+  if (!S.vm.wcPath.trim()) { setStatus('Nessuna working copy configurata.'); return render(); }
+  S.vm.cl = { from: '' }; render();
+}
+function vmCleanupCancel() {
+  S.vm.cl = null;
+  if (S.vm.cleanupBack) { S.vm.warn = { name: S.vm.cleanupBack }; S.vm.cleanupBack = null; }
+  render();
+}
+async function vmCleanupRun(a) {
+  const destructive = a.unversioned || a.ignored || a.revert;
+  if (!S.vm.cl || (destructive && !a.confirmed) || !(a.status || a.vacuum || a.externals || a.unversioned || a.ignored || a.revert)) return;
+  S.vm.cl = null;
   try {
     setStatus('Cleanup in corso...'); render();
-    await svn('cleanup', 700);
+    await svn('cleanup' + (a.unversioned ? ' --remove-unversioned' : '') + (a.ignored ? ' --remove-ignored' : '') + (a.vacuum ? ' --vacuum-pristines' : '') + (a.externals ? ' --include-externals' : ''), 300);
+    const lines = [];
+    if (a.unversioned) S.files.filter(f => f.st === '?').forEach(f => lines.push('D         ' + fwd(f.path)));
+    if (a.ignored) lines.push('D         Web/obj', 'D         Web/bin', 'D         Core/obj');
+    if (a.revert) S.files.filter(f => IS_REV.includes(f.st)).forEach(f => lines.push(`Reverted '${fwd(f.path)}'`));
+    await progRun('cleanup', 'SVN Cleanup', 'Cleanup in corso...', lines);
+    if (a.unversioned) S.files = S.files.filter(f => f.st !== '?');
+    if (a.revert) S.files.filter(f => IS_REV.includes(f.st)).forEach(f => svnRevert(f.path));
     await vmRefresh('Cleanup completato.');
-  } catch (e) { setStatus('Errore cleanup: ' + e.message); render(); }
+    progDone(true, 'Cleanup completato.');
+  } catch (e) { setStatus('Errore cleanup: ' + e.message); progDone(false, 'Errore cleanup: ' + e.message); render(); }
 }
 
 // ---------- view model: Log / History (specchio di SvnLogToolWindowData) ----------

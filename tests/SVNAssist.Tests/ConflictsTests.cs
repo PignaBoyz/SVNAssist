@@ -544,7 +544,13 @@ public class ConflictsTests
         Assert.Contains("da committare", ((LogState)log.GetSnapshot()).Msg);
         Assert.Contains("Conflitti da risolvere in Changes: 1", ((LogState)log.GetSnapshot()).Msg);
         Assert.Empty(dialogs.Asked);   // niente dialogo: la sezione Conflitti di Changes e' gia' li'
-        Assert.Equal(1, host.ChangesShown);   // Changes portata in primo piano senza chiedere
+        Assert.Equal(0, host.ChangesShown);   // niente salto di finestra: lo apre il pulsante della finestra di avanzamento
+        var progress = ((LogState)log.GetSnapshot()).Progress!;
+        Assert.False(progress.Running);
+        Assert.Equal(1, progress.Conflicts);
+        await log.DispatchAsync("progressClose", JsonSerializer.SerializeToElement(new { conflicts = true }), Ct);
+        Assert.Null(((LogState)log.GetSnapshot()).Progress);
+        Assert.Equal(1, host.ChangesShown);
 
         await log.DispatchAsync("mergeResolve", JsonSerializer.SerializeToElement(new { }), Ct);
         Assert.Equal(2, host.ChangesShown);   // il pulsante "Risolvi i conflitti" del Log

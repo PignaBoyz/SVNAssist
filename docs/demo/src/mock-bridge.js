@@ -59,6 +59,7 @@
     [/^(\d+) file in conflitto: risolvili nella sezione Conflitti, poi committa\.$/, '$1 conflicted files: resolve them in the Conflicts section, then commit.'], [/^Conflitti ad albero risolti: (\d+)\.$/, 'Tree conflicts resolved: $1.'], [/^Conflitto risolto: (.+)$/, 'Conflict resolved: $1'],
     [/^Editor di merge aperto \(vsDiffMerge\): .*$/, 'Merge editor opened (vsDiffMerge): save the result, then press "Mark as resolved".'], [/^Editor di merge chiuso senza salvare: .*$/, 'Merge editor closed without saving: the file still has the conflict markers.'],
     [/^Merge completato\.$/, 'Merge completed.'],
+    [/^Switch a (.+)$/, 'Switch to $1'], [/^Verifica working copy$/, 'Checking working copy'], [/^Switch in corso\.\.\.$/, 'Switching...'], [/^Merge in corso\.\.\.$/, 'Merging...'], [/^Cleanup in corso\.\.\.$/, 'Cleaning up...'], [/^(.+): completato con (\d+) conflitti\.$/, '$1: completed with $2 conflicts.'], [/^Merge completato con (\d+) conflitti: .*$/, 'Merge completed with $1 conflicts: resolve them before committing.'],
     [/^Seleziona almeno una revisione da unire\.$/, 'Select at least one revision to merge.'], [/^Merge completato: rivedi le modifiche e committa\.$/, 'Merge completed: review the changes and commit.'],
     [/^Merge completato: (\d+) file in conflitto da risolvere\.$/, 'Merge completed: $1 conflicted files to resolve.'], [/^Merge annullato: (\d+) elementi ripristinati\.$/, 'Merge undone: $1 items restored.'],
     [/^Annullamento del merge in corso\.\.\.$/, 'Undoing the merge...'], [/^Merge (.+) da (\^\/.+): rivedi le modifiche e committa, oppure annulla il merge\. Messaggio del merge disponibile nei Recenti\.$/, 'Merge $1 from $2: review the changes and commit, or undo the merge. Merge message available in Recent.'], [/^Errore: La working copy è a revisioni miste: [\s\S]*$/, 'Error: The working copy has mixed revisions: run SVN Update and try again.\nsvn: E195020: Cannot merge into mixed-revision working copy'],
@@ -128,6 +129,8 @@
       items: s.loading ? [] : SW_ITEMS.filter(([name]) => !merge || name !== S.branch).map(([name, kind, rev, author, days]) => ({ name, kind, current: name === S.branch, rev, author, date: new Date(Date.now() - days * 864e5).toISOString() })),
       recent: (S.swRecent || []).filter(n => SW_ITEMS.some(i => i[0] === n && (!merge || n !== S.branch))) };
   }
+  const progSnap = () => S.prog ? { progress: { ...S.prog, title: tr(S.prog.title), phase: tr(S.prog.phase), summary: tr(S.prog.summary) } } : {};
+  function dirtyCounts() { const n = (...k) => S.files.filter(f => k.includes(f.st)).length; return { modified: n('M', 'R'), added: n('A'), deleted: n('D', '!'), conflicted: n('C'), unversioned: n('?') }; }
   function snapshotChanges() {
     const v = S.vm;
     const sections = SECS.map(([id, title]) => { const items = secItems(id); return { id, title: tr(title), count: items.length, expanded: !v.collapsed['sec:' + id], rows: rowsOf(id, items) }; });
@@ -139,6 +142,9 @@
         count: commitSet().files.length, all: commitSet().all, recent: (S.recentMsgs || []).slice() },
       view: v.view, theme: { mode: theme.mode, kind: kindOf() }, sections, status: { msg: tr(msg), err: !!v.err || /^Errore/.test(msg), seq: v.statusSeq || 0, ...(/E155004/.test(msg) ? { action: { label: tr('Esegui Cleanup'), cmd: 'cleanup' } } : {}) }, prereq: prereq(), loading: !!v.loading, wizard: wizardSnap(), revPicker: rpSnap(), switchPicker: swSnap(),
       ...(v.mergeBanner && commitSet().files.length ? { merge: { text: tr(v.mergeBanner.text), conflicts: S.files.filter(f => f.st === 'C').length } } : {}),
+      ...progSnap(),
+      ...(v.warn ? (() => { const c = dirtyCounts(); return { switchWarn: { target: v.warn.name, counts: c, total: c.modified + c.added + c.deleted + c.conflicted + c.unversioned } }; })() : {}),
+      ...(v.cl ? { cleanup: { extras: true, svnVersion: '1.14.3', from: v.cl.from || '' } } : {}),
       conflicts: S.files.filter(f => f.st === 'C').map(f => ({ key: key('changes', f.path), path: fwd(f.path), name: base(f.path), kind: f.tree ? 'tree' : 'text', files: f.tree ? [] : cflAux(f).map(fwd) })),
     };
   }
@@ -157,11 +163,11 @@
       const m = l.merge, d = r => { const x = new Date(); x.setDate(x.getDate() - r.days); x.setHours(10, 30, 0, 0); return x.toISOString(); };
       return { path: l.path || '', msg: tr(m.error || m.msg || ''), err: !!m.error, loading: !!(m.loading || m.busy), canMore: false, sel: null,
         entries: mgEligible(m.name).slice().reverse().map(r => ({ rev: r.rev, author: r.author, date: d(r), msg: r.msg, paths: r.files.map(([k, p]) => ({ a: k === 'U' || k === 'C' ? 'M' : k, p: '/' + m.name + '/' + fwd(p) })) })), diff: '',
-        filter: l.filter || { author: '', text: '', path: '', from: '', to: '' }, files: null, merge: mergeSnap(m) };
+        filter: l.filter || { author: '', text: '', path: '', from: '', to: '' }, files: null, merge: mergeSnap(m), ...progSnap() };
     }
     return { path: l.path || '', msg: tr(l.msg || ''), err: /^Errore/.test(l.msg || ''), loading: /^Caricamento/.test(l.msg || ''), canMore: !!l.canMore, sel: l.sel == null ? null : l.sel,
       entries: l.entries.filter(logMatch).map(e => ({ rev: e.rev, author: e.author, date: e.date.toISOString(), msg: e.msg, paths: e.paths.map(p => ({ a: p.a, p: p.p })) })), diff: tr(l.diff || ''),
-      filter: l.filter || { author: '', text: '', path: '', from: '', to: '' }, files: l.files || null };
+      filter: l.filter || { author: '', text: '', path: '', from: '', to: '' }, files: l.files || null, ...progSnap() };
   }
   function snapshotDiff(id) {
     const d = S.ui.diffs.find(x => x.id === id); if (!d) return { title: 'Diff', subtitle: '', diff: '' };
@@ -250,6 +256,13 @@
       return openLog().then(() => { if (!S.lvm.entries.length) { S.lvm.path = S.vm.wcPath; return lvmLoad(50); } });
     },
     cleanup: () => vmCleanup(),
+    cleanupOk: a => vmCleanupRun(a),
+    cleanupCancel: () => vmCleanupCancel(),
+    switchWarnContinue: () => vmWarn('go'),
+    switchWarnCleanup: () => vmWarn('cleanup'),
+    switchWarnCancel: () => vmWarn('cancel'),
+    switchBack: () => { setStatus('Nessuno switch da annullare.'); render(); },   // la demo non simula switch interrotti
+    progressClose: a => vmProgressClose(a),
     commit: () => vmCommit(),
     useRecentMessage: a => { const m = (S.recentMsgs || [])[+a.i]; if (m != null) { S.vm.commitMsg = m; render(); } },
     setCommitText: a => { S.vm.commitMsg = String(a.text || ''); },   // niente render: e' la UI a tenere il testo

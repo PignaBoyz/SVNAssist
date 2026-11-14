@@ -100,15 +100,17 @@
     const list = root.querySelector('#llist'), had = list.contains(document.activeElement), top = list.scrollTop;
     if (U.setHTML(list, U.logHTML.list(st))) { list.scrollTop = top; if (had) { const f = list.querySelector('[tabindex="0"]'); if (f) f.focus(); } }
     U.setHTML(root.querySelector('#ldet'), U.logHTML.detail(st));
+    root.querySelector('.app').inert = U.ops.render(root.querySelector('#ops'), st);
     const m = root.querySelector('#lmsg'); m.textContent = st.msg || ''; m.className = 'foot msg' + (st.err ? ' err' : '');
   }
   U.views.log = {
     mount(root) {
-      root.innerHTML = `<div class="app log"><div class="prog" aria-hidden="true"></div><div id="ltop"></div><div class="lbody"><div class="llist" id="llist" role="grid" aria-label="${esc(t('Revisioni'))}"></div><div class="ldet" id="ldet"></div></div><footer class="foot" id="lmsg" role="status"></footer></div>`;
+      root.innerHTML = `<div class="app log"><div class="prog" aria-hidden="true"></div><div id="ltop"></div><div class="lbody"><div class="llist" id="llist" role="grid" aria-label="${esc(t('Revisioni'))}"></div><div class="ldet" id="ldet"></div></div><footer class="foot" id="lmsg" role="status"></footer></div><div id="ops"></div>`;
       root.addEventListener('submit', e => {
         if (e.target.id === 'logform') { e.preventDefault(); U.bridge.send('logLoad', { path: e.target.querySelector('input').value }); }
         else if (e.target.id === 'logfilter') { e.preventDefault(); const a = {}; for (const i of e.target.querySelectorAll('input')) a[i.name] = i.value; U.bridge.send('logFilter', a); }
       });
+      U.ops.wire(root.querySelector('#ops'), () => st);
       const list = root.querySelector('#llist');
       list.addEventListener('click', e => { const r = e.target.closest('.lr'); if (r && st && st.merge) { mcur = +r.dataset.rev; U.bridge.send('mergeToggle', { rev: mcur }); } else if (r) { const c = U.logClick(st && st.sel, +r.dataset.rev, e.ctrlKey || e.shiftKey || e.metaKey); U.bridge.send(c.cmd, c.args); } });
       list.addEventListener('pointerdown', e => {   // trascina il bordo dell'intestazione per cambiare la larghezza della colonna
