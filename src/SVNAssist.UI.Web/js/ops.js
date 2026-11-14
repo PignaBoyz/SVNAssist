@@ -96,6 +96,8 @@
   O.wire = (box, getState) => {
     box.addEventListener('change', e => { const k = e.target.dataset && e.target.dataset.ock; if (k) { O.toggle(k); O.render(box, getState()); } });
     box.addEventListener('click', e => { if (e.target.closest('[data-ops-ok]') && O.cleanupValid()) U.bridge.send('cleanupOk', O.cleanupOpts()); });
+    // Annulla alla pressione: le righe di svn ridisegnano la finestra tra mousedown e mouseup e il click andrebbe perso (il backend annulla una volta sola).
+    box.addEventListener('pointerdown', e => { const b = e.target.closest('[data-cmd="opCancel"]'); if (b && !b.disabled && e.button === 0) U.bridge.send('opCancel'); });
     document.addEventListener('keydown', e => {
       if (!box.__open) return; const st = getState();
       if (e.key === 'Escape') { if (st.cleanup && !st.progress) { e.preventDefault(); U.bridge.send('cleanupCancel'); } else if (st.switchWarn && !st.progress) { e.preventDefault(); U.bridge.send('switchWarnCancel'); } else if (st.commitWarn && !st.progress) { e.preventDefault(); U.bridge.send('commitWarnCancel'); } else if (st.progress && !st.progress.running) { e.preventDefault(); U.bridge.send('progressClose', { conflicts: false }); } return; }

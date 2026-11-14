@@ -662,10 +662,10 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 await SetWorkingCopyAsync(Args.Str(args, "path"), ct);
                 break;
             case "stage":
-                SetStaged(Args.Str(args, "key"), staged: true);
+                SetStaged(Args.Keys(args), staged: true);
                 break;
             case "unstage":
-                SetStaged(Args.Str(args, "key"), staged: false);
+                SetStaged(Args.Keys(args), staged: false);
                 break;
             case "toggleFolder":
                 ToggleFolder(Args.Str(args, "key"));
@@ -691,7 +691,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 await ShowFolderDiffAsync(Args.Str(args, "key"), ct);
                 break;
             case "rowOp":
-                await RowOpAsync(Args.OneOf(args, "op", "add", "ignore", "revert", "resolve", "deleteFile", "lock", "unlock"), Args.Str(args, "key"), ct);
+                await RowOpAsync(Args.OneOf(args, "op", "add", "ignore", "revert", "resolve", "deleteFile", "lock", "unlock"), Args.Keys(args), ct);
                 break;
             case "setTheme":
                 await SetThemeAsync(Args.OneOf(args, "mode", "auto", "light", "dark", "blue"), ct);
@@ -1231,13 +1231,23 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         }
     }
 
+    /// <summary>Selezione multipla: ogni chiave si valida come ResolveKey; gli elementi si uniscono senza duplicati (cartella + file sotto).</summary>
+    private KeyTarget ResolveKeys(IReadOnlyList<string> keys)
+    {
+        if (keys.Count == 1)
+            return ResolveKey(keys[0]);
+        var targets = keys.Select(ResolveKey).ToList();
+        var entries = targets.SelectMany(t => t.Entries).DistinctBy(e => e.FullPath, StringComparer.OrdinalIgnoreCase).ToList();
+        return new KeyTarget(targets[0].Section, false, string.Empty, entries);
+    }
+
     // ── Staged ───────────────────────────────────────────────────────
 
-    private void SetStaged(string key, bool staged)
+    private void SetStaged(IReadOnlyList<string> keys, bool staged)
     {
         lock (_stateLock)
         {
-            var target = ResolveKey(key);
+            var target = ResolveKeys(keys);
             var staging = Wc.Staged;
             foreach (var entry in target.Entries)
             {
@@ -1920,12 +1930,12 @@ internal sealed class ChangesStore : ViewStore, IDisposable
 
     // ── Operazioni su file, cartelle e sezioni ───────────────────────
 
-    private Task RowOpAsync(string op, string key, CancellationToken ct)
+    private Task RowOpAsync(string op, IReadOnlyList<string> keys, CancellationToken ct)
     {
         // La chiave si risolve dentro l'esecuzione esclusiva: dopo l'attesa di un refresh in corso lo stato potrebbe essere cambiato.
         return RunExclusiveAsync(() =>
         {
-            var target = ResolveKey(key);
+            var target = ResolveKeys(keys);
             return op switch
             {
                 "add" => AddCoreAsync(target, ct),
@@ -2061,7 +2071,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         var scope = everything ? string.Empty
             : target.WholeSection
             ? $" ({ChangesTreeBuilder.SectionTitle(target.Section)})"
-            : target.SingleFile is null ? Loc.T(" nella cartella \"{0}\"", target.Path) : string.Empty;
+            : target.SingleFile is null && target.Path.Length > 0 ? Loc.T(" nella cartella \"{0}\"", target.Path) : string.Empty;
         var message = Loc.T("Annullare le modifiche locali su {0} elementi{1}?\n\n{2}\n\nLe modifiche andranno perse e l'operazione non è annullabile.",
             targets.Count, scope, ListForConfirmation(targets));
         if (!await _dialogs.ConfirmAsync(message, ct))

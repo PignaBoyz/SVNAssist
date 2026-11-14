@@ -75,7 +75,7 @@ ecent-messages.json`: al massimo 25, un duplicato risale in cima |
 | `genAi` / `improveAi` | `improveAi`: `style` facoltativo `shorter|detailed` | genera / migliora il messaggio dal diff degli stessi file del commit (Staged, o tutte le modifiche versionate se Staged è vuoto). Con `style` il messaggio corrente viene accorciato ("Più corto") o dettagliato ("Più dettagliato") a partire dal diff: voci nel menu AI accanto a Genera |
 | `setLanguage` | `lang`: `auto|italiano|english` | lingua del messaggio AI |
 | `setWorkingCopy` | `path` | carica una working copy |
-| **`stage`** / **`unstage`** | `key` | sposta file, cartella o sezione tra Staged e Modifiche/Non versionati (i conflitti non si possono mettere in Staged) |
+| **`stage`** / **`unstage`** | `key` oppure `keys` | (`keys` = selezione multipla: array non vuoto, ogni chiave validata come `key`, elementi uniti senza duplicati; lo stesso vale per `rowOp`) sposta file, cartella o sezione tra Staged e Modifiche/Non versionati (i conflitti non si possono mettere in Staged) |
 | `toggleFolder` | `key` | espandi/comprimi cartella |
 | `toggleSection` | `sec` | espandi/comprimi sezione |
 | `expandAll` / `collapseAll` | – | tutte le cartelle |
@@ -222,6 +222,7 @@ la UI le applica con `style.setProperty` (ammesso dalla CSP). Alto contrasto di 
 Variabili: `--bg0..4 --bd --bd2 --fg --fg2 --fg3 --acc --acc-fg --acc-h --acc2 --acc-bg --focus --ok --warn --err --st-{M,A,D,C,U,X,R} --add/del/hunk-* --syn-* --chip-* --warn-bg/fg --shadow --scrim --font --mono --fs`.
 
 ## Tastiera (albero, ARIA `tree`)
+Clic: seleziona · Ctrl+clic / Ctrl+Spazio: alterna · Maiusc+clic / Maiusc+↑↓ Home End: intervallo · Ctrl+A: tutto (la selezione e' solo nella UI, per chiave, e sopravvive agli snapshot; Spazio, Canc e il menu agiscono su tutta la selezione, inviando `keys`) ·
 ↑ ↓ Home End: muovi · → espandi / vai al primo figlio · ← comprimi / vai al padre · Invio: diff (file) o espandi/comprimi · Spazio: Staged ⇄ Modifiche ·
 **Canc**: elimina file (con conferma) · Menu/Maiusc+F10: menu contestuale · doppio clic: diff · Ctrl+Invio nel messaggio: commit.
 Roving tabindex: un solo elemento nel tab order. Le icone senza testo hanno `aria-label` e `title`.

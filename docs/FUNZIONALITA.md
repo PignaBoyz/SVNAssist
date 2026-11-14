@@ -43,6 +43,7 @@ Switch e Merge da Visual Studio (dettagli in `docs/release-notes/v0.3.0.md`): ra
 - Temi chiaro / scuro / blu / alto contrasto con cambio a caldo; lingua **Italiano / English** a caldo.
 
 ### Pannello SVN Changes
+- **Selezione multipla** (come Esplora risorse): clic = uno, Ctrl+clic aggiunge/toglie, Maiusc+clic intervallo dall'ancora (righe visibili, anche tra sezioni), Maiusc+frecce, Ctrl+Spazio, Ctrl+A. Cartelle e file si mescolano (un'azione su una cartella vale per gli elementi sotto, senza duplicati). Menu contestuale con conteggio: Aggiungi/Rimuovi dai file da committare, Ignora (solo non versionati), SVN Revert…, Elimina…; le voci che non valgono per tutti sono disabilitate con il motivo. La selezione resta tra un aggiornamento e l'altro (un file che passa da Modifiche a Staged resta selezionato).
 - Stile Git Changes: albero con tastiera (frecce, Spazio, Invio, Canc con conferma su file e cartelle: versionati svn delete, non versionati dal disco), filtro, vista Albero/Lista, sezioni **Staged / Modifiche / Non versionati / Conflitti** con contatori.
 - **Commit All** se Staged è vuoto, **Commit Staged (n)** altrimenti; niente auto-stage; mostra la revisione creata; bloccato con conflitti.
 - Add, Delete, Revert (con conferma ed elenco; anche **"SVN Revert di tutto…"** dal tasto destro sull'intestazione delle sezioni Changes e Staged, anche su piu' cartelle, non versionati esclusi), Add to Ignore List, Risolvi conflitto (Working / Mine-full / Theirs-full / Base; tree-conflict con conferma).
