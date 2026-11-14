@@ -12,7 +12,7 @@
 con un'esperienza in stile *Git Changes*, più la generazione automatica dei commit message via AI.
 
 - **Architettura**: **host in-proc** (net472, package VSSDK + tool window WebView2, `src/SVNAssist.Host`) ↔
-  **backend .NET** (net8, processo separato, logica SVN e AI) via **StreamJsonRpc su stdio**
+  **backend .NET** (net10, processo separato, logica SVN e AI) via **StreamJsonRpc su stdio**
   (`src/Shared/RpcContract.cs`); la **UI web** (`src/SVNAssist.UI.Web`) e' condivisa con la demo
   (`tools/build-demo.mjs`). Se il backend cade, VS no.
 - **SVN**: `svn.exe` come processo esterno (`IProcessRunner`, `ArgumentList`, output in inglese e non
@@ -297,7 +297,7 @@ Come provare l'estensione end-to-end sulla tua macchina.
 
 ### Prerequisiti
 1. **Visual Studio 2022 o VS 18** con il workload di sviluppo estensioni (per provare il VSIX in istanza sperimentale).
-2. **.NET 8 SDK** (`dotnet --version` ≥ 8).
+2. **.NET 10 SDK** (`dotnet --version` ≥ 10).
 3. **svn.exe** nel PATH — oppure lascia che l'estensione te lo proponga al primo avvio
    (`winget install --id Slik.Subversion -e`).
 4. *(Solo per l'AI)* GitHub CLI loggato (`gh auth login`) **oppure** un PAT GitHub gratuito pronto.

@@ -237,7 +237,7 @@ Roving tabindex: un solo elemento nel tab order. Le icone senza testo hanno `ari
 
 ## Backend (`src/SVNAssist.Backend`) e contratto RPC
 
-`SVNAssist.Backend.exe` (net8, apphost, framework-dependent) parla **StreamJsonRpc su stdin/stdout** (formatter e opzioni di default, nomi dei metodi = nomi C# delle interfacce di `src/Shared/RpcContract.cs`, es. `"DispatchAsync"`).
+`SVNAssist.Backend.exe` (net10, apphost, framework-dependent) parla **StreamJsonRpc su stdin/stdout** (formatter e opzioni di default, nomi dei metodi = nomi C# delle interfacce di `src/Shared/RpcContract.cs`, es. `"DispatchAsync"`).
 stdout è solo canale RPC (le scritture accidentali sulla console sono deviate su stderr); i log vanno in `%LOCALAPPDATA%\SVNAssist\logs\backend-aaaammgg.log`. Il processo termina quando l'host chiude la pipe (anche se VS muore).
 
 | Direzione | Metodo | Note |
