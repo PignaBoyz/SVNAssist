@@ -22,7 +22,7 @@
         U.btn('btn sm', t('Chiudi merge'), 'x', 'mergeClose', null, t('Torna al log della working copy')) + `</div>`;
       return `<form class="wc" id="logform"><label for="logp">Working copy</label><input id="logp" type="text" value="${esc(s.path)}" placeholder="${esc(t('C:\\percorso\\della\\working copy'))}" spellcheck="false">` +
         `<button class="btn" type="submit" title="${esc(t('Carica le ultime revisioni (svn log)'))}">${U.icon('refresh')}<span>${t('Carica log')}</span></button>` +
-        `</form>` + U.logHTML.filter(s);
+        `</form>` + U.logHTML.filter(s) + U.logHTML.opts(s);
     },
     filter(s) {
       const f = s.filter || {}, on = !!(f.author || f.text || f.path || f.from || f.to);
@@ -31,6 +31,13 @@
         fld('from', t('Dal'), f.from, '', 'date') + fld('to', t('al'), f.to, '', 'date') +
         `<button class="btn sm" type="submit" title="${esc(t('Applica i filtri (svn log --search)'))}">${U.icon('check')}<span>${t('Filtra')}</span></button>` +
         (on ? U.btn('btn sm', t('Azzera'), null, 'logFilter', {}, t('Mostra di nuovo tutte le revisioni')) : '') + `</form>`;
+    },
+    // opzioni di Show Log (come TortoiseSVN): lo stato e' nel backend, il clic invia entrambe le opzioni
+    opts(s) {
+      const o = (n, on, label, tip) => `<label class="lo-c" title="${esc(tip)}"><input type="checkbox" name="${n}"${on ? ' checked' : ''}><span>${label}</span></label>`;
+      return `<div class="lo" id="logopts" role="group" aria-label="${esc(t('Opzioni del log'))}">` +
+        o('stopOnCopy', s.stopOnCopy !== false, t('Ferma alla copia/rinomina'), t('Mostra la storia solo fino alla creazione del ramo (svn log --stop-on-copy); spento segue la storia oltre copie e rinomine')) +
+        o('merged', !!s.includeMerged, t('Includi revisioni unite'), t('Mostra sotto ogni merge le revisioni che ha portato (svn log -g)')) + `</div>`;
     },
     files(s) {
       const f = s.files;
@@ -53,8 +60,8 @@
       const h = (c, label) => `<span role="columnheader">${label}<i class="rz" data-c="${c}" aria-hidden="true"></i></span>`;
       const picked = s.merge ? new Set(s.merge.selected) : null, cur = s.merge ? (s.entries.some(e => e.rev === mcur) ? mcur : s.entries[0].rev) : (s.sel == null ? s.entries[0].rev : s.sel);
       return `<div class="lh" role="row">${h(1, t('Rev.'))}${h(2, t('Autore'))}${h(3, t('Data'))}<span role="columnheader">${t('Messaggio')}</span></div>` +
-        s.entries.map(e => { const on = picked ? picked.has(e.rev) : s.sel === e.rev; return `<div class="lr${on ? ' sel' : ''}" role="row" aria-selected="${on}" tabindex="${cur === e.rev ? 0 : -1}" data-rev="${e.rev}">` +
-          `<b class="rv" role="gridcell">${picked ? `<span class="ck${on ? ' on' : ''}" aria-hidden="true">${on ? U.icon('check') : ''}</span>` : ''}r${e.rev}</b><span class="au" role="gridcell" title="${esc(e.author)}">${esc(e.author)}</span><span class="dtm muted" role="gridcell">${U.fmtDate(e.date)}</span><span class="m" role="gridcell" title="${esc(e.msg)}">${esc((e.msg || '').split('\n')[0])}</span></div>`; }).join('') +
+        s.entries.map(e => { const on = picked ? picked.has(e.rev) : s.sel === e.rev; const d = e.depth ? Math.min(e.depth, 3) : 0; return `<div class="lr${on ? ' sel' : ''}${d ? ' mg d' + d : ''}${e.reverse ? ' rvm' : ''}" role="row" aria-selected="${on}"${d ? ` aria-level="${d + 1}"` : ''} tabindex="${cur === e.rev ? 0 : -1}" data-rev="${e.rev}">` +
+          `<b class="rv" role="gridcell">${picked ? `<span class="ck${on ? ' on' : ''}" aria-hidden="true">${on ? U.icon('check') : ''}</span>` : ''}${d ? `<i class="mgi" title="${esc(t('Entrata per merge'))}" aria-hidden="true">↳</i>` : ''}r${e.rev}</b><span class="au" role="gridcell" title="${esc(e.author)}">${esc(e.author)}</span><span class="dtm muted" role="gridcell">${U.fmtDate(e.date)}</span><span class="m" role="gridcell" title="${esc(e.msg)}">${e.reverse ? `<em class="rvt">${esc(t('merge inverso'))}</em> ` : ''}${esc((e.msg || '').split('\n')[0])}</span></div>`; }).join('') +
         (s.canMore ? `<div class="lmore">${U.btn('btn', t('Carica altre 50'), null, 'logMore', null, t('Carica altre 50 revisioni più vecchie'))}</div>` : '');
     },
     // riga di un file dell'anteprima/merge (azione + percorso, senza diff: il merge non e' ancora committato)
@@ -108,6 +115,11 @@
       root.addEventListener('submit', e => {
         if (e.target.id === 'logform') { e.preventDefault(); U.bridge.send('logLoad', { path: e.target.querySelector('input').value }); }
         else if (e.target.id === 'logfilter') { e.preventDefault(); const a = {}; for (const i of e.target.querySelectorAll('input')) a[i.name] = i.value; U.bridge.send('logFilter', a); }
+      });
+      root.addEventListener('change', e => {
+        if (!e.target.closest('#logopts')) return;
+        const v = n => e.target.closest('#logopts').querySelector(`[name=${n}]`).checked;
+        U.bridge.send('logOptions', { stopOnCopy: v('stopOnCopy'), merged: v('merged') });
       });
       const list = root.querySelector('#llist');
       list.addEventListener('click', e => { const r = e.target.closest('.lr'); if (r && st && st.merge) { mcur = +r.dataset.rev; U.bridge.send('mergeToggle', { rev: mcur }); } else if (r) { const c = U.logClick(st && st.sel, +r.dataset.rev, e.ctrlKey || e.shiftKey || e.metaKey); U.bridge.send(c.cmd, c.args); } });

@@ -15,18 +15,23 @@ public sealed record SvnLogPath(string Action, string Path, string Kind = "");
 /// <param name="Date">Data e ora del commit.</param>
 /// <param name="Message">Messaggio di commit.</param>
 /// <param name="Paths">Percorsi toccati (solo con <c>-v</c>); vuoto se non richiesti.</param>
+/// <param name="Children">Revisioni entrate per merge (<c>svn log -g</c>: <c>&lt;logentry&gt;</c> annidati); null se non richieste.</param>
+/// <param name="ReverseMerge">Attributo <c>reverse-merge</c>: la revisione e' stata tolta dal merge.</param>
 public sealed record SvnLogEntry(
     long Revision,
     string Author,
     DateTimeOffset Date,
     string Message,
-    IReadOnlyList<SvnLogPath>? Paths = null);
+    IReadOnlyList<SvnLogPath>? Paths = null,
+    IReadOnlyList<SvnLogEntry>? Children = null,
+    bool ReverseMerge = false);
 
 /// <summary>
 /// Filtri del log (tutti facoltativi). Autore, testo e percorso: sottostringa senza distinzione maiuscole/minuscole.
 /// <see cref="From"/>/<see cref="To"/>: giorni inclusi.
 /// </summary>
-public sealed record SvnLogFilter(string? Author = null, string? Text = null, string? Path = null, DateOnly? From = null, DateOnly? To = null)
+public sealed record SvnLogFilter(string? Author = null, string? Text = null, string? Path = null, DateOnly? From = null, DateOnly? To = null,
+    bool StopOnCopy = false, bool IncludeMerged = false)
 {
     public bool IsEmpty => string.IsNullOrWhiteSpace(Author) && string.IsNullOrWhiteSpace(Text)
         && string.IsNullOrWhiteSpace(Path) && From is null && To is null;
