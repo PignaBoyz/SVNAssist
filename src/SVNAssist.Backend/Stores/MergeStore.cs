@@ -235,8 +235,8 @@ internal sealed class MergeStore
                 try
                 {
                     Say(Loc.T("Merge da {0} in corso...", source.Name));
-                    _changes.Progress.Begin("merge", Loc.T("Merge da {0}", source.Name), Loc.T("Merge in corso..."));
-                    output = await SvnProgress.RunAsync(_changes.Progress.Line, () => _svn.MergeAsync(wc, source.Url, revs, dryRun: false, ct));
+                    var ot = _changes.Progress.Begin("merge", Loc.T("Merge da {0}", source.Name), Loc.T("Merge in corso..."), ct);
+                    output = await SvnProgress.RunAsync(_changes.Progress.Line, () => _svn.MergeAsync(wc, source.Url, revs, dryRun: false, ot));
                     var summary = ToResult("merge", label, output);
                     lock (_lock)
                         _result = summary;
@@ -252,6 +252,10 @@ internal sealed class MergeStore
                     _changes.Progress.Done(true, output.Conflicts > 0
                         ? Loc.T("Merge completato con {0} conflitti: vanno risolti prima di committare.", output.Conflicts)
                         : Loc.T("Merge completato: rivedi le modifiche e committa."), output.Conflicts);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested && _changes.Progress.IsCancelling)
+                {
+                    await _changes.FinishMergeCancelledAsync(wc, ct);
                 }
                 catch (Exception ex) when (!ct.IsCancellationRequested)
                 {

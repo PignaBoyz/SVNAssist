@@ -15,6 +15,23 @@ test('avanzamento in corso: barra indeterminata, contatore, conflitto evidenziat
   assert.doesNotMatch(h, /progressClose/);
 });
 
+test('avanzamento: Annulla solo se cancellable, si disabilita con cancelling; annullato mostra avviso e azioni', () => {
+  const run = O.progressHTML(prog({ cancellable: true }));
+  assert.match(run, /data-cmd="opCancel"/);
+  assert.doesNotMatch(run, /opCancel[^>]*disabled/);
+  const busy = O.progressHTML(prog({ cancellable: true, cancelling: true }));
+  assert.match(busy, /opCancel[^>]*disabled/);
+  assert.doesNotMatch(O.progressHTML(prog()), /opCancel/);   // cleanup / non cancellabile
+  const h = O.progressHTML(prog({ running: false, ok: false, cancelled: true, summary: 'Switch annullato dopo 3 elementi', actions: [{ label: 'Completa switch', cmd: 'switchResume' }, { label: 'Cleanup…', cmd: 'cleanup' }] }));
+  assert.match(h, /Operazione annullata|Operation cancelled/);
+  assert.match(h, /data-cmd="switchResume"/);
+  assert.match(h, /data-cmd="cleanup"/);
+  assert.match(h, /progressClose/);   // Chiudi
+  const merge = O.progressHTML(prog({ op: 'merge', conflicts: 0, running: false, ok: false, cancelled: true, summary: 's', actions: [{ label: 'Revert delle modifiche del merge', cmd: 'progressRevertMerge' }, { label: 'Lascia così', cmd: 'progressClose' }] }));
+  assert.match(merge, /progressRevertMerge/);
+  assert.equal((merge.match(/data-cmd="progressClose"/g) || []).length, 1);   // "Lascia così" al posto di Chiudi
+});
+
 test('avanzamento finito: riepilogo, Chiudi e "Apri i conflitti" solo con conflitti', () => {
   const h = O.progressHTML(prog({ running: false, ok: true, summary: 'Switch completato con 1 conflitti.' }));
   assert.match(h, /obar ok/);

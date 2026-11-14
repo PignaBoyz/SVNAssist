@@ -552,7 +552,12 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 if (string.IsNullOrWhiteSpace(WorkingCopyPath))
                     SetStatus(Loc.T("Nessuna working copy configurata."));
                 else
+                {
+                    if (Progress.GetSnapshot() is { Running: false })
+                        Progress.Close(); // "Cleanup…" dalla finestra di un'operazione annullata: la finestra delle opzioni la sostituisce
                     OpenCleanupDialog();
+                }
+
                 break;
             case "cleanupCancel":
                 CloseCleanupDialog(back: true);
@@ -583,6 +588,12 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 break;
             case "progressClose":
                 await CloseProgressAsync(Args.Bool(args, "conflicts"));
+                break;
+            case "opCancel":
+                Progress.Cancel();
+                break;
+            case "progressRevertMerge":
+                await RevertCancelledMergeAsync(ct);
                 break;
             case "commit":
                 await RunExclusiveAsync(() => CommitCoreAsync(ct));
@@ -1417,8 +1428,8 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         try
         {
             SetStatus(Loc.T("Update in corso..."));
-            Progress.Begin("update", "SVN Update", Loc.T("Update in corso..."));
-            var update = await Streaming(() => _svnService.UpdateAsync(wc, ct));
+            var ot = Progress.Begin("update", "SVN Update", Loc.T("Update in corso..."), ct);
+            var update = await Streaming(() => _svnService.UpdateAsync(wc, ot));
             var updated = update.Revision is { } rev ? Loc.T("Aggiornato alla revisione {0}", rev) : Loc.T("Update completato");
             await RefreshAsync(ct, reloadBranch: true, update.ConflictedPaths.Count > 0
                 ? Loc.T("{0}: {1} file in conflitto.", updated, update.ConflictedPaths.Count)
@@ -1426,11 +1437,53 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             Progress.Done(true, update.ConflictedPaths.Count > 0 ? Loc.T("{0}: completato con {1} conflitti.", updated, update.ConflictedPaths.Count) : $"{updated}.", update.ConflictedPaths.Count);
             await RevealConflictsAsync(update.ConflictedPaths.Count, ct);
         }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested && Progress.IsCancelling)
+        {
+            await FinishCancelledAsync(wc, Loc.T("Update annullato"), [new(Loc.T("Riprova update"), "update"), new(Loc.T("Cleanup…"), "cleanup")], ct);
+        }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
             SetStatus(Loc.T("Errore update: {0}", ex.Message));
             Progress.Done(false, _statusMessage);
         }
+    }
+
+    internal Task FinishMergeCancelledAsync(string wc, CancellationToken ct)
+        => FinishCancelledAsync(wc, Loc.T("Merge annullato"),
+            [new(Loc.T("Revert delle modifiche del merge"), "progressRevertMerge"), new(Loc.T("Lascia così"), "progressClose")], ct, cleanup: false);
+
+    /// <summary>"Revert delle modifiche del merge" dalla finestra di un merge annullato: chiude la finestra e fa il solito "Annulla merge" (con conferma).</summary>
+    internal async Task RevertCancelledMergeAsync(CancellationToken ct)
+    {
+        Progress.Close();
+        await RunExclusiveAsync(() => UndoMergeCoreAsync(ct));
+    }
+
+    /// <summary>
+    /// Dopo "Annulla" su switch/update/merge: svn e' stato terminato, la working copy puo' essere a meta' o sporca. Per switch e update
+    /// fa un cleanup normale (come se l'utente lo lanciasse); poi la finestra resta con l'avviso, il riepilogo e i passi proposti
+    /// (tra cui "Cleanup..." con le opzioni). Il merge non fa cleanup: si decide tra revert delle modifiche e "Lascia cosi'".
+    /// </summary>
+    private async Task FinishCancelledAsync(string wc, string what, IReadOnlyList<ProgressActionDto> actions, CancellationToken ct, bool cleanup = true)
+    {
+        var failed = string.Empty;
+        if (cleanup)
+        {
+            Progress.SetPhase(Loc.T("Cleanup in corso..."));
+            try { await Streaming(async () => { await _svnService.CleanupAsync(wc, CleanupOptions.Default, ct); return true; }); }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                BackendLog.Warn("Cleanup dopo annullamento non riuscito: " + ex.Message);
+                failed = " " + Loc.T("Il cleanup automatico non è riuscito: {0}", ex.Message);
+            }
+        }
+
+        await RefreshAsync(ct, reloadBranch: true);
+        var summary = (cleanup
+            ? Loc.T("{0} dopo {1} elementi già applicati. La working copy può essere rimasta a metà o sporca: è stato eseguito un cleanup normale. Scegli come proseguire, oppure apri il Cleanup con le opzioni.", what, Progress.Processed)
+            : Loc.T("{0} dopo {1} elementi già applicati: restano modifiche parziali nella working copy. Puoi annullarle con un revert oppure lasciarle così.", what, Progress.Processed)) + failed;
+        SetStatus(Loc.T("Errore: {0}", summary));
+        Progress.Done(false, summary, cancelled: true, actions: actions);
     }
 
     /// <summary>Apre la scelta guidata della revisione per i percorsi indicati (working copy corrente o selezione di Solution Explorer).</summary>
@@ -1588,7 +1641,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             _pendingSwitch.Set(wc, new PendingSwitch.Entry(target.Name, target.Url, from?.FromUrl, from?.FromRev, from?.FromName));
         }
 
-        Progress.Begin("switch", Loc.T("Switch a {0}", target.Name), Loc.T("Verifica working copy"));
+        var ot = Progress.Begin("switch", Loc.T("Switch a {0}", target.Name), Loc.T("Verifica working copy"), ct);
         try
         {
             if (resuming)
@@ -1603,7 +1656,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             UpdateResult result;
             try
             {
-                result = await Streaming(() => _svnService.SwitchAsync(wc, target.Url, ct, backToRevision));
+                result = await Streaming(() => _svnService.SwitchAsync(wc, target.Url, ot, backToRevision));
             }
             catch (Exception first) when (!ct.IsCancellationRequested && SvnErrors.IsWorkingCopyLocked(first.Message))
             {
@@ -1612,9 +1665,9 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 Progress.SetPhase(Loc.T("Switch interrotto: cleanup e nuovo tentativo..."));
                 await Streaming(async () => { await _svnService.CleanupAsync(wc, CleanupOptions.Default, ct); return true; });
                 if (SwitchRetryDelay > TimeSpan.Zero)
-                    await Task.Delay(SwitchRetryDelay, ct);
+                    await Task.Delay(SwitchRetryDelay, ot);
                 Progress.SetPhase(Loc.T("Switch in corso..."));
-                result = await Streaming(() => _svnService.SwitchAsync(wc, target.Url, ct, backToRevision));
+                result = await Streaming(() => _svnService.SwitchAsync(wc, target.Url, ot, backToRevision));
             }
 
             _pendingSwitch.Clear(wc);
@@ -1624,6 +1677,15 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 : $"{done}.") + " " + Loc.T("Se Visual Studio lo chiede, ricarica la solution."));
             Progress.Done(true, result.ConflictedPaths.Count > 0 ? Loc.T("{0}: completato con {1} conflitti.", done, result.ConflictedPaths.Count) : $"{done}.", result.ConflictedPaths.Count);
             await RevealConflictsAsync(result.ConflictedPaths.Count, ct);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested && Progress.IsCancelling)
+        {
+            // PendingSwitch resta: lo stato "Errore" qui sotto mostra "Completa switch" / "Torna a prima dello switch"; la finestra li ripete.
+            List<ProgressActionDto> next = [new(Loc.T("Completa switch"), "switchResume")];
+            if (_pendingSwitch.Get(wc) is { CanGoBack: true })
+                next.Add(new(Loc.T("Torna a prima dello switch"), "switchBack"));
+            next.Add(new(Loc.T("Cleanup…"), "cleanup"));
+            await FinishCancelledAsync(wc, Loc.T("Switch a {0} annullato", target.Name), next, ct);
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {

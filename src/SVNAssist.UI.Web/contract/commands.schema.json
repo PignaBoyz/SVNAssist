@@ -789,6 +789,48 @@
       }
     },
     {
+      "title": "opCancel",
+      "description": "Annulla dalla finestra di avanzamento (solo switch, update, merge): termina svn e il suo albero di processi; la finestra mostra poi Operazione annullata con i passi proposti. Vale in Changes e in Log.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "opCancel"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "progressRevertMerge",
+      "description": "Da un merge annullato: chiude la finestra e fa Annulla merge (revert ricorsivo con conferma). Vale in Changes e in Log.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "progressRevertMerge"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
       "title": "commit",
       "description": "Commit dei file in Staged con il messaggio corrente.",
       "type": "object",

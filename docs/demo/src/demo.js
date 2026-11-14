@@ -865,7 +865,7 @@ async function vmUpdate() {
     await vmRefresh(updMsg(), true);
     progDone(true, updMsg(), out.filter(l => /^C /.test(l)).length);
     await offerResolve(out.filter(l => /^C /.test(l)).length);
-  } catch (e) { setStatus('Errore update: ' + e.message); progDone(false, 'Errore update: ' + e.message); render(); }
+  } catch (e) { if (e.cancelled) return render(); setStatus('Errore update: ' + e.message); progDone(false, 'Errore update: ' + e.message); render(); }
 }
 
 // Update to revision: scelta guidata (modale con le ultime revisioni, HEAD, numero) come nel prodotto.
@@ -972,12 +972,12 @@ async function swGo(name) {
     const n = S.prog.conflicts;
     await vmRefresh(`Switch a ${name} completato (revisione ${S.wcRev}). Se Visual Studio lo chiede, ricarica la solution.`, true);
     progDone(true, n ? `Switch a ${name} completato (revisione ${S.wcRev}): completato con ${n} conflitti.` : `Switch a ${name} completato (revisione ${S.wcRev}).`, n);
-  } catch (e) { setStatus('Errore switch: ' + e.message); progDone(false, 'Errore switch: ' + e.message); render(); }
+  } catch (e) { if (e.cancelled) return render(); setStatus('Errore switch: ' + e.message); progDone(false, 'Errore switch: ' + e.message); render(); }
 }
 // Avanzamento modale (switch, merge, update, cleanup): righe di svn in streaming, barra indeterminata + contatore, resta aperta con il riepilogo.
 const progKind = l => { const m = /^([ ADUCGER][ UCGM][ B][ C])\s+\S/.exec(l); return m ? (m[1].includes('C') ? 'C' : /^[ADGR]/.test(m[1]) ? m[1][0] : 'U') : /^Reverted /.test(l) ? 'R' : 'i'; };
 async function progRun(op, title, phase, lines) {
-  S.prog = { op, title, phase, running: true, ok: false, processed: 0, conflicts: 0, omitted: 0, lines: [], summary: '', conflictPaths: [] }; render();
+  S.prog = { op, title, phase, running: true, ok: false, processed: 0, conflicts: 0, omitted: 0, lines: [], summary: '', conflictPaths: [], cancellable: op !== 'cleanup', cancelling: false, cancelled: false }; render();
   for (const l of lines) {
     await sleep(60);
     const p = S.prog, k = progKind(l);
@@ -985,9 +985,22 @@ async function progRun(op, title, phase, lines) {
     if (k === 'C') { p.conflicts++; p.conflictPaths.push(l.replace(/^\S+\s+/, '')); }
     p.lines.push({ k, t: l }); if (p.lines.length > 300) { p.lines.shift(); p.omitted++; }
     render();
+    if (p.cancelling) return progCancelled(p);
   }
 }
-function progDone(ok, summary, conflicts) { const p = S.prog; if (!p) return; p.running = false; p.ok = ok; p.phase = ''; p.summary = summary; if (conflicts != null) p.conflicts = conflicts; render(); }
+// Annulla (switch, merge, update): svn terminato, per switch/update un cleanup normale, poi avviso + passi proposti. Lancia per fermare l'operazione che ha chiamato progRun.
+async function progCancelled(p) {
+  const merge = p.op === 'merge', what = merge ? 'Merge annullato' : p.op === 'switch' ? 'Switch annullato' : 'Update annullato';
+  if (!merge) { p.phase = 'Cleanup in corso...'; p.lines.push({ k: 'i', t: 'Cleanup in corso...' }); render(); await sleep(400); }
+  p.cancelling = false; p.cancelled = true;
+  p.actions = merge ? [{ label: 'Revert delle modifiche del merge', cmd: 'progressRevertMerge' }, { label: 'Lascia così', cmd: 'progressClose' }]
+    : [...(p.op === 'update' ? [{ label: 'Riprova update', cmd: 'update' }] : []), { label: 'Cleanup…', cmd: 'cleanup' }];
+  progDone(false, merge ? `${what} dopo ${p.processed} elementi già applicati: restano modifiche parziali nella working copy. Puoi annullarle con un revert oppure lasciarle così.`
+    : `${what} dopo ${p.processed} elementi già applicati. La working copy può essere rimasta a metà o sporca: è stato eseguito un cleanup normale. Scegli come proseguire, oppure apri il Cleanup con le opzioni.`);
+  throw Object.assign(new Error('annullato'), { cancelled: true });
+}
+function vmOpCancel() { const p = S.prog; if (p && p.running && p.cancellable && !p.cancelling) { p.cancelling = true; render(); } }
+function progDone(ok, summary, conflicts) { const p = S.prog; if (!p) return; p.running = false; p.cancellable = false; p.ok = ok; p.phase = ''; p.summary = summary; if (conflicts != null) p.conflicts = conflicts; render(); }
 function vmProgressClose(a) {
   S.prog = null;
   if (S.vm.cleanupBack) { S.vm.warn = { name: S.vm.cleanupBack }; S.vm.cleanupBack = null; }
@@ -1088,7 +1101,7 @@ async function mgRun(all) {
     m.sel = []; m.msg = res.counts.conflicted ? `Merge eseguito, da committare. Conflitti da risolvere in Changes: ${res.counts.conflicted}.` : 'Merge eseguito, da committare.';
     await vmRefresh(res.counts.conflicted ? `Merge completato: ${res.counts.conflicted} file in conflitto da risolvere.` : 'Merge completato: rivedi le modifiche e committa.', false);
     progDone(true, res.counts.conflicted ? `Merge completato con ${res.counts.conflicted} conflitti: vanno risolti prima di committare.` : 'Merge completato: rivedi le modifiche e committa.', res.counts.conflicted);
-  } catch (e) { m.error = 'Errore: ' + e.message; progDone(false, 'Errore: ' + e.message); }
+  } catch (e) { if (!e.cancelled) { m.error = 'Errore: ' + e.message; progDone(false, 'Errore: ' + e.message); } }
   m.busy = false; render();
 }
 async function mgUndo() {
