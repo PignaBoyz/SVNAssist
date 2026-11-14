@@ -186,7 +186,7 @@ public class SvnService : ISvnService
         if (pathList.Count == 0)
             return;
 
-        await RunSvnWithTargetsAsync(["add", "--force"], pathList, workingDirectory: null, ct);
+        await RunSvnWithTargetsAsync(["add", "--force", "--parents"], pathList, workingDirectory: null, ct);
     }
 
     /// <inheritdoc />

@@ -86,6 +86,10 @@ namespace SVNAssist.Host
 
         internal bool Active => _active;
 
+        /// <summary>True se il provider e' attivo e la cache dice che il percorso e' non versionato ('?'); cache vuota = false (voce nascosta).</summary>
+        internal bool IsUnversioned(string path) =>
+            _active && !string.IsNullOrEmpty(path) && _states.TryGetValue(path.TrimEnd('\\', '/'), out var s) && s == "Unversioned";
+
         private SccGlyph GlyphOf(string path)
         {
             var r = _root;

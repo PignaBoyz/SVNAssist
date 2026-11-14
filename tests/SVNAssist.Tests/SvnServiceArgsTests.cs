@@ -87,14 +87,14 @@ public class SvnServiceArgsTests
     }
 
     [Fact]
-    public async Task AddAsync_CostruisceAddForce()
+    public async Task AddAsync_CostruisceAddForceParents()
     {
         var runner = new FakeProcessRunner();
         var sut = CreateSut(runner);
 
         await sut.AddAsync([@"C:\wc\nuovo.txt"], CancellationToken.None);
 
-        Assert.Equal(["add", "--non-interactive", "--force", @"C:\wc\nuovo.txt"], runner.LastArguments);
+        Assert.Equal(["add", "--non-interactive", "--force", "--parents", @"C:\wc\nuovo.txt"], runner.LastArguments);
     }
 
     [Fact]

@@ -48,6 +48,7 @@
       <Button guid="guidSVNAssistCmdSet" id="CmdPrevChange" priority="0x0041" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainSecondary" /><Strings><CommandName>SVNAssist.PreviousChange</CommandName><ButtonText>Previous Change in Diff</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdRevertSel" priority="0x0000" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupCode" /><Strings><CommandName>SVNAssist.RevertSelected</CommandName><ButtonText>SVN: Revert Selected Changes</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdSeLog" priority="0x0000" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSe" /><CommandFlag>DefaultInvisible</CommandFlag><CommandFlag>DynamicVisibility</CommandFlag><Strings><CommandName>SVNAssist.SeLog</CommandName><ButtonText>Show Log</ButtonText></Strings></Button>
+      <Button guid="guidSVNAssistCmdSet" id="CmdSeAdd" priority="0x0001" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSe" /><CommandFlag>DefaultInvisible</CommandFlag><CommandFlag>DynamicVisibility</CommandFlag><Strings><CommandName>SVNAssist.SeAdd</CommandName><ButtonText>SVN Add</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdLangAuto" priority="0x0000" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupLang" /><Strings><CommandName>SVNAssist.LanguageAuto</CommandName><ButtonText>Automatica / Automatic (lingua di Visual Studio)</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdLangIt" priority="0x0010" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupLang" /><Strings><CommandName>SVNAssist.LanguageItalian</CommandName><ButtonText>Italiano</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdLangEn" priority="0x0020" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupLang" /><Strings><CommandName>SVNAssist.LanguageEnglish</CommandName><ButtonText>English</ButtonText></Strings></Button>
@@ -83,6 +84,7 @@
       <IDSymbol name="GroupCode" value="0x1116" />
       <IDSymbol name="GroupSe" value="0x1117" />
       <IDSymbol name="CmdSeLog" value="0x0113" />
+      <IDSymbol name="CmdSeAdd" value="0x0121" />
       <IDSymbol name="CmdRevertSel" value="0x011E" />
       <IDSymbol name="CmdNextChange" value="0x011F" />
       <IDSymbol name="CmdPrevChange" value="0x0120" />

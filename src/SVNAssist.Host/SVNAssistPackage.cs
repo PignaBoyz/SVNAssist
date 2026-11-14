@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.ComponentModel.Design;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -178,6 +180,20 @@ namespace SVNAssist.Host
             seLog.BeforeQueryStatus += (s, e) => ((OleMenuCommand)s).Visible = InWorkingCopy(SelectedPath());
             mcs.AddCommand(seLog);
 
+            // Solution Explorer > SVN Add: solo se TUTTI gli elementi selezionati sono non versionati (stato dalla cache SCC; provider spento = nascosto).
+            var seAdd = new OleMenuCommand((s, e) => Run(async () =>
+            {
+                await JoinableTaskFactory.SwitchToMainThreadAsync();
+                var ps = SelectedPaths();
+                if (ps.Count > 0) await Host.RunPathCommandAsync("add", ps.ToArray());
+            }), new CommandID(Ids.CmdSet, Ids.CmdSeAdd));
+            seAdd.BeforeQueryStatus += (s, e) =>
+            {
+                var ps = SelectedPaths();
+                ((OleMenuCommand)s).Visible = ps.Count > 0 && ps.All(Scc.IsUnversioned);
+            };
+            mcs.AddCommand(seAdd);
+
             // Sottomenu Lingua: tre voci a scelta esclusiva, la spunta segue l'impostazione.
             void AddLang(int id, string value)
             {
@@ -210,6 +226,39 @@ namespace SVNAssist.Host
                 if (hierPtr != IntPtr.Zero) Marshal.Release(hierPtr);
                 if (contPtr != IntPtr.Zero) Marshal.Release(contPtr);
             }
+        }
+
+        /// <summary>Percorsi di tutti gli elementi selezionati in Solution Explorer (selezione multipla inclusa); vuoto se nessuno.</summary>
+        private List<string> SelectedPaths()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            var res = new List<string>();
+            IntPtr hierPtr = IntPtr.Zero, contPtr = IntPtr.Zero;
+            try
+            {
+                if (!(GetService(typeof(SVsShellMonitorSelection)) is IVsMonitorSelection sel)) return res;
+                sel.GetCurrentSelection(out hierPtr, out uint itemId, out var multi, out contPtr);
+                if (itemId == VSConstants.VSITEMID_SELECTION && multi != null)
+                {
+                    if (multi.GetSelectionInfo(out uint n, out _) != VSConstants.S_OK || n == 0) return res;
+                    var items = new VSITEMSELECTION[n];
+                    if (multi.GetSelectedItems(0, n, items) != VSConstants.S_OK) return res;
+                    foreach (var it in items)
+                        if (it.pHier != null && it.pHier.GetCanonicalName(it.itemid, out var name) == VSConstants.S_OK && !string.IsNullOrWhiteSpace(name)) res.Add(name);
+                }
+                else if (hierPtr != IntPtr.Zero)
+                {
+                    var hier = (IVsHierarchy)Marshal.GetObjectForIUnknown(hierPtr);
+                    if (hier.GetCanonicalName(itemId, out var name) == VSConstants.S_OK && !string.IsNullOrWhiteSpace(name)) res.Add(name);
+                }
+            }
+            catch (Exception ex) { Log.Write("selezione SE: " + ex.Message); res.Clear(); }
+            finally
+            {
+                if (hierPtr != IntPtr.Zero) Marshal.Release(hierPtr);
+                if (contPtr != IntPtr.Zero) Marshal.Release(contPtr);
+            }
+            return res;
         }
 
         // shortcut: cerca ".svn" risalendo le cartelle (come SvnService.FindSvnRoot) senza chiedere al backend; upgrade se servono working copy esterne.
