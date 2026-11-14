@@ -460,6 +460,8 @@ namespace SVNAssist
             ["Annulla questa modifica (riporta a BASE)"] = "Revert this change (back to BASE)",
             ["Nessun file aperto nell'editor."] = "No file is open in the editor.",
             ["Impossibile salvare il file prima di annullare le righe."] = "Cannot save the file before reverting the lines.",
+            ["Mostra lo stato SVN in Solution Explorer"] = "Show SVN status in Solution Explorer",
+            ["Icone accanto ai file (modificato, aggiunto, non versionato, in conflitto) quando la solution e' in una working copy SVN. SVNAssist si registra come provider di source control di Visual Studio: spegni se usi un altro provider."] = "Icons next to files (modified, added, unversioned, conflicted) when the solution is in an SVN working copy. SVNAssist registers as a Visual Studio source control provider: turn this off if you use another provider.",
         };
     }
 }

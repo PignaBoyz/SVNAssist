@@ -129,6 +129,7 @@ internal sealed class BackendServer : IBackend, IDisposable
             c.Store.Changed += () => ScheduleFlush(c);
         }
 
+        Changes.EntriesChanged += () => _ = Task.Run(async () => { try { await _host.SccStatusChangedAsync(); } catch (Exception ex) { BackendLog.Warn("SccStatusChanged: " + ex.Message); } });
         Changes.CleanTemp();
     }
 
@@ -298,6 +299,12 @@ internal sealed class BackendServer : IBackend, IDisposable
     {
         Changes.HeadCheck.SetActive(active);
         return Task.CompletedTask;
+    }
+
+    public async Task<Dictionary<string, string>> GetSccStatesAsync()
+    {
+        await Changes.OnReadyAsync(_lifetime.Token); // avvia il caricamento anche senza finestre aperte (idempotente)
+        return Changes.SccStates();
     }
 
     public async Task<int[]> GetChangedBlocksAsync(string file)

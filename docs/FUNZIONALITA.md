@@ -14,6 +14,10 @@ Questo file è pensato per essere **modificato da te** e restituito per pianific
 
 ---
 
+## ✅ In arrivo nella 0.4.0
+
+Icone di stato SVN accanto ai file in Solution Explorer (modificato, aggiunto, non versionato, conflitto, eliminato), via provider di source control di VS attivo solo in una working copy SVN; opzione "Mostra lo stato SVN in Solution Explorer" (attiva di default). Solo glifi, nessun comando; icone standard di VS (non ancora quelle custom stile Git).
+
 ## ✅ Cosa c'è nella 0.3.2
 
 Switch robusto su working copy grandi (dettagli in `docs/release-notes/v0.3.2.md`): se svn si ferma a metà (E155009, cartella tenuta aperta da VS) fa da solo cleanup + nuovo tentativo; se non basta lo dice chiaramente, con **Completa switch** (cleanup + switch) anche dopo un riavvio di VS; intestazione e selettore non mentono più sul ramo corrente; errori su più righe, leggibili per intero.

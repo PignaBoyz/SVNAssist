@@ -26,6 +26,8 @@ namespace SVNAssist.Host
     [ProvideToolWindow(typeof(ChangesToolWindow), Style = VsDockStyle.Tabbed, Window = ToolWindowGuids80.SolutionExplorer, Orientation = ToolWindowOrientation.Left)]
     [ProvideToolWindow(typeof(LogToolWindow), Style = VsDockStyle.MDI, Transient = true)] // il Log e' un documento nell'area editor, come i diff
     [ProvideOptionPage(typeof(SvnAssistOptions), "SVNAssist", "General", 0, 0, true)]
+    [ProvideService(typeof(SvnSccService), IsAsyncQueryable = true)]
+    [ProvideSourceControlProvider("SVNAssist", "SVNAssist", Ids.SccProviderGuid, Ids.PackageGuid, Ids.SccServiceGuid)]
     // Serve per i solution events (SolutionChanged al backend); il backend parte solo alla prima vista/comando.
     [ProvideAutoLoad(VSConstants.UICONTEXT.NoSolution_string, PackageAutoLoadFlags.BackgroundLoad)]
     [ProvideAutoLoad(VSConstants.UICONTEXT.SolutionExists_string, PackageAutoLoadFlags.BackgroundLoad)]
@@ -33,6 +35,7 @@ namespace SVNAssist.Host
     {
         internal static SVNAssistPackage Instance { get; private set; }
         internal HostService Host { get; private set; }
+        internal SvnSccService Scc { get; private set; }
         private SvnAssistOptions _options;
 
         /// <summary>Impostazioni (Tools > Options). Solo thread UI.</summary>
@@ -46,6 +49,9 @@ namespace SVNAssist.Host
             SvnAssistOptions.VsCulture = System.Globalization.CultureInfo.CurrentUICulture.Name; // lingua dell'interfaccia di VS (thread UI)
             Loc.Lang = Options.EffectiveLanguage;
             Host = new HostService(this);
+            Scc = new SvnSccService(this);
+            AddService(typeof(SvnSccService), (c, t, type) => Task.FromResult<object>(Scc), true);
+            SvnAssistOptions.Changed += () => Scc.Reevaluate(null);
 
             if (await GetServiceAsync(typeof(IMenuCommandService)) is OleMenuCommandService mcs)
                 RegisterCommands(mcs);
@@ -115,6 +121,7 @@ namespace SVNAssist.Host
             }
             catch (Exception ex) { Log.Write("solution info: " + ex.Message); }
             Host.OnSolutionChangedAsync(dir).FileAndForget("SVNAssist/solution");
+            Scc.Reevaluate(dir ?? "");
         }
 
         // ---- finestre ----

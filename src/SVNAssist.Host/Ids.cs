@@ -11,6 +11,9 @@ namespace SVNAssist.Host
         public const string CmdSetGuid = "4d6e8f0a-3c5e-4071-9c9d-2e3f4a5b6c74";
         public const string OptionsPageGuid = "5e7f9a1b-4d6f-4182-8dae-3f4a5b6c7d85";
 
+        public const string SccProviderGuid = "6f8a0b2c-5e70-4293-9ebf-4a5b6c7d8e96";
+        public const string SccServiceGuid = "7a9b1c3d-6f81-43a4-8fc0-5b6c7d8e9fa7";
+
         public static readonly Guid CmdSet = new Guid(CmdSetGuid);
 
         public const int CmdChanges = 0x0100, CmdCommit = 0x0101, CmdUpdate = 0x0102, CmdLog = 0x0103, CmdAiSetup = 0x0104;
