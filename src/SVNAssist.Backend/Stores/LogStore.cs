@@ -52,16 +52,19 @@ internal sealed class LogStore : ViewStore
     private long _cmpFrom, _cmpTo;
     private IReadOnlyList<SvnChange> _files = [];
     private readonly IHost? _host;
+    private readonly ChangesStore? _changes;
     private readonly DiffOpener? _diffs;
 
     /// <param name="host">Serve ad aprire i diff nell'editor di VS; senza host (test) i comandi di diff falliscono con un messaggio.</param>
     /// <param name="changes">Serve alla modalita' merge (working copy, messaggio di commit, "Annulla merge"); senza, il Log non ha il merge.</param>
     public LogStore(ISvnService svnService, ISvnAssistSettings settings, IHost? host = null, string? tempRoot = null, ChangesStore? changes = null)
     {
+        _changes = changes;
         if (changes is not null)
         {
             Merge = new MergeStore(svnService, changes);
             Merge.Changed += NotifyChanged;
+            changes.Progress.Changed += NotifyChanged; // la finestra di avanzamento del merge sta anche nel Log
         }
 
         _svnService = svnService;
@@ -90,11 +93,11 @@ internal sealed class LogStore : ViewStore
         {
             var (text, err) = Merge.Status;
             lock (_lock)
-                return new LogState(_path, text, err, merge.Loading || merge.Busy, false, null, Merge.Entries, string.Empty, _filterText, null, merge);
+                return new LogState(_path, text, err, merge.Loading || merge.Busy, false, null, Merge.Entries, string.Empty, _filterText, null, merge, Progress: _changes?.Progress.GetSnapshot());
         }
 
         lock (_lock)
-            return new LogState(_path, _msgInitial ? Loc.T("Inserisci il percorso della working copy e premi Carica log.") : _msg, _err, _loading, _canMore, _sel, _entries, _diff, _filterText, FilesDto(), null, _stopOnCopy, _includeMerged);
+            return new LogState(_path, _msgInitial ? Loc.T("Inserisci il percorso della working copy e premi Carica log.") : _msg, _err, _loading, _canMore, _sel, _entries, _diff, _filterText, FilesDto(), null, _stopOnCopy, _includeMerged, _changes?.Progress.GetSnapshot());
     }
 
     private LogFilesDto? FilesDto() => _filesKind is null
@@ -164,6 +167,10 @@ internal sealed class LogStore : ViewStore
             case "mergeSelected":
                 if (Merge is not null)
                     await Merge.RunAsync(all: false, ct);
+                break;
+            case "progressClose":
+                if (_changes is not null)
+                    await _changes.CloseProgressAsync(Args.Bool(args, "conflicts"));
                 break;
             case "mergeResolve":
                 if (Merge is not null)

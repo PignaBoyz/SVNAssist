@@ -235,7 +235,8 @@ internal sealed class MergeStore
                 try
                 {
                     Say(Loc.T("Merge da {0} in corso...", source.Name));
-                    output = await _svn.MergeAsync(wc, source.Url, revs, dryRun: false, ct);
+                    _changes.Progress.Begin("merge", Loc.T("Merge da {0}", source.Name), Loc.T("Merge in corso..."));
+                    output = await SvnProgress.RunAsync(_changes.Progress.Line, () => _svn.MergeAsync(wc, source.Url, revs, dryRun: false, ct));
                     var summary = ToResult("merge", label, output);
                     lock (_lock)
                         _result = summary;
@@ -248,10 +249,14 @@ internal sealed class MergeStore
                     // Dopo il refresh: il repository (chiave dei Recenti) e' noto.
                     _changes.AfterMerge(MergeCommitMessage(revs is null ? shown.Select(e => e.Rev).ToList() : revs, shown, source.Path),
                         Loc.T("Merge {0} da {1}: rivedi le modifiche e committa, oppure annulla il merge. Messaggio del merge disponibile nei Recenti.", label, "^/" + source.Path));
+                    _changes.Progress.Done(true, output.Conflicts > 0
+                        ? Loc.T("Merge completato con {0} conflitti: vanno risolti prima di committare.", output.Conflicts)
+                        : Loc.T("Merge completato: rivedi le modifiche e committa."), output.Conflicts);
                 }
                 catch (Exception ex) when (!ct.IsCancellationRequested)
                 {
                     Fail(ex);
+                    _changes.Progress.Done(false, Loc.T("Errore: {0}", ex.Message));
                     await _changes.RefreshAsync(ct, reloadBranch: false); // un merge fallito a meta' puo' aver toccato dei file
                 }
             });
@@ -264,7 +269,7 @@ internal sealed class MergeStore
                 Say(output.Conflicts > 0
                     ? Loc.T("Merge eseguito, da committare. Conflitti da risolvere in Changes: {0}.", output.Conflicts)
                     : Loc.T("Merge eseguito, da committare."));
-                await _changes.RevealConflictsAsync(output.Conflicts, ct);
+                // I conflitti li apre il pulsante della finestra di avanzamento (niente salto di finestra mentre e' aperta).
             }
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)

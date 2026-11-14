@@ -301,19 +301,29 @@ public class SwitchTests
         await f.Store.RefreshAsync(Ct);
         await f.Cmd("switchOpen");
 
-        f.Dialogs.ConfirmResult = false;
         await f.Cmd("switchOk", new { name = "tags/1.0" });
+        Assert.Empty(f.Svn.Switched);   // avviso con il riepilogo, niente switch
+        var warn = ((ChangesState)f.Store.GetSnapshot()).SwitchWarn!;
+        Assert.Equal(1, warn.Counts.Modified);
+        Assert.Equal(1, warn.Total);
+        await f.Cmd("switchWarnCancel");
+        Assert.Null(((ChangesState)f.Store.GetSnapshot()).SwitchWarn);
         Assert.Empty(f.Svn.Switched);
-        Assert.True(f.Picker.Open);   // annullato: il selettore resta aperto
-        Assert.Single(f.Dialogs.Messages);
 
-        f.Dialogs.ConfirmResult = true;
+        await f.Cmd("switchOpen");
         await f.Cmd("switchOk", new { name = "tags/1.0" });
+        await f.Cmd("switchWarnCleanup");   // Apri Cleanup: dopo, torna l'avviso
+        Assert.NotNull(((ChangesState)f.Store.GetSnapshot()).Cleanup);
+        await f.Cmd("cleanupCancel");
+        Assert.NotNull(((ChangesState)f.Store.GetSnapshot()).SwitchWarn);
+
+        await f.Cmd("switchWarnContinue");
         Assert.Single(f.Svn.Switched);
+        Assert.False(((ChangesState)f.Store.GetSnapshot()).Progress!.Running);
     }
 
     [Fact]
-    public async Task Switch_SoloNonVersionati_NonChiedeConferma()
+    public async Task Switch_SoloNonVersionati_AvvisaConIlConteggio()
     {
         using var f = new Fixture();
         f.Svn.Statuses.Add(new SvnFileStatus(@"C:\wc\nuovo.txt", SvnStatusKind.Unversioned, IsTreeConflict: false));
@@ -322,8 +332,8 @@ public class SwitchTests
 
         await f.Cmd("switchOk", new { name = "tags/1.0" });
 
-        Assert.Empty(f.Dialogs.Messages);
-        Assert.Single(f.Svn.Switched);
+        Assert.Empty(f.Svn.Switched);
+        Assert.Equal(1, ((ChangesState)f.Store.GetSnapshot()).SwitchWarn!.Counts.Unversioned);
     }
 
     [Fact]
@@ -412,6 +422,41 @@ public class SwitchTests
         Assert.DoesNotContain("incompleto", f.State.WorkingCopy.Branch);
         await f.Cmd("switchOpen");
         Assert.True(f.Picker.Items.Single(i => i.Name == "tags/1.0").Current);
+    }
+
+    [Fact]
+    public async Task Switch_Interrotto_TornaAPrimaDelloSwitch_UrlERevisioneDiPartenza()
+    {
+        using var f = new Fixture();
+        var fromUrl = f.Svn.RepoRoot + f.Svn.InfoRelativeUrl[1..];
+        var fromRev = f.Svn.InfoRevision;
+        f.Svn.SwitchError = WorkQueueError;
+        f.Svn.InfoAfterFailedSwitch = "^/tags/1.0";
+        await f.Cmd("switchOpen");
+        await f.Cmd("switchOk", new { name = "tags/1.0" });
+        Assert.Equal("switchResume", f.State.Status.Action?.Cmd);
+        Assert.Equal("switchBack", f.State.Status.Action2?.Cmd);
+
+        f.Svn.SwitchError = null;
+        f.Svn.SwitchLog.Clear();
+        await f.Cmd("switchBack");
+
+        Assert.Equal(["cleanup", $"switch {fromUrl}@{fromRev}"], f.Svn.SwitchLog);   // solo cleanup normale, poi switch -r alla partenza
+        Assert.Equal([CleanupOptions.Default], f.Svn.CleanupOptionsUsed.Distinct().ToList());
+        Assert.Null(f.State.Status.Action2);
+        Assert.False(f.State.Status.Err);
+    }
+
+    [Fact]
+    public void PendingSwitch_VoceVecchiaSenzaPartenza_NonPuoTornareIndietro()
+    {
+        var file = Path.Combine(Path.GetTempPath(), "pending-" + Guid.NewGuid().ToString("N")[..8] + ".json");
+        File.WriteAllText(file, "{\"C:\\\\WC\":{\"Name\":\"tags/1.0\",\"Url\":\"file:///r/tags/1.0\"}}");
+        var p = new PendingSwitch(file);
+        Assert.False(p.Get(@"C:\wc")!.CanGoBack);
+        p.Set(@"C:\wc", new PendingSwitch.Entry("t", "u", "file:///r/trunk", 5, "trunk"));
+        Assert.True(new PendingSwitch(file).Get(@"C:\wc")!.CanGoBack);
+        File.Delete(file);
     }
 
     [Fact]

@@ -585,8 +585,29 @@
       }
     },
     {
+      "title": "switchBack",
+      "description": "Torna a prima dello switch interrotto: cleanup normale + svn switch -r verso URL e revisione di partenza (salvati in pending-switch.json); le modifiche locali restano.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "switchBack"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
       "title": "cleanup",
-      "description": "SVN Cleanup della working copy (svn cleanup).",
+      "description": "SVN Cleanup della working copy: apre la finestra delle opzioni (cleanup nello snapshot); da qui partono menu di VS, errore \"working copy bloccata\" e avviso dello switch.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -602,6 +623,168 @@
           "additionalProperties": false,
           "required": [],
           "properties": {}
+        }
+      }
+    },
+    {
+      "title": "cleanupOk",
+      "description": "Esegue il Cleanup con le opzioni scelte (svn cleanup --remove-unversioned/--remove-ignored/--vacuum-pristines/--include-externals, svn revert -R). Le opzioni distruttive (unversioned, ignored, revert) richiedono confirmed=true.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "cleanupOk"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "vacuum",
+            "externals",
+            "unversioned",
+            "ignored",
+            "revert",
+            "confirmed"
+          ],
+          "properties": {
+            "status": {
+              "type": "boolean"
+            },
+            "vacuum": {
+              "type": "boolean"
+            },
+            "externals": {
+              "type": "boolean"
+            },
+            "unversioned": {
+              "type": "boolean"
+            },
+            "ignored": {
+              "type": "boolean"
+            },
+            "revert": {
+              "type": "boolean"
+            },
+            "confirmed": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "cleanupCancel",
+      "description": "Chiude la finestra del Cleanup (se veniva dall'avviso dello switch, torna l'avviso).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "cleanupCancel"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "switchWarnContinue",
+      "description": "Avviso switch su working copy sporca: continua comunque.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "switchWarnContinue"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "switchWarnCleanup",
+      "description": "Avviso switch su working copy sporca: apre il Cleanup (poi torna l'avviso).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "switchWarnCleanup"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "switchWarnCancel",
+      "description": "Avviso switch su working copy sporca: annulla lo switch.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "switchWarnCancel"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "progressClose",
+      "description": "Chiude la finestra di avanzamento a fine operazione; conflicts=true porta in primo piano Changes (sezione Conflitti). Vale in Changes e in Log.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "progressClose"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "conflicts"
+          ],
+          "properties": {
+            "conflicts": {
+              "type": "boolean"
+            }
+          }
         }
       }
     },

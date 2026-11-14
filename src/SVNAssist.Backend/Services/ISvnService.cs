@@ -105,6 +105,9 @@ public interface ISvnService
     /// <summary>Ripulisce la working copy da un'operazione interrotta (<c>svn cleanup</c>); su un file agisce sulla sua cartella.</summary>
     Task CleanupAsync(string path, CancellationToken ct);
 
+    /// <summary>Cleanup con le opzioni di TortoiseSVN (<c>--remove-unversioned</c>, <c>--remove-ignored</c>, <c>--vacuum-pristines</c>, <c>--include-externals</c>, revert ricorsivo).</summary>
+    Task CleanupAsync(string path, CleanupOptions options, CancellationToken ct);
+
     /// <summary>Blocca i file (<c>svn lock</c>) con un messaggio facoltativo; <paramref name="force"/> = <c>--force</c> ruba il lock di un altro.</summary>
     Task LockAsync(IEnumerable<string> paths, string? message, bool force, CancellationToken ct);
 
@@ -204,7 +207,7 @@ public interface ISvnService
     Task<IReadOnlyDictionary<string, SvnConflictInfo>> GetConflictInfoAsync(IReadOnlyList<string> paths, CancellationToken ct);
 
     /// <summary>Porta la working copy su un altro URL (<c>svn switch --accept postpone</c>), dalla sua radice. I conflitti restano da risolvere.</summary>
-    Task<UpdateResult> SwitchAsync(string workingCopyPath, string url, CancellationToken ct);
+    Task<UpdateResult> SwitchAsync(string workingCopyPath, string url, CancellationToken ct, long? revision = null);
 
     /// <summary>Revisioni del sorgente ancora da unire nella working copy (<c>svn mergeinfo --show-revs eligible SRC .</c>), in ordine crescente. Richiede svn 1.5+ (l'unione automatica 1.8+).</summary>
     Task<IReadOnlyList<long>> GetEligibleRevisionsAsync(string workingCopyPath, string sourceUrl, CancellationToken ct);

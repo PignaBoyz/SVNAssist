@@ -14,6 +14,13 @@ Questo file è pensato per essere **modificato da te** e restituito per pianific
 
 ---
 
+## ✅ Novità 0.4.0 (in lavorazione)
+
+- **Avviso prima dello switch su working copy sporca**: riepilogo con i conteggi (modificati, aggiunti, eliminati, in conflitto, non versionati) e tre scelte: Continua comunque, Apri Cleanup, Annulla. Dopo il Cleanup torna l'avviso aggiornato.
+- **Cleanup con opzioni come TortoiseSVN**, da ogni punto di avvio (menu di VS, errore "working copy bloccata", avviso dello switch): Clean up working copy status (predefinito), Break write locks e Fix time stamps (inclusi in `svn cleanup`, mostrati legati ad esso), Vacuum pristine copies, Include externals, e le opzioni **distruttive** (Delete unversioned, Delete ignored, Revert all recursively) evidenziate in rosso, che richiedono una conferma esplicita (anche lato backend). Con svn < 1.9 le opzioni oltre il cleanup semplice sono disabilitate con la spiegazione. "Refresh shell overlays" non c'è: in VS non ha senso. Il retry automatico dello switch (0.3.2) esegue sempre e solo il cleanup normale, non distruttivo.
+- **Finestra di avanzamento modale** per Switch, Merge, Update e Cleanup (anche nel Log per il merge): blocca la UI, mostra fase corrente, barra indeterminata (svn non dà un totale), contatore degli elementi e le righe di notifica di svn in streaming (`U`, `A`, `D`, `G`, i conflitti `C` evidenziati); a fine operazione resta aperta con il riepilogo, **Chiudi** e **Apri i conflitti**.
+- **Switch interrotto**: oltre a **Completa switch**, il pulsante **Torna a prima dello switch** (cleanup normale + `svn switch -r` verso URL e revisione di partenza, salvati prima dello switch in `pending-switch.json`; le modifiche locali restano; nascosto per le voci vecchie senza questi dati).
+
 ## ✅ Cosa c'è nella 0.3.2
 
 Switch robusto su working copy grandi (dettagli in `docs/release-notes/v0.3.2.md`): se svn si ferma a metà (E155009, cartella tenuta aperta da VS) fa da solo cleanup + nuovo tentativo; se non basta lo dice chiaramente, con **Completa switch** (cleanup + switch) anche dopo un riavvio di VS; intestazione e selettore non mentono più sul ramo corrente; errori su più righe, leggibili per intero.

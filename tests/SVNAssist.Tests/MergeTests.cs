@@ -341,6 +341,7 @@ public class MergeTests
         Assert.Empty(SnapshotSchemaTests.Validate("log-state", UiJson.Serialize(f.Log.GetSnapshot())));
         Assert.Empty(SnapshotSchemaTests.Validate("changes-state", UiJson.Serialize(f.Changes.GetSnapshot())));
         Assert.Contains("\"merge\"", UiJson.Serialize(f.Changes.GetSnapshot()));
+        await f.LogCmd("progressClose", new { conflicts = false });
         await f.LogCmd("mergeClose");
         Assert.DoesNotContain("\"merge\"", UiJson.Serialize(f.Log.GetSnapshot()));   // log normale: il campo non c'e'
     }

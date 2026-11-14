@@ -9,7 +9,11 @@ namespace SVNAssist.Stores;
 /// </summary>
 internal sealed class PendingSwitch
 {
-    internal sealed record Entry(string Name, string Url);
+    /// <param name="FromUrl">URL, revisione e nome di partenza (da svn info prima dello switch): servono a "Torna a prima dello switch"; null nelle voci vecchie.</param>
+    internal sealed record Entry(string Name, string Url, string? FromUrl = null, long? FromRev = null, string? FromName = null)
+    {
+        internal bool CanGoBack => !string.IsNullOrEmpty(FromUrl) && FromRev is > 0;
+    }
 
     private readonly string _file;
     private readonly object _lock = new();

@@ -349,14 +349,22 @@ public class SvnService : ISvnService
     }
 
     /// <inheritdoc />
-    public async Task CleanupAsync(string path, CancellationToken ct)
+    public Task CleanupAsync(string path, CancellationToken ct) => CleanupAsync(path, CleanupOptions.Default, ct);
+
+    /// <inheritdoc />
+    public async Task CleanupAsync(string path, CleanupOptions options, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(path))
             throw new ArgumentException("Il percorso non può essere vuoto.", nameof(path));
 
         // svn cleanup lavora su una cartella: per un file si usa quella che lo contiene. Può durare (rimuove lock, riprende operazioni).
-        var dir = File.Exists(path) ? Path.GetDirectoryName(path) : path;
-        await RunSvnAsync(["cleanup"], dir, ct, applyTimeout: false);
+        var dir = (File.Exists(path) ? Path.GetDirectoryName(path) : path)!;
+        if (options.UsesExtras && !CleanupOptions.ExtrasSupported(await GetSvnVersionAsync(ct)))
+            throw new InvalidOperationException(Loc.T("Queste opzioni del Cleanup richiedono svn 1.9 o successivo."));
+        if (options.RunsCleanup)
+            await RunSvnAsync(options.ToArgs(), dir, ct, applyTimeout: false);
+        if (options.RevertAll)
+            await RevertAsync([dir], ct, recursive: true);
     }
 
     /// <inheritdoc />
@@ -969,9 +977,9 @@ public class SvnService : ISvnService
             .Where(e => e.Name.Length > 0).OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase).ToList();
 
     /// <inheritdoc />
-    public async Task<UpdateResult> SwitchAsync(string workingCopyPath, string url, CancellationToken ct)
+    public async Task<UpdateResult> SwitchAsync(string workingCopyPath, string url, CancellationToken ct, long? revision = null)
         // Come l'update: puo' durare a lungo, niente timeout (l'utente puo' annullare).
-        => ParseUpdateOutput(await RunSvnAsync(BuildSwitchArgs(url), workingCopyPath, ct, applyTimeout: false));
+        => ParseUpdateOutput(await RunSvnAsync(BuildSwitchArgs(url, revision), workingCopyPath, ct, applyTimeout: false));
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<long>> GetEligibleRevisionsAsync(string workingCopyPath, string sourceUrl, CancellationToken ct)
@@ -1000,7 +1008,8 @@ public class SvnService : ISvnService
     }
 
     /// <summary><c>--accept postpone</c>: i conflitti non aprono nulla, restano nel pannello Changes. <c>--non-interactive</c> lo aggiunge RunSvnOnceAsync.</summary>
-    internal static List<string> BuildSwitchArgs(string url) => ["switch", "--accept", "postpone", Peg(url)];
+    internal static List<string> BuildSwitchArgs(string url, long? revision = null)
+        => revision is { } r ? ["switch", "--accept", "postpone", "-r", r.ToString(CultureInfo.InvariantCulture), Peg(url)] : ["switch", "--accept", "postpone", Peg(url)];
 
     /// <summary>Nome da mostrare per l'URL relativo (<c>^/trunk</c> -> <c>trunk</c>); la radice del repository (repo senza trunk/branches) e' "/ (radice)".</summary>
     internal static string BranchLabel(string relativeUrl)
@@ -1325,8 +1334,16 @@ public class SvnService : ISvnService
 
         try
         {
-            return await _processRunner.RunAsync(
-                _svnExePath, full, workingDirectory, timeoutCts.Token, stdin, SvnProcessEnvironment);
+            if (SvnProgress.Sink is not { } sink)
+                return await _processRunner.RunAsync(_svnExePath, full, workingDirectory, timeoutCts.Token, stdin, SvnProcessEnvironment);
+            if (_processRunner is ILineProcessRunner streaming)
+                return await streaming.RunStreamingAsync(_svnExePath, full, workingDirectory, timeoutCts.Token, stdin, SvnProcessEnvironment, sink);
+            // Runner senza streaming (test): le righe arrivano tutte alla fine.
+            var done = await _processRunner.RunAsync(_svnExePath, full, workingDirectory, timeoutCts.Token, stdin, SvnProcessEnvironment);
+            foreach (var l in done.StandardOutput.Split('\n'))
+                if (l.Trim().Length > 0)
+                    sink(l.TrimEnd('\r'));
+            return done;
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested && timeoutCts.IsCancellationRequested)
         {

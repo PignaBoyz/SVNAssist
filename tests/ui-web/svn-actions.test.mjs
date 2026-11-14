@@ -63,5 +63,13 @@ test('mock: lock e unlock di un file modificato, cleanup', async () => {
   assert.equal(last().sections.flatMap(s => s.rows).find(r => r.key === f.key).locked, undefined);
 
   await send('cleanup', {}); ok();
+  assert.equal(last().cleanup.extras, true);   // apre la finestra delle opzioni
+  const opts = { status: true, vacuum: false, externals: false, unversioned: true, ignored: false, revert: false, confirmed: false };
+  await send('cleanupOk', opts);   // distruttivo senza conferma: ignorato
+  assert.ok(last().cleanup);
+  await send('cleanupOk', { ...opts, confirmed: true }); ok();
   assert.match(last().status.msg, /Cleanup completato/);
+  assert.equal(last().progress.op, 'cleanup'); assert.equal(last().progress.running, false);
+  await send('progressClose', { conflicts: false });
+  assert.equal(last().progress, undefined);
 });

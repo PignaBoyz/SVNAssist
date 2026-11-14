@@ -292,7 +292,30 @@
               "enum": [
                 "cleanup",
                 "update",
-                "switchResume"
+                "switchResume",
+                "switchBack"
+              ]
+            }
+          }
+        },
+        "action2": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "label",
+            "cmd"
+          ],
+          "description": "Secondo pulsante: \"Torna a prima dello switch\" (switchBack) accanto a \"Completa switch\", solo se la voce dello switch interrotto ricorda URL e revisione di partenza.",
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "cmd": {
+              "enum": [
+                "cleanup",
+                "update",
+                "switchResume",
+                "switchBack"
               ]
             }
           }
@@ -742,6 +765,167 @@
           "type": "integer",
           "minimum": 0,
           "description": "Elementi rimasti in conflitto."
+        }
+      }
+    },
+    "progress": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Finestra di avanzamento modale (switch, merge, update, cleanup): resta aperta a fine operazione con il riepilogo; si chiude con progressClose. svn non da un totale: barra indeterminata + processed. lines = ultime righe di notifica di svn.",
+      "required": [
+        "op",
+        "title",
+        "phase",
+        "running",
+        "ok",
+        "processed",
+        "conflicts",
+        "omitted",
+        "lines",
+        "summary"
+      ],
+      "properties": {
+        "op": {
+          "enum": [
+            "switch",
+            "merge",
+            "update",
+            "cleanup"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "phase": {
+          "type": "string"
+        },
+        "running": {
+          "type": "boolean"
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "processed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "conflicts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "omitted": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Righe piu vecchie non piu in lines."
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "k",
+              "t"
+            ],
+            "properties": {
+              "k": {
+                "enum": [
+                  "U",
+                  "A",
+                  "D",
+                  "G",
+                  "R",
+                  "C",
+                  "i"
+                ]
+              },
+              "t": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "summary": {
+          "type": "string"
+        },
+        "conflictPaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "switchWarn": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Avviso prima dello switch su una working copy sporca: switchWarnContinue / switchWarnCleanup / switchWarnCancel. total 0 = dopo il Cleanup ora e pulita.",
+      "required": [
+        "target",
+        "counts",
+        "total"
+      ],
+      "properties": {
+        "target": {
+          "type": "string"
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "modified",
+            "added",
+            "deleted",
+            "conflicted",
+            "unversioned"
+          ],
+          "properties": {
+            "modified": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "added": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "deleted": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "conflicted": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "unversioned": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    },
+    "cleanup": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Finestra delle opzioni del Cleanup (cleanupOk / cleanupCancel). extras falso = svn < 1.9: le opzioni oltre il cleanup semplice sono disabilitate. from = destinazione dello switch a cui si torna.",
+      "required": [
+        "extras",
+        "svnVersion",
+        "from"
+      ],
+      "properties": {
+        "extras": {
+          "type": "boolean"
+        },
+        "svnVersion": {
+          "type": "string"
+        },
+        "from": {
+          "type": "string"
         }
       }
     }

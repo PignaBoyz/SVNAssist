@@ -359,6 +359,94 @@
           }
         }
       }
+    },
+    "progress": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Finestra di avanzamento modale (switch, merge, update, cleanup): resta aperta a fine operazione con il riepilogo; si chiude con progressClose. svn non da un totale: barra indeterminata + processed. lines = ultime righe di notifica di svn.",
+      "required": [
+        "op",
+        "title",
+        "phase",
+        "running",
+        "ok",
+        "processed",
+        "conflicts",
+        "omitted",
+        "lines",
+        "summary"
+      ],
+      "properties": {
+        "op": {
+          "enum": [
+            "switch",
+            "merge",
+            "update",
+            "cleanup"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "phase": {
+          "type": "string"
+        },
+        "running": {
+          "type": "boolean"
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "processed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "conflicts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "omitted": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Righe piu vecchie non piu in lines."
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "k",
+              "t"
+            ],
+            "properties": {
+              "k": {
+                "enum": [
+                  "U",
+                  "A",
+                  "D",
+                  "G",
+                  "R",
+                  "C",
+                  "i"
+                ]
+              },
+              "t": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "summary": {
+          "type": "string"
+        },
+        "conflictPaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
     }
   }
 }
