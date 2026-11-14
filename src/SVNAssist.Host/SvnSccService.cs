@@ -90,6 +90,11 @@ namespace SVNAssist.Host
         internal bool IsUnversioned(string path) =>
             _active && !string.IsNullOrEmpty(path) && _states.TryGetValue(path.TrimEnd('\\', '/'), out var s) && s == "Unversioned";
 
+        /// <summary>True se il provider e' attivo e la cache dice che il percorso e' modificato, sostituito o in conflitto (diff BASE ⇄ working copy).</summary>
+        internal bool IsModified(string path) =>
+            _active && !string.IsNullOrEmpty(path) && _states.TryGetValue(path.TrimEnd('\\', '/'), out var s)
+            && (s == "Modified" || s == "Replaced" || s == "Conflicted");
+
         private SccGlyph GlyphOf(string path)
         {
             var r = _root;

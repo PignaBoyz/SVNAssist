@@ -194,6 +194,20 @@ namespace SVNAssist.Host
             };
             mcs.AddCommand(seAdd);
 
+            // Solution Explorer > Check for Modifications: solo un file modificato/sostituito/in conflitto (cache SCC); il diff e' quello di Changes (BASE ⇄ working copy).
+            var seDiff = new OleMenuCommand((s, e) => Run(async () =>
+            {
+                await JoinableTaskFactory.SwitchToMainThreadAsync();
+                var ps = SelectedPaths();
+                if (ps.Count == 1) await Host.RunPathCommandAsync("diff", ps.ToArray());
+            }), new CommandID(Ids.CmdSet, Ids.CmdSeDiff));
+            seDiff.BeforeQueryStatus += (s, e) =>
+            {
+                var ps = SelectedPaths();
+                ((OleMenuCommand)s).Visible = ps.Count == 1 && System.IO.File.Exists(ps[0]) && Scc.IsModified(ps[0]);
+            };
+            mcs.AddCommand(seDiff);
+
             // Sottomenu Lingua: tre voci a scelta esclusiva, la spunta segue l'impostazione.
             void AddLang(int id, string value)
             {
