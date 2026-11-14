@@ -71,10 +71,18 @@ $hw = Join-Path $Root '_hotfix'; Svn checkout -q "$repo/branches/hotfix-login" $
 As 'gverdi'; Edit "$hw\src\Shop\Core\Customer.cs" { param($l) $l[2] = 'public record Customer(string Name, string Email, bool Locked = false);' }; Ci 'Login: utente bloccabile' $hw
 Remove-Item -Recurse -Force $hw
 
+# ---- 0.4.0: branch grande (2000 file) per vedere avanzamento e Annulla dello switch ----
+Svn copy -q --username dev3 "$repo/trunk" "$repo/branches/feature-grande" -m 'Branch grande: codice generato'
+$gen = Join-Path $Root '_gen'; for ($i = 1; $i -le 2000; $i++) { W "$gen\Mod$([int]($i / 100))\Gen$($i.ToString('0000')).cs" @("namespace Shop.Generated;", "public static class Gen$i { public const int Id = $i; }") }
+Svn import -q --username dev3 $gen "$repo/branches/feature-grande/src/Generated" -m 'Generated: 2000 file'
+Remove-Item -Recurse -Force $gen
+
 # ---- trunk prosegue: conflitti con il branch ----
 Svn update -q $wc
 As 'gverdi'; Edit "$wc\README.txt" { param($l) $l[1] = 'Versione: 1.0.1' }; Ci 'README: versione 1.0.1' $wc
 As 'lbianchi'; Edit "$wc\docs\old-setup.md" { param($l) $l.Add('Aggiunta nota.') }; Edit "$wc\docs\old-faq.md" { param($l) $l.Add('Nuova FAQ.') }; Ci 'Docs: nota sul setup' $wc
+# 0.4.0: un merge gia' nella storia del trunk, per 'Include merged revisions' nel Log
+Svn update -q $wc; Svn merge -q "$repo/branches/hotfix-login" $wc; As 'gverdi'; Ci 'Merge di hotfix-login nel trunk' $wc; Svn update -q $wc
 
 # ---- molti branch e tag ----
 Write-Host '[..] Creazione di 150 branch e 20 tag (qualche minuto)...'

@@ -4,6 +4,7 @@
 Vedi `prompt.md` (aggiornato per la 0.3.0).
 
 ## Stato
+- [ ] **0.4.0 (2026-11-14)**: 0.3.2 inglobata (mai taggata). Funzioni: docs/release-notes/v0.4.0.md. Branch claude/eager-archimedes-kvbdoo, 736 xUnit + 127 node verdi, VSIX compilato. Collaudo utente: `tools/collaudo-mirato.ps1` (parte A e B; la simulazione ha ora feature-grande con 2000 file e un merge di hotfix-login nel trunk). IN ATTESA dell'esito; poi develop → main, tag v0.4.0, Release (demo + vsix + sorgenti), lista candidati 0.5.0 all'utente. Decisioni: Stop on copy spento di default; Commit All chiede se aggiungere i '?'; + su '?' = Staged (svn add solo al commit); SVN Add da Solution Explorer = svn add subito; diff da SE rispetto a BASE; icone SCC attive di default; switch interrotto: solo cleanup normale automatico + Completa/Torna a prima.
 - [x] Audit
 - [x] Tendina modelli + default Sonnet + prerequisiti per provider (non compilato)
 - [x] CI + workflow release (non ancora eseguito con successo)
