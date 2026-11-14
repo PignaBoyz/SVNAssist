@@ -60,17 +60,26 @@ public abstract class AiServiceBase : IAiService
     }
 
     /// <inheritdoc />
-    public async Task<string> ImproveCommitMessageAsync(string draft, string diff, string language, CancellationToken ct, string? projectInstructions = null)
+    public async Task<string> ImproveCommitMessageAsync(string draft, string diff, string language, CancellationToken ct, string? projectInstructions = null, string? style = null)
     {
         var systemPrompt = "Sei un assistente per sviluppatori. Migliora questo messaggio di commit " +
                            "rendendolo più chiaro e professionale. " +
                            "Rispondi solo con il messaggio migliorato, niente altro." +
+                           StyleInstruction(style) +
                            GetLanguageInstruction(language) +
                            CommitInstructions.ForPrompt(projectInstructions);
 
         var diffContext = await GetDiffContextAsync(diff, language, ct);
         return await AskAsync(systemPrompt, BuildImproveUserMessage(draft, diffContext), ct);
     }
+
+    /// <summary>Istruzione di stile per "Più corto" (<c>shorter</c>) e "Più dettagliato" (<c>detailed</c>); altri valori: nessuna.</summary>
+    internal static string StyleInstruction(string? style) => style switch
+    {
+        "shorter" => " Accorcia il messaggio: riassumilo in poche righe tenendo solo l'essenziale.",
+        "detailed" => " Rendi il messaggio più dettagliato: aggiungi contesto e l'elenco puntato delle modifiche principali, senza inventare nulla che non sia nel diff.",
+        _ => string.Empty,
+    };
 
     /// <summary>Tempo massimo per una singola richiesta al provider AI.</summary>
     internal virtual TimeSpan CallTimeout => TimeSpan.FromMinutes(3);

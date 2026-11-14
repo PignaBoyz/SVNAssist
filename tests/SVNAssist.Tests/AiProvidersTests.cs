@@ -15,7 +15,7 @@ public class AiProvidersTests
             return Task.FromResult(answer());
         }
 
-        public Task<string> ImproveCommitMessageAsync(string draft, string diff, string language, CancellationToken ct, string? projectInstructions = null)
+        public Task<string> ImproveCommitMessageAsync(string draft, string diff, string language, CancellationToken ct, string? projectInstructions = null, string? style = null)
             => GenerateCommitMessageAsync(diff, language, ct);
     }
 

@@ -361,6 +361,7 @@ internal sealed class RecordingAi : IAiService
     public List<string> Languages { get; } = [];
     public List<string> Diffs { get; } = [];
     public List<string?> Instructions { get; } = [];
+    public List<string?> Styles { get; } = [];
 
     public Task<string> GenerateCommitMessageAsync(string diff, string language, CancellationToken ct, string? projectInstructions = null)
     {
@@ -370,9 +371,10 @@ internal sealed class RecordingAi : IAiService
         return Task.FromResult("messaggio generato");
     }
 
-    public Task<string> ImproveCommitMessageAsync(string draft, string diff, string language, CancellationToken ct, string? projectInstructions = null)
+    public Task<string> ImproveCommitMessageAsync(string draft, string diff, string language, CancellationToken ct, string? projectInstructions = null, string? style = null)
     {
         Languages.Add(language);
+        Styles.Add(style);
         return Task.FromResult("migliorato: " + draft);
     }
 }

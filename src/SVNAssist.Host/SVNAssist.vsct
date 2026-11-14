@@ -29,6 +29,8 @@
 
       <!-- Menu contestuale dell'editor di codice (anche il pannello destro del diff): "SVN: Revert Selected Changes" -->
       <Group guid="guidSVNAssistCmdSet" id="GroupCode" priority="0x0F00" />
+      <!-- Menu contestuale di Solution Explorer (file, progetto, cartella): solo "Show Log". -->
+      <Group guid="guidSVNAssistCmdSet" id="GroupSe" priority="0x0F00" />
     </Groups>
 
     <Buttons>
@@ -45,6 +47,7 @@
       <Button guid="guidSVNAssistCmdSet" id="CmdNextChange" priority="0x0040" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainSecondary" /><Strings><CommandName>SVNAssist.NextChange</CommandName><ButtonText>Next Change in Diff</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdPrevChange" priority="0x0041" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainSecondary" /><Strings><CommandName>SVNAssist.PreviousChange</CommandName><ButtonText>Previous Change in Diff</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdRevertSel" priority="0x0000" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupCode" /><Strings><CommandName>SVNAssist.RevertSelected</CommandName><ButtonText>SVN: Revert Selected Changes</ButtonText></Strings></Button>
+      <Button guid="guidSVNAssistCmdSet" id="CmdSeLog" priority="0x0000" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSe" /><CommandFlag>DefaultInvisible</CommandFlag><CommandFlag>DynamicVisibility</CommandFlag><Strings><CommandName>SVNAssist.SeLog</CommandName><ButtonText>Show Log</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdLangAuto" priority="0x0000" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupLang" /><Strings><CommandName>SVNAssist.LanguageAuto</CommandName><ButtonText>Automatica / Automatic (lingua di Visual Studio)</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdLangIt" priority="0x0010" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupLang" /><Strings><CommandName>SVNAssist.LanguageItalian</CommandName><ButtonText>Italiano</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdLangEn" priority="0x0020" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupLang" /><Strings><CommandName>SVNAssist.LanguageEnglish</CommandName><ButtonText>English</ButtonText></Strings></Button>
@@ -56,6 +59,9 @@
     <!-- Anche nel menu contestuale dell'editor/diff, accanto a "Revert Selected Changes". -->
     <CommandPlacement guid="guidSVNAssistCmdSet" id="CmdNextChange" priority="0x0010"><Parent guid="guidSVNAssistCmdSet" id="GroupCode" /></CommandPlacement>
     <CommandPlacement guid="guidSVNAssistCmdSet" id="CmdPrevChange" priority="0x0011"><Parent guid="guidSVNAssistCmdSet" id="GroupCode" /></CommandPlacement>
+    <CommandPlacement guid="guidSVNAssistCmdSet" id="GroupSe" priority="0x0F00"><Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_ITEMNODE" /></CommandPlacement>
+    <CommandPlacement guid="guidSVNAssistCmdSet" id="GroupSe" priority="0x0F00"><Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_PROJNODE" /></CommandPlacement>
+    <CommandPlacement guid="guidSVNAssistCmdSet" id="GroupSe" priority="0x0F00"><Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_FOLDERNODE" /></CommandPlacement>
   </CommandPlacements>
 
   <KeyBindings>
@@ -75,6 +81,8 @@
       <IDSymbol name="GroupLang" value="0x1115" />
       <IDSymbol name="CmdLangAuto" value="0x011B" />
       <IDSymbol name="GroupCode" value="0x1116" />
+      <IDSymbol name="GroupSe" value="0x1117" />
+      <IDSymbol name="CmdSeLog" value="0x0113" />
       <IDSymbol name="CmdRevertSel" value="0x011E" />
       <IDSymbol name="CmdNextChange" value="0x011F" />
       <IDSymbol name="CmdPrevChange" value="0x0120" />

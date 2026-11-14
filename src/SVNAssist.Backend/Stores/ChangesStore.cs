@@ -392,7 +392,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
 
     private static bool CanDiff(ChangeEntry e) => e.Status is not (SvnStatusKind.Unversioned or SvnStatusKind.Normal) && !e.IsDirectory;
 
-    private static bool CanDeleteFile(ChangeEntry e) => !e.IsDirectory && e.Status != SvnStatusKind.Deleted;
+    private static bool CanDeleteFile(ChangeEntry e) => e.Status != SvnStatusKind.Deleted && e.RelativePath != "."; // mai la radice della working copy
 
     private static CanDto FolderCan(ChangeSection section, List<ChangeEntry> entries) => new(
         Diff: entries.Any(CanDiff),
@@ -402,7 +402,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         Ignore: entries.Any(e => e.Status == SvnStatusKind.Unversioned),
         Revert: entries.Any(e => StatusPresentation.IsRevertable(e.Status)),
         Resolve: false,
-        DeleteFile: false);
+        DeleteFile: entries.Any(CanDeleteFile));
 
     // ── Comandi ──────────────────────────────────────────────────────
 
@@ -500,7 +500,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 await CommitMessage.GenerateAsync(ct);
                 break;
             case "improveAi":
-                await CommitMessage.ImproveAsync(ct);
+                await CommitMessage.ImproveAsync(ct, args.ValueKind == JsonValueKind.Object && args.TryGetProperty("style", out _) ? Args.OneOf(args, "style", "shorter", "detailed") : null);
                 break;
             case "setLanguage":
                 CommitMessage.SetLanguage(Args.OneOf(args, "lang", "auto", "italiano", "english"));
@@ -1661,33 +1661,35 @@ internal sealed class ChangesStore : ViewStore, IDisposable
     }
 
     /// <summary>
-    /// Tasto Canc su un file: lo elimina dal file system (non versionato: nel cestino; versionato: <c>svn delete --force</c>),
-    /// dopo la conferma e con avviso se ha modifiche locali. Non si applica alle cartelle.
+    /// Tasto Canc su un file o una cartella (gli elementi mostrati sotto la riga; non una sezione intera), dopo conferma con elenco:
+    /// versionati <c>svn delete --force</c> (resta da committare), non versionati nel cestino (cartelle comprese, ricorsivo).
     /// </summary>
     private async Task DeleteFileCoreAsync(KeyTarget target, CancellationToken ct)
     {
-        var entry = target.SingleFile;
-        if (entry is null || !CanDeleteFile(entry))
+        var items = target.WholeSection ? [] : target.Entries.Where(CanDeleteFile).ToList();
+        items = items.Where(e => !items.Any(o => o.IsDirectory && IsUnder(e.FullPath, o.FullPath))).ToList(); // svn e disco cancellano gia' il sottoalbero
+        if (items.Count == 0)
         {
-            SetStatus(target.Entries.Any(e => e.IsDirectory) || target.Entries.Count != 1
-                ? Loc.T("L'eliminazione con Canc non è disponibile sulle cartelle.")
-                : Loc.T("Nessun file idoneo per l'eliminazione."));
+            SetStatus(Loc.T("Nessun file idoneo per l'eliminazione."));
             return;
         }
 
         // Difesa in profondita': il file viene da svn status, ma non si tocca mai nulla fuori dalla working copy.
-        if (!IsUnderWorkingCopy(entry.FullPath))
+        if (items.Any(e => !IsUnderWorkingCopy(e.FullPath)))
         {
             SetStatus(Loc.T("Errore: il file non si trova nella working copy."));
             return;
         }
 
-        var versioned = entry.Status != SvnStatusKind.Unversioned;
-        var message = versioned
-            ? Loc.T("Eliminare \"{0}\"?\n\nIl file verrà eliminato dalla cartella di lavoro e rimosso da SVN al prossimo commit.", entry.RelativePath)
-            : Loc.T("Eliminare \"{0}\" dal disco?\n\nIl file non è versionato: verrà spostato nel cestino.", entry.RelativePath);
-        var hasLocalChanges = entry.Status is SvnStatusKind.Modified or SvnStatusKind.Replaced or SvnStatusKind.Conflicted or SvnStatusKind.Added;
-        if (hasLocalChanges)
+        var versioned = items.Where(e => e.Status != SvnStatusKind.Unversioned).ToList();
+        var loose = items.Where(e => e.Status == SvnStatusKind.Unversioned).ToList();
+        var message = items.Count == 1 && !items[0].IsDirectory
+            ? (versioned.Count == 1
+                ? Loc.T("Eliminare \"{0}\"?\n\nIl file verrà eliminato dalla cartella di lavoro e rimosso da SVN al prossimo commit.", items[0].RelativePath)
+                : Loc.T("Eliminare \"{0}\" dal disco?\n\nIl file non è versionato: verrà spostato nel cestino.", items[0].RelativePath))
+            : Loc.T("Eliminare {0} elementi?\n\n{1}\n\nI versionati ({2}) verranno rimossi da SVN al prossimo commit; i non versionati ({3}) andranno nel cestino, cartelle comprese.",
+                items.Count, ListForConfirmation(items), versioned.Count, loose.Count);
+        if (items.Any(e => e.Status is SvnStatusKind.Modified or SvnStatusKind.Replaced or SvnStatusKind.Conflicted or SvnStatusKind.Added))
             message += "\n\n" + Loc.T("ATTENZIONE: il file ha modifiche locali non committate, che andranno perse.");
 
         if (!await _dialogs.ConfirmAsync(message, ct))
@@ -1696,12 +1698,13 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         try
         {
             SetStatus(Loc.T("Eliminazione in corso..."));
-            if (versioned)
-                await _svnService.DeleteAsync([entry.FullPath], ct, force: true);
-            else
-                DeleteFromDisk(entry.FullPath);
+            if (versioned.Count > 0)
+                await _svnService.DeleteAsync(versioned.Select(e => e.FullPath).ToList(), ct, force: true);
+            foreach (var e in loose)
+                DeleteFromDisk(e.FullPath);
 
-            await RefreshAsync(ct, reloadBranch: false, Loc.T("Eliminato: {0}.", entry.RelativePath));
+            await RefreshAsync(ct, reloadBranch: false,
+                items.Count == 1 ? Loc.T("Eliminato: {0}.", items[0].RelativePath) : Loc.T("Eliminati {0} elementi.", items.Count));
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
@@ -1717,17 +1720,21 @@ internal sealed class ChangesStore : ViewStore, IDisposable
 
     private static void RecycleOrDelete(string path)
     {
+        var dir = Directory.Exists(path);
         try
         {
-            Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(
-                path, Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs,
-                Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
+            if (dir)
+                Microsoft.VisualBasic.FileIO.FileSystem.DeleteDirectory(
+                    path, Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
+            else
+                Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(
+                    path, Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException && File.Exists(path))
+        catch (Exception ex) when (ex is not OperationCanceledException && (dir ? Directory.Exists(path) : File.Exists(path)))
         {
             // Cestino non disponibile (es. unita' di rete): eliminazione definitiva, l'utente ha gia' confermato.
             BackendLog.Warn("Cestino non disponibile, eliminazione diretta: " + ex.Message);
-            File.Delete(path);
+            if (dir) Directory.Delete(path, recursive: true); else File.Delete(path);
         }
     }
 

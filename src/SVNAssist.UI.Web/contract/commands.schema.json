@@ -705,7 +705,7 @@
     },
     {
       "title": "improveAi",
-      "description": "Migliora la bozza scritta.",
+      "description": "Migliora la bozza scritta; style opzionale: accorcia o dettaglia il messaggio corrente.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -720,7 +720,14 @@
           "type": "object",
           "additionalProperties": false,
           "required": [],
-          "properties": {}
+          "properties": {
+            "style": {
+              "enum": [
+                "shorter",
+                "detailed"
+              ]
+            }
+          }
         }
       }
     },

@@ -156,7 +156,7 @@ internal sealed class CommitStore
 
     internal Task GenerateAsync(CancellationToken ct) => RunAiAsync(improve: false, ct);
 
-    internal Task ImproveAsync(CancellationToken ct) => RunAiAsync(improve: true, ct);
+    internal Task ImproveAsync(CancellationToken ct, string? style = null) => RunAiAsync(improve: true, ct, style);
 
     /// <summary>Azzera messaggio e stato AI (dopo un commit riuscito).</summary>
     internal void Clear()
@@ -195,7 +195,7 @@ internal sealed class CommitStore
     }
 
     /// <summary>Flusso comune a Genera e Migliora: provider, file in Staged, diff minimo, chiamata AI.</summary>
-    private async Task RunAiAsync(bool improve, CancellationToken ct)
+    private async Task RunAiAsync(bool improve, CancellationToken ct, string? style = null)
     {
         // Un solo flusso AI alla volta: il doppio click non avvia due richieste ne' due guide di configurazione.
         if (Interlocked.CompareExchange(ref _aiRunning, 1, 0) != 0)
@@ -205,7 +205,7 @@ internal sealed class CommitStore
         {
             IsBusy = true;
             AiStatus = improve ? Loc.T("Miglioramento in corso...") : Loc.T("Generazione in corso..."); // riscontro immediato a ogni clic
-            await RunAiCoreAsync(improve, ct);
+            await RunAiCoreAsync(improve, ct, style);
         }
         catch (OperationCanceledException)
         {
@@ -223,7 +223,7 @@ internal sealed class CommitStore
         }
     }
 
-    private async Task RunAiCoreAsync(bool improve, CancellationToken ct)
+    private async Task RunAiCoreAsync(bool improve, CancellationToken ct, string? style = null)
     {
         SetTrace(null, null, finished: true);
         var ai = await _aiServiceFactory.CreateAsync(ct);
@@ -297,7 +297,7 @@ internal sealed class CommitStore
         try
         {
             result = improve
-                ? await ai.ImproveCommitMessageAsync(Text, diff, language, ct, rules)
+                ? await ai.ImproveCommitMessageAsync(Text, diff, language, ct, rules, style)
                 : await ai.GenerateCommitMessageAsync(diff, language, ct, rules);
         }
         catch

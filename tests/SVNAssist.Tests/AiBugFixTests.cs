@@ -22,7 +22,7 @@ public class AiBugFixTests : IDisposable
         public Task<string> GenerateCommitMessageAsync(string diff, string language, CancellationToken ct, string? projectInstructions = null)
             => Task.FromException<string>(ex);
 
-        public Task<string> ImproveCommitMessageAsync(string draft, string diff, string language, CancellationToken ct, string? projectInstructions = null)
+        public Task<string> ImproveCommitMessageAsync(string draft, string diff, string language, CancellationToken ct, string? projectInstructions = null, string? style = null)
             => Task.FromException<string>(ex);
     }
 

@@ -79,7 +79,7 @@
   const STN = c => tr(STNAME[c]);
   const key = (sec, p) => sec + ':' + fwd(p);
   function can(sec, it) {
-    return { diff: !!it.canDiff, stage: sec !== 'staged' && it.st !== 'C', unstage: sec === 'staged', add: !!it.canAdd, ignore: !!it.canIgn, revert: !!it.canRev, resolve: !!it.canRes, deleteFile: !it.dir, lock: !it.dir && !it.locked && it.st === 'M', unlock: !!it.locked };
+    return { diff: !!it.canDiff, stage: sec !== 'staged' && it.st !== 'C', unstage: sec === 'staged', add: !!it.canAdd, ignore: !!it.canIgn, revert: !!it.canRev, resolve: !!it.canRes, deleteFile: it.st !== 'D', lock: !it.dir && !it.locked && it.st === 'M', unlock: !!it.locked };
   }
   function fileRow(sec, it, depth, list) {
     const par = parentDir(it.path);
@@ -97,7 +97,7 @@
         const { cur, label } = compactNode(d), ck = 's:' + sec + ':' + cur.path, exp = !v.collapsed[ck];
         const its = under(items, cur.path);
         rows.push({ key: key(sec, cur.path), kind: 'folder', depth, name: fwd(label), detail: '', expanded: exp, count: its.length, status: null, statusText: '',
-          can: { diff: its.some(f => f.st !== '?' && !f.dir), stage: sec !== 'staged' && its.some(f => f.st !== 'C'), unstage: sec === 'staged', add: sec === 'unversioned', ignore: sec === 'unversioned', revert: sec === 'changes', resolve: false, deleteFile: false }, tooltip: fwd(cur.path) });
+          can: { diff: its.some(f => f.st !== '?' && !f.dir), stage: sec !== 'staged' && its.some(f => f.st !== 'C'), unstage: sec === 'staged', add: sec === 'unversioned', ignore: sec === 'unversioned', revert: sec === 'changes', resolve: false, deleteFile: its.some(f => f.st !== 'D') }, tooltip: fwd(cur.path) });
         if (exp) walk(cur, depth + 1);
       });
       node.files.slice().sort((a, b) => fname(a).localeCompare(fname(b), 'it', { sensitivity: 'base' })).forEach(it => rows.push(fileRow(sec, it, depth, false)));
@@ -254,7 +254,7 @@
     useRecentMessage: a => { const m = (S.recentMsgs || [])[+a.i]; if (m != null) { S.vm.commitMsg = m; render(); } },
     setCommitText: a => { S.vm.commitMsg = String(a.text || ''); },   // niente render: e' la UI a tenere il testo
     genAi: () => vmAi('gen'),
-    improveAi: () => vmAi('improve'),
+    improveAi: a => vmAi('improve', a && a.style),
     setLanguage: a => { S.vm.lang = a.lang; render(); },
     setWorkingCopy: a => { S.vm.wcPath = String(a.path || ''); return vmRefresh(undefined, true); },
     stage: a => stageKey(a.key, true),

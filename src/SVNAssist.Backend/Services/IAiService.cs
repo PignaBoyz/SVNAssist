@@ -29,6 +29,7 @@ public interface IAiService
     /// Lingua per il messaggio: <c>"italiano"</c>, <c>"english"</c> o <c>"auto"</c>.
     /// </param>
     /// <param name="ct">Token per annullare l'operazione.</param>
+    /// <param name="style"><c>"shorter"</c> o <c>"detailed"</c> per accorciare/dettagliare il messaggio corrente; <c>null</c> = solo migliorare.</param>
     /// <returns>Il messaggio di commit migliorato.</returns>
-    Task<string> ImproveCommitMessageAsync(string draft, string diff, string language, CancellationToken ct, string? projectInstructions = null);
+    Task<string> ImproveCommitMessageAsync(string draft, string diff, string language, CancellationToken ct, string? projectInstructions = null, string? style = null);
 }

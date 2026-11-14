@@ -84,7 +84,7 @@
         case 'Enter': e.preventDefault();
           if (kind === 'file') U.bridge.send('showDiff', { key: r.dataset.key }); else U.bridge.send(...toggleCmd(r)); return;
         case ' ': e.preventDefault(); U.bridge.send(r.dataset.sec === 'staged' ? 'unstage' : 'stage', { key: r.dataset.key }); return;
-        case 'Delete': if (kind === 'file') { e.preventDefault(); U.bridge.send('rowOp', { op: 'deleteFile', key: r.dataset.key }); } return;   // come Git Changes: conferma a cura dell'host
+        case 'Delete': if (kind !== 'section') { e.preventDefault(); U.bridge.send('rowOp', { op: 'deleteFile', key: r.dataset.key }); } return;   // come Git Changes: conferma a cura dell'host
         case 'ContextMenu': { e.preventDefault(); const b = r.getBoundingClientRect(); ctx.rowMenu(r, b.left + 24, b.bottom); return; }
         case 'F10': if (e.shiftKey) { e.preventDefault(); const b = r.getBoundingClientRect(); ctx.rowMenu(r, b.left + 24, b.bottom); } return;
       }

@@ -580,18 +580,33 @@ public class ChangesStoreTests
     }
 
     [Fact]
-    public async Task DeleteFile_SuCartellaOSezione_NonEseguito()
+    public async Task DeleteFile_SuSezione_NonEseguito()
     {
         var f = new Fixture().With(("src/a.cs", SvnStatusKind.Modified), ("src/b.cs", SvnStatusKind.Modified));
         await f.Refresh();
-        Assert.False(f.Row("staged:src").Can.DeleteFile);
 
-        await f.Cmd("rowOp", new { op = "deleteFile", key = "staged:src" });
         await f.Cmd("rowOp", new { op = "deleteFile", key = "section:staged" });
 
         Assert.Empty(f.Svn.Deleted);
         Assert.Empty(f.Recycled);
         Assert.Empty(f.Dialogs.Messages);
+    }
+
+    [Fact]
+    public async Task DeleteFile_SuCartella_ConfermaConElenco_VersionatiSvnNonVersionatiDisco()
+    {
+        var f = new Fixture().With(("src/a.cs", SvnStatusKind.Modified), ("src/b.cs", SvnStatusKind.Added), ("src/newdir", SvnStatusKind.Unversioned));
+        await f.Refresh();
+        Assert.True(f.Row("staged:src").Can.DeleteFile);
+
+        await f.Cmd("rowOp", new { op = "deleteFile", key = "staged:src" });
+        await f.Cmd("rowOp", new { op = "deleteFile", key = "unversioned:src/newdir" });
+
+        Assert.Equal([[Full(@"src\a.cs"), Full(@"src\b.cs")]], f.Svn.Deleted);
+        Assert.Equal([true], f.Svn.DeleteForced);
+        Assert.Contains("2 elementi", f.Dialogs.Messages[0]);
+        Assert.Contains("src/a.cs", f.Dialogs.Messages[0]);
+        Assert.Equal([Full(@"src\newdir")], f.Recycled);
     }
 
     [Fact]
@@ -938,6 +953,29 @@ public class ChangesStoreTests
 
         Assert.Equal(["italiano"], f.Ai.Service.Languages);
         Assert.Equal("migliorato: bozza", f.Snap.Commit.Text);
+    }
+
+    [Fact]
+    public async Task Ai_PiuCortoEPiuDettagliato_PassanoLoStileAlServizio_StileSconosciutoRifiutato()
+    {
+        var f = new Fixture().With(("a.cs", SvnStatusKind.Modified));
+        await f.Refresh();
+        await f.Cmd("setCommitText", new { text = "bozza" });
+
+        await f.Cmd("improveAi", new { style = "shorter" });
+        await f.Cmd("improveAi", new { style = "detailed" });
+        await f.Cmd("improveAi");
+
+        Assert.Equal(["shorter", "detailed", null], f.Ai.Service.Styles);
+        await Assert.ThrowsAsync<ArgumentException>(() => f.Cmd("improveAi", new { style = "x" }));
+    }
+
+    [Fact]
+    public void Ai_StyleInstruction_ShorterDetailedENulla()
+    {
+        Assert.Contains("Accorcia", AiServiceBase.StyleInstruction("shorter"));
+        Assert.Contains("dettagliato", AiServiceBase.StyleInstruction("detailed"));
+        Assert.Equal(string.Empty, AiServiceBase.StyleInstruction(null));
     }
 
     [Fact]

@@ -33,6 +33,17 @@ public class PathCommandsTests : IDisposable
     private Task Run(string command, params string[] paths) => _cmd.RunAsync(command, paths, CancellationToken.None);
 
     [Fact]
+    public async Task Log_SuFileProgetto_ApreIlLogDelSoloFile_FuoriWorkingCopyAvvisa()
+    {
+        await Run("log", P("wc", "src", "App.csproj")); // il progetto non diventa la sua cartella
+        Assert.Equal([P("wc", "src", "App.csproj")], _host.LogShown);
+
+        _host.LogShown.Clear();
+        await Run("log", P("plain", "b.cs"));
+        Assert.Empty(_host.LogShown);
+    }
+
+    [Fact]
     public async Task Revert_ChiedeConferma_ESeAnnullatoNonTocca()
     {
         _host.PromptAnswers.Enqueue(1); // Annulla

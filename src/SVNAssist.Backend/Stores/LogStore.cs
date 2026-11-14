@@ -294,7 +294,7 @@ internal sealed class LogStore : ViewStore
                 return;
             }
 
-            if (!Directory.Exists(full) || SvnService.FindSvnRoot(full) is null)
+            if (!(Directory.Exists(full) || File.Exists(full)) || SvnService.FindSvnRoot(full) is null)
             {
                 Set(Loc.T("Errore: non è una working copy SVN."), err: true);
                 return;

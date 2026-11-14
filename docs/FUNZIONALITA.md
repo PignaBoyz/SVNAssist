@@ -30,7 +30,7 @@ Switch e Merge da Visual Studio (dettagli in `docs/release-notes/v0.3.0.md`): ra
 - Temi chiaro / scuro / blu / alto contrasto con cambio a caldo; lingua **Italiano / English** a caldo.
 
 ### Pannello SVN Changes
-- Stile Git Changes: albero con tastiera (frecce, Spazio, Invio, Canc con conferma), filtro, vista Albero/Lista, sezioni **Staged / Modifiche / Non versionati / Conflitti** con contatori.
+- Stile Git Changes: albero con tastiera (frecce, Spazio, Invio, Canc con conferma su file e cartelle: versionati svn delete, non versionati dal disco), filtro, vista Albero/Lista, sezioni **Staged / Modifiche / Non versionati / Conflitti** con contatori.
 - **Commit All** se Staged è vuoto, **Commit Staged (n)** altrimenti; niente auto-stage; mostra la revisione creata; bloccato con conflitti.
 - Add, Delete, Revert (con conferma ed elenco; anche **"SVN Revert di tutto…"** dal tasto destro sull'intestazione delle sezioni Changes e Staged, anche su piu' cartelle, non versionati esclusi), Add to Ignore List, Risolvi conflitto (Working / Mine-full / Theirs-full / Base; tree-conflict con conferma).
 - **Sezione Conflitti** con pulsanti per file: editor di merge a 3 vie (vsDiffMerge di VS, poi TortoiseMerge, poi il file con i marcatori), Usa la mia, Usa la loro, Segna come risolto; riquadro ampio, comprimibile, che scorre con molti conflitti; **conflitti ad albero raggruppati** in "Conflitti ad albero (N)" con **Segna tutti come risolti** (conferma con elenco; un errore non blocca gli altri) o uno per uno; file di appoggio di svn raggruppati sotto il file (non tra i non versionati); dopo merge, update e switch con conflitti Changes va in primo piano, senza dialoghi.
@@ -48,13 +48,13 @@ Switch e Merge da Visual Studio (dettagli in `docs/release-notes/v0.3.0.md`): ra
 - **Diff nativo di VS** ovunque (WC, revisioni, cartelle); TortoiseSVN non serve più.
 
 ### Esplora soluzioni
-- Nessun menu SVN in Solution Explorer (tolto perche' ridondante con la finestra Changes).
+- Menu contestuale di Solution Explorer: solo **Show Log** (file, progetto, cartella; visibile solo dentro una working copy): apre il Log come documento sul solo elemento (svn log del file .csproj incluso). Il resto del menu SVN e' stato tolto perche' ridondante con la finestra Changes.
 - **Annulla il blocco** dal pannello destro del diff: pulsante con icona annulla (KnownMonikers.Undo) a sinistra di ogni blocco modificato, come Git; clic = riporta a BASE solo quel blocco, senza dialoghi (messaggio di stato in Changes). Resta **SVN: Revert Selected Changes** nel menu contestuale (righe selezionate o riga del cursore). Il documento viene salvato prima, niente Ctrl+Z. Mancante: il pulsante nell'editor normale e nel diff inline.
 - **Next/Previous Change in Diff** (Alt+F8 / Shift+Alt+F8, menu contestuale, Extensions > SVNAssist): nel diff sposta il cursore e centra la modifica successiva/precedente (viewer nativo, con giro); in un editor normale di un file modificato salta al blocco successivo/precedente del svn diff (letto da disco: righe non salvate possono slittare). Ctrl+Alt+Giù/Su e' di VS (elenco documenti). Scorciatoie personalizzabili in Tools > Options > SVNAssist > Scorciatoie (vuoto = nessuna).
 
 ### AI per i commit
 - **Procedura guidata** (provider, prerequisiti, login, modello) riapribile da "Change AI Provider...": GitHub Copilot, Claude Code, Claude API, GitHub Models.
-- **Genera con AI** / **Migliora** dal diff minimo dei soli file in Staged (aggiunti/eliminati/vuoti/binari citati, diff compattato con molti file); lingua del commit selezionabile.
+- **Genera con AI** / **Migliora** dal diff minimo dei soli file in Staged (aggiunti/eliminati/vuoti/binari citati, diff compattato con molti file); lingua del commit selezionabile; dal menu AI **Più corto** / **Più dettagliato** riscrivono il messaggio corrente (riassunto o con più dettagli) a partire dal diff.
 - Segue le regole di commit in `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md`, `~/.copilot/copilot-instructions.md`.
 - Modelli da **tendina** (elenco fisso); default Claude: Sonnet. API key **cifrate con DPAPI**.
 

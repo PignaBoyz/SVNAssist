@@ -162,6 +162,15 @@ namespace SVNAssist.Host
             Add(Ids.CmdNextChange, () => DiffNavigateAsync(true));
             Add(Ids.CmdPrevChange, () => DiffNavigateAsync(false));
 
+            // Solution Explorer > Show Log: visibile solo con un elemento selezionato dentro una working copy.
+            var seLog = new OleMenuCommand((s, e) => Run(async () =>
+            {
+                await JoinableTaskFactory.SwitchToMainThreadAsync();
+                if (SelectedPath() is string p) await Host.RunPathCommandAsync("log", new[] { p });
+            }), new CommandID(Ids.CmdSet, Ids.CmdSeLog));
+            seLog.BeforeQueryStatus += (s, e) => ((OleMenuCommand)s).Visible = InWorkingCopy(SelectedPath());
+            mcs.AddCommand(seLog);
+
             // Sottomenu Lingua: tre voci a scelta esclusiva, la spunta segue l'impostazione.
             void AddLang(int id, string value)
             {
@@ -173,6 +182,36 @@ namespace SVNAssist.Host
             AddLang(Ids.CmdLangIt, "it");
             AddLang(Ids.CmdLangEn, "en");
 
+        }
+
+        /// <summary>Percorso dell'unico elemento selezionato in Solution Explorer (file, progetto, cartella); null se multiplo o assente.</summary>
+        private string SelectedPath()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            IntPtr hierPtr = IntPtr.Zero, contPtr = IntPtr.Zero;
+            try
+            {
+                if (!(GetService(typeof(SVsShellMonitorSelection)) is IVsMonitorSelection sel)) return null;
+                sel.GetCurrentSelection(out hierPtr, out uint itemId, out _, out contPtr);
+                if (hierPtr == IntPtr.Zero || itemId == VSConstants.VSITEMID_SELECTION) return null;
+                var hier = (IVsHierarchy)Marshal.GetObjectForIUnknown(hierPtr);
+                return hier.GetCanonicalName(itemId, out var name) == VSConstants.S_OK && !string.IsNullOrWhiteSpace(name) ? name : null;
+            }
+            catch (Exception ex) { Log.Write("selezione SE: " + ex.Message); return null; }
+            finally
+            {
+                if (hierPtr != IntPtr.Zero) Marshal.Release(hierPtr);
+                if (contPtr != IntPtr.Zero) Marshal.Release(contPtr);
+            }
+        }
+
+        // shortcut: cerca ".svn" risalendo le cartelle (come SvnService.FindSvnRoot) senza chiedere al backend; upgrade se servono working copy esterne.
+        private static bool InWorkingCopy(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return false;
+            for (var d = new System.IO.DirectoryInfo(path); d != null; d = d.Parent)
+                if (System.IO.Directory.Exists(System.IO.Path.Combine(d.FullName, ".svn"))) return true;
+            return false;
         }
 
         /// <summary>

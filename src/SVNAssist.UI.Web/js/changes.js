@@ -192,7 +192,7 @@
     if (e.key === 'Enter' && rows[rcSel]) { e.preventDefault(); rcChoose(+rows[rcSel].dataset.i); }
   }
   function aiMenu() {
-    return [{ label: t('Migliora il messaggio scritto'), cmd: 'improveAi', hint: t('Riscrive la bozza nel campo sopra') }, { label: t('Cambia provider AI…'), cmd: 'wizardOpen', hint: t('Procedura guidata: provider, accesso, modello') }, { sep: true }, { header: true, label: t('Lingua del messaggio') },
+    return [{ label: t('Migliora il messaggio scritto'), cmd: 'improveAi', hint: t('Riscrive la bozza nel campo sopra') }, { label: t('Più corto'), cmd: 'improveAi', args: { style: 'shorter' }, hint: t('Riassume il messaggio nel campo sopra') }, { label: t('Più dettagliato'), cmd: 'improveAi', args: { style: 'detailed' }, hint: t('Aggiunge dettagli al messaggio nel campo sopra, dal diff') }, { label: t('Cambia provider AI…'), cmd: 'wizardOpen', hint: t('Procedura guidata: provider, accesso, modello') }, { sep: true }, { header: true, label: t('Lingua del messaggio') },
       ...LANGS().map(([l, t]) => ({ label: t, cmd: 'setLanguage', args: { lang: l }, checked: st.commit.lang === l }))];
   }
   // menu della riga di sezione (Changes / Staged / Non versionati): SVN Revert di tutto dove ci sono modifiche annullabili
@@ -214,7 +214,7 @@
       { sep: true }, A('add', t('SVN Add (aggiungi al controllo di versione)'), c.add), A('ignore', t('Aggiungi alla ignore list'), c.ignore),
       A('revert', isF ? t('SVN Revert (annulla le modifiche)…') : t('SVN Revert della cartella (annulla le modifiche)…'), c.revert), isF ? A('resolve', t('Risolvi conflitto…'), c.resolve) : null,
       isF && (c.lock || c.unlock) ? { sep: true } : null, isF && c.lock ? A('lock', 'SVN Lock…', true) : null, isF && c.unlock ? A('unlock', 'SVN Unlock', true) : null,
-      { sep: true }, isF ? A('deleteFile', t('Elimina file…'), c.deleteFile, t('Canc')) : { label: t('Espandi tutto'), cmd: 'expandAll' }, isF ? null : { label: t('Comprimi tutto'), cmd: 'collapseAll' },
+      { sep: true }, A('deleteFile', isF ? t('Elimina file…') : t('Elimina cartella…'), c.deleteFile, t('Canc')), isF ? null : { sep: true }, isF ? null : { label: t('Espandi tutto'), cmd: 'expandAll' }, isF ? null : { label: t('Comprimi tutto'), cmd: 'collapseAll' },
     ].filter(Boolean), row);
   }
 

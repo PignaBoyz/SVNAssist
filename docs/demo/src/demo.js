@@ -695,7 +695,7 @@ function genMessage(lang) {
   const body = fs.slice(0, 6).map(f => `- ${v[f.st]} ${base(f.path)}: ${descOf(f, l)}`).join('\n');
   return title + '\n\n' + body;
 }
-function improveMessage(draft, lang) {
+function improveMessage(draft, lang, style) {
   const l = langOf(lang); let ls = draft.trim().split('\n');
   let t = ls[0].trim().replace(/[.\s]+$/, '');
   const map = l === 'en' ? [[/^fix(ed)?\b/i, 'Fix'], [/^add(ed)?\b/i, 'Add'], [/^updat(ed|e)\b/i, 'Update']] : [[/^fix(ed)?\b/i, 'Corregge'], [/^(added|aggiunto|aggiunta)\b/i, 'Aggiunge'], [/^(updated|aggiornato|aggiornata)\b/i, 'Aggiorna']];
@@ -706,11 +706,13 @@ function improveMessage(draft, lang) {
   let body = ls.slice(1).map(x => x.trim()).filter(Boolean).map(x => x.startsWith('-') ? x : '- ' + x);
   if (extra) body.unshift('- ...' + extra);
   if (!body.length) { const v = VERB[l]; body = changedForAi().slice(0, 4).map(f => `- ${v[f.st]} ${base(f.path)}`); }
+  if (style === 'shorter') return t;   // solo il titolo
+  if (style === 'detailed') body = body.concat(changedForAi().slice(0, 6).map(f => `- ${VERB[l][f.st]} ${base(f.path)}`).filter(x => !body.includes(x)));
   return t + (body.length ? '\n\n' + body.join('\n') : '');
 }
 
 // ---------- esecuzione AI condivisa (tool window + dialog) ----------
-async function aiCore(kind, ui) {
+async function aiCore(kind, ui, style) {
   const r = resolveChain();
   if (!r.chain.length) {
     ui.trace([]); S.f.aiNone = true; S.f.aiPromptShown = true;
@@ -747,7 +749,7 @@ async function aiCore(kind, ui) {
           if (!S.env.claudeLogin) throw new Error('Claude Code fallito (exit code 1): Not logged in - Please run /login');
         }
         await sleep(1000);
-        result = kind === 'improve' ? improveMessage(ui.draft(), ui.lang()) : genMessage(ui.lang());
+        result = kind === 'improve' ? improveMessage(ui.draft(), ui.lang(), style) : genMessage(ui.lang());
         t.state = 'ok'; usedName = c.name; ui.trace(trace); break;
       } catch (e) { t.state = 'fail'; t.detail = e.message; errors.push(`${c.name === 'Copilot' ? 'GitHub Copilot' : c.name}: ${e.message}`); ui.trace(trace); }
       first = false;
@@ -1556,6 +1558,16 @@ async function rowOp(op0, key) {
       await svn(`add --force ${row.kind === 'folder' && row.section === 'unversioned' ? '"' + fwd(row.key) + '"' : '--targets (' + aff.length + ' elementi)'}`, 500);
       aff.forEach(f => svnAdd(f.path)); aff.forEach(f => { f.sel = true; });
       await done(`Aggiunti a SVN: ${aff.length} elementi.`);
+    } else if (op === 'del' && row.kind === 'folder') {   // Canc su una cartella: elementi sotto la riga, versionati svn delete, non versionati dal disco
+      const its = row.entries.filter(f => f.st !== 'D'), vers = its.filter(f => f.st !== '?'), loose = its.filter(f => f.st === '?');
+      if (!its.length) { setStatus("Nessun file idoneo per l'eliminazione."); return render(); }
+      let msg = `Eliminare ${its.length} elementi?\n\n${listForConfirm(its)}\n\nI versionati (${vers.length}) verranno rimossi da SVN al prossimo commit; i non versionati (${loose.length}) andranno nel cestino, cartelle comprese.`;
+      if (its.some(f => ['M', 'R', 'C', 'A'].includes(f.st))) msg += '\n\nATTENZIONE: il file ha modifiche locali non committate, che andranno perse.';
+      if (!await confirmBox(msg)) return;
+      setStatus('Eliminazione in corso...'); render();
+      if (vers.length) { await svn(`delete --force --targets (${vers.length} elementi)`, 500); vers.forEach(f => { if (fileBy(f.path)) svnDelete(f.path); }); }
+      if (loose.length) { await svn(`(rimozione dal disco) ${loose.length} elementi`, 300); S.files = S.files.filter(x => !loose.includes(x)); }
+      await done(`Eliminati ${its.length} elementi.`);
     } else if (op === 'del') {   // Canc su un file: elimina dal filesystem (con conferma) come Git Changes
       const f = row.file; if (!f || f.dir) { setStatus('Seleziona un file da eliminare.'); return render(); }
       let msg = f.st === '?' ? `Eliminare "${f.path}" dal disco?\n\nIl file non è versionato: l'operazione non è annullabile.` : `Eliminare "${f.path}"?\n\nIl file verrà eliminato dalla cartella di lavoro e rimosso da SVN al prossimo commit.`;
@@ -1750,7 +1762,7 @@ async function optionsDlg() {
   if (r) { toast('Impostazioni salvate'); render(); }
 }
 
-async function vmAi(kind) { if (S.vm.aiBusy) return; await aiCore(kind === 'improve' ? 'improve' : 'gen', vmAiUi()); }
+async function vmAi(kind, style) { if (S.vm.aiBusy) return; await aiCore(kind === 'improve' ? 'improve' : 'gen', vmAiUi(), style); }
 
 // mini wizard riusabile dalle anteprime "Prossimamente"
 function wizard(title, steps) {

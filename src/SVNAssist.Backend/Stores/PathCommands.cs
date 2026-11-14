@@ -44,6 +44,14 @@ internal sealed class PathCommands
             return;
         }
 
+        // log di un file (anche .csproj/.sln: SvnTarget li porterebbe alla cartella): svn log sul solo file
+        if (command == "log" && paths is [var logFile] && File.Exists(logFile))
+        {
+            if (SvnService.FindSvnRoot(Path.GetDirectoryName(logFile)!) is null) await InfoAsync(SvnTarget.NotWorkingCopyMessage);
+            else await _host.ShowLogAsync(logFile);
+            return;
+        }
+
         var targets = new List<SvnTarget>();
         foreach (var p in paths ?? [])
             if (SvnTarget.Resolve(p) is { } t && !targets.Any(x => string.Equals(x.Path, t.Path, StringComparison.OrdinalIgnoreCase)))
