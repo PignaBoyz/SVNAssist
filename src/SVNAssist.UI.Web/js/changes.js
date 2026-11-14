@@ -256,7 +256,7 @@
     renderWizard(root, anyModal);
     renderRev(root, anyModal);
     renderSw(root, anyModal);
-    U.ops.render(root.querySelector("#ops"), st);
+    U.ops.render(document.getElementById("ops"), st);
   }
 
   // Procedura guidata: dialogo modale (il resto e' inert), il testo digitato e il focus sopravvivono ai ridisegni.

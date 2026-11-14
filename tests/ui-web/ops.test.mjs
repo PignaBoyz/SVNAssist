@@ -84,3 +84,11 @@ test('demo: switch su working copy sporca -> avviso -> Continua -> avanzamento c
   await send('progressClose', { conflicts: false });
   assert.equal(last().progress, undefined);
 });
+
+// Regressione 0.4.0: #ops sta FUORI da .app; cercarlo dentro .app dava null, O.render lanciava e la finestra restava inert senza dialogo.
+test('changes.js passa a ops.render il contenitore #ops preso dal documento, non da .app', async () => {
+  const { read } = await import('./helpers.mjs');
+  const src = read('src/SVNAssist.UI.Web/js/changes.js');
+  assert.match(src, /U\.ops\.render\(document\.getElementById\(["']ops["']\)/);
+  assert.doesNotMatch(src, /U\.ops\.render\(root\.querySelector/);
+});

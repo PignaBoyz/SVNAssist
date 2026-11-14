@@ -196,6 +196,13 @@ internal sealed class BackendServer : IBackend, IDisposable
 
         var name = nameProp.GetString()!;
         var args = root.TryGetProperty("args", out var a) && a.ValueKind == JsonValueKind.Object ? a : default;
+        if (name == "uiError")
+        {
+            // Eccezione JavaScript nel disegno della vista: senza questa riga la finestra resta "bloccata" senza lasciare tracce.
+            BackendLog.Warn($"Errore UI ({channel.View}): {(args.ValueKind == JsonValueKind.Object && args.TryGetProperty("error", out var e) ? e.ToString() : "?")}");
+            return;
+        }
+
         string? error = null;
         object? result = null;
         try

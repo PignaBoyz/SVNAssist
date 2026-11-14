@@ -25,7 +25,7 @@
     if (!m || typeof m !== 'object') return;
     if (m.type === 'state' && m.view === view && (!m.id || !vid || m.id === vid)) {
       if (m.lang && U.setLang(m.lang) && V.relang) V.relang(root);   // cambio lingua a caldo: i testi statici si rifanno, lo stato ridisegna il resto
-      V.update(root, m.state);
+      try { V.update(root, m.state); } catch (e) { U.bridge.send('uiError', { view, error: String(e && e.stack || e).slice(0, 2000) }); throw e; }
     }
     else if (m.type === 'theme') theme(m);
     else if (m.type === 'event') { if (m.name === 'toast') toast(m.text || ''); else if (m.name === 'focus') { const f = root.querySelector('[tabindex="0"],textarea'); if (f) f.focus(); } else if (m.name === 'backendRestarted') toast(U.t('Il servizio SVNAssist è stato riavviato.')); }
