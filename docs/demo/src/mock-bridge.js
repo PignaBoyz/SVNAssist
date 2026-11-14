@@ -144,6 +144,7 @@
       ...(v.mergeBanner && commitSet().files.length ? { merge: { text: tr(v.mergeBanner.text), conflicts: S.files.filter(f => f.st === 'C').length } } : {}),
       ...progSnap(),
       ...(v.warn ? (() => { const c = dirtyCounts(); return { switchWarn: { target: v.warn.name, counts: c, total: c.modified + c.added + c.deleted + c.conflicted + c.unversioned } }; })() : {}),
+      ...(v.cwarn ? { commitWarn: v.cwarn } : {}),
       ...(v.cl ? { cleanup: { extras: true, svnVersion: '1.14.3', from: v.cl.from || '' } } : {}),
       conflicts: S.files.filter(f => f.st === 'C').map(f => ({ key: key('changes', f.path), path: fwd(f.path), name: base(f.path), kind: f.tree ? 'tree' : 'text', files: f.tree ? [] : cflAux(f).map(fwd) })),
     };
@@ -273,6 +274,9 @@
     switchBack: () => { setStatus('Nessuno switch da annullare.'); render(); },   // la demo non simula switch interrotti
     progressClose: a => vmProgressClose(a),
     commit: () => vmCommit(),
+    commitWarnAdd: () => vmCommitWarn('add'),
+    commitWarnNo: () => vmCommitWarn('no'),
+    commitWarnCancel: () => vmCommitWarn('cancel'),
     useRecentMessage: a => { const m = (S.recentMsgs || [])[+a.i]; if (m != null) { S.vm.commitMsg = m; render(); } },
     setCommitText: a => { S.vm.commitMsg = String(a.text || ''); },   // niente render: e' la UI a tenere il testo
     genAi: () => vmAi('gen'),

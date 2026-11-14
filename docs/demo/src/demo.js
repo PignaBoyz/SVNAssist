@@ -824,8 +824,11 @@ function commitSet() {
   const v = S.vm.files.filter(f => ['M', 'A', 'D', 'R', '!', 'C'].includes(f.st));
   return { files: v, all: v.length > 0 };
 }
-async function vmCommit() {
-  const vm = S.vm, sel = commitSet().files;
+async function vmCommit(ask = true, addNew = false) {
+  const vm = S.vm, cs = commitSet(), un = S.files.filter(f => f.st === '?');
+  // Commit All con file non versionati: prima la domanda (Si' / No / Annulla), come nell'estensione.
+  if (ask && cs.all && vm.commitMsg.trim() && un.length) { vm.cwarn = { count: un.length, items: un.slice(0, 10).map(f => fwd(f.path)), more: Math.max(0, un.length - 10) }; return render(); }
+  const sel = addNew && cs.all ? cs.files.concat(un) : cs.files;
   if (!sel.length) { setStatus('Nessuna modifica da committare.'); return render(); }
   if (!vm.commitMsg.trim()) { setStatus('Scrivi un messaggio di commit.'); return render(); }
   const conf = sel.filter(f => f.st === 'C');
@@ -994,6 +997,7 @@ function vmProgressClose(a) {
   if (a && a.conflicts) { S.ui.statusOpen = true; S.ui.view = 'dock'; S.ui.seOpen = false; S.ui.menu = null; }
   render();
 }
+function vmCommitWarn(act) { S.vm.cwarn = null; if (act === 'cancel') return render(); return vmCommit(false, act === 'add'); }
 function vmWarn(act) {
   const w = S.vm.warn; if (!w) return;
   if (act === 'go') return swGo(w.name);

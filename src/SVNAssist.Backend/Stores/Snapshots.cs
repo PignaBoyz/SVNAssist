@@ -117,7 +117,8 @@ internal sealed record ChangesState(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ConflictDto>? Conflicts = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ProgressDto? Progress = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SwitchWarnDto? SwitchWarn = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CleanupDialogDto? Cleanup = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CleanupDialogDto? Cleanup = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CommitWarnDto? CommitWarn = null);
 
 /// <param name="K"><c>dir</c> per le cartelle (non si aprono nel diff); assente altrimenti.</param>
 internal sealed record LogPathDto(string A, string P, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? K = null);
@@ -177,6 +178,9 @@ internal sealed record DirtyCountsDto(int Modified, int Added, int Deleted, int 
 
 /// <summary>Avviso prima dello switch su una working copy sporca: Continua comunque / Apri Cleanup / Annulla. <c>Total</c> 0 = ora e' pulita.</summary>
 internal sealed record SwitchWarnDto(string Target, DirtyCountsDto Counts, int Total);
+
+/// <summary>Domanda di "Commit All" con file non versionati: Count totali, Items i primi (max 10), More quanti non elencati.</summary>
+internal sealed record CommitWarnDto(int Count, IReadOnlyList<string> Items, int More);
 
 /// <summary>Finestra delle opzioni del Cleanup. <c>Extras</c> falso = svn &lt; 1.9: le opzioni oltre il cleanup semplice si disabilitano.</summary>
 internal sealed record CleanupDialogDto(bool Extras, string SvnVersion, string From);

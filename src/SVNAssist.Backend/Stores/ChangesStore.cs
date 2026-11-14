@@ -161,6 +161,9 @@ internal sealed class ChangesStore : ViewStore, IDisposable
 
     // Switch su working copy sporca: destinazione in attesa della scelta dell'utente (avviso) e destinazione a cui si torna dopo il Cleanup.
     private SwitchPickerStore.Target? _warnTarget, _cleanupReturn;
+
+    // "Commit All" con file non versionati: domanda prima di aggiungerli (Si' / No / Annulla).
+    private bool _commitWarn;
     private bool _cleanupOpen;
 
     /// <summary>Esegue una chiamata svn convogliando le sue righe di notifica nella finestra di avanzamento.</summary>
@@ -351,8 +354,24 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 conflicts,
                 Progress.GetSnapshot(),
                 _warnTarget is { } w ? BuildSwitchWarn(w) : null,
-                _cleanupOpen ? new CleanupDialogDto(CleanupOptions.ExtrasSupported(SvnVersionParsed), _svnVersion ?? string.Empty, _cleanupReturn?.Name ?? string.Empty) : null);
+                _cleanupOpen ? new CleanupDialogDto(CleanupOptions.ExtrasSupported(SvnVersionParsed), _svnVersion ?? string.Empty, _cleanupReturn?.Name ?? string.Empty) : null,
+                _commitWarn ? BuildCommitWarn() : null);
         }
+    }
+
+    private CommitWarnDto BuildCommitWarn()
+    {
+        var names = _entries.Where(e => e.Status == SvnStatusKind.Unversioned).Select(e => e.RelativePath).ToList();
+        return new CommitWarnDto(names.Count, names.Take(10).ToList(), Math.Max(0, names.Count - 10));
+    }
+
+    /// <summary>"Commit All" (Staged vuoto) con un messaggio e dei non versionati: prima si chiede se aggiungerli.</summary>
+    private bool NeedsNewFilesQuestion()
+    {
+        if (string.IsNullOrWhiteSpace(CommitMessage.Text))
+            return false;
+        lock (_stateLock)
+            return CommitSet().All && _entries.Any(e => e.Status == SvnStatusKind.Unversioned);
     }
 
     private Version? SvnVersionParsed => Version.TryParse(_svnVersion, out var v) ? v : null;
@@ -585,7 +604,24 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 await CloseProgressAsync(Args.Bool(args, "conflicts"));
                 break;
             case "commit":
+                if (NeedsNewFilesQuestion())
+                {
+                    _commitWarn = true;
+                    NotifyChanged();
+                    break;
+                }
+
                 await RunExclusiveAsync(() => CommitCoreAsync(ct));
+                break;
+            case "commitWarnAdd":
+            case "commitWarnNo":
+                _commitWarn = false;
+                NotifyChanged();
+                await RunExclusiveAsync(() => CommitCoreAsync(ct, addNew: name == "commitWarnAdd"));
+                break;
+            case "commitWarnCancel":
+                _commitWarn = false;
+                NotifyChanged();
                 break;
             case "setCommitText":
                 CommitMessage.SetTextQuietly(Args.Str(args, "text"));
@@ -1300,12 +1336,16 @@ internal sealed class ChangesStore : ViewStore, IDisposable
     /// Commit degli elementi di <see cref="CommitSet"/>. Come TortoiseSVN: i non versionati in Staged vengono prima
     /// aggiunti e i mancanti prima cancellati (svn commit da solo li rifiuterebbe).
     /// </summary>
-    private async Task CommitCoreAsync(CancellationToken ct)
+    private async Task CommitCoreAsync(CancellationToken ct, bool addNew = false)
     {
-        var (selected, _) = CommitSet();
-        List<ChangeEntry> all;
+        var (selected, all) = CommitSet();
+        List<ChangeEntry> allEntries;
         lock (_stateLock)
-            all = _entries;
+            allEntries = _entries;
+
+        // Commit All con "Si', aggiungi": anche i non versionati ('?'), che piu' sotto vengono aggiunti con svn add.
+        if (addNew && all)
+            selected = selected.Concat(allEntries.Where(e => e.Status == SvnStatusKind.Unversioned)).ToList();
 
         if (selected.Count == 0)
         {
@@ -1326,6 +1366,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             return;
         }
 
+        var toAddCount = 0;
         try
         {
             SetStatus(Loc.T("Commit in corso..."));
@@ -1333,10 +1374,11 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             // Come TortoiseSVN: le cartelle padre nuove (aggiunte o non versionate) di un elemento in Staged vanno
             // nel commit anche se non ci sono, altrimenti svn rifiuta ("is not known to exist in the repository
             // and is not part of the commit, yet its child is part of the commit").
-            var parents = NewParentFolders(selected, all);
+            var parents = NewParentFolders(selected, allEntries);
             var commitEntries = parents.Concat(selected).ToList();
 
             var toAdd = commitEntries.Where(e => e.Status == SvnStatusKind.Unversioned).Select(e => e.FullPath).ToList();
+            toAddCount = toAdd.Count;
             if (toAdd.Count > 0)
                 await _svnService.AddAsync(toAdd, ct);
 
@@ -1373,7 +1415,8 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
             // Add/delete gia' eseguiti prima del commit fallito (es. "fai prima Update"): la lista va riallineata.
-            await RefreshAsync(ct, reloadBranch: false, Loc.T("Errore commit: {0}", ex.Message));
+            var note = toAddCount > 0 ? " " + Loc.T("I file nuovi restano aggiunti (A): rifai il commit o annullali con Revert.") : string.Empty;
+            await RefreshAsync(ct, reloadBranch: false, Loc.T("Errore commit: {0}", ex.Message) + note);
         }
     }
 

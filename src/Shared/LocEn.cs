@@ -152,6 +152,7 @@ namespace SVNAssist
             ["Commit completato: revisione {0} ({1} elementi)."] = "Commit completed: revision {0} ({1} items).",
             ["Commit completato: {0} elementi."] = "Commit completed: {0} items.",
             ["Errore commit: {0}"] = "Error during commit: {0}",
+            ["I file nuovi restano aggiunti (A): rifai il commit o annullali con Revert."] = "The new files stay added (A): commit again or undo them with Revert.",
             ["Nessuna working copy configurata."] = "No working copy configured.",
             ["Update in corso..."] = "Update in progress...",
             ["Aggiornato alla revisione {0}"] = "Updated to revision {0}",

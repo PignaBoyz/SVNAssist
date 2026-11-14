@@ -44,6 +44,12 @@
       U.btn('btn primary', clean ? t('Esegui lo switch') : t('Continua comunque'), 'branch', 'switchWarnContinue', null, t('Esegue svn switch')) + `</div></div></div>`;
   };
 
+  O.commitWarnHTML = s => `<div class="wiz-scrim"><div class="wiz" role="dialog" aria-modal="true" aria-labelledby="ops-t"><div class="wiz-h"><h3 id="ops-t" tabindex="-1">Commit All</h3></div><div class="wiz-b">` +
+    `<p>${U.icon('warn')} ${esc(t('Ci sono {0} file non versionati. Aggiungerli al commit?', s.count))}</p><ul class="olines">${s.items.map(p => `<li class="ol"><span class="st st-?">?</span><span class="pt">${esc(p)}</span></li>`).join('')}${s.more ? `<li class="ol i"><span class="st"></span><span class="pt muted">${esc(t('… e altri {0}', s.more))}</span></li>` : ''}</ul>` +
+    `</div><div class="wiz-f">${U.btn('btn ghost', t('Annulla'), null, 'commitWarnCancel', null, t('Non committa nulla'))}<span class="fill"></span>` +
+    U.btn('btn', t('No, solo i versionati'), null, 'commitWarnNo', null, t('Committa solo le modifiche dei file versionati; i non versionati restano fuori')) +
+    U.btn('btn primary', t('Sì, aggiungi e committa'), 'check', 'commitWarnAdd', null, t('Esegue svn add sui file non versionati e li committa insieme al resto')) + `</div></div></div>`;
+
   O.cleanupHTML = c => {
     const ck = (k, label, hint, o = {}) => {
       const on = o.mirror != null ? o.mirror : opt[k], off = o.mirror != null || (o.extra && !c.extras);
@@ -69,12 +75,12 @@
 
   // Un solo contenitore (#ops) per vista; inert/modal-open sull'app li imposta la vista.
   O.render = (box, st) => {
-    const open = !!(st.progress || st.switchWarn || st.cleanup), was = !!box.__open, a = document.activeElement;
-    const kind = st.progress ? 'p' : st.switchWarn ? 'w' : st.cleanup ? 'c' : '';
+    const open = !!(st.progress || st.switchWarn || st.cleanup || st.commitWarn), was = !!box.__open, a = document.activeElement;
+    const kind = st.progress ? 'p' : st.switchWarn ? 'w' : st.cleanup ? 'c' : st.commitWarn ? 'k' : '';
     if (open && (!was || box.__kind !== kind)) { if (kind === 'c') O.resetCleanup(); if (!was) box.__prev = a; }
     const lines = box.querySelector('#ops-lines'), stick = !lines || lines.scrollTop + lines.clientHeight >= lines.scrollHeight - 8, top = lines ? lines.scrollTop : 0;
     const focusKey = box.contains(a) ? (a.dataset && (a.dataset.ock || ('opsOk' in a.dataset ? 'ok' : ''))) : '';
-    const changed = U.setHTML(box, st.progress ? O.progressHTML(st.progress) : st.switchWarn ? O.warnHTML(st.switchWarn) : st.cleanup ? O.cleanupHTML(st.cleanup) : '');
+    const changed = U.setHTML(box, st.progress ? O.progressHTML(st.progress) : st.switchWarn ? O.warnHTML(st.switchWarn) : st.cleanup ? O.cleanupHTML(st.cleanup) : st.commitWarn ? O.commitWarnHTML(st.commitWarn) : '');
     const l2 = box.querySelector('#ops-lines'); if (l2) l2.scrollTop = stick ? l2.scrollHeight : top;
     if (open && changed) {
       const f = (!was || box.__kind !== kind) ? box.querySelector('#ops-t') : focusKey === 'ok' ? box.querySelector('[data-ops-ok]') : focusKey ? box.querySelector(`[data-ock="${focusKey}"]`) : box.querySelector('.wiz-f .btn.primary,.wiz-f .btn.danger');
@@ -90,7 +96,7 @@
     box.addEventListener('click', e => { if (e.target.closest('[data-ops-ok]') && O.cleanupValid()) U.bridge.send('cleanupOk', O.cleanupOpts()); });
     document.addEventListener('keydown', e => {
       if (!box.__open) return; const st = getState();
-      if (e.key === 'Escape') { if (st.cleanup && !st.progress) { e.preventDefault(); U.bridge.send('cleanupCancel'); } else if (st.switchWarn && !st.progress) { e.preventDefault(); U.bridge.send('switchWarnCancel'); } else if (st.progress && !st.progress.running) { e.preventDefault(); U.bridge.send('progressClose', { conflicts: false }); } return; }
+      if (e.key === 'Escape') { if (st.cleanup && !st.progress) { e.preventDefault(); U.bridge.send('cleanupCancel'); } else if (st.switchWarn && !st.progress) { e.preventDefault(); U.bridge.send('switchWarnCancel'); } else if (st.commitWarn && !st.progress) { e.preventDefault(); U.bridge.send('commitWarnCancel'); } else if (st.progress && !st.progress.running) { e.preventDefault(); U.bridge.send('progressClose', { conflicts: false }); } return; }
       if (e.key !== 'Tab') return;
       const f = [...box.querySelectorAll('button:not(:disabled),input:not(:disabled),[tabindex="0"]')]; if (!f.length) return;
       const a = document.activeElement, first = f[0], last = f[f.length - 1];
