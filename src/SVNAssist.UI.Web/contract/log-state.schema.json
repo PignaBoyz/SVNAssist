@@ -445,6 +445,38 @@
           "items": {
             "type": "string"
           }
+        },
+        "cancellable": {
+          "type": "boolean",
+          "description": "Mostra Annulla (opCancel): switch, merge, update mentre girano; mai per il cleanup."
+        },
+        "cancelling": {
+          "type": "boolean",
+          "description": "Annullamento richiesto: Annulla disabilitato (\"Annullamento...\")."
+        },
+        "cancelled": {
+          "type": "boolean",
+          "description": "Terminata per annullamento: la working copy puo essere rimasta a meta o sporca."
+        },
+        "actions": {
+          "type": "array",
+          "description": "Passi proposti dopo un annullamento (cmd = comando UI).",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "label",
+              "cmd"
+            ],
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "cmd": {
+                "type": "string"
+              }
+            }
+          }
         }
       }
     }

@@ -118,9 +118,20 @@ internal sealed class FakeSvnService : ISvnService
     public Task AddToIgnoreListAsync(string path, CancellationToken ct) { Ignored.Add(path); return Task.CompletedTask; }
     public int Updates { get; private set; }
 
+    /// <summary>Update e switch non finiscono finche' il token non viene annullato (svn lungo; poi lanciano come il runner reale).</summary>
+    public bool Hang { get; set; }
+
+    private static async Task<UpdateResult> HangAsync(CancellationToken ct)
+    {
+        await Task.Delay(Timeout.Infinite, ct);
+        return new UpdateResult(0, []);
+    }
+
     public Task<UpdateResult> UpdateAsync(string workingCopyPath, CancellationToken ct)
     {
         Updates++;
+        if (Hang)
+            return HangAsync(ct);
         return UpdateError is not null ? throw new InvalidOperationException(UpdateError) : Task.FromResult(new UpdateResult(7, UpdateConflicts));
     }
 
@@ -270,6 +281,8 @@ internal sealed class FakeSvnService : ISvnService
     public Task<UpdateResult> SwitchAsync(string workingCopyPath, string url, CancellationToken ct, long? revision = null)
     {
         SwitchLog.Add("switch " + url + (revision is { } rv ? "@" + rv : ""));
+        if (Hang)
+            return HangAsync(ct);
         if (SwitchError is not null && (SwitchFailTimes is null || SwitchFailTimes-- > 0))
         {
             if (InfoAfterFailedSwitch is not null)

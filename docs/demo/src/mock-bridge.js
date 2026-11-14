@@ -129,7 +129,7 @@
       items: s.loading ? [] : SW_ITEMS.filter(([name]) => !merge || name !== S.branch).map(([name, kind, rev, author, days]) => ({ name, kind, current: name === S.branch, rev, author, date: new Date(Date.now() - days * 864e5).toISOString() })),
       recent: (S.swRecent || []).filter(n => SW_ITEMS.some(i => i[0] === n && (!merge || n !== S.branch))) };
   }
-  const progSnap = () => S.prog ? { progress: { ...S.prog, title: tr(S.prog.title), phase: tr(S.prog.phase), summary: tr(S.prog.summary) } } : {};
+  const progSnap = () => S.prog ? { progress: { ...S.prog, title: tr(S.prog.title), phase: tr(S.prog.phase), summary: tr(S.prog.summary), ...(S.prog.actions ? { actions: S.prog.actions.map(a => ({ ...a, label: tr(a.label) })) } : {}) } } : {};
   function dirtyCounts() { const n = (...k) => S.files.filter(f => k.includes(f.st)).length; return { modified: n('M', 'R'), added: n('A'), deleted: n('D', '!'), conflicted: n('C'), unversioned: n('?') }; }
   function snapshotChanges() {
     const v = S.vm;
@@ -273,6 +273,8 @@
     switchWarnCancel: () => vmWarn('cancel'),
     switchBack: () => { setStatus('Nessuno switch da annullare.'); render(); },   // la demo non simula switch interrotti
     progressClose: a => vmProgressClose(a),
+    opCancel: () => vmOpCancel(),
+    progressRevertMerge: () => { S.prog = null; setStatus('Revert delle modifiche del merge: nessuna modifica parziale da annullare (la demo non applica il merge a metà).'); render(); },
     commit: () => vmCommit(),
     commitWarnAdd: () => vmCommitWarn('add'),
     commitWarnNo: () => vmCommitWarn('no'),

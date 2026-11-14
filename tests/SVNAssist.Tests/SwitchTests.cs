@@ -498,6 +498,82 @@ public class SwitchTests
     }
 
     [Fact]
+    public void Avanzamento_Annulla_SoloSwitchUpdateMerge_UnaVolta()
+    {
+        var p = new OperationProgress();
+        var ct = p.Begin("cleanup", "c", "f");
+        Assert.False(p.GetSnapshot()!.Cancellable);
+        Assert.False(p.Cancel());
+        Assert.False(ct.IsCancellationRequested);
+
+        ct = p.Begin("merge", "m", "f");
+        Assert.True(p.GetSnapshot()!.Cancellable);
+        Assert.True(p.Cancel());
+        Assert.False(p.Cancel());   // doppio click
+        Assert.True(ct.IsCancellationRequested);
+        Assert.True(p.GetSnapshot()!.Cancelling);
+    }
+
+    [Fact]
+    public async Task ProcessRunner_TokenAnnullato_TerminaIlProcesso()
+    {
+        using var cts = new CancellationTokenSource();
+        var started = new TaskCompletionSource();
+        var run = new ProcessRunner().RunStreamingAsync("ping.exe", ["-n", "60", "127.0.0.1"], null, cts.Token, null, null, _ => started.TrySetResult());
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => run);
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(5), "ping avrebbe girato per 60 secondi: il processo non e' stato ucciso");
+    }
+
+    [Fact]
+    public async Task Switch_Annullato_LasciaPendingSwitch_CleanupEAzioniNellaFinestra()
+    {
+        using var f = new Fixture();
+        f.Svn.Hang = true;
+        await f.Cmd("switchOpen");
+        var run = f.Cmd("switchOk", new { name = "tags/1.0" });
+        for (var i = 0; i < 200 && !f.Svn.SwitchLog.Contains("switch file:///repo/tags/1.0"); i++)
+            await Task.Delay(10);
+        Assert.True(f.State.Progress!.Cancellable);
+
+        await f.Cmd("opCancel");
+        await run;
+
+        var p = f.State.Progress!;
+        Assert.True(p.Cancelled);
+        Assert.False(p.Running);
+        Assert.Equal(["switchResume", "switchBack", "cleanup"], p.Actions!.Select(a => a.Cmd));
+        Assert.Equal(["switch file:///repo/tags/1.0", "cleanup"], f.Svn.SwitchLog);   // cleanup normale dopo l'annullamento
+        Assert.Equal("switchResume", f.State.Status.Action?.Cmd);   // PendingSwitch resta: flusso esistente
+        Assert.Empty(f.Svn.Switched);
+
+        await f.Cmd("cleanup");   // "Cleanup…" dalla finestra: chiude l'avanzamento e apre le opzioni
+        Assert.Null(f.State.Progress);
+        Assert.NotNull(f.State.Cleanup);
+    }
+
+    [Fact]
+    public async Task Update_Annullato_ProponeRiprovaECleanup()
+    {
+        using var f = new Fixture();
+        f.Svn.Hang = true;
+        var run = f.Cmd("update");
+        for (var i = 0; i < 200 && f.Svn.Updates == 0; i++)
+            await Task.Delay(10);
+
+        await f.Cmd("opCancel");
+        await run;
+
+        Assert.Equal(["update", "cleanup"], f.State.Progress!.Actions!.Select(a => a.Cmd));
+        Assert.True(f.State.Progress.Cancelled);
+        Assert.Equal(["cleanup"], f.Svn.SwitchLog);
+    }
+
+    [Fact]
     public async Task Switch_Interrotto_SiRicordaAncheDopoIlRiavvio()
     {
         string recent;

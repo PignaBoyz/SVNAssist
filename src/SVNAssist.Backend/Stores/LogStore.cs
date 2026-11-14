@@ -172,6 +172,13 @@ internal sealed class LogStore : ViewStore
                 if (_changes is not null)
                     await _changes.CloseProgressAsync(Args.Bool(args, "conflicts"));
                 break;
+            case "opCancel":
+                _changes?.Progress.Cancel();
+                break;
+            case "progressRevertMerge":
+                if (_changes is not null)
+                    await _changes.RevertCancelledMergeAsync(ct);
+                break;
             case "mergeResolve":
                 if (Merge is not null)
                     await Merge.ShowConflictsAsync();
