@@ -154,6 +154,10 @@ namespace SVNAssist.Host
         [LDescription("Automatica usa la lingua di Visual Studio (italiano se è italiano, altrimenti inglese). Si applica subito a finestre e messaggi; la lingua dei commit message AI è un'impostazione separata.")]
         public string UiLanguage { get; set; } = "auto";
 
+        [LCategory("Generale"), LDisplayName("Mostra lo stato SVN in Solution Explorer"), DefaultValue(true)]
+        [LDescription("Icone accanto ai file (modificato, aggiunto, non versionato, in conflitto) quando la solution e' in una working copy SVN. SVNAssist si registra come provider di source control di Visual Studio: spegni se usi un altro provider.")]
+        public bool ShowSccGlyphs { get; set; } = true;
+
         [LCategory("Scorciatoie"), LDisplayName("Prossima modifica nel diff"), DefaultValue("Alt+F8")]
         [LDescription("Scorciatoia globale, es. Alt+F8 o Ctrl+Shift+Down. Vuota = nessuna scorciatoia. Se non valida resta quella precedente (vedi il log di SVNAssist).")]
         public string NextChangeShortcut { get; set; } = "Alt+F8";

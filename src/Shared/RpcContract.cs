@@ -37,6 +37,9 @@ namespace SVNAssist.Rpc
 
         /// <summary>Visual Studio e' diventata l'applicazione attiva (true) o ha perso il primo piano (false): il controllo delle nuove revisioni si ferma in secondo piano.</summary>
         Task IdeActiveChangedAsync(bool active);
+
+        /// <summary>Stato SVN dei percorsi non "normali" della working copy aperta (percorso completo -> nome di SvnStatusKind), dalla cache in memoria di Changes: per i glifi di Solution Explorer.</summary>
+        Task<Dictionary<string, string>> GetSccStatesAsync();
     }
 
     /// <summary>Metodi esposti dall'HOST, chiamati dal backend.</summary>
@@ -100,5 +103,8 @@ namespace SVNAssist.Rpc
         /// annullabile (Ctrl+Z) e lo salva: true. File non aperto: false e non fa nulla (il backend scrive su disco).
         /// </summary>
         Task<bool> ApplyDocumentTextAsync(string path, string text);
+
+        /// <summary>Lo stato SVN dei file e' cambiato: l'host rilegge GetSccStatesAsync e aggiorna i glifi di Solution Explorer.</summary>
+        Task SccStatusChangedAsync();
     }
 }

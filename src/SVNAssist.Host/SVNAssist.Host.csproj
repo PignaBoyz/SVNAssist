@@ -35,6 +35,7 @@
     <Reference Include="System.Security" />
     <Reference Include="System.ComponentModel.Composition" />
     <Compile Include="..\Shared\DiffNav.cs" Link="DiffNav.cs" />
+    <Compile Include="..\Shared\SccGlyph.cs" Link="SccGlyph.cs" />
     <Compile Include="..\Shared\RpcContract.cs" Link="RpcContract.cs" />
     <Compile Include="..\Shared\Loc.cs" Link="Loc.cs" />
     <Compile Include="..\Shared\LocEn.cs" Link="LocEn.cs" />

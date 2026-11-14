@@ -18,6 +18,8 @@ internal sealed class FakeHost : IHost
     /// <summary>Risposta quando la coda e' vuota (0 = primo pulsante, cioe' "OK").</summary>
     public int DefaultAnswer { get; set; }
 
+    public Task SccStatusChangedAsync() => Task.CompletedTask;
+
     public Task PushAsync(string view, string messageJson)
     {
         lock (Pushed)

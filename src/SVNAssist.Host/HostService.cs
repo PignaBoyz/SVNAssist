@@ -27,6 +27,7 @@ namespace SVNAssist.Host
         private readonly Dictionary<string, string> _lastReady = new Dictionary<string, string>();
         private readonly Dictionary<string, TaskCompletionSource<bool>> _readyTcs = new Dictionary<string, TaskCompletionSource<bool>>();
         private string _solutionDir;
+        private int _sccPending;
         private int _seq = 1_000_000; // id dei cmd generati dall'host (i comandi del menu), lontani da quelli della UI
 
         public HostService(SVNAssistPackage pkg)
@@ -108,6 +109,24 @@ namespace SVNAssist.Host
         {
             var b = await _backend.GetAsync().ConfigureAwait(false);
             return await b.GetChangedBlocksAsync(file).ConfigureAwait(false) ?? new int[0];
+        }
+
+        /// <summary>Provider SCC attivato: serve il backend anche se nessuna finestra e' aperta; poi si legge lo stato dei file.</summary>
+        public async Task StartSccAsync()
+        {
+            await SendSolutionAsync(await _backend.GetAsync().ConfigureAwait(false)).ConfigureAwait(false);
+            await SccStatusChangedAsync().ConfigureAwait(false);
+        }
+
+        /// <summary>Dal backend: lo stato dei file e' cambiato (coalescenza 300 ms), si rilegge la cache e si ridisegnano i glifi.</summary>
+        public async Task SccStatusChangedAsync()
+        {
+            var scc = _pkg.Scc;
+            if (scc == null || !scc.Active || Interlocked.Exchange(ref _sccPending, 1) == 1) return;
+            await Task.Delay(300).ConfigureAwait(false);
+            Interlocked.Exchange(ref _sccPending, 0);
+            try { scc.SetStates(await (await _backend.GetAsync().ConfigureAwait(false)).GetSccStatesAsync().ConfigureAwait(false)); }
+            catch (Exception ex) { Log.Write("scc stati: " + ex.Message); }
         }
 
         public async Task RunPathCommandAsync(string command, string[] paths)

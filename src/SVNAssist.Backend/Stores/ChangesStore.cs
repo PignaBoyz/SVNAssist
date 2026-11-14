@@ -49,6 +49,17 @@ internal sealed class ChangesStore : ViewStore, IDisposable
     private int _started;
 
     private List<ChangeEntry> _entries = [];
+
+    /// <summary>Lo stato dei file e' stato riletto da svn (per i glifi di Solution Explorer).</summary>
+    internal event Action? EntriesChanged;
+
+    /// <summary>Stato dei percorsi non normali (percorso completo -> nome di <see cref="SvnStatusKind"/>); conflitto ad albero = Conflicted.</summary>
+    internal Dictionary<string, string> SccStates()
+    {
+        lock (_stateLock)
+            return _entries.GroupBy(e => e.FullPath, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First().Status.ToString(), StringComparer.OrdinalIgnoreCase);
+    }
     private readonly Dictionary<string, WorkingCopyState> _wcStates = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _collapsed = new(StringComparer.Ordinal);
 
@@ -1022,6 +1033,8 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 _showWorkingCopyInput = !_autoDetected;
                 UpdateStagedAfterRefresh();
             }
+
+            EntriesChanged?.Invoke();
 
             if (urlChanged)
             {

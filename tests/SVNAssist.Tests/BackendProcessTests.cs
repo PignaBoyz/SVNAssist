@@ -36,6 +36,7 @@ public sealed class BackendProcessTests
         public Task ShowLogAsync(string path) => Task.CompletedTask;
         public Task ShowLogWindowAsync(string title) => Task.CompletedTask;
         public Task ShowChangesWindowAsync() => Task.CompletedTask;
+        public Task SccStatusChangedAsync() => Task.CompletedTask;
         public Task<bool> ApplyDocumentTextAsync(string path, string text) => Task.FromResult(false);
         public Task ShowFolderDiffAsync(string path) => Task.CompletedTask;
         public Task RunInTerminalAsync(string command, string workingDir) => Task.CompletedTask;
