@@ -20,15 +20,13 @@ public sealed record CleanupOptions(
     /// <summary>Opzioni oltre il cleanup semplice: esistono da svn 1.9.</summary>
     public bool UsesExtras => VacuumPristines || IncludeExternals || RemoveUnversioned || RemoveIgnored;
 
-    /// <summary><c>--vacuum-pristines</c>, <c>--include-externals</c>, <c>--remove-*</c> richiedono svn 1.9 (versione sconosciuta = si prova).</summary>
+    /// <summary><c>--vacuum-pristines</c>, <c>--include-externals</c>, l'eliminazione di non versionati/ignorati richiedono svn 1.9 (versione sconosciuta = si prova).</summary>
     public static bool ExtrasSupported(Version? svn) => svn is null || svn >= new Version(1, 9);
 
-    /// <summary>Argomenti di <c>svn cleanup</c> (<c>--non-interactive</c> lo aggiunge SvnService).</summary>
+    /// <summary>Argomenti di <c>svn cleanup</c>: <c>--remove-*</c> non si passano, i non versionati/ignorati li elimina SVNAssist (VS tiene file aperti) (<c>--non-interactive</c> lo aggiunge SvnService).</summary>
     public List<string> ToArgs()
     {
         var args = new List<string> { "cleanup" };
-        if (RemoveUnversioned) args.Add("--remove-unversioned");
-        if (RemoveIgnored) args.Add("--remove-ignored");
         if (VacuumPristines) args.Add("--vacuum-pristines");
         if (IncludeExternals) args.Add("--include-externals");
         return args;

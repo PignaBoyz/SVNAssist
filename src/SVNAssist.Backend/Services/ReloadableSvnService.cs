@@ -52,7 +52,7 @@ internal sealed class ReloadableSvnService : ISvnService
     public Task<UpdateResult> UpdateAsync(string workingCopyPath, CancellationToken ct) => Current.UpdateAsync(workingCopyPath, ct);
     public Task<UpdateResult> UpdateToRevisionAsync(string workingCopyPath, string revision, CancellationToken ct) => Current.UpdateToRevisionAsync(workingCopyPath, revision, ct);
     public Task CleanupAsync(string path, CancellationToken ct) => Current.CleanupAsync(path, ct);
-    public Task CleanupAsync(string path, CleanupOptions options, CancellationToken ct) => Current.CleanupAsync(path, options, ct);
+    public Task<CleanupReport> CleanupAsync(string path, CleanupOptions options, CancellationToken ct) => Current.CleanupAsync(path, options, ct);
     public Task LockAsync(IEnumerable<string> paths, string? message, bool force, CancellationToken ct) => Current.LockAsync(paths, message, force, ct);
     public Task UnlockAsync(IEnumerable<string> paths, CancellationToken ct) => Current.UnlockAsync(paths, ct);
     public Task<IReadOnlyList<SvnLogEntry>> GetLogAsync(string targetPath, int maxEntries, CancellationToken ct) => Current.GetLogAsync(targetPath, maxEntries, ct);

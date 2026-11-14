@@ -628,7 +628,7 @@
     },
     {
       "title": "cleanupOk",
-      "description": "Esegue il Cleanup con le opzioni scelte (svn cleanup --remove-unversioned/--remove-ignored/--vacuum-pristines/--include-externals, svn revert -R). Le opzioni distruttive (unversioned, ignored, revert) richiedono confirmed=true.",
+      "description": "Esegue il Cleanup con le opzioni scelte (svn cleanup --vacuum-pristines/--include-externals, svn revert -R). Le opzioni distruttive (unversioned, ignored, revert) richiedono confirmed=true.",
       "type": "object",
       "additionalProperties": false,
       "required": [

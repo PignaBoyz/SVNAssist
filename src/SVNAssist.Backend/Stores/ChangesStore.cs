@@ -1893,9 +1893,10 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         {
             SetStatus(Loc.T("Cleanup in corso..."));
             Progress.Begin("cleanup", "SVN Cleanup", Loc.T("Cleanup in corso..."));
-            await Streaming(async () => { await _svnService.CleanupAsync(wc, options, ct); return true; });
-            await RefreshAsync(ct, reloadBranch: false, Loc.T("Cleanup completato."));
-            Progress.Done(true, Loc.T("Cleanup completato."));
+            var report = await Streaming(() => _svnService.CleanupAsync(wc, options, ct));
+            var summary = report.Summary(Loc.T("Cleanup completato."));
+            await RefreshAsync(ct, reloadBranch: false, summary);
+            Progress.Done(true, summary, warnings: report.Skipped > 0);
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {

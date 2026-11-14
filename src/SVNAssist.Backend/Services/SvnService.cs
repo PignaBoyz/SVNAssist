@@ -352,7 +352,7 @@ public class SvnService : ISvnService
     public Task CleanupAsync(string path, CancellationToken ct) => CleanupAsync(path, CleanupOptions.Default, ct);
 
     /// <inheritdoc />
-    public async Task CleanupAsync(string path, CleanupOptions options, CancellationToken ct)
+    public async Task<CleanupReport> CleanupAsync(string path, CleanupOptions options, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(path))
             throw new ArgumentException("Il percorso non può essere vuoto.", nameof(path));
@@ -363,8 +363,17 @@ public class SvnService : ISvnService
             throw new InvalidOperationException(Loc.T("Queste opzioni del Cleanup richiedono svn 1.9 o successivo."));
         if (options.RunsCleanup)
             await RunSvnAsync(options.ToArgs(), dir, ct, applyTimeout: false);
+        var report = new CleanupReport(0, 0);
+        if (options.RemoveUnversioned || options.RemoveIgnored)
+        {
+            var sink = SvnProgress.Sink;   // l'XML di status non va nella finestra di avanzamento
+            var xml = await SvnProgress.RunAsync(_ => { }, () => RunSvnAsync(["status", "--no-ignore", "--xml"], dir, ct, applyTimeout: false));
+            report = CleanupDeleter.Delete(CleanupDeleter.ParseExtras(xml, dir, options.RemoveUnversioned, options.RemoveIgnored), sink);
+        }
+
         if (options.RevertAll)
             await RevertAsync([dir], ct, recursive: true);
+        return report;
     }
 
     /// <inheritdoc />

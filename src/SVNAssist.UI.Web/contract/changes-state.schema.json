@@ -858,6 +858,10 @@
           "type": "boolean",
           "description": "Mostra Annulla (opCancel): switch, merge, update mentre girano; mai per il cleanup."
         },
+        "warnings": {
+          "type": "boolean",
+          "description": "Finita bene ma con avvisi (es. Cleanup: file in uso saltati): riepilogo in giallo."
+        },
         "cancelling": {
           "type": "boolean",
           "description": "Annullamento richiesto: Annulla disabilitato (\"Annullamento...\")."

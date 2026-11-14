@@ -153,7 +153,8 @@ internal sealed class FakeSvnService : ISvnService
 
     public Task CleanupAsync(string path, CancellationToken ct) { CleanedUp.Add(path); SwitchLog.Add("cleanup"); return Task.CompletedTask; }
     public List<CleanupOptions> CleanupOptionsUsed { get; } = [];
-    public Task CleanupAsync(string path, CleanupOptions options, CancellationToken ct) { CleanupOptionsUsed.Add(options); return CleanupAsync(path, ct); }
+    public Task<SVNAssist.Services.CleanupReport> CleanupAsync(string path, CleanupOptions options, CancellationToken ct) { CleanupOptionsUsed.Add(options); CleanupAsync(path, ct); return Task.FromResult(CleanupReportToReturn); }
+    public SVNAssist.Services.CleanupReport CleanupReportToReturn { get; set; } = new(0, 0);
 
     public Task LockAsync(IEnumerable<string> paths, string? message, bool force, CancellationToken ct)
     {

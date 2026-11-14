@@ -530,7 +530,7 @@ public class SvnCleanupLockAuthTests
     public void CleanupOptions_Argomenti()
     {
         Assert.Equal(["cleanup"], CleanupOptions.Default.ToArgs());
-        Assert.Equal(["cleanup", "--remove-unversioned", "--remove-ignored", "--vacuum-pristines", "--include-externals"],
+        Assert.Equal(["cleanup", "--vacuum-pristines", "--include-externals"],
             new CleanupOptions(true, true, true, true, true).ToArgs());
         Assert.False(new CleanupOptions(false, RevertAll: true).RunsCleanup);
         Assert.True(CleanupOptions.ExtrasSupported(new Version(1, 9)));
@@ -541,11 +541,12 @@ public class SvnCleanupLockAuthTests
     public async Task SvnService_CleanupConOpzioni_ArgomentiERevert()
     {
         var r = new Runner();
-        r.Respond = (a, _) => new ProcessResult(0, a[0] == "cleanup" ? "D         C:\\wc\\tmp.txt\n" : "Reverted 'C:\\wc\\a.cs'\n", "");
+        r.Respond = (a, _) => new ProcessResult(0, a[0] == "cleanup" ? "D         C:\\wc\\tmp.txt\n" : a[0] == "status" ? "<status><target path=\".\"></target></status>" : "Reverted 'C:\\wc\\a.cs'\n", "");
         var svn = new SvnService(FakeSvnPath, r);
         var lines = new List<string>();
         await SvnProgress.RunAsync(lines.Add, async () => { await svn.CleanupAsync(@"C:\wc", new CleanupOptions(true, true, false, true, false, true), Ct); return 0; });
-        Assert.Equal(["cleanup", "--non-interactive", "--remove-unversioned", "--vacuum-pristines"], r.Calls[^2].Args);
+        Assert.Equal(["cleanup", "--non-interactive", "--vacuum-pristines"], r.Calls.Single(c => c.Args[0] == "cleanup").Args);   // niente --remove-*: li elimina SVNAssist
+        Assert.Contains(r.Calls, c => c.Args[0] == "status" && c.Args.Contains("--no-ignore"));
         Assert.Equal("revert", r.Calls[^1].Args[0]);
         Assert.Equal(["D         C:\\wc\\tmp.txt", "Reverted 'C:\\wc\\a.cs'"], lines);   // senza streaming (runner finto) le righe arrivano a fine comando
     }

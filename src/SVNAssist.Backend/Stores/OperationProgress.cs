@@ -23,7 +23,7 @@ internal sealed record ProgressDto(
     IReadOnlyList<ProgressLineDto> Lines, string Summary,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? ConflictPaths = null,
     bool Cancellable = false, bool Cancelling = false, bool Cancelled = false,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ProgressActionDto>? Actions = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ProgressActionDto>? Actions = null, bool Warnings = false);
 
 /// <summary>Stato condiviso della finestra di avanzamento: lo scrive l'operazione (anche da thread di svn), lo legge lo snapshot di Changes e di Log.</summary>
 internal sealed partial class OperationProgress
@@ -35,7 +35,7 @@ internal sealed partial class OperationProgress
     private readonly List<ProgressLineDto> _lines = [];
     private readonly List<string> _conflicts = [];
     private string _op = string.Empty, _title = string.Empty, _phase = string.Empty, _summary = string.Empty;
-    private bool _open, _running, _ok, _cancelling, _cancelled;
+    private bool _open, _running, _ok, _cancelling, _cancelled, _warnings;
     private IReadOnlyList<ProgressActionDto>? _actions;
     private CancellationTokenSource? _cts;
     private int _processed, _conflictCount, _omitted;
@@ -52,7 +52,7 @@ internal sealed partial class OperationProgress
         {
             (_open, _running, _ok, _op, _title, _phase, _summary) = (true, true, false, op, title, phase, string.Empty);
             (_processed, _conflictCount, _omitted) = (0, 0, 0);
-            (_cancelling, _cancelled, _actions) = (false, false, null);
+            (_cancelling, _cancelled, _actions, _warnings) = (false, false, null, false);
             _lines.Clear();
             _conflicts.Clear();
             _cts?.Dispose();
@@ -118,12 +118,12 @@ internal sealed partial class OperationProgress
         Changed?.Invoke();
     }
 
-    internal void Done(bool ok, string summary, int? conflicts = null, bool cancelled = false, IReadOnlyList<ProgressActionDto>? actions = null)
+    internal void Done(bool ok, string summary, int? conflicts = null, bool cancelled = false, IReadOnlyList<ProgressActionDto>? actions = null, bool warnings = false)
     {
         lock (_lock)
         {
             (_running, _ok, _summary, _phase, _conflictCount) = (false, ok, summary, string.Empty, conflicts ?? _conflictCount);
-            (_cancelling, _cancelled, _actions) = (false, cancelled, actions);
+            (_cancelling, _cancelled, _actions, _warnings) = (false, cancelled, actions, warnings);
         }
 
         Changed?.Invoke();
@@ -147,7 +147,7 @@ internal sealed partial class OperationProgress
         lock (_lock)
             return !_open ? null
                 : new ProgressDto(_op, _title, _phase, _running, _ok, _processed, _conflictCount, _omitted, _lines.ToList(), _summary, _conflicts.Count > 0 ? _conflicts.ToList() : null,
-                    _running && IsCancellableOp(_op), _cancelling, _cancelled, _actions);
+                    _running && IsCancellableOp(_op), _cancelling, _cancelled, _actions, _warnings);
     }
 
     /// <summary>

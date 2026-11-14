@@ -22,8 +22,8 @@
     const done = !p.running, bar = `<div class="obar${done ? (p.ok ? ' ok' : ' err') : ''}" role="progressbar" aria-label="${esc(p.title)}"${done ? ' aria-valuenow="100" aria-valuemin="0" aria-valuemax="100"' : ''}><i></i></div>`;
     const counts = `<span class="muted">${t('{0} elementi elaborati', p.processed)}</span>` + (p.conflicts ? ` <span class="chip fail">${U.icon('warn')}${t('{0} in conflitto', p.conflicts)}</span>` : '');
     const lines = p.lines.length ? `<ul class="olines" id="ops-lines" tabindex="0" aria-label="${esc(t('Righe di notifica di svn'))}">${p.omitted ? `<li class="ol i"><span class="st"></span><span class="pt muted">${esc(t('… altre righe precedenti non mostrate'))}</span></li>` : ''}${p.lines.map(O.lineHTML).join('')}</ul>`
-      : `<div class="olines empty muted">${esc(t('In attesa delle prime righe da svn…'))}</div>`;
-    const summary = done ? `<div class="${p.cancelled ? 'rp-err warnb' : p.ok ? (p.conflicts ? 'rp-err warnb' : 'osum ok') : 'rp-err'}" role="alert">${U.icon(p.ok && !p.conflicts ? 'check' : p.ok || p.cancelled ? 'warn' : 'x')}<span>${esc(p.summary)}</span></div>` : '';
+      : `<div class="olines empty muted">${esc(done ? t('Nessun output da svn') : t('In attesa delle prime righe da svn…'))}</div>`;
+    const summary = done ? `<div class="${p.cancelled ? 'rp-err warnb' : p.ok ? (p.conflicts || p.warnings ? 'rp-err warnb' : 'osum ok') : 'rp-err'}" role="alert">${U.icon(p.ok && !p.conflicts && !p.warnings ? 'check' : p.ok || p.cancelled ? 'warn' : 'x')}<span>${esc(p.summary)}</span></div>` : '';
     return `<div class="wiz-scrim"><div class="wiz ops" role="dialog" aria-modal="true" aria-labelledby="ops-t"><div class="wiz-h"><h3 id="ops-t" tabindex="-1">${esc(p.title)}</h3></div>` +
       `<div class="wiz-b"><div class="ophase">${done ? '' : '<span class="spin" aria-hidden="true"></span>'}<b>${esc(done ? (p.cancelled ? t('Operazione annullata') : p.ok ? t('Completato') : t('Operazione non riuscita')) : p.phase)}</b><span class="fill"></span>${counts}</div>${bar}${lines}${summary}</div>` +
       `<div class="wiz-f"><span class="muted">${done ? '' : esc(t('Operazione in corso: la finestra si sblocca da sola al termine.'))}</span><span class="fill"></span>` +
@@ -66,8 +66,8 @@
       ck('vacuum', t('Vacuum pristine copies'), t('Elimina le copie originali non più usate (--vacuum-pristines)'), { extra: true }) +
       ck('externals', t('Include externals'), t('Applica il cleanup anche agli external (--include-externals)'), { extra: true }) +
       `<div class="osep ${bad ? 'on' : ''}">${U.icon('warn')} ${esc(t('Azioni distruttive: non recuperabili'))}</div>` +
-      ck('unversioned', t('Delete unversioned files and folders'), t('Cancella dal disco tutto ciò che SVN non conosce (--remove-unversioned)'), { danger: true, extra: true }) +
-      ck('ignored', t('Delete ignored files and folders'), t('Cancella dal disco i file ignorati, ad es. bin e obj (--remove-ignored)'), { danger: true, extra: true }) +
+      ck('unversioned', t('Delete unversioned files and folders'), t('Cancella dal disco tutto ciò che SVN non conosce (salta .vs e i file in uso)'), { danger: true, extra: true }) +
+      ck('ignored', t('Delete ignored files and folders'), t('Cancella dal disco i file ignorati, ad es. bin e obj (salta .vs e i file in uso)'), { danger: true, extra: true }) +
       ck('revert', t('Revert all changes recursively'), t('Annulla tutte le modifiche locali di tutta la working copy (svn revert -R)'), { danger: true }) +
       (c.extras ? '' : `<div class="rp-err" role="note">${U.icon('warn')}<span>${esc(t('Con svn {0} le opzioni oltre il cleanup semplice, e l\'eliminazione dei non versionati/ignorati, non sono disponibili: servono svn 1.9 o successivo.', c.svnVersion || '?'))}</span></div>`) +
       (bad ? `<label class="ock danger confirm"><input type="checkbox" data-ock="confirmed" ${opt.confirmed ? 'checked' : ''}><span><b>${esc(t('Confermo: file eliminati e modifiche annullate non si recuperano.'))}</b></span></label>` : '') +
