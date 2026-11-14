@@ -178,6 +178,7 @@
     "Carica questa working copy": "Load this working copy",
     "Apri": "Open",
     "Committa i {0} file in Staged (Ctrl+Invio)": "Commit the {0} file(s) in Staged (Ctrl+Enter)",
+    "Ci sono solo file non versionati: Commit All ti chiede se aggiungerli e committarli (Ctrl+Invio)": "There are only unversioned files: Commit All asks whether to add and commit them (Ctrl+Enter)",
     "Staged è vuoto: committa tutte le {0} modifiche dei file versionati; se ci sono file non versionati ti chiede se aggiungerli (Ctrl+Invio)": "Staged is empty: commits all {0} changes of versioned files; if there are unversioned files it asks whether to add them (Ctrl+Enter)",
     "Ci sono {0} file non versionati. Aggiungerli al commit?": "There are {0} unversioned files. Add them to the commit?",
     "… e altri {0}": "… and {0} more",

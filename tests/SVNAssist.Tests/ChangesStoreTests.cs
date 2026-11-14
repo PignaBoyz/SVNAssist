@@ -424,7 +424,7 @@ public class ChangesStoreTests
     }
 
     [Fact]
-    public async Task Commit_NienteDaCommittare_NonCommitta()
+    public async Task Commit_SoloNonVersionati_ChiedeSeAggiungerli()
     {
         var f = new Fixture().With(("n.txt", SvnStatusKind.Unversioned));
         await f.Refresh();
@@ -434,7 +434,7 @@ public class ChangesStoreTests
         await f.Cmd("commit");
 
         Assert.Empty(f.Svn.Commits);
-        Assert.Contains("Nessuna modifica da committare", f.Status);
+        Assert.Equal(1, f.Snap.CommitWarn!.Count); // solo non versionati: Commit All chiede se aggiungerli
         Assert.Equal(0, f.Snap.Commit.Count);
     }
 

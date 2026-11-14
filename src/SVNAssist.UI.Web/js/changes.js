@@ -22,10 +22,12 @@
     // Come Git: con Staged vuoto "Commit All" prende tutte le modifiche dei file versionati; con file in Staged "Commit Staged (n)".
     const c = s.commit, busy = c.busy || s.loading, staged = (s.sections.find(x => x.id === 'staged') || { count: 0 }).count;
     const n = c.count != null ? c.count : staged, all = c.count != null ? !!c.all : false;
-    const why = !n ? t('Nessuna modifica da committare')
+    const onlyNew = !n && all && (s.sections.find(x => x.id === 'unversioned') || { count: 0 }).count > 0; // solo '?': Commit All chiede se aggiungerli
+    const why = onlyNew ? t('Ci sono solo file non versionati: Commit All ti chiede se aggiungerli e committarli (Ctrl+Invio)')
+      : !n ? t('Nessuna modifica da committare')
       : all ? t('Staged è vuoto: committa tutte le {0} modifiche dei file versionati; se ci sono file non versionati ti chiede se aggiungerli (Ctrl+Invio)', n)
         : t('Committa i {0} file in Staged (Ctrl+Invio)', n);
-    return `<button type="button" class="btn primary" ${U.cmd('commit')} ${n && !busy ? '' : 'disabled'} title="${esc(why)}">${U.icon('check')}<span>${all || !n ? 'Commit All' : 'Commit Staged'}</span>${n ? `<span class="pill">${n}</span>` : ''}</button><span class="fill"></span>` +
+    return `<button type="button" class="btn primary" ${U.cmd('commit')} ${(n || onlyNew) && !busy ? '' : 'disabled'} title="${esc(why)}">${U.icon('check')}<span>${all || !n ? 'Commit All' : 'Commit Staged'}</span>${n ? `<span class="pill">${n}</span>` : ''}</button><span class="fill"></span>` +
       `<button type="button" class="btn sm" data-recent title="${esc(t('Messaggi recenti: riusa un messaggio già committato in questo repository'))}" aria-haspopup="dialog">${U.icon('chev-d')}<span>${t('Recenti')}</span></button>` +
       `<button type="button" class="btn ai" ${U.cmd('genAi')} ${c.busy ? 'disabled aria-busy="true"' : ''} title="${esc(t('Scrive il messaggio dal diff dei file da committare'))}">${c.busy ? '<span class="spin"></span>' : U.icon('spark')}<span>${c.busy ? t('Generazione in corso…') : t('Genera con AI')}</span></button>` +
       `<button type="button" class="ib" data-menu="ai" ${c.busy ? 'disabled' : ''} title="${esc(t('Migliora il messaggio, lingua'))}" aria-label="${esc(t('Altre opzioni AI'))}" aria-haspopup="menu">${U.icon('chev-d')}</button>`;

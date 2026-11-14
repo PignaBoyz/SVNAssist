@@ -1339,7 +1339,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
 
             var versioned = _entries.Where(e => e.Status is SvnStatusKind.Modified or SvnStatusKind.Added or SvnStatusKind.Deleted
                 or SvnStatusKind.Replaced or SvnStatusKind.Missing or SvnStatusKind.Conflicted).ToList();
-            return (versioned, versioned.Count > 0);
+            return (versioned, true); // Staged vuoto = Commit All, anche con soli non versionati (la domanda li propone)
         }
     }
 
