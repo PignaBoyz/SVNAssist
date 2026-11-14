@@ -928,6 +928,32 @@
           "type": "string"
         }
       }
+    },
+    "commitWarn": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Domanda di Commit All con file non versionati: commitWarnAdd (svn add + commit) / commitWarnNo (solo i versionati) / commitWarnCancel. items = i primi 10 percorsi, more = quanti non elencati.",
+      "required": [
+        "count",
+        "items",
+        "more"
+      ],
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "more": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
     }
   },
   "$defs": {

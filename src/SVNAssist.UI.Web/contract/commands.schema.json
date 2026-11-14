@@ -1974,6 +1974,69 @@
           "properties": {}
         }
       }
+    },
+    {
+      "title": "commitWarnAdd",
+      "description": "Domanda di Commit All con non versionati: svn add e commit anche dei nuovi file.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "commitWarnAdd"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "commitWarnNo",
+      "description": "Domanda di Commit All con non versionati: commit dei soli versionati.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "commitWarnNo"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "commitWarnCancel",
+      "description": "Domanda di Commit All con non versionati: annulla.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "commitWarnCancel"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
     }
   ]
 }

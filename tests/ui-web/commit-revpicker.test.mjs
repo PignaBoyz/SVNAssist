@@ -20,7 +20,7 @@ test('Staged vuoto: "Commit All" con il numero delle modifiche versionate', () =
   const s = fx(); s.commit.count = 5; s.commit.all = true;
   const b = commitBtn(H.commitBar(s));
   assert.match(b, /Commit All/); assert.match(b, /class="pill">5</); assert.doesNotMatch(b, /disabled/);
-  assert.match(b, /non versionati restano fuori/);
+  assert.match(b, /ti chiede se aggiungerli/);
 });
 
 test('niente da committare: pulsante disabilitato; durante il caricamento pure', () => {
@@ -119,3 +119,32 @@ test('mock: Commit All con Staged vuoto prende le modifiche versionate, non i no
   await run("S.vm.files[0].sel = true", 't'); await send('refresh', {});
   assert.equal(last().commit.all, false); assert.equal(last().commit.count, 1);
 });
+
+test('Commit All con non versionati: la domanda elenca i file e offre Sì / No / Annulla', () => {
+  const h = loadUi(['i18n', 'util', 'ops']).ops.commitWarnHTML({ count: 12, items: ['a.txt', 'b/c.txt'], more: 10 });
+  for (const c of ['commitWarnAdd', 'commitWarnNo', 'commitWarnCancel']) assert.ok(h.includes(`data-cmd="${c}"`), c);
+  assert.match(h, /12 file non versionati/); assert.match(h, /b\/c\.txt/); assert.match(h, /e altri 10/);
+});
+
+test('mock: Commit All con non versionati chiede prima; Annulla e No non aggiungono nulla', async () => {
+  const { run, bridge } = await loadDemo();
+  const B = bridge(), got = [], win = { frameElement: { isConnected: true } }, tick = () => new Promise(r => setImmediate(r));
+  B.attach(win, m => got.push(JSON.parse(JSON.stringify(m))));
+  const send = async (name, args) => { B.postMessage({ v: 1, id: send.n = (send.n || 0) + 1, type: 'cmd', name, args }, win); for (let i = 0; i < 20; i++) await tick(); };
+  const last = () => got.filter(m => m.type === 'state').at(-1).state;
+  await run('autoDetect()', 't');
+  B.postMessage({ v: 1, type: 'ready', view: 'changes', id: null }, win); await tick();
+  await run("S.vm.files.forEach(f => { f.sel = false; }); S.vm.commitMsg = 'prova'", 't');
+  await send('refresh', {});
+  const unv = () => JSON.parse(JSON.stringify(run("S.vm.files.filter(f => f.st === '?').length", 't')));
+  const n = unv();
+  assert.ok(n > 0, 'la demo ha file non versionati');
+  await send('commit', {});
+  assert.equal(last().commitWarn.count, n); assert.ok(last().commitWarn.items.length <= 10);
+  await send('commitWarnCancel', {}); assert.equal(last().commitWarn, undefined); assert.equal(unv(), n);
+  await send('commit', {}); await send('commitWarnNo', {});
+  assert.equal(last().commitWarn, undefined); assert.equal(unv(), n, 'No: i non versionati restano fuori');
+  await run("S.vm.files = S.vm.files.filter(f => f.st !== 'C'); S.vm.commitMsg = 'ancora'", 't'); await send('commit', {}); await send('commitWarnAdd', {});
+  assert.equal(unv(), 0, 'Sì: i non versionati sono stati aggiunti e committati'); assert.match(last().status.msg, /Commit completato/);
+});
+

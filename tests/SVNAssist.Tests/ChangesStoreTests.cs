@@ -407,6 +407,7 @@ public class ChangesStoreTests
         Assert.StartsWith("Errore commit", f.Status);
         Assert.Contains("più recenti", f.Status);
         Assert.Equal(statusCalls + 1, f.Svn.StatusCalls);
+        Assert.Contains("restano aggiunti", f.Status); // l'add e' gia' avvenuto: l'errore lo dice
         Assert.Equal("msg", f.Snap.Commit.Text); // il messaggio non si perde
     }
 
@@ -438,7 +439,7 @@ public class ChangesStoreTests
     }
 
     [Fact]
-    public async Task Commit_StagedVuoto_CommittaTutteLeModificheVersionate_NonIlNonVersionato()
+    public async Task Commit_StagedVuoto_ConNonVersionati_ChiedeEPoi_NoCommittaSoloIVersionati()
     {
         var f = new Fixture().With(("a.cs", SvnStatusKind.Modified), ("b.cs", SvnStatusKind.Added), ("d.cs", SvnStatusKind.Deleted),
             ("m.cs", SvnStatusKind.Missing), ("n.txt", SvnStatusKind.Unversioned));
@@ -449,12 +450,67 @@ public class ChangesStoreTests
         Assert.Equal(4, f.Snap.Commit.Count);
 
         await f.Cmd("commit");
+        var warn = f.Snap.CommitWarn!;
+        Assert.Equal(1, warn.Count);
+        Assert.Equal(["n.txt"], warn.Items);
+        Assert.Empty(f.Svn.Commits); // niente commit finche' l'utente non sceglie
+        await f.Cmd("commitWarnNo");
+        Assert.Null(f.Snap.CommitWarn);
 
         var commit = Assert.Single(f.Svn.Commits);
         Assert.Equivalent(new[] { Full("a.cs"), Full("b.cs"), Full("d.cs"), Full("m.cs") }, commit.Paths);
         Assert.DoesNotContain(Full("n.txt"), commit.Paths);
         Assert.Empty(f.Svn.Added);
         Assert.Contains(Full("m.cs"), f.Svn.Deleted.SelectMany(d => d)); // il mancante viene cancellato come delete
+    }
+
+    [Fact]
+    public async Task Commit_StagedVuoto_ConNonVersionati_SiAggiungiECommitta()
+    {
+        var f = new Fixture().With(("a.cs", SvnStatusKind.Modified), ("n.txt", SvnStatusKind.Unversioned));
+        await f.Refresh();
+        await f.Cmd("unstage", new { key = "section:staged" });
+        await f.Cmd("setCommitText", new { text = "tutto" });
+
+        await f.Cmd("commit");
+        await f.Cmd("commitWarnAdd");
+
+        Assert.Equal([Full("n.txt")], Assert.Single(f.Svn.Added));
+        Assert.Equivalent(new[] { Full("a.cs"), Full("n.txt") }, Assert.Single(f.Svn.Commits).Paths);
+    }
+
+    [Fact]
+    public async Task Commit_StagedVuoto_ConNonVersionati_AnnullaNonFaNulla_EOltreDieciSiElencaIlResto()
+    {
+        var f = new Fixture().With(("a.cs", SvnStatusKind.Modified));
+        for (var i = 0; i < 12; i++)
+            f = f.With(($"n{i:00}.txt", SvnStatusKind.Unversioned));
+        await f.Refresh();
+        await f.Cmd("unstage", new { key = "section:staged" });
+        await f.Cmd("setCommitText", new { text = "tutto" });
+
+        await f.Cmd("commit");
+        var warn = f.Snap.CommitWarn!;
+        Assert.Equal((12, 10, 2), (warn.Count, warn.Items.Count, warn.More));
+        await f.Cmd("commitWarnCancel");
+
+        Assert.Null(f.Snap.CommitWarn);
+        Assert.Empty(f.Svn.Commits);
+        Assert.Empty(f.Svn.Added);
+    }
+
+    [Fact]
+    public async Task Commit_ConFileInStaged_ONessunNonVersionato_NonChiedeNulla()
+    {
+        var f = new Fixture().With(("a.cs", SvnStatusKind.Modified), ("n.txt", SvnStatusKind.Unversioned));
+        await f.Refresh();
+        await f.Cmd("setCommitText", new { text = "solo a" });
+
+        await f.Cmd("commit");
+
+        Assert.Null(f.Snap.CommitWarn);
+        Assert.Single(f.Svn.Commits);
+        Assert.Empty(f.Svn.Added);
     }
 
     [Fact]

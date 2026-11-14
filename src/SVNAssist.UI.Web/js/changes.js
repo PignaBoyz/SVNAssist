@@ -23,7 +23,7 @@
     const c = s.commit, busy = c.busy || s.loading, staged = (s.sections.find(x => x.id === 'staged') || { count: 0 }).count;
     const n = c.count != null ? c.count : staged, all = c.count != null ? !!c.all : false;
     const why = !n ? t('Nessuna modifica da committare')
-      : all ? t('Staged è vuoto: committa tutte le {0} modifiche dei file versionati; i file non versionati restano fuori (Ctrl+Invio)', n)
+      : all ? t('Staged è vuoto: committa tutte le {0} modifiche dei file versionati; se ci sono file non versionati ti chiede se aggiungerli (Ctrl+Invio)', n)
         : t('Committa i {0} file in Staged (Ctrl+Invio)', n);
     return `<button type="button" class="btn primary" ${U.cmd('commit')} ${n && !busy ? '' : 'disabled'} title="${esc(why)}">${U.icon('check')}<span>${all || !n ? 'Commit All' : 'Commit Staged'}</span>${n ? `<span class="pill">${n}</span>` : ''}</button><span class="fill"></span>` +
       `<button type="button" class="btn sm" data-recent title="${esc(t('Messaggi recenti: riusa un messaggio già committato in questo repository'))}" aria-haspopup="dialog">${U.icon('chev-d')}<span>${t('Recenti')}</span></button>` +
@@ -249,7 +249,7 @@
     if (changed) { list.scrollTop = top; if (had) { const r = list.querySelector(`.tr[data-key="${CSS.escape(cursor)}"]`); if (r) r.focus(); } }
     list.setAttribute('aria-busy', !!st.loading);
     U.setHTML(root.querySelector('#foot'), foot(st));
-    const anyModal = !!(st.wizard && st.wizard.open) || !!(st.revPicker && st.revPicker.open) || !!(st.switchPicker && st.switchPicker.open) || !!(st.progress || st.switchWarn || st.cleanup);
+    const anyModal = !!(st.wizard && st.wizard.open) || !!(st.revPicker && st.revPicker.open) || !!(st.switchPicker && st.switchPicker.open) || !!(st.progress || st.switchWarn || st.cleanup || st.commitWarn);
     if (anyModal) rcClose(false); else rcRefresh();
     renderWizard(root, anyModal);
     renderRev(root, anyModal);
