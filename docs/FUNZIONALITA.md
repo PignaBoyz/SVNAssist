@@ -44,6 +44,7 @@ Switch e Merge da Visual Studio (dettagli in `docs/release-notes/v0.3.0.md`): ra
 - Feedback visibile su ogni azione; "Operazione in corso…" se se ne lancia una seconda.
 
 ### Log e diff
+- **Show Log: Stop on copy/rename e Include merged revisions** (checkbox nella barra del Log, valgono per la sessione): Stop on copy (default acceso) ferma la storia alla creazione del ramo, spento segue copie e rinomine; Include merged mostra sotto ogni merge le revisioni portate (`svn log -g`), indentate con ↳ e, per i reverse-merge, con "merge inverso". Clic su un file anche di una revisione unita = diff `r-1 ↔ r`.
 - **Show Log come documento** nell'area editor: tabella revisioni, filtri autore/testo/percorso/date, file cambiati per revisione, confronto tra due revisioni (Ctrl+clic). Anche per file e cartelle da Esplora soluzioni.
 - **Diff nativo di VS** ovunque (WC, revisioni, cartelle); TortoiseSVN non serve più.
 

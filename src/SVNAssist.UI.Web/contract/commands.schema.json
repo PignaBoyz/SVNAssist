@@ -1260,6 +1260,39 @@
       }
     },
     {
+      "title": "logOptions",
+      "description": "Opzioni di Show Log (valgono per la sessione): ricarica da capo il log con --stop-on-copy e/o -g.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "logOptions"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "stopOnCopy",
+            "merged"
+          ],
+          "properties": {
+            "stopOnCopy": {
+              "type": "boolean",
+              "description": "Ferma la storia a copie e rinomine."
+            },
+            "merged": {
+              "type": "boolean",
+              "description": "Include le revisioni entrate per merge (svn log -g)."
+            }
+          }
+        }
+      }
+    },
+    {
       "title": "logFilter",
       "description": "Filtra il log (svn log --search): autore, testo del messaggio, percorso, date aaaa-mm-gg. Tutti vuoti = nessun filtro.",
       "type": "object",

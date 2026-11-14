@@ -105,6 +105,32 @@ public class SvnServiceParsingTests : IDisposable
     }
 
     [Fact]
+    public void ParseLogXml_ConMergeHistory_AnnidaLeRevisioniUniteEIlReverseMerge()
+    {
+        const string xml = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <log>
+            <logentry revision="12"><author>a</author><date>2026-11-01T10:00:00.000000Z</date><paths><path action="M" kind="file">/trunk/A.cs</path></paths><msg>merge</msg>
+              <logentry revision="9"><author>b</author><date>2026-10-30T10:00:00.000000Z</date><paths><path action="A" kind="file">/branches/x/B.cs</path></paths><msg>nuovo</msg>
+                <logentry revision="8"><author>c</author><date>2026-10-29T10:00:00.000000Z</date><msg>annidato</msg></logentry>
+              </logentry>
+              <logentry revision="7" reverse-merge="true"><author>b</author><date>2026-10-28T10:00:00.000000Z</date><msg>tolto</msg></logentry>
+            </logentry>
+            <logentry revision="11"><author>a</author><date>2026-10-31T10:00:00.000000Z</date><msg>altro</msg></logentry>
+            </log>
+            """;
+        var entries = SvnService.ParseLogXml(xml);
+        Assert.Equal([12L, 11L], entries.Select(e => e.Revision));
+        var merged = entries[0].Children!;
+        Assert.Equal([9L, 7L], merged.Select(e => e.Revision));
+        Assert.Equal("/branches/x/B.cs", merged[0].Paths![0].Path);
+        Assert.Equal(8, merged[0].Children![0].Revision);
+        Assert.False(merged[0].ReverseMerge);
+        Assert.True(merged[1].ReverseMerge);
+        Assert.Null(entries[1].Children);
+    }
+
+    [Fact]
     public void ParseLogXml_ConVerbose_EstraeIPercorsiToccati()
     {
         var xml = """

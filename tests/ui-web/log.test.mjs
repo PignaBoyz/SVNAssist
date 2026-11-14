@@ -112,3 +112,25 @@ test('tastiera: frecce/Home/End spostano la selezione entro i limiti, Invio la c
   assert.equal(U.logKey('x', r, 123), null);
   assert.equal(U.logKey('ArrowDown', r, 999), null);
 });
+
+test('opzioni Show Log: due checkbox (stop on copy spento di default), logOptions valido', () => {
+  const s = fx(); const h = U.logHTML.opts(s);
+  assert.doesNotMatch(h, /name="stopOnCopy" checked/);
+  assert.doesNotMatch(h, /name="merged" checked/);
+  s.stopOnCopy = true; s.includeMerged = true;
+  const h2 = U.logHTML.opts(s);
+  assert.match(h2, /name="stopOnCopy" checked/);
+  assert.match(h2, /name="merged" checked/);
+  valid({ name: 'logOptions', args: { stopOnCopy: false, merged: true } });
+});
+
+test('revisioni unite: riga indentata (classe mg/d1) e merge inverso segnalato; schema ok', () => {
+  const s = fx(); s.sel = null;
+  s.entries.splice(1, 0, { ...s.entries[0], rev: 99, depth: 1 }, { ...s.entries[0], rev: 98, depth: 1, reverse: true });
+  assert.deepEqual(validate(S, s), []);
+  const h = U.logHTML.list(s);
+  assert.match(h, /class="lr mg d1" role="row"[^>]*data-rev="99"/);
+  assert.match(h, /class="lr mg d1 rvm"[^>]*data-rev="98"/);
+  assert.match(h, /merge inverso/);
+  assert.match(h, /aria-level="2"/);
+});

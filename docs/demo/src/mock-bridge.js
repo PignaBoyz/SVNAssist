@@ -151,6 +151,15 @@
     const el = mgEligible(m.name);
     return { source: m.name, title: tr('Merge da ' + m.name), loading: !!m.loading, busy: !!m.busy, error: tr(m.error || ''), blocked: tr(m.blocked || ''), selected: m.sel.slice().sort((a, b) => a - b), eligible: el.length, result: m.result || null, pending: !!(S.vm.mergeBanner && commitSet().files.length), needsUpdate: /E195020/.test(m.error || '') };
   }
+  // "Includi revisioni unite": sotto la 2a revisione compaiono due revisioni di un ramo entrate per merge (una e' un merge inverso)
+  function logRows(l) {
+    const rows = l.entries.filter(logMatch).map(e => ({ rev: e.rev, author: e.author, date: e.date.toISOString(), msg: e.msg, paths: e.paths.map(p => ({ a: p.a, p: p.p })) }));
+    if (l.includeMerged && rows.length > 2) {
+      const m = rows[1], mk = (n, au, msg, a, p, rv) => ({ rev: m.rev - n, author: au, date: new Date(Date.parse(m.date) - n * 3600e3).toISOString(), msg, paths: [{ a, p: '/branches/feature-x/' + p }], depth: 1, ...(rv ? { reverse: true } : {}) });
+      rows.splice(2, 0, mk(40, 'lbianchi', 'feature-x: validazione del carrello', 'M', 'Web/Controllers/CartController.cs'), mk(41, 'mrossi', 'feature-x: annulla il tentativo di cache', 'M', 'Core/Services/InventoryService.cs', true));
+    }
+    return rows;
+  }
   function snapshotLog() {
     const l = S.lvm;
     if (l.merge) {
@@ -160,7 +169,7 @@
         filter: l.filter || { author: '', text: '', path: '', from: '', to: '' }, files: null, merge: mergeSnap(m) };
     }
     return { path: l.path || '', msg: tr(l.msg || ''), err: /^Errore/.test(l.msg || ''), loading: /^Caricamento/.test(l.msg || ''), canMore: !!l.canMore, sel: l.sel == null ? null : l.sel,
-      entries: l.entries.filter(logMatch).map(e => ({ rev: e.rev, author: e.author, date: e.date.toISOString(), msg: e.msg, paths: e.paths.map(p => ({ a: p.a, p: p.p })) })), diff: tr(l.diff || ''),
+      entries: logRows(l), diff: tr(l.diff || ''), stopOnCopy: !!l.stopOnCopy, includeMerged: !!l.includeMerged,
       filter: l.filter || { author: '', text: '', path: '', from: '', to: '' }, files: l.files || null };
   }
   function snapshotDiff(id) {
@@ -280,7 +289,8 @@
       if (f.from && f.to && f.from > f.to) [f.from, f.to] = [f.to, f.from];
       S.lvm.filter = f; S.lvm.msg = S.lvm.entries.filter(logMatch).length + ' revisioni caricate' + (Object.values(f).some(Boolean) ? ' (filtro attivo).' : '.'); render();
     },
-    logOpenFile: a => { const e = S.lvm.entries.find(x => x.rev === +a.rev), p = e && e.paths[+a.i]; if (p) toast('Diff a due pannelli aperto in Visual Studio: ' + p.p.split('/').pop() + ' r' + (e.rev - 1) + ' ↔ r' + e.rev); },
+    logOptions: a => { S.lvm.stopOnCopy = !!a.stopOnCopy; S.lvm.includeMerged = !!a.merged; return lvmLoad(50); },
+    logOpenFile: a => { const e = logRows(S.lvm).find(x => x.rev === +a.rev), p = e && e.paths[+a.i]; if (p) toast('Diff a due pannelli aperto in Visual Studio: ' + p.p.split('/').pop() + ' r' + (e.rev - 1) + ' ↔ r' + e.rev); },
     logCompare: a => {
       const lo = Math.min(+a.a, +a.b), hi = Math.max(+a.a, +a.b), seen = new Set(), items = [];
       for (const e of S.lvm.entries) if (e.rev > lo && e.rev <= hi) for (const p of e.paths) if (!seen.has(p.p)) { seen.add(p.p); items.push({ a: p.a, p: p.p }); }

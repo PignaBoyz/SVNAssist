@@ -39,6 +39,39 @@ public class LogDiffTests : IDisposable
         => Assert.Equal(["log", "--xml", "-v", "-l", "50", "C:\\wc"], SvnService.BuildLogArgs("C:\\wc", 50, new SvnLogFilter()));
 
     [Fact]
+    public void BuildLogArgs_StopOnCopyEMerged_AggiungonoLeOpzioni()
+    {
+        var a = SvnService.BuildLogArgs("C:\\wc", 50, new SvnLogFilter(StopOnCopy: true, IncludeMerged: true));
+        Assert.Equal(["log", "--xml", "-v", "-l", "50", "--stop-on-copy", "-g", "C:\\wc"], a);
+    }
+
+    [Fact]
+    public async Task LogOptions_DefaultStoriaCompleta_PoiLeOpzioniArrivanoAlBackendERicaricano()
+    {
+        await _store.DispatchAsync("logLoad", JsonSerializer.SerializeToElement(new { path = Wc }), Ct);
+        Assert.False(_svn.LastLogFilter!.StopOnCopy);
+        Assert.False(_svn.LastLogFilter.IncludeMerged);
+        Assert.False(Snap.StopOnCopy);
+
+        await Cmd("logOptions", new { stopOnCopy = true, merged = true });
+        Assert.True(_svn.LastLogFilter.StopOnCopy);
+        Assert.True(_svn.LastLogFilter.IncludeMerged);
+        Assert.True(Snap.StopOnCopy);
+        Assert.True(Snap.IncludeMerged);
+    }
+
+    [Fact]
+    public void Flatten_RevisioniUnite_SonoIndentateSottoIlMerge()
+    {
+        var child = new SvnLogEntry(7, "b", DateTimeOffset.UnixEpoch, "x", [], null, ReverseMerge: true);
+        var top = new SvnLogEntry(9, "a", DateTimeOffset.UnixEpoch, "merge", [], [child]);
+        var rows = LogStore.Flatten(top, 0).ToList();
+        Assert.Equal([9L, 7L], rows.Select(r => r.Rev));
+        Assert.Equal([0, 1], rows.Select(r => r.Depth));
+        Assert.Equal([false, true], rows.Select(r => r.Reverse));
+    }
+
+    [Fact]
     public void BuildLogArgs_AutoreTestoPercorso_DiventanoSearchInAnd()
     {
         var a = SvnService.BuildLogArgs("C:\\wc", 50, new SvnLogFilter("mario", "fix [bug]", "src\\Core"));

@@ -124,7 +124,11 @@ internal sealed record LogFilterDto(string Author, string Text, string Path, str
 /// <summary>Elenco di file con diff a due pannelli: <c>folder</c> (modifiche di una cartella) o <c>compare</c> (due revisioni).</summary>
 internal sealed record LogFilesDto(string Kind, string Title, IReadOnlyList<LogPathDto> Items);
 
-internal sealed record LogEntryDto(long Rev, string Author, string Date, string Msg, IReadOnlyList<LogPathDto> Paths);
+/// <param name="Depth">0 = revisione del log; &gt;0 = entrata per merge (<c>svn log -g</c>), annidata sotto la revisione di merge che la precede.</param>
+/// <param name="Reverse"><c>reverse-merge</c>: la revisione e' stata tolta dal merge.</param>
+internal sealed record LogEntryDto(long Rev, string Author, string Date, string Msg, IReadOnlyList<LogPathDto> Paths,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int Depth = 0,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Reverse = false);
 
 internal sealed record MergeCountsDto(int Updated, int Added, int Deleted, int Merged, int Conflicted);
 
@@ -159,7 +163,9 @@ internal sealed record LogState(
     string Diff,
     LogFilterDto Filter,
     LogFilesDto? Files,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] MergeDto? Merge = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] MergeDto? Merge = null,
+    bool StopOnCopy = false,
+    bool IncludeMerged = false);
 
 /// <summary>Snapshot della vista <c>diff</c> (diff-state.schema.json).</summary>
 internal sealed record DiffState(string Title, string Subtitle, string Diff);

@@ -41,6 +41,8 @@ internal sealed class LogStore : ViewStore
     private string? _solutionRoot;
     private LogFilterDto _filterText = new("", "", "", "", "");
     private SvnLogFilter _filter = new();
+    // Opzioni di Show Log (come TortoiseSVN), valide per la sessione: stop su copy/rename acceso, revisioni di merge spento.
+    private bool _stopOnCopy, _includeMerged;
     private string? _repoRoot;
     private string? _repoRootFor;
     // Elenco file (confronto tra revisioni o modifiche di una cartella): Kind "folder" | "compare".
@@ -92,7 +94,7 @@ internal sealed class LogStore : ViewStore
         }
 
         lock (_lock)
-            return new LogState(_path, _msgInitial ? Loc.T("Inserisci il percorso della working copy e premi Carica log.") : _msg, _err, _loading, _canMore, _sel, _entries, _diff, _filterText, FilesDto());
+            return new LogState(_path, _msgInitial ? Loc.T("Inserisci il percorso della working copy e premi Carica log.") : _msg, _err, _loading, _canMore, _sel, _entries, _diff, _filterText, FilesDto(), null, _stopOnCopy, _includeMerged);
     }
 
     private LogFilesDto? FilesDto() => _filesKind is null
@@ -187,6 +189,15 @@ internal sealed class LogStore : ViewStore
             case "logSelect":
                 CloseFiles();
                 await SelectAsync(Args.Long(args, "rev"), ct);
+                break;
+            case "logOptions":
+                lock (_lock)
+                {
+                    _stopOnCopy = Args.Bool(args, "stopOnCopy");
+                    _includeMerged = Args.Bool(args, "merged");
+                }
+
+                await LoadAsync(PageSize, ct);
                 break;
             case "logFilter":
                 SetFilter(args);
@@ -338,9 +349,9 @@ internal sealed class LogStore : ViewStore
         try
         {
             Set(Loc.T("Caricamento log..."), err: false, loading: true);
-            var entries = await _svnService.GetLogAsync(path, limit, _filter, ct);
+            var entries = await _svnService.GetLogAsync(path, limit, _filter with { StopOnCopy = _stopOnCopy, IncludeMerged = _includeMerged }, ct);
 
-            var dtos = entries.Select(ToDto).ToList();
+            var dtos = entries.SelectMany(e => Flatten(e, 0)).ToList();
 
             lock (_lock)
             {
@@ -576,9 +587,14 @@ internal sealed class LogStore : ViewStore
         await _host!.OpenFileAsync(file);
     }
 
-    internal static LogEntryDto ToDto(SvnLogEntry e) => new(
+    internal static LogEntryDto ToDto(SvnLogEntry e, int depth = 0) => new(
         e.Revision, e.Author, e.Date.ToString("o"), e.Message,
-        (e.Paths ?? []).Select(p => new LogPathDto(NormalizeAction(p.Action), p.Path, p.Kind == "dir" ? "dir" : null)).ToList());
+        (e.Paths ?? []).Select(p => new LogPathDto(NormalizeAction(p.Action), p.Path, p.Kind == "dir" ? "dir" : null)).ToList(),
+        depth, e.ReverseMerge);
+
+    /// <summary>Elenco piatto in ordine di visita: la revisione, poi quelle entrate per merge (<c>Depth</c> &gt; 0).</summary>
+    internal static IEnumerable<LogEntryDto> Flatten(SvnLogEntry e, int depth)
+        => new[] { ToDto(e, depth) }.Concat((e.Children ?? []).SelectMany(c => Flatten(c, depth + 1)));
 
     private static string NormalizeAction(string action) => action is "A" or "M" or "D" or "R" ? action : "M";
 
@@ -586,12 +602,14 @@ internal sealed class LogStore : ViewStore
     private async Task SelectAsync(long revision, CancellationToken ct)
     {
         string path;
+        bool merged;
         lock (_lock)
         {
             if (!_entries.Any(e => e.Rev == revision))
                 throw new ArgumentException(Loc.T("Revisione {0} non presente nell'elenco.", revision));
 
             path = _path;
+            merged = _entries.First(e => e.Rev == revision).Depth > 0;
             _sel = revision;
             _diff = Loc.T("Caricamento diff...");
         }
@@ -599,7 +617,8 @@ internal sealed class LogStore : ViewStore
         Set(Loc.T("Caricamento diff per revisione {0}...", revision), err: false, loading: true);
         try
         {
-            var diff = await _svnService.GetDiffAsync(path, revision, ct);
+            // una revisione entrata per merge sta su un altro ramo: il diff -c si chiede alla radice del repository
+            var diff = await _svnService.GetDiffAsync(merged ? await RepoRootAsync(path, ct) : path, revision, ct);
             lock (_lock)
             {
                 if (_sel == revision)

@@ -445,6 +445,10 @@ public class SvnService : ISvnService
     internal static List<string> BuildLogArgs(string targetPath, int maxEntries, SvnLogFilter filter)
     {
         var args = new List<string> { "log", "--xml", "-v", "-l", maxEntries.ToString(CultureInfo.InvariantCulture) };
+        if (filter.StopOnCopy)
+            args.Add("--stop-on-copy");
+        if (filter.IncludeMerged)
+            args.Add("-g");
         static string D(DateOnly d, string time) => "{" + d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + "T" + time + "}";
         if (filter.From is { } f && filter.To is { } t)
             args.AddRange(["-r", D(t, "23:59:59") + ":" + D(f, "00:00:00")]);
@@ -496,28 +500,26 @@ public class SvnService : ISvnService
     /// cultura invariante, qualunque sia la lingua di Windows.
     /// </summary>
     internal static IReadOnlyList<SvnLogEntry> ParseLogXml(string xml)
+        => XDocument.Parse(xml).Root!.Elements("logentry").Select(ParseLogEntry).ToList();
+
+    // Con "svn log -g" le revisioni entrate per merge sono <logentry> annidati nel <logentry> del merge.
+    private static SvnLogEntry ParseLogEntry(XElement entry)
     {
-        var doc = XDocument.Parse(xml);
-        var results = new List<SvnLogEntry>();
+        long.TryParse(
+            entry.Attribute("revision")?.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var revision);
+        var author = entry.Element("author")?.Value ?? "(sconosciuto)";
+        // <date> può mancare (revprop cancellata): in quel caso resta la data di default.
+        DateTimeOffset.TryParse(
+            entry.Element("date")?.Value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var date);
+        var message = entry.Element("msg")?.Value ?? string.Empty;
 
-        foreach (var entry in doc.Descendants("logentry"))
-        {
-            long.TryParse(
-                entry.Attribute("revision")?.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var revision);
-            var author = entry.Element("author")?.Value ?? "(sconosciuto)";
-            // <date> può mancare (revprop cancellata): in quel caso resta la data di default.
-            DateTimeOffset.TryParse(
-                entry.Element("date")?.Value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var date);
-            var message = entry.Element("msg")?.Value ?? string.Empty;
+        var paths = entry.Element("paths")?.Elements("path")
+            .Select(p => new SvnLogPath(p.Attribute("action")?.Value ?? "M", p.Value, p.Attribute("kind")?.Value ?? ""))
+            .ToList() ?? [];
 
-            var paths = entry.Element("paths")?.Elements("path")
-                .Select(p => new SvnLogPath(p.Attribute("action")?.Value ?? "M", p.Value, p.Attribute("kind")?.Value ?? ""))
-                .ToList() ?? [];
-
-            results.Add(new SvnLogEntry(revision, author, date, message, paths));
-        }
-
-        return results;
+        var children = entry.Elements("logentry").Select(ParseLogEntry).ToList();
+        return new SvnLogEntry(revision, author, date, message, paths, children.Count > 0 ? children : null,
+            entry.Attribute("reverse-merge")?.Value == "true");
     }
 
     /// <inheritdoc />

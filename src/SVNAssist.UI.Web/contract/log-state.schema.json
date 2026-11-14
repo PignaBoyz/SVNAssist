@@ -66,6 +66,15 @@
           "msg": {
             "type": "string"
           },
+          "depth": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Assente = revisione del log. >0: entrata per merge (svn log -g), annidata sotto la revisione di merge che la precede."
+          },
+          "reverse": {
+            "type": "boolean",
+            "description": "Solo se vero: reverse-merge (la revisione e' stata tolta dal merge)."
+          },
           "paths": {
             "type": "array",
             "items": {
@@ -99,6 +108,14 @@
           }
         }
       }
+    },
+    "stopOnCopy": {
+      "type": "boolean",
+      "description": "Opzione Show Log: ferma la storia a copie e rinomina (--stop-on-copy). Default vero."
+    },
+    "includeMerged": {
+      "type": "boolean",
+      "description": "Opzione Show Log: include le revisioni entrate per merge (svn log -g), con entries[].depth > 0."
     },
     "diff": {
       "type": "string",

@@ -176,6 +176,15 @@ pre.cmd{background:var(--bg0);border:1px solid var(--bd);padding:6px 8px;font:12
 .lf label{color:var(--fg2,inherit);opacity:.8;white-space:nowrap}
 .lf input[type=text]{width:auto;flex:1 1 90px;min-width:70px}
 .lf input[type=date]{background:var(--bg1);border:1px solid var(--bd2);border-radius:4px;padding:4px 6px;color:var(--fg)}
+.lo{display:flex;flex-wrap:wrap;gap:4px 16px;padding:0 8px 6px}
+.lo-c{display:inline-flex;gap:6px;align-items:center;cursor:pointer;color:var(--fg2,inherit)}
+.lo-c input{width:auto;margin:0;accent-color:var(--acc)}
+.lr.mg{box-shadow:inset 2px 0 0 var(--bd2)}
+.lr.mg.sel,.lr.mg.sel:hover{box-shadow:inset 3px 0 0 var(--acc)}
+.lr.mg>*{color:var(--fg2)}
+.lr.d1 .rv{padding-left:24px}.lr.d2 .rv{padding-left:38px}.lr.d3 .rv{padding-left:52px}
+.mgi{font-style:normal;margin-right:4px;opacity:.7}
+.rvt{font-style:normal;color:var(--warn);font-weight:600}
 .lf.on input:not([value=""]){border-color:var(--acc)}
 .paths .pl{background:none;border:0;padding:0;color:var(--acc2);font:inherit;cursor:pointer;text-align:left;word-break:break-all}
 .paths .pl:hover{text-decoration:underline}
