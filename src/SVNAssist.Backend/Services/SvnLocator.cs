@@ -1,4 +1,5 @@
 using System.IO;
+using SVNAssist.Rpc;
 
 namespace SVNAssist.Services;
 
@@ -44,7 +45,10 @@ public static class SvnLocator
     /// </summary>
     /// <param name="exeName">Nome del file eseguibile (es. <c>svn.exe</c>).</param>
     /// <returns>Il percorso completo, oppure <c>null</c> se non trovato.</returns>
-    public static string? FindExecutable(string exeName)
+    public static string? FindExecutable(string exeName) =>
+        FindExecutableOnce(exeName) ?? (PathRefresh.Refresh() ? FindExecutableOnce(exeName) : null);
+
+    private static string? FindExecutableOnce(string exeName)
     {
         foreach (var dir in RootedPathDirectories())
         {

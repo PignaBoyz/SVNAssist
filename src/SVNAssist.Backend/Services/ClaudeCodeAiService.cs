@@ -62,9 +62,13 @@ internal sealed class ClaudeCodeAiService : AiServiceBase
     /// Cerca Claude Code: <c>claude.exe</c> nel PATH e in <c>~/.local/bin</c> (installer nativo) oppure l'installazione
     /// npm (<c>claude.cmd</c>), risolta sul programma vero (vedi <see cref="ResolveNpmShim"/>).
     /// </summary>
-    public static string? FindClaudeExecutable() => FindClaudeExecutable(
-        SvnLocator.RootedPathDirectories(),
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
+    public static string? FindClaudeExecutable()
+    {
+        string? Find() => FindClaudeExecutable(
+            SvnLocator.RootedPathDirectories(),
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
+        return Find() ?? (SVNAssist.Rpc.PathRefresh.Refresh() ? Find() : null); // PATH di VS vecchio: rileggilo dal registro
+    }
 
     internal static string? FindClaudeExecutable(IEnumerable<string> pathDirs, string userProfile)
     {

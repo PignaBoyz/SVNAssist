@@ -69,6 +69,7 @@ namespace SVNAssist
             ["variabile ANTHROPIC_API_KEY"] = "ANTHROPIC_API_KEY variable",
             ["Client Subversion (svn.exe)"] = "Subversion client (svn.exe)",
             ["svn.exe non trovato: serve per tutte le operazioni SVN."] = "svn.exe not found: it is needed for all SVN operations.",
+            ["Installato ma non funzionante in questa sessione: riavvia Visual Studio (se non basta, riavvia il PC)."] = "Installed but not working in this session: restart Visual Studio (if that is not enough, restart the PC).",
             ["Si apre una finestra con:  winget install --id Slik.Subversion -e\nOppure installa TortoiseSVN e, nell'installer, abilita \"command line client tools\".\nPoi premi Ricontrolla (se svn non viene trovato, riavvia Visual Studio)."] = "A window opens with:  winget install --id Slik.Subversion -e\nOr install TortoiseSVN and enable \"command line client tools\" in its installer.\nThen press Recheck (if svn is not found, restart Visual Studio).",
             ["Installa con winget"] = "Install with winget",
             ["Pagina download"] = "Download page",

@@ -92,6 +92,7 @@ namespace SVNAssist.Host
             Log.Write("backend avviato pid " + p.Id);
         }
 
+        private static bool _dotnetBroken; // dotnet trovato ma --list-runtimes fallisce
         private const string DownloadUrl = "https://dotnet.microsoft.com/download/dotnet/10.0";
         private static readonly string UserDotnetDir =
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "dotnet");
@@ -99,6 +100,7 @@ namespace SVNAssist.Host
         /// <summary>Radice dotnet con Microsoft.NETCore.App 10.x (anche se dotnet non e' nel PATH), o null.</summary>
         private static string FindRuntimeRoot()
         {
+            PathRefresh.Refresh(); // installazioni fatte dopo l'avvio di VS: PATH dal registro (lo ereditano anche backend e figli)
             var pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
             foreach (var exe in new[] { "dotnet", Path.Combine(pf, "dotnet", "dotnet.exe"), Path.Combine(UserDotnetDir, "dotnet.exe") })
             {
@@ -111,6 +113,7 @@ namespace SVNAssist.Host
                     {
                         var output = pr.StandardOutput.ReadToEnd();
                         pr.WaitForExit(10000);
+                        if (pr.ExitCode != 0) _dotnetBroken = true;
                         var root = DotnetRuntime.FindRoot(output);
                         if (root != null) return root;
                     }
@@ -125,6 +128,8 @@ namespace SVNAssist.Host
         {
             var root = FindRuntimeRoot();
             if (root != null) return root;
+            if (_dotnetBroken)
+                throw new InvalidOperationException(Loc.T("Installato ma non funzionante in questa sessione: riavvia Visual Studio (se non basta, riavvia il PC)."));
 
             var choice = Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory.Run(async () =>
             {

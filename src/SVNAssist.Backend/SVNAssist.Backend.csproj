@@ -40,6 +40,7 @@
   <ItemGroup>
     <Compile Include="..\Shared\RpcContract.cs" Link="Hosting\RpcContract.cs" />
     <Compile Include="..\Shared\Loc.cs" Link="Hosting\Loc.cs" />
+    <Compile Include="..\Shared\PathRefresh.cs" Link="Hosting\PathRefresh.cs" />
     <Compile Include="..\Shared\LocEn.cs" Link="Hosting\LocEn.cs" />
   </ItemGroup>
 
