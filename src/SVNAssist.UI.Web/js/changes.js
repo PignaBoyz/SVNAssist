@@ -205,8 +205,21 @@
       sec === 'unversioned' ? null : { label: t('SVN Revert di tutto…'), cmd: 'rowOp', args: { op: 'revert', key }, disabled: !(s && s.count), hint: t('Annulla tutte le modifiche di questa sezione (anche in più cartelle), dopo conferma con l’elenco dei file; i non versionati non si toccano') },
       sec === 'unversioned' ? null : { sep: true }, { label: t('Espandi tutto'), cmd: 'expandAll' }, { label: t('Comprimi tutto'), cmd: 'collapseAll' }].filter(Boolean);
   }
+  // menu per la selezione multipla: ogni voce vale solo se vale per TUTTE le righe, altrimenti e' disabilitata col motivo
+  function multiMenu(keys, s0 = st) {
+    const rows = keys.map(k => { for (const s of s0.sections) { const r = s.rows.find(z => z.key === k); if (r) return r; } return null; }).filter(Boolean), n = rows.length;
+    const all = f => rows.every(r => r.can[f]), I = (label, cmd, args, can, why, kbd) => ({ label, cmd, args, disabled: !can, hint: can ? '' : why, kbd });
+    return [{ header: true, label: t('Selezione: {0} elementi', n) },
+      I(t('Aggiungi ai file da committare ({0})', n), 'stage', { keys }, all('stage'), t('Alcuni elementi sono già da committare o in conflitto'), t('Spazio')),
+      I(t('Rimuovi dai file da committare ({0})', n), 'unstage', { keys }, all('unstage'), t('Alcuni elementi non sono tra i file da committare')),
+      { sep: true }, I(t('Aggiungi alla ignore list ({0})', n), 'rowOp', { op: 'ignore', keys }, all('ignore'), t('Disponibile solo se tutti gli elementi sono non versionati')),
+      I(t('SVN Revert ({0})…', n), 'rowOp', { op: 'revert', keys }, all('revert'), t('Alcuni elementi non hanno modifiche da annullare')),
+      { sep: true }, I(t('Elimina ({0})…', n), 'rowOp', { op: 'deleteFile', keys }, all('deleteFile'), t('Alcuni elementi non si possono eliminare'), t('Canc'))];
+  }
   function rowMenu(row, x, y) {
     const key = row.dataset.key, kind = row.dataset.kind, sec = row.dataset.sec;
+    const multi = U.selection(row.closest('#list'));
+    if (kind !== 'section' && multi.length > 1) return U.menu.open(x, y, multiMenu(multi), row);
     const s = st.sections.find(z => z.id === sec); const r = s && s.rows.find(z => z.key === key);
     const A = (op, label, can, kbd) => ({ label, cmd: 'rowOp', args: { op, key }, disabled: !can, kbd });
     if (kind === 'section') return U.menu.open(x, y, sectionMenu(sec, key, s), row);
@@ -244,10 +257,10 @@
     if (ta.value !== st.commit.text && document.activeElement !== ta) ta.value = st.commit.text;
     const list = root.querySelector('#list'), had = list.contains(document.activeElement), cur = list.__cursor, top = list.scrollTop;
     const keys = []; st.sections.forEach(s => { keys.push('section:' + s.id); s.rows.forEach(r => keys.push(r.key)); });
-    const cursor = keys.includes(cur) ? cur : keys[0];
+    const remap = U.syncSel(list, keys), cursor = keys.includes(remap(cur)) ? remap(cur) : keys[0];   // la selezione sopravvive allo snapshot
     // Come Git Changes: prima le sezioni (Staged c'e' sempre), lo stato vuoto sta sotto.
     const html = isEmpty(st) && !st.loading ? `<div class="empty-state">${U.icon('check', 'big')}<b>${t('Nessuna modifica')}</b><span class="muted">${t('La working copy è pulita.')}</span></div>` : '';
-    const changed = U.setHTML(list, U.treeHTML(st.sections.filter(s => s.id === 'staged' || s.count), cursor, filter) + html);
+    const changed = U.setHTML(list, U.treeHTML(st.sections.filter(s => s.id === 'staged' || s.count), cursor, filter, list.__sel) + html);
     if (changed) { list.scrollTop = top; if (had) { const r = list.querySelector(`.tr[data-key="${CSS.escape(cursor)}"]`); if (r) r.focus(); } }
     list.setAttribute('aria-busy', !!st.loading);
     U.setHTML(root.querySelector('#foot'), foot(st));
@@ -493,7 +506,7 @@
     else if (!e.shiftKey && (a === last || !box.contains(a))) { e.preventDefault(); first.focus(); }
   }
 
-  U.changesHTML = { sectionMenu, header, commitBar, foot, revHTML, switchHTML, mergeBanner, conflictsHTML, revIndicator, statusKind, OK_TTL, recentHTML, trackStatus, listHTML };   // parti pure, provate senza DOM (tests/ui-web)
+  U.changesHTML = { sectionMenu, multiMenu, header, commitBar, foot, revHTML, switchHTML, mergeBanner, conflictsHTML, revIndicator, statusKind, OK_TTL, recentHTML, trackStatus, listHTML };   // parti pure, provate senza DOM (tests/ui-web)
 
   U.views.changes = {
     mount(root) {

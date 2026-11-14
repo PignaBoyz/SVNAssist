@@ -42,6 +42,16 @@ internal static class Args
             : throw new ArgumentException(Loc.T("Argomento non valido: {0}", name));
     }
 
+    /// <summary>Chiavi di riga: <c>keys</c> (array di stringhe, non vuoto) oppure <c>key</c>.</summary>
+    internal static IReadOnlyList<string> Keys(JsonElement args)
+    {
+        if (args.ValueKind != JsonValueKind.Object || !args.TryGetProperty("keys", out var arr))
+            return [Str(args, "key")];
+        if (arr.ValueKind != JsonValueKind.Array || arr.GetArrayLength() == 0 || arr.EnumerateArray().Any(e => e.ValueKind != JsonValueKind.String))
+            throw new ArgumentException(Loc.T("Argomento non valido: {0}", "keys"));
+        return arr.EnumerateArray().Select(e => e.GetString()!).ToList();
+    }
+
     internal static long Long(JsonElement args, string name)
     {
         var value = Prop(args, name);

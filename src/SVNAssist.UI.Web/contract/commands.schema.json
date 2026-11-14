@@ -1031,15 +1031,33 @@
         "args": {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "key"
-          ],
+          "required": [],
           "properties": {
             "key": {
               "type": "string",
               "description": "Chiave di riga: \"<sezione>:<percorso/con/slash>\" oppure \"section:<id>\" (sezione intera). La UI non manda mai percorsi assoluti."
+            },
+            "keys": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string"
+              },
+              "description": "Selezione multipla: elenco di chiavi di riga (stessa validazione di key per ognuna; cartella + file sotto non duplicano). In alternativa a key."
             }
-          }
+          },
+          "oneOf": [
+            {
+              "required": [
+                "key"
+              ]
+            },
+            {
+              "required": [
+                "keys"
+              ]
+            }
+          ]
         }
       }
     },
@@ -1059,15 +1077,33 @@
         "args": {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "key"
-          ],
+          "required": [],
           "properties": {
             "key": {
               "type": "string",
               "description": "Chiave di riga: \"<sezione>:<percorso/con/slash>\" oppure \"section:<id>\" (sezione intera). La UI non manda mai percorsi assoluti."
+            },
+            "keys": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string"
+              },
+              "description": "Selezione multipla: elenco di chiavi di riga (stessa validazione di key per ognuna; cartella + file sotto non duplicano). In alternativa a key."
             }
-          }
+          },
+          "oneOf": [
+            {
+              "required": [
+                "key"
+              ]
+            },
+            {
+              "required": [
+                "keys"
+              ]
+            }
+          ]
         }
       }
     },
@@ -1275,8 +1311,7 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "op",
-            "key"
+            "op"
           ],
           "properties": {
             "op": {
@@ -1294,8 +1329,28 @@
             "key": {
               "type": "string",
               "description": "Chiave di riga: \"<sezione>:<percorso/con/slash>\" oppure \"section:<id>\" (sezione intera). La UI non manda mai percorsi assoluti."
+            },
+            "keys": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string"
+              },
+              "description": "Selezione multipla: elenco di chiavi di riga (stessa validazione di key per ognuna; cartella + file sotto non duplicano). In alternativa a key."
             }
-          }
+          },
+          "oneOf": [
+            {
+              "required": [
+                "key"
+              ]
+            },
+            {
+              "required": [
+                "keys"
+              ]
+            }
+          ]
         }
       }
     },

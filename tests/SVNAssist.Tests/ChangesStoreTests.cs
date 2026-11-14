@@ -740,6 +740,51 @@ public class ChangesStoreTests
         Assert.Equal(["staged:a.txt", "staged:b.txt"], f.FileKeys("staged"));
     }
 
+    // ── Selezione multipla: keys[] ───────────────────────────────────
+
+    [Fact]
+    public async Task Keys_StageEUnstage_SuPiuRighe_CartellaEFileSottoSenzaDuplicati()
+    {
+        var f = new Fixture().With(("src/a.cs", SvnStatusKind.Modified), ("src/b.cs", SvnStatusKind.Modified), ("c.cs", SvnStatusKind.Modified));
+        await f.Refresh();
+        await f.Cmd("unstage", new { keys = new[] { "staged:src", "staged:src/a.cs", "staged:c.cs" } });
+        Assert.Empty(f.FileKeys("staged"));
+        await f.Cmd("stage", new { keys = new[] { "changes:src/a.cs", "changes:c.cs" } });
+        Assert.Equal(["staged:c.cs", "staged:src/a.cs"], f.FileKeys("staged").Order().ToArray());
+        Assert.Equal(["changes:src/b.cs"], f.FileKeys("changes"));
+    }
+
+    [Fact]
+    public async Task Keys_UnaChiaveNonValida_RifiutaTuttoENonTocca_Nulla()
+    {
+        var f = new Fixture().With(("a.cs", SvnStatusKind.Modified), ("b.cs", SvnStatusKind.Modified));
+        await f.Refresh();
+        await Assert.ThrowsAsync<ArgumentException>(() => f.Cmd("unstage", new { keys = new[] { "staged:a.cs", "staged:non-c-e.cs" } }));
+        await Assert.ThrowsAsync<ArgumentException>(() => f.Cmd("unstage", new { keys = Array.Empty<string>() }));
+        await Assert.ThrowsAsync<ArgumentException>(() => f.Cmd("rowOp", new { op = "revert", keys = new[] { "staged:a.cs", "bogus" } }));
+        Assert.Equal(["staged:a.cs", "staged:b.cs"], f.FileKeys("staged"));
+        Assert.Empty(f.Svn.Reverted);
+    }
+
+    [Fact]
+    public async Task Keys_Revert_SuPiuRighe_UnaConfermaConElencoEUnSoloRevert()
+    {
+        var f = new Fixture().With(("a.cs", SvnStatusKind.Modified), ("d/b.cs", SvnStatusKind.Modified), ("d/c.cs", SvnStatusKind.Modified));
+        await f.Refresh();
+        await f.Cmd("rowOp", new { op = "revert", keys = new[] { "staged:a.cs", "staged:d" } });
+        Assert.Equal([Full("a.cs"), Full(@"d\b.cs"), Full(@"d\c.cs")], Assert.Single(f.Svn.Reverted).Order());
+        Assert.Single(f.Dialogs.Messages);
+    }
+
+    [Fact]
+    public async Task Keys_Ignore_SuPiuRighe_IgnoraOgniElemento()
+    {
+        var f = new Fixture().With(("a.tmp", SvnStatusKind.Unversioned), ("o/b.tmp", SvnStatusKind.Unversioned), ("o/c.tmp", SvnStatusKind.Unversioned));
+        await f.Refresh();
+        await f.Cmd("rowOp", new { op = "ignore", keys = new[] { "unversioned:a.tmp", "unversioned:o" } });
+        Assert.Equal(3, f.Svn.Ignored.Count);
+    }
+
     [Fact]
     public async Task Ignore_SuCartella_ChiedeConfermaEIgnoraOgniElemento()
     {

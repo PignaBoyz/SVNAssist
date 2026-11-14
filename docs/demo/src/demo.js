@@ -1614,6 +1614,7 @@ function buildTree(items) {
 function compactNode(d) { let cur = d, label = d.label; while (cur.files.length === 0 && cur.dirs.length === 1) { cur = cur.dirs[0]; label += '\\' + cur.label; } return { cur, label }; }
 // risolve la chiave di riga del protocollo (docs/ui-protocol.md): file | folder | section
 function getRow(key) {
+  if (Array.isArray(key)) { const rs = key.map(getRow); return rs.length === 1 ? rs[0] : { kind: 'multi', section: rs[0].section, key: '', entries: [...new Set(rs.flatMap(r => r.entries))] }; }   // selezione multipla
   const i = key.indexOf(':'), sec = key.slice(0, i), p = key.slice(i + 1).replace(/\//g, '\\');
   if (sec === 'section') return { kind: 'section', section: p, key: '', entries: secItems(p), name: SEC_NAMES[p] };
   const all = secItems(sec), f = all.find(x => x.path === p);
@@ -1635,7 +1636,7 @@ async function rowOp(op0, key) {
       await svn(`add --force ${row.kind === 'folder' && row.section === 'unversioned' ? '"' + fwd(row.key) + '"' : '--targets (' + aff.length + ' elementi)'}`, 500);
       aff.forEach(f => svnAdd(f.path)); aff.forEach(f => { f.sel = true; });
       await done(`Aggiunti a SVN: ${aff.length} elementi.`);
-    } else if (op === 'del' && row.kind === 'folder') {   // Canc su una cartella: elementi sotto la riga, versionati svn delete, non versionati dal disco
+    } else if (op === 'del' && row.kind !== 'file') {   // Canc su una cartella: elementi sotto la riga, versionati svn delete, non versionati dal disco
       const its = row.entries.filter(f => f.st !== 'D'), vers = its.filter(f => f.st !== '?'), loose = its.filter(f => f.st === '?');
       if (!its.length) { setStatus("Nessun file idoneo per l'eliminazione."); return render(); }
       let msg = `Eliminare ${its.length} elementi?\n\n${listForConfirm(its)}\n\nI versionati (${vers.length}) verranno rimossi da SVN al prossimo commit; i non versionati (${loose.length}) andranno nel cestino, cartelle comprese.`;
@@ -1669,7 +1670,7 @@ async function rowOp(op0, key) {
     } else if (op === 'rev') {
       const t = row.entries.filter(f => IS_REV.includes(f.st));
       if (!t.length) { setStatus('Nessun elemento idoneo per SVN Revert.'); return render(); }
-      const scope = row.kind === 'folder' ? ` nella cartella "${row.key}"` : row.kind === 'section' ? ` (${SEC_NAMES[row.section]})` : '';
+      const scope = row.kind === 'multi' ? '' : row.kind === 'folder' ? ` nella cartella "${row.key}"` : row.kind === 'section' ? ` (${SEC_NAMES[row.section]})` : '';
       if (!await confirmBox(`Annullare le modifiche locali su ${t.length} elementi${scope}?\n\n${listForConfirm(t)}\n\nLe modifiche andranno perse e l'operazione non è annullabile.`)) return;
       setStatus('Revert in corso...'); render();
       await svn(`revert --depth infinity --targets (${t.length} elementi)`, 500); t.forEach(f => svnRevert(f.path));
