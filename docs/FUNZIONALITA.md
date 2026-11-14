@@ -16,6 +16,7 @@ Questo file è pensato per essere **modificato da te** e restituito per pianific
 
 ## ✅ Novità 0.4.0 (in lavorazione)
 
+- **Prerequisiti installati dopo l'avvio di VS trovati senza riavviare il PC**: il PATH viene riletto dal registro all'avvio di host e backend e ogni volta che un eseguibile (svn, gh, claude, dotnet) non si trova; se un eseguibile trovato non parte (`--version` fallisce) i prerequisiti dicono "Installato ma non funzionante in questa sessione: riavvia Visual Studio (se non basta, riavvia il PC)".
 - **SVN Add in Solution Explorer** (menu contestuale, accanto a Show Log): compare solo se tutti gli elementi selezionati (anche piu' di uno) sono non versionati; esegue `svn add --parents`, poi icone e finestra Changes mostrano il file come aggiunto.
 - **Commit All e file nuovi**: con Staged vuoto, se esistono file non versionati (`?`) compare una domanda con l'elenco (max 10 + "e altri N"): **Sì, aggiungi e committa** (`svn add` sui nuovi, poi commit insieme ai versionati; gli ignorati da svn non compaiono, quindi restano fuori), **No, solo i versionati** (come prima) o **Annulla**. Nessuna domanda senza `?`. **Commit Staged (n)** è invariato. Se il commit fallisce dopo l'add, i file restano `A` e il messaggio d'errore lo dice.
 - **Avviso prima dello switch su working copy sporca**: riepilogo con i conteggi (modificati, aggiunti, eliminati, in conflitto, non versionati) e tre scelte: Continua comunque, Apri Cleanup, Annulla. Dopo il Cleanup torna l'avviso aggiornato.

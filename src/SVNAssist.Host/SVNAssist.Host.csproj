@@ -40,6 +40,7 @@
     <Compile Include="..\Shared\Loc.cs" Link="Loc.cs" />
     <Compile Include="..\Shared\LocEn.cs" Link="LocEn.cs" />
     <Compile Include="..\Shared\DotnetRuntime.cs" Link="DotnetRuntime.cs" />
+    <Compile Include="..\Shared\PathRefresh.cs" Link="PathRefresh.cs" />
     <VSCTCompile Include="SVNAssist.vsct">
       <ResourceName>Menus.ctmenu</ResourceName>
     </VSCTCompile>

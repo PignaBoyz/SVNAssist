@@ -8,6 +8,7 @@ var stdout = Console.OpenStandardOutput();
 var stdin = Console.OpenStandardInput();
 Console.SetOut(Console.Error);
 
+SVNAssist.Rpc.PathRefresh.Refresh(); // PATH aggiornato dal registro (installazioni fatte dopo l'avvio di VS)
 BackendLog.Prune();
 BackendLog.Info($"Avvio backend pid={Environment.ProcessId} runtime={Environment.Version}");
 AppDomain.CurrentDomain.UnhandledException += (_, e) => BackendLog.Error("Eccezione non gestita", e.ExceptionObject as Exception);

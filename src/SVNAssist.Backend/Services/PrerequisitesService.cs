@@ -143,6 +143,8 @@ internal sealed class PrerequisiteProbes
     public Func<string?> FindGitHubCli { get; init; } = () => null;
     public Func<string?> FindClaude { get; init; } = () => null;
     public Func<string, string?> ReadEnvironment { get; init; } = _ => null;
+    /// <summary>Dato il percorso di un eseguibile trovato, dice se parte davvero (<c>--version</c> esce con 0).</summary>
+    public Func<string, CancellationToken, Task<bool>> Runs { get; init; } = (_, _) => Task.FromResult(true);
     public Func<bool> CopilotRuntimeInstalled { get; init; } = () => false;
 
     /// <summary>Dato il percorso di gh, dice se l'utente ha fatto login.</summary>
@@ -159,6 +161,15 @@ internal sealed class PrerequisiteProbes
         FindGitHubCli = FindGh,
         FindClaude = ClaudeCodeAiService.FindClaudeExecutable,
         ReadEnvironment = Environment.GetEnvironmentVariable,
+        Runs = async (exe, ct) =>
+        {
+            if (!exe.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) return true; // es. cli.js: non si lancia da solo
+            try
+            {
+                return (await processRunner.RunWithTimeoutAsync(exe, ["--version"], null, GitHubTokenResolver.GhTimeout, "--version", ct)).ExitCode == 0;
+            }
+            catch (Exception) when (!ct.IsCancellationRequested) { return false; }
+        },
         CopilotRuntimeInstalled = () => CopilotRuntimeInstaller.IsInstalled,
         IsGitHubCliLoggedIn = async (gh, ct) =>
         {
@@ -215,10 +226,13 @@ internal sealed class PrerequisitesService
         var provider = AiProviderGuide.Normalize(providerOverride ?? await _settings.GetAiProviderAsync(ct));
 
         var svn = _probes.FindSvn();
+        var svnBroken = svn is not null && !await _probes.Runs(svn, ct);
         var tortoise = _probes.FindTortoise();
         var gh = _probes.FindGitHubCli();
         var claude = _probes.FindClaude();
-        var ghLoggedIn = gh is not null && await _probes.IsGitHubCliLoggedIn(gh, ct);
+        var claudeBroken = claude is not null && !await _probes.Runs(claude, ct);
+        var ghBroken = gh is not null && !await _probes.Runs(gh, ct);
+        var ghLoggedIn = gh is not null && !ghBroken && await _probes.IsGitHubCliLoggedIn(gh, ct);
         var token = await _probes.ResolveGitHubToken(ct);
         var copilotInstalled = _probes.CopilotRuntimeInstalled();
 
@@ -235,7 +249,7 @@ internal sealed class PrerequisitesService
         // Copilot serve il login GitHub (token): senza, non è utilizzabile nemmeno se scelto esplicitamente.
         if (token is not null && (provider == "copilot" || (Use("copilot") && copilotInstalled)))
             usable.Add("GitHub Copilot");
-        if (Use("claudecode") && claude is not null)
+        if (Use("claudecode") && claude is not null && !claudeBroken)
             usable.Add("Claude Code");
         if (Use("claude") && anthropicKeySource is not null)
             usable.Add("Claude API");
@@ -245,8 +259,8 @@ internal sealed class PrerequisitesService
 
         var items = new List<PrerequisiteItem>
         {
-            new(PrerequisiteIds.Svn, GroupRequired, Loc.T("Client Subversion (svn.exe)"), svn is not null,
-                svn ?? Loc.T("svn.exe non trovato: serve per tutte le operazioni SVN."),
+            new(PrerequisiteIds.Svn, GroupRequired, Loc.T("Client Subversion (svn.exe)"), svn is not null && !svnBroken,
+                svnBroken ? NotWorking : svn ?? Loc.T("svn.exe non trovato: serve per tutte le operazioni SVN."),
                 Loc.T("Si apre una finestra con:  winget install --id Slik.Subversion -e\n" +
                       "Oppure installa TortoiseSVN e, nell'installer, abilita \"command line client tools\".\n" +
                       "Poi premi Ricontrolla (se svn non viene trovato, riavvia Visual Studio)."),
@@ -257,8 +271,8 @@ internal sealed class PrerequisitesService
                 Loc.T("Scarica TortoiseSVN da {0}\nNell'installer abilita anche \"command line client tools\".", TortoiseDownloadUrl),
                 Loc.T("Pagina download")),
 
-            new(PrerequisiteIds.GitHubCli, GroupAi, "GitHub CLI (gh)", gh is not null,
-                gh ?? Loc.T("gh.exe non trovato (per Copilot e GitHub Models)."),
+            new(PrerequisiteIds.GitHubCli, GroupAi, "GitHub CLI (gh)", gh is not null && !ghBroken,
+                ghBroken ? NotWorking : gh ?? Loc.T("gh.exe non trovato (per Copilot e GitHub Models)."),
                 Loc.T("Si apre una finestra con:  winget install --id GitHub.cli -e\n" +
                       "Poi premi Ricontrolla. Se gh non viene trovato, riavvia Visual Studio (il PATH non si aggiorna da solo)."),
                 gh is null ? Loc.T("Installa GitHub CLI") : null),
@@ -270,8 +284,8 @@ internal sealed class PrerequisitesService
                       "Conferma il codice nel browser, poi premi Ricontrolla."),
                 gh is not null && !ghLoggedIn ? Loc.T("Accedi a GitHub") : null),
 
-            new(PrerequisiteIds.ClaudeCode, GroupAi, "Claude Code", claude is not null,
-                claude is null ? Loc.T("claude.exe non trovato.")
+            new(PrerequisiteIds.ClaudeCode, GroupAi, "Claude Code", claude is not null && !claudeBroken,
+                claudeBroken ? NotWorking : claude is null ? Loc.T("claude.exe non trovato.")
                     : Loc.T("{0} (il login non è verificabile: premi \"Accedi a Claude Code\" se non l'hai mai fatto)", claude),
                 Loc.T("Si apre una finestra PowerShell con:  irm https://claude.ai/install.ps1 | iex\n" +
                       "Poi premi Ricontrolla ed esegui \"Accedi a Claude Code\" (nella finestra che si apre, /login con il tuo abbonamento)."),
@@ -303,6 +317,9 @@ internal sealed class PrerequisitesService
 
         return new PrerequisitesSnapshot(items, provider, usable, AiProviderGuide.Requirements(provider));
     }
+
+    /// <summary>Eseguibile trovato ma che non parte in questa sessione (PATH/DLL non ancora aggiornati).</summary>
+    internal static string NotWorking => Loc.T("Installato ma non funzionante in questa sessione: riavvia Visual Studio (se non basta, riavvia il PC).");
 
     private static HashSet<string>? RelevantAiItems(string provider) => provider switch
     {
