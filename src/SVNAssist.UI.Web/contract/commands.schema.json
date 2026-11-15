@@ -68,6 +68,82 @@
       }
     },
     {
+      "title": "createPatch",
+      "description": "Create Patch: svn diff dei file indicati (key/keys; nessuna = tutte le modifiche versionate) nel file .patch scelto con il dialogo Salva dell'host.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "createPatch"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {
+            "key": {
+              "type": "string",
+              "description": "Chiave di riga o \"section:<id>\"."
+            },
+            "keys": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string"
+              },
+              "description": "Selezione multipla (in alternativa a key)."
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "applyPatch",
+      "description": "Apply Patch: dialogo Apri file, anteprima con svn patch --dry-run (file toccati e rifiuti), conferma, poi applica.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "applyPatch"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "restoreBackup",
+      "description": "Ripristina modifiche: dopo un revert di massa (sezione, tutto, Annulla merge) applica con svn patch il backup salvato prima; il backup si elimina.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "restoreBackup"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
       "title": "revPickerMore",
       "description": "Scelta revisione: carica altre revisioni (\"Carica altre\").",
       "type": "object",

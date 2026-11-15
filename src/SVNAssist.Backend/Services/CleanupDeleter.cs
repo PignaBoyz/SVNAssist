@@ -27,7 +27,7 @@ internal static class CleanupDeleter
             if (string.IsNullOrEmpty(path) || !(item == "unversioned" && unversioned || item == "ignored" && ignored))
                 continue;
             var full = Path.GetFullPath(Path.Combine(root, path));
-            if (!full.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Contains(".vs", StringComparer.OrdinalIgnoreCase))
+            if (!full.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Any(seg => seg.Equals(".vs", StringComparison.OrdinalIgnoreCase) || seg.Equals(".svn-assist", StringComparison.OrdinalIgnoreCase)))
                 result.Add(full);
         }
 

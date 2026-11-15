@@ -18,7 +18,7 @@ namespace SVNAssist.Stores;
 /// <see cref="DispatchAsync"/> con le chiavi di riga della UI: ogni chiave viene <b>rivalidata</b> contro lo stato corrente
 /// (<see cref="ResolveKey"/>) e i percorsi vengono sempre da <c>svn status</c>, mai dalla UI.
 /// </remarks>
-internal sealed class ChangesStore : ViewStore, IDisposable
+internal sealed partial class ChangesStore : ViewStore, IDisposable
 {
     /// <summary>Oltre questo numero il diff di una cartella viene troncato (ogni file e' una chiamata a svn).</summary>
     internal const int MaxFolderDiffFiles = 100;
@@ -547,6 +547,18 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             case "updateToRevision":
                 await OpenRevisionPickerAsync([WorkingCopyPath], ct);
                 break;
+            case "createPatch":
+                await RunExclusiveAsync(() => CreatePatchAsync(OptionalKeys(args), ct));
+                break;
+            case "applyPatch":
+                await RunExclusiveAsync(() => ApplyPatchFileAsync(ct));
+                break;
+            case "restoreBackup":
+                {
+                    var backup = _restoreBackup;
+                    await RunExclusiveAsync(() => RestoreBackupAsync(backup, ct), keepBackup: true);
+                    break;
+                }
             case "revPickerMore":
                 await RevPicker.MoreAsync(ct);
                 break;
@@ -1358,7 +1370,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
     /// Esegue <paramref name="body"/> solo se nessun'altra operazione e' in corso (altrimenti ignora la richiesta:
     /// doppio click). Aspetta un eventuale refresh gia' avviato, per non sovrapporre status e comando svn.
     /// </summary>
-    internal async Task RunExclusiveAsync(Func<Task> body)
+    internal async Task RunExclusiveAsync(Func<Task> body, bool keepBackup = false)
     {
         if (Interlocked.CompareExchange(ref _operationRunning, 1, 0) != 0)
         {
@@ -1370,6 +1382,8 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         {
             await _refreshGate.WaitAsync();
             _refreshGate.Release();
+            if (!keepBackup)
+                DiscardBackup(); // qualunque altra operazione: il "Ripristina modifiche" dell'ultimo revert non vale piu'
             await body();
         }
         finally
@@ -1890,18 +1904,22 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 entries.Count, ListForConfirmation(entries)), ct))
             return;
 
+        var (proceed, backup, note) = await BackupBeforeAsync("undo-merge", [wc], ct);
+        if (!proceed)
+            return;
         try
         {
             SetStatus(Loc.T("Annullamento del merge in corso..."));
             await _svnService.RevertAsync([wc], ct, recursive: true);
             ClearMergeBanner();
-            await RefreshAsync(ct, reloadBranch: false, Loc.T("Merge annullato: {0} elementi ripristinati.", entries.Count));
+            await RefreshAsync(ct, reloadBranch: false, Loc.T("Merge annullato: {0} elementi ripristinati.", entries.Count) + note);
+            OfferRestore(backup);
             if (MergeUndone is not null)
                 await MergeUndone(ct);
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            SetStatus(Loc.T("Errore revert: {0}", ex.Message));
+            SetStatus(Loc.T("Errore revert: {0}", ex.Message) + BackupKept(backup));
         }
     }
 
@@ -1997,7 +2015,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         // "Errore..." (it) e "Error..." (en) iniziano uguale: il test non dipende dalla lingua.
         var isError = _statusMessage.StartsWith("Error", StringComparison.Ordinal);
         return new StatusDto(_statusMessage, isError,
-            !isError ? null
+            !isError ? (_restoreBackup is null ? null : new StatusActionDto(Loc.T("Ripristina modifiche"), "restoreBackup"))
                 : _pendingSwitch.Get(_workingCopyPath) is not null ? new StatusActionDto(Loc.T("Completa switch"), "switchResume")
                 : SvnErrors.IsWorkingCopyLocked(_statusMessage) ? new StatusActionDto(Loc.T("Esegui Cleanup"), "cleanup")
                 : SvnErrors.SuggestsUpdate(_statusMessage) ? new StatusActionDto(Loc.T("SVN Update ora"), "update") : null, _statusSeq,
@@ -2153,6 +2171,16 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         if (!await _dialogs.ConfirmAsync(message, ct))
             return;
 
+        string? backup = null;
+        var note = string.Empty;
+        if (everything || target.WholeSection) // revert di massa: si salva il diff (PatchBackup)
+        {
+            bool proceed;
+            (proceed, backup, note) = await BackupBeforeAsync("revert", targets.Select(e => e.FullPath).ToList(), ct);
+            if (!proceed)
+                return;
+        }
+
         try
         {
             SetStatus(Loc.T("Revert in corso..."));
@@ -2166,7 +2194,8 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 await _svnService.RevertAsync(recursive, ct, recursive: true);
             if (shallow.Count > 0)
                 await _svnService.RevertAsync(shallow, ct, recursive: false);
-            await RefreshAsync(ct, reloadBranch: false, Loc.T("Revert completato su {0} elementi.", targets.Count));
+            await RefreshAsync(ct, reloadBranch: false, Loc.T("Revert completato su {0} elementi.", targets.Count) + note);
+            OfferRestore(backup);
             bool left;
             lock (_stateLock)
                 left = _entries.Any(e => StatusPresentation.IsRevertable(e.Status));
@@ -2175,7 +2204,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            SetStatus(Loc.T("Errore revert: {0}", ex.Message));
+            SetStatus(Loc.T("Errore revert: {0}", ex.Message) + BackupKept(backup));
         }
     }
 
@@ -2751,6 +2780,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
 
     public void Dispose()
     {
+        DiscardBackup();
         _lifetime.Cancel();
         lock (_watcherLock)
         {

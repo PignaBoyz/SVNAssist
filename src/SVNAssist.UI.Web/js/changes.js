@@ -66,6 +66,7 @@
   }
   const actTip = cmd => cmd === 'update' ? t('Esegue svn update sulla working copy')
     : cmd === 'switchResume' ? t('Esegue svn cleanup e ripete lo switch: svn riprende da dove si era fermato')
+    : cmd === 'restoreBackup' ? t('Rimette le modifiche appena annullate (svn patch del backup salvato prima del revert); il backup poi si elimina')
     : cmd === 'switchBack' ? t('Esegue svn cleanup e riporta la working copy al ramo e alla revisione di prima dello switch; le modifiche locali restano')
     : t('Esegue svn cleanup sulla working copy');
   function foot(s) {
@@ -207,6 +208,8 @@
   function sectionMenu(sec, key, s) {
     return [{ label: sec === 'staged' ? t('Rimuovi tutto dai file da committare') : t('Aggiungi tutto ai file da committare'), cmd: sec === 'staged' ? 'unstage' : 'stage', args: { key } }, { sep: true },
       sec === 'unversioned' ? null : { label: t('SVN Revert di tutto…'), cmd: 'rowOp', args: { op: 'revert', key }, disabled: !(s && s.count), hint: t('Annulla tutte le modifiche di questa sezione (anche in più cartelle), dopo conferma con l’elenco dei file; i non versionati non si toccano') },
+      sec === 'unversioned' ? null : { label: t('Create Patch…'), cmd: 'createPatch', args: { key }, disabled: !(s && s.count), hint: t('Salva le modifiche di questa sezione in un file .patch (svn diff)') },
+      { label: t('Apply Patch…'), cmd: 'applyPatch', hint: t('Applica un file .patch alla working copy, con anteprima prima di scrivere') },
       sec === 'unversioned' ? null : { sep: true }, { label: t('Espandi tutto'), cmd: 'expandAll' }, { label: t('Comprimi tutto'), cmd: 'collapseAll' }].filter(Boolean);
   }
   // menu per la selezione multipla: ogni voce vale solo se vale per TUTTE le righe, altrimenti e' disabilitata col motivo
@@ -218,6 +221,7 @@
       I(t('Rimuovi dai file da committare ({0})', n), 'unstage', { keys }, all('unstage'), t('Alcuni elementi non sono tra i file da committare')),
       { sep: true }, I(t('Aggiungi alla ignore list ({0})', n), 'rowOp', { op: 'ignore', keys }, all('ignore'), t('Disponibile solo se tutti gli elementi sono non versionati')),
       I(t('SVN Revert ({0})…', n), 'rowOp', { op: 'revert', keys }, all('revert'), t('Alcuni elementi non hanno modifiche da annullare')),
+      I(t('Create Patch…'), 'createPatch', { keys }, rows.every(r => r.status !== '?'), t('Salva le modifiche selezionate in un file .patch (svn diff)')),
       { sep: true }, I(t('Elimina ({0})…', n), 'rowOp', { op: 'deleteFile', keys }, all('deleteFile'), t('Alcuni elementi non si possono eliminare'), t('Canc'))];
   }
   function rowMenu(row, x, y) {
@@ -235,6 +239,7 @@
       { sep: true }, A('add', t('SVN Add (aggiungi al controllo di versione)'), c.add), A('ignore', t('Aggiungi alla ignore list'), c.ignore),
       A('revert', isF ? t('SVN Revert (annulla le modifiche)…') : t('SVN Revert della cartella (annulla le modifiche)…'), c.revert), isF ? A('resolve', t('Risolvi conflitto…'), c.resolve) : null,
       isF && (c.lock || c.unlock) ? { sep: true } : null, isF && c.lock ? A('lock', 'SVN Lock…', true) : null, isF && c.unlock ? A('unlock', 'SVN Unlock', true) : null,
+      { label: t('Create Patch…'), cmd: 'createPatch', args: { key }, disabled: r.status === '?', hint: t('Salva le modifiche selezionate in un file .patch (svn diff)') },
       { sep: true }, A('deleteFile', isF ? t('Elimina file…') : t('Elimina cartella…'), c.deleteFile, t('Canc')), isF ? null : { sep: true }, isF ? null : { label: t('Espandi tutto'), cmd: 'expandAll' }, isF ? null : { label: t('Comprimi tutto'), cmd: 'collapseAll' },
     ].filter(Boolean), row);
   }

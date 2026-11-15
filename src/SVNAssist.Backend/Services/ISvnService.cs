@@ -168,6 +168,15 @@ public interface ISvnService
     Task<string> GetFileDiffAsync(string filePath, CancellationToken ct);
 
     /// <summary>
+    /// Diff unificato (<c>svn diff --depth empty</c>) esattamente dei percorsi indicati, con i percorsi relativi alla working copy:
+    /// il testo di una patch (Create Patch, backup prima di un revert). Vuoto se non c'e' nulla da mostrare.
+    /// </summary>
+    Task<string> GetPatchAsync(string workingCopyPath, IEnumerable<string> paths, CancellationToken ct);
+
+    /// <summary>Applica una patch alla working copy (<c>svn patch</c>); <paramref name="dryRun"/> = solo anteprima. Ritorna l'output di svn (U/A/D/G/C per file, hunk rifiutati).</summary>
+    Task<string> ApplyPatchAsync(string workingCopyPath, string patchFile, bool dryRun, CancellationToken ct);
+
+    /// <summary>
     /// Esporta la versione BASE (pristine, senza modifiche locali) di un file della working copy in <paramref name="destination"/>
     /// (<c>svn export -r BASE</c>): serve all'host per aprire il diff nell'editor. Fallisce per i file senza BASE (aggiunti).
     /// </summary>

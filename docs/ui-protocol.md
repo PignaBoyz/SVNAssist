@@ -45,6 +45,9 @@ Vale per file e cartelle (la cartella ha il percorso della cartella; le catene a
 | `refresh` | – | `svn status` |
 | `update` | – | `svn update` |
 | `updateToRevision` | – | **SVN Update to revision**: apre in Changes la scelta guidata (`revPicker.open`): le ultime revisioni del repository (`svn log`, 30 alla volta), `HEAD` in cima, campo "oppure numero". Da Solution Explorer parte lo stesso su quei percorsi (l'host mostra prima Changes) |
+| `createPatch` | `key`/`keys` (facoltativi) | **Create Patch…** (menu contestuale di sezione/riga/selezione e comando di VS): `svn diff --depth empty` esattamente dei file versionati indicati (nessuna chiave = tutte le modifiche) nel file scelto con il dialogo Salva dell'host (`IHost.PickFileAsync`). I file binari non stanno in un diff: lo stato lo segnala |
+| `applyPatch` | – | **Apply Patch…**: dialogo Apri file, anteprima con `svn patch --dry-run` (file toccati e rifiuti/conflitti) con conferma, poi `svn patch`; riepilogo nello stato e, se ci sono rifiuti, un dialogo con l'output (conflitti in Changes, hunk rifiutati in `*.svnpatch.rej`) |
+| `restoreBackup` | – | **Ripristina modifiche** (azione della barra di stato `status.action`, solo dopo un revert di massa riuscito): `svn patch` del backup salvato prima del revert, poi il backup si elimina. L'azione sparisce (e il backup si elimina) alla prossima operazione, alla chiusura del backend o dopo 7 giorni |
 | `revPickerMore` | – | "Carica altre": altre 30 revisioni |
 | `revPickerCancel` | – | chiude la scelta senza aggiornare |
 | `revPickerOk` | `rev` | intero positivo o `HEAD`: chiude ed esegue `svn update -r N` (esito come l'update: revisione, conflitti). Se non valido la scelta resta aperta con `revPicker.error` |

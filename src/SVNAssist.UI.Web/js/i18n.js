@@ -5,6 +5,12 @@
 (function (w) {
   const U = w.SVNUI = w.SVNUI || { views: {} };
   const EN = {
+    "Create Patch…": "Create Patch…",
+    "Apply Patch…": "Apply Patch…",
+    "Salva le modifiche di questa sezione in un file .patch (svn diff)": "Save the changes of this section in a .patch file (svn diff)",
+    "Salva le modifiche selezionate in un file .patch (svn diff)": "Save the selected changes in a .patch file (svn diff)",
+    "Applica un file .patch alla working copy, con anteprima prima di scrivere": "Apply a .patch file to the working copy, with a preview before writing",
+    "Rimette le modifiche appena annullate (svn patch del backup salvato prima del revert); il backup poi si elimina": "Puts back the changes just reverted (svn patch of the backup saved before the revert); the backup is then deleted",
     "Esegue svn cleanup e riporta la working copy al ramo e alla revisione di prima dello switch; le modifiche locali restano": "Runs svn cleanup and takes the working copy back to the branch and revision it had before the switch; local changes are kept",
     "{0} elementi elaborati": "{0} items processed",
     "{0} di circa {1} elementi": "{0} of about {1} items",

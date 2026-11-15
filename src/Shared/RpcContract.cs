@@ -104,6 +104,9 @@ namespace SVNAssist.Rpc
         /// </summary>
         Task<bool> ApplyDocumentTextAsync(string path, string text);
 
+        /// <summary>Dialogo Salva con nome (save) / Apri file per le patch. Ritorna il percorso scelto, null se annullato.</summary>
+        Task<string?> PickFileAsync(bool save, string title, string defaultName, string filter);
+
         /// <summary>Lo stato SVN dei file e' cambiato: l'host rilegge GetSccStatesAsync e aggiorna i glifi di Solution Explorer.</summary>
         Task SccStatusChangedAsync();
     }
