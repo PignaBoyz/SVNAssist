@@ -18,6 +18,9 @@ namespace SVNAssist.Models;
 /// <param name="IsWcLocked">Attributo <c>wc-locked</c>: lock della working copy lasciato da un'operazione interrotta (serve cleanup).</param>
 public sealed record SvnFileStatus(string Path, SvnStatusKind Status, bool IsTreeConflict = false, bool IsLocked = false, bool IsSwitched = false, bool IsWcLocked = false);
 
+/// <summary>Lock di un altro utente su un file (da <c>svn status -u</c>, <c>repos-status/lock</c>).</summary>
+public sealed record SvnRemoteLock(string Path, string Owner, string Comment, string Created);
+
 /// <summary>
 /// Enumerazione degli stati possibili di un file in SVN.
 /// I valori corrispondono all'attributo <c>item</c> nell'XML di <c>svn status</c>.

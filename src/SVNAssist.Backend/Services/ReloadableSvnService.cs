@@ -42,6 +42,7 @@ internal sealed class ReloadableSvnService : ISvnService
         }
     }
 
+    public Task<IReadOnlyList<SvnRemoteLock>> GetRemoteLocksAsync(string workingCopyPath, CancellationToken ct) => Current.GetRemoteLocksAsync(workingCopyPath, ct);
     public Task<IReadOnlyList<SvnFileStatus>> GetStatusAsync(string workingCopyPath, CancellationToken ct) => Current.GetStatusAsync(workingCopyPath, ct);
     public Task<long?> CommitAsync(IEnumerable<string> paths, string message, CancellationToken ct, IEnumerable<string>? includeAllUnder = null) => Current.CommitAsync(paths, message, ct, includeAllUnder);
     public Task AddAsync(IEnumerable<string> paths, CancellationToken ct) => Current.AddAsync(paths, ct);

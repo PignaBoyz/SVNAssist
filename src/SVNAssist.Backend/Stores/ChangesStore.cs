@@ -140,7 +140,31 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         string? url;
         lock (_stateLock)
             url = _branchUrl;
-        return string.IsNullOrEmpty(url) ? null : await _svnService.GetHeadRevisionAsync(url, ct);
+        long? head = string.IsNullOrEmpty(url) ? null : await _svnService.GetHeadRevisionAsync(url, ct);
+        if (head is not null)
+            await FetchRemoteLocksAsync(ct);
+        return head;
+    }
+
+    /// <summary>Lock di altri utenti per percorso completo. Si rileggono solo nel ciclo del controllo remoto (HEAD), mai a ogni refresh.</summary>
+    private Dictionary<string, SvnRemoteLock> _remoteLocks = new(StringComparer.OrdinalIgnoreCase);
+
+    // shortcut: i lock di altri si mostrano solo sui file gia' nell'albero (modificati); quelli su file non toccati non si elencano. Un errore qui non rompe il controllo HEAD.
+    private async Task FetchRemoteLocksAsync(CancellationToken ct)
+    {
+        string wc;
+        lock (_stateLock)
+            wc = _workingCopyPath;
+        if (string.IsNullOrWhiteSpace(wc))
+            return;
+        try
+        {
+            var locks = (await _svnService.GetRemoteLocksAsync(wc, ct))
+                .ToDictionary(l => NormalizeStatusPath(l.Path, wc), StringComparer.OrdinalIgnoreCase);
+            lock (_stateLock)
+                _remoteLocks = locks;
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested) { BackendLog.Warn("Lock di altri non letti: " + ex.Message); }
     }
 
     /// <summary>Refresh automatico (watcher): salta se non c'e' una working copy o se un'operazione dell'utente e' in corso.</summary>
@@ -456,6 +480,13 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             var statusText = statusName;
             if (entry.IsLocked && entry.Status != SvnStatusKind.Normal)
                 statusText += " — " + Loc.T("bloccato (lock)");
+            string? lockedBy = null;
+            if (_remoteLocks.TryGetValue(entry.FullPath, out var rl))
+            {
+                lockedBy = Loc.T("Bloccato da {0}", rl.Owner) + (rl.Created.Length >= 10 ? " (" + rl.Created[..10] + ")" : "")
+                    + (rl.Comment.Length > 0 ? ": " + rl.Comment : "");
+                statusText += " — " + lockedBy;
+            }
             if (section == ChangeSection.Staged && entry.Status == SvnStatusKind.Unversioned)
                 statusText += " " + Loc.T("(verrà aggiunto con il commit)");
             else if (section == ChangeSection.Staged && entry.Status == SvnStatusKind.Missing)
@@ -479,7 +510,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                     Lock: !entry.IsDirectory && !entry.IsLocked && entry.Status == SvnStatusKind.Modified,
                     Unlock: !entry.IsDirectory && entry.IsLocked),
                 Tooltip: $"{entry.RelativePath} — {statusText}",
-                Locked: entry.IsLocked ? true : null));
+                Locked: entry.IsLocked ? true : null, LockedBy: lockedBy));
         }
     }
 
@@ -564,6 +595,9 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 break;
             case "resolveTreeConflicts":
                 await RunExclusiveAsync(() => ResolveTreeConflictsAsync(ct));
+                break;
+            case "resolveAllConflicts":
+                await RunExclusiveAsync(() => ResolveAllTextConflictsAsync(Args.OneOf(args, "op", "mine", "theirs"), ct));
                 break;
             case "showLog":
                 if (string.IsNullOrWhiteSpace(WorkingCopyPath))
@@ -1396,6 +1430,17 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         {
             SetStatus(Loc.T("Risolvi prima i conflitti ({0} file): svn non committa file in conflitto.", conflicted.Count));
             return;
+        }
+
+        // D10: marcatori di conflitto rimasti in un file (risolto "a mano" senza toglierli): si chiede, file per file.
+        foreach (var f in selected.Where(e => !e.IsDirectory && e.Status is not (SvnStatusKind.Deleted or SvnStatusKind.Missing)
+                     && ConflictMarkers.HasMarkers(e.FullPath)))
+        {
+            if (!await _dialogs.ConfirmAsync(Loc.T("Il file {0} contiene marcatori di conflitto. Committare comunque?", f.RelativePath), ct))
+            {
+                SetStatus(Loc.T("Commit annullato: {0} contiene marcatori di conflitto.", f.RelativePath));
+                return;
+            }
         }
 
         var toAddCount = 0;
@@ -2310,6 +2355,39 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         await RefreshAsync(ct, reloadBranch: false, failed.Count == 0
             ? Loc.T("Conflitti ad albero risolti: {0}.", done)
             : Loc.T("Errore resolve: {0} conflitti ad albero risolti, {1} falliti. {2}", done, failed.Count, string.Join(" | ", failed)));
+    }
+
+    /// <summary>"Usa la mia/loro per tutti": solo i conflitti di testo (mai ad albero ne' di proprieta'), con conferma che elenca i file.</summary>
+    private async Task ResolveAllTextConflictsAsync(string op, CancellationToken ct)
+    {
+        List<ChangeEntry> texts;
+        lock (_stateLock)
+            texts = _entries.Where(e => e.Status == SvnStatusKind.Conflicted && !e.IsTreeConflict
+                && !(_conflictInfo.TryGetValue(e.FullPath, out var i) && i.Type == "property")).ToList();
+        if (texts.Count == 0)
+        {
+            SetStatus(Loc.T("Nessun conflitto di testo da risolvere."));
+            return;
+        }
+
+        var mine = op == "mine";
+        if (!await _dialogs.ConfirmAsync(mine
+                ? Loc.T("Tenere la TUA versione in {0} conflitti di testo? Le modifiche arrivate dal server su questi file vengono scartate. I conflitti ad albero e di proprietà non sono toccati.\n\n{1}", texts.Count, ListForConfirmation(texts))
+                : Loc.T("Prendere la versione LORO (del server) in {0} conflitti di testo? Le TUE modifiche locali su questi file vengono scartate. I conflitti ad albero e di proprietà non sono toccati.\n\n{1}", texts.Count, ListForConfirmation(texts)), ct))
+            return;
+
+        SetStatus(Loc.T("Risoluzione conflitti in corso..."));
+        var failed = new List<string>();
+        foreach (var entry in texts)
+        {
+            try { await _svnService.ResolveAsync(entry.FullPath, mine ? SvnConflictChoice.MineFull : SvnConflictChoice.TheirsFull, ct); }
+            catch (Exception ex) when (!ct.IsCancellationRequested) { failed.Add($"{entry.RelativePath}: {FirstLine(ex.Message)}"); }
+        }
+
+        var done = texts.Count - failed.Count;
+        await RefreshAsync(ct, reloadBranch: false, failed.Count == 0
+            ? Loc.T("Conflitti di testo risolti: {0}.", done)
+            : Loc.T("Errore resolve: {0} conflitti risolti, {1} falliti. {2}", done, failed.Count, string.Join(" | ", failed)));
     }
 
     private async Task OpenMergeEditorAsync(ChangeEntry entry)

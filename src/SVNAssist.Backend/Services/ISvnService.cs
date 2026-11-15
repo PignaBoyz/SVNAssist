@@ -199,6 +199,9 @@ public interface ISvnService
     /// </summary>
     Task<long> GetHeadRevisionAsync(string url, CancellationToken ct);
 
+    /// <summary>Lock tenuti da altri utenti (<c>svn status -u --xml</c>, tocca la rete): mai interattiva, in caso di errore lancia.</summary>
+    Task<IReadOnlyList<SvnRemoteLock>> GetRemoteLocksAsync(string workingCopyPath, CancellationToken ct);
+
     /// <summary>Versione di svn (<c>svn --version --quiet</c>); <c>null</c> se non si riesce a leggerla. Le funzioni che richiedono svn &lt; 1.8 si nascondono.</summary>
     Task<Version?> GetSvnVersionAsync(CancellationToken ct);
 

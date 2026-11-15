@@ -116,8 +116,12 @@
       `<p class="muted">${t('Rinomine o cancellazioni in conflitto: non ci sono versioni da scegliere. Dopo aver sistemato la struttura a mano si segnano risolti, di solito tutti insieme.')}</p>` +
       `<div class="cf-a">${U.btn('btn primary', t('Segna tutti come risolti'), 'check', 'resolveTreeConflicts', null, t('Conferma con l\'elenco, poi resolve --accept working su ognuno; un errore su uno non ferma gli altri'), off)}</div>` +
       (u.treeOpen ? `<ul class="cfl-l cf-sub">${trees.map(f => `<li class="cf-s"><b class="cf-n" title="${esc(f.path)}">${esc(f.name)}</b>${f.path !== f.name ? `<span class="muted small cf-p" title="${esc(f.path)}">${esc(f.path)}</span>` : ''}<span class="fill"></span>${U.btn('btn sm', t('Segna come risolto'), 'check', 'conflictOp', { op: 'resolved', key: f.key }, t('Conferma di aver sistemato la struttura (resolve)'), off)}</li>`).join('')}</ul>` : '') + `</li>`;
+    const texts = c.filter(f => f.kind === 'text').length;
+    const bulk = texts < 2 ? '' : `<li class="cf cf-g"><div class="cf-t">${U.icon('warn')}<b>${t('Tutti i conflitti di testo ({0})', texts)}</b></div><div class="cf-a">` +
+      U.btn('btn', t('Usa la mia per tutti'), null, 'resolveAllConflicts', { op: 'mine' }, t('Tiene la tua versione in tutti i conflitti di testo, con conferma (resolve --accept mine-full); ad albero e proprietà esclusi'), off) +
+      U.btn('btn', t('Usa la loro per tutti'), null, 'resolveAllConflicts', { op: 'theirs' }, t('Prende la versione del server in tutti i conflitti di testo, con conferma (resolve --accept theirs-full); ad albero e proprietà esclusi'), off) + `</div></li>`;
     return `<section class="cfl" aria-label="${esc(t('Conflitti'))}"><div class="cfl-h"><button type="button" class="ib" data-cfl-toggle aria-expanded="${!!u.open}" title="${esc(u.open ? t('Comprimi il riquadro dei conflitti') : t('Espandi il riquadro dei conflitti'))}" aria-label="${esc(u.open ? t('Comprimi il riquadro dei conflitti') : t('Espandi il riquadro dei conflitti'))}">${U.icon(u.open ? 'chev-d' : 'chev-r')}</button>${U.icon('warn')}<b>${t('Conflitti')}</b><span class="pill">${c.length}</span><span class="muted cfl-n">${t('Svn non committa file in conflitto: risolvili qui.')}</span></div>` +
-      (u.open ? `<ul class="cfl-l">${others.map(one).join('')}${group}</ul>` : '') + `</section>`;
+      (u.open ? `<ul class="cfl-l">${bulk}${others.map(one).join('')}${group}</ul>` : '') + `</section>`;
   }
   function moreMenu() {
     return [

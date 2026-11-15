@@ -263,6 +263,36 @@
       }
     },
     {
+      "title": "resolveAllConflicts",
+      "description": "Sezione Conflitti: \"Usa la mia per tutti\" (op mine, resolve --accept mine-full) o \"Usa la loro per tutti\" (op theirs, theirs-full) su tutti i conflitti di TESTO, dopo conferma con l'elenco dei file. I conflitti ad albero e di proprieta' non sono toccati; un errore su uno non ferma gli altri.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "resolveAllConflicts"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op"
+          ],
+          "properties": {
+            "op": {
+              "enum": [
+                "mine",
+                "theirs"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
       "title": "resolveTreeConflicts",
       "description": "Sezione Conflitti: \"Segna tutti come risolti\" per i conflitti ad albero. Conferma con l'elenco, poi svn resolve --accept working su ognuno; un errore su uno non ferma gli altri e viene riportato nel messaggio di stato.",
       "type": "object",

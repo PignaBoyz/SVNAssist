@@ -1116,6 +1116,10 @@
         "locked": {
           "type": "boolean",
           "description": "La working copy tiene un lock (svn lock) su questo file: la UI mostra un lucchetto. Assente = non bloccato."
+        },
+        "lockedBy": {
+          "type": "string",
+          "description": "Lock di un altro utente (svn status -u, letto nel controllo remoto periodico): 'Bloccato da <utente> (data): commento'. Mostrato come lucchetto con tooltip. Assente = nessun lock di altri."
         }
       }
     }

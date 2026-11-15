@@ -40,7 +40,8 @@ internal sealed record RowDto(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? StatusText,
     CanDto Can,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tooltip,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Locked = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Locked = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? LockedBy = null);
 
 internal sealed record SectionDto(string Id, string Title, int Count, bool Expanded, IReadOnlyList<RowDto> Rows);
 

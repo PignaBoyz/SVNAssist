@@ -85,6 +85,27 @@ public class SvnService : ISvnService
         return ParseStatusXml(xml);
     }
 
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<SvnRemoteLock>> GetRemoteLocksAsync(string workingCopyPath, CancellationToken ct)
+    {
+        // RunSvnOnceAsync: controllo in background, mai il dialogo di login.
+        var r = await RunSvnOnceAsync(["status", "-u", "--xml"], workingCopyPath, ct, true, null);
+        if (r.ExitCode != 0)
+            throw new InvalidOperationException(BuildErrorMessage("status -u", r.ExitCode, r.StandardError));
+        return ParseRemoteLocks(r.StandardOutput);
+    }
+
+    /// <summary>Lock di altri: <c>repos-status/lock</c> senza <c>lock</c> in <c>wc-status</c> (quello e' nostro).</summary>
+    internal static IReadOnlyList<SvnRemoteLock> ParseRemoteLocks(string xml) =>
+        XDocument.Parse(xml).Descendants("entry")
+            .Where(e => e.Element("repos-status")?.Element("lock") is not null && e.Element("wc-status")?.Element("lock") is null)
+            .Select(e =>
+            {
+                var l = e.Element("repos-status")!.Element("lock")!;
+                return new SvnRemoteLock(e.Attribute("path")?.Value ?? string.Empty, l.Element("owner")?.Value ?? "?",
+                    l.Element("comment")?.Value ?? string.Empty, l.Element("created")?.Value ?? string.Empty);
+            }).ToList();
+
     /// <summary>
     /// Converte l'XML di <c>svn status --xml</c> in elenco di modifiche.
     /// Ignorati ed external non sono modifiche e vengono scartati.

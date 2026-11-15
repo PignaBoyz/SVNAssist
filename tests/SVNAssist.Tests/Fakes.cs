@@ -64,6 +64,8 @@ internal sealed class FakeSvnService : ISvnService
     public int LogRequestedLimit { get; private set; }
     public int LogEntryCount { get; set; } = 500;
 
+    public List<SvnRemoteLock> RemoteLocks { get; } = [];
+    public Task<IReadOnlyList<SvnRemoteLock>> GetRemoteLocksAsync(string workingCopyPath, CancellationToken ct) => Task.FromResult<IReadOnlyList<SvnRemoteLock>>(RemoteLocks.ToList());
     public Task<IReadOnlyList<SvnFileStatus>> GetStatusAsync(string workingCopyPath, CancellationToken ct)
     {
         StatusCalls++;
