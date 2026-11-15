@@ -1,15 +1,29 @@
 <#
     Collaudo mirato 0.5.0 (docs/verifica/0.5.0/checklist.md): installa il VSIX appena compilato in SvnHost, ricrea la simulazione e apre VS.
     Uso (PowerShell, nella cartella del repo, con VS CHIUSO):
+      .\tools\collaudo-mirato.ps1 -Mini        # parte A con simulazione piccola (pochi secondi)
       .\tools\collaudo-mirato.ps1              # parte A: lavoro in corso (wc)
       .\tools\collaudo-mirato.ps1 -Parte B     # parte B: Switch, Merge, conflitti (wc-merge), senza ricreare
       .\tools\collaudo-mirato.ps1 -SoloSim     # parte A senza reinstallare il VSIX: ricrea solo la simulazione
+      .\tools\collaudo-mirato.ps1 -Collega     # con VS aperto: un "collega" committa un file nuovo sul trunk
 #>
-param([ValidateSet('A', 'B')][string]$Parte = 'A', [switch]$SoloSim, [switch]$Mini)
+param([ValidateSet('A', 'B')][string]$Parte = 'A', [switch]$SoloSim, [switch]$Mini, [switch]$Collega)
 $ErrorActionPreference = 'Stop'
 $ide = 'C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE'
 $vsix = Join-Path $PSScriptRoot '..\src\SVNAssist.Host\bin\Release\net472\SVNAssist.vsix'
 $sim = Join-Path $env:TEMP 'svnsim'
+
+if ($Collega) {
+    # Commit di un altro utente su un file che tu non hai: la tua working copy resta indietro senza saperlo.
+    $dir = Join-Path $sim '_collega'; $url = 'file:///' + ("$sim\repo" -replace '\\', '/')
+    if (!(Test-Path $dir)) { & svn checkout -q "$url/trunk" $dir } else { & svn update -q $dir }
+    $f = Join-Path $dir ('Collega-' + (Get-Date -Format 'HHmmss') + '.txt')
+    Set-Content $f 'lavoro del collega'
+    & svn add -q $f
+    & svn commit -q --username lbianchi -m 'Lavoro del collega' $dir
+    Write-Host "[ok] lbianchi ha committato $(Split-Path $f -Leaf) sul trunk. Ora in VS committa una tua modifica."
+    return
+}
 
 if (Get-Process devenv -ErrorAction SilentlyContinue) { throw 'Chiudi Visual Studio e rilancia lo script.' }
 
