@@ -294,4 +294,29 @@ public class PatchTests : IDisposable
         Assert.Equal("uno\nDUE\ntre\n", File.ReadAllText(file).Replace("\r\n", "\n"));
         Assert.DoesNotContain(await sut.GetStatusAsync(wc, Ct), s => s.Path.Contains(".svn-assist"));   // il backup non sporca la working copy
     }
+
+    /// <summary>Caso visto dall'utente: un file aggiunto (A) dopo Revert resta '?' su disco e svn patch lo salta; il ripristino lo rimette in A.</summary>
+    [Fact]
+    public async Task SvnVero_RipristinoDiUnFileAggiunto_LoRimetteInAdd()
+    {
+        var svn = Find("svn.exe");
+        var repo = Path.Combine(_dir, "repo");
+        var wc = Path.Combine(_dir, "wc");
+        Run(Find("svnadmin.exe"), $"create \"{repo}\"", _dir);
+        Run(svn, $"checkout \"file:///{repo.Replace('\\', '/')}\" \"{wc}\"", _dir);
+        Directory.CreateDirectory(Path.Combine(wc, "sub"));
+        Run(svn, "add sub", wc);
+        Run(svn, "commit -m base", wc);
+        var added = Path.Combine(wc, "sub", "Nuovo.cs");
+        File.WriteAllText(added, "nuovo\n");
+        Run(svn, $"add \"{added}\"", wc);
+        var sut = new SvnService(svn);
+
+        var patch = await sut.GetPatchAsync(wc, [added], Ct);
+        await sut.RevertAsync([added], Ct, recursive: false);
+        var backup = PatchBackup.Write(wc, "revert", patch);
+        var output = await sut.ApplyPatchAsync(wc, backup, dryRun: false, Ct);
+
+        Assert.True(ChangesStore.AddedSkipped(output, patch).SequenceEqual([Path.Combine("sub", "Nuovo.cs")]), output + "\n=====\n" + patch);
+    }
 }

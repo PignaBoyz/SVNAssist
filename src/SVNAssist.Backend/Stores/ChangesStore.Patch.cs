@@ -72,7 +72,16 @@ internal sealed partial class ChangesStore
         try
         {
             SetStatus(Loc.T("Ripristino in corso..."));
-            var summary = SummarizePatch(await _svnService.ApplyPatchAsync(wc, path, dryRun: false, ct));
+            var output = await _svnService.ApplyPatchAsync(wc, path, dryRun: false, ct);
+            var summary = SummarizePatch(output);
+            // svn revert non cancella i file aggiunti (A): restano su disco come '?', e svn patch li salta ("obstructed").
+            // Il contenuto e' gia' quello giusto: basta rimetterli sotto controllo.
+            var readd = AddedSkipped(output, await File.ReadAllTextAsync(path, ct));
+            if (readd.Count > 0)
+            {
+                await _svnService.AddAsync(readd.Select(r => Path.Combine(wc, r)), ct);
+                summary = (summary.Touched + readd.Count, summary.Problems - readd.Count, summary.Text);
+            }
             PatchBackup.Delete(path);
             _restoreBackup = null;
             await RefreshAsync(ct, reloadBranch: false, Loc.T("Modifiche ripristinate: {0} file.", summary.Touched) + ProblemsNote(summary));
@@ -81,6 +90,17 @@ internal sealed partial class ChangesStore
         {
             SetStatus(Loc.T("Errore ripristino: {0}", ex.Message) + BackupKept(path));
         }
+    }
+
+    /// <summary>File nuovi nel backup (<c>--- x	(nonexistent)</c> o <c>(revision 0)</c>) che <c>svn patch</c> ha saltato perche' gia' su disco non versionati.</summary>
+    internal static List<string> AddedSkipped(string patchOutput, string patch)
+    {
+        var added = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (Match m in Regex.Matches(patch, @"^--- (.+?)\t\((?:nonexistent|revision 0)\)", RegexOptions.Multiline))
+            added.Add(m.Groups[1].Value.Trim().Replace('/', Path.DirectorySeparatorChar));
+        return Regex.Matches(patchOutput, @"^Skipped '(.+?)' -- obstructed by unversioned node", RegexOptions.Multiline)
+            .Select(m => m.Groups[1].Value.Replace('/', Path.DirectorySeparatorChar))
+            .Where(added.Contains).ToList();
     }
 
     private static string ProblemsNote((int Touched, int Problems, string Text) s)

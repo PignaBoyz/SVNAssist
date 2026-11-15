@@ -849,7 +849,8 @@ public class SvnService : ISvnService
     /// <inheritdoc />
     public Task<string> GetPatchAsync(string workingCopyPath, IEnumerable<string> paths, CancellationToken ct)
     {
-        var list = paths.ToList();
+        // Percorsi relativi alla working copy: la patch deve applicarsi anche su un'altra working copy (collega, altro PC).
+        var list = paths.Select(p => Path.GetRelativePath(workingCopyPath, p)).ToList();
         return list.Count == 0 ? Task.FromResult(string.Empty)
             : RunSvnWithTargetsAsync(["diff", "--depth", "empty"], list, workingCopyPath, ct, applyTimeout: false);
     }
