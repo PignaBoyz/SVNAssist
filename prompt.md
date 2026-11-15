@@ -55,7 +55,7 @@ TODO 0.5.0 (decisa dall'utente il 2026-11-15: flusso branch + debiti tecnici; [ 
 [x] F. Avanzamento: percentuale vera quando il totale è ricavabile (es. svn diff --summarize prima dello switch/update) +
        finestra di avanzamento anche per Update to revision.
 [-] G. SALTATA (utente 2026-11-15: nessuna macchina con VS 2022): resta rischio noto nelle note di rilascio.
-[ ] H. Note di rilascio v0.5.0, versione 0.5.0, collaudo mirato, release.
+[~] H. Fatto: versione 0.5.0, note, checklist docs/verifica/0.5.0/checklist.md. Manca: collaudo utente (`tools/collaudo-mirato.ps1 -Mini`), poi release.
 
 COME LAVORARE (0.5.0):
 - Un agente Sonnet per voce (A-F), in parallelo, worktree separati; nel prompt: file da non toccare e aggiunte localizzate.

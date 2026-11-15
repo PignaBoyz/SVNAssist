@@ -1,11 +1,11 @@
 <#
-    Collaudo mirato 0.4.0: installa il VSIX appena compilato in SvnHost, ricrea la simulazione e apre VS.
+    Collaudo mirato 0.5.0 (docs/verifica/0.5.0/checklist.md): installa il VSIX appena compilato in SvnHost, ricrea la simulazione e apre VS.
     Uso (PowerShell, nella cartella del repo, con VS CHIUSO):
       .\tools\collaudo-mirato.ps1              # parte A: lavoro in corso (wc)
       .\tools\collaudo-mirato.ps1 -Parte B     # parte B: Switch, Merge, conflitti (wc-merge), senza ricreare
       .\tools\collaudo-mirato.ps1 -SoloSim     # parte A senza reinstallare il VSIX: ricrea solo la simulazione
 #>
-param([ValidateSet('A', 'B')][string]$Parte = 'A', [switch]$SoloSim)
+param([ValidateSet('A', 'B')][string]$Parte = 'A', [switch]$SoloSim, [switch]$Mini)
 $ErrorActionPreference = 'Stop'
 $ide = 'C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE'
 $vsix = Join-Path $PSScriptRoot '..\src\SVNAssist.Host\bin\Release\net472\SVNAssist.vsix'
@@ -23,7 +23,11 @@ if ($Parte -eq 'A' -and !$SoloSim) {
 }
 if ($Parte -eq 'A') {
     Write-Host '[..] Ricreo la simulazione...'
-    & (Join-Path $PSScriptRoot 'setup-sim.ps1') -Root $sim -Force | Out-Null
+    & (Join-Path $PSScriptRoot 'setup-sim.ps1') -Root $sim -Force -Mini:$Mini | Out-Null
+    # 0.5.0: lock di un altro utente su un file modificato in wc (lucchetto "Bloccato da mrossi")
+    $tmp = Join-Path $sim '_lock'; $url = 'file:///' + ("$sim\repo" -replace '\\', '/')
+    & svn checkout -q --depth files "$url/trunk/src/Shop/Core" $tmp
+    & svn lock -q --username mrossi -m 'Sto rifacendo il catalogo' "$tmp\Catalog.cs"
 }
 
 $sln = if ($Parte -eq 'A') { "$sim\wc\Shop.sln" } else { "$sim\wc-merge\Shop.sln" }
@@ -31,20 +35,18 @@ Start-Process "$ide\devenv.exe" -ArgumentList '/rootsuffix', 'SvnHost', "`"$sln`
 
 Write-Host ''
 if ($Parte -eq 'A') {
-    Write-Host 'PARTE A - wc (Shop.sln, lavoro in corso):'
-    Write-Host ' 1. Solution Explorer: icone di stato (Catalog.cs/Order.cs modificati, Payment.cs aggiunto, gli altri col lucchetto).'
-    Write-Host ' 2. Tasto destro su Catalog.cs > Check for Modifications: diff di VS. Su Order.cs e sul progetto > Show Log: log del solo file.'
-    Write-Host ' 3. Aggiungi una classe Foo.cs al progetto: icona non versionato > tasto destro > SVN Add: icona aggiunto, in Changes e'' A.'
-    Write-Host ' 4. Changes: crea una cartella tmp con un file, Canc sulla cartella: conferma, finisce nel cestino.'
-    Write-Host ' 5. Genera con AI, poi menu AI > Piu'' corto e Piu'' dettagliato.'
-    Write-Host ' 6. Commit All (Note.txt non versionato): compare la domanda Si'' / No / Annulla. Premi Annulla.'
-    Write-Host ' 7. Show Log: spunta Include merged revisions (merge di hotfix-login annidato), clic su un file = diff; spegni/accendi Stop on copy.'
-    Write-Host ' 8. Switch... su un ramo: avviso working copy sporca > Apri Cleanup: opzioni rosse chiedono conferma. Annulla tutto.'
+    Write-Host 'PARTE A - wc (Shop.sln) - novita'' 0.5.0 (dettagli in docs/verifica/0.5.0/checklist.md):'
+    Write-Host ' 1. Lock: Options > controllo HEAD attivo; dopo il ciclo Catalog.cs in Changes ha il lucchetto "Bloccato da mrossi".'
+    Write-Host ' 2. Create Patch: tasto destro sulla sezione Modifiche > Create Patch... > salva. Poi Revert di tutto: compare Ripristina modifiche, cliccalo.'
+    Write-Host ' 3. Apply Patch: Extensions > SVNAssist > Apply Patch... sul file salvato prima (dopo un nuovo Revert): anteprima e applica.'
+    Write-Host ' 4. Marcatori: scrivi <<<<<<< / ======= / >>>>>>> in Order.cs e premi Commit: avviso marcatori, rispondi No.'
+    Write-Host ' 5. Branch/Tag: Extensions > SVNAssist > Branch/Tag... nome prova-050, Passa subito: crea e switcha con barra in percentuale.'
+    Write-Host ' 6. Ripeti con lo stesso nome: errore esiste gia''. Prova anche un nome con spazio iniziale o con i due punti: nome non valido.'
+    Write-Host ' 7. Update to revision: finestra di avanzamento con Annulla.'
     Write-Host 'Poi chiudi VS e lancia: .\tools\collaudo-mirato.ps1 -Parte B'
 } else {
     Write-Host 'PARTE B - wc-merge (pulita):'
-    Write-Host ' 1. Switch... > feature-grande (2000 file): finestra di avanzamento con righe che scorrono. Premi Annulla a meta''.'
-    Write-Host ' 2. Avviso working copy a meta'': prova Torna a prima dello switch (torni su trunk). Poi rifai lo switch e lascialo finire.'
-    Write-Host ' 3. Switch di nuovo su trunk. SVN Merge... > feature-coupon > Merge tutto: avanzamento con C evidenziate > Apri i conflitti.'
-    Write-Host ' 4. Menu Extensions > SVNAssist > Cleanup con Revert all: il bottone resta disabilitato senza la spunta di conferma.'
+    Write-Host ' 1. SVN Merge... > feature-coupon > Merge tutto: conflitti. In Conflitti: Usa la loro per tutti (conferma con elenco).'
+    Write-Host ' 2. Rifai il merge (Annulla merge prima: deve chiedere/creare il backup e offrire Ripristina modifiche).'
+    Write-Host ' 3. Switch... su un ramo: Calcolo del totale... poi barra con N di circa M elementi.'
 }
