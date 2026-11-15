@@ -241,6 +241,16 @@ namespace SVNAssist.Host
         }
 
         // Le credenziali non si loggano mai (nemmeno la lunghezza).
+        public async Task<string> PickFileAsync(bool save, string title, string defaultName, string filter)
+        {
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            using (var d = save ? (System.Windows.Forms.FileDialog)new System.Windows.Forms.SaveFileDialog { OverwritePrompt = true } : new System.Windows.Forms.OpenFileDialog { CheckFileExists = true })
+            {
+                d.Title = title ?? ""; d.FileName = defaultName ?? ""; d.Filter = filter ?? "";
+                return d.ShowDialog() == System.Windows.Forms.DialogResult.OK ? d.FileName : null;
+            }
+        }
+
         public async Task<string[]> PromptCredentialsAsync(string detail, string defaultUser)
         {
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();

@@ -104,6 +104,16 @@ internal sealed class FakeHost : IHost
         return Task.FromResult(AppliedTexts is not null);
     }
 
+    /// <summary>Percorso scelto nei dialoghi Salva/Apri file (null = annullato); registra (save, titolo).</summary>
+    public string? PickedFile { get; set; }
+    public List<(bool Save, string Title)> Picks { get; } = [];
+
+    public Task<string?> PickFileAsync(bool save, string title, string defaultName, string filter)
+    {
+        Picks.Add((save, title));
+        return Task.FromResult(PickedFile);
+    }
+
     public int ChangesShown { get; private set; }
 
     public Task ShowChangesWindowAsync() { ChangesShown++; return Task.CompletedTask; }

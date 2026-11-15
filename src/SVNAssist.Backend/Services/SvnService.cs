@@ -106,6 +106,9 @@ public class SvnService : ISvnService
             var kind = ParseStatusKind(itemStatus);
             if (kind is SvnStatusKind.Ignored or SvnStatusKind.External)
                 continue;
+            // .svn-assist = backup di SVNAssist (PatchBackup): non e' mai una modifica dell'utente, senza toccare le proprieta' del repo.
+            if (path.Split('\\', '/').Contains(".svn-assist", StringComparer.OrdinalIgnoreCase))
+                continue;
 
             // Quando cambia solo una proprietà (es. svn:ignore), svn status --xml
             // restituisce item="normal" e props="modified": va trattato come modifica.
@@ -799,6 +802,18 @@ public class SvnService : ISvnService
         // svn diff per un singolo file: modifiche locali non committate rispetto a BASE.
         return await RunSvnAsync(["diff", SafeTarget(filePath)], workingDirectory: null, ct);
     }
+
+    /// <inheritdoc />
+    public Task<string> GetPatchAsync(string workingCopyPath, IEnumerable<string> paths, CancellationToken ct)
+    {
+        var list = paths.ToList();
+        return list.Count == 0 ? Task.FromResult(string.Empty)
+            : RunSvnWithTargetsAsync(["diff", "--depth", "empty"], list, workingCopyPath, ct, applyTimeout: false);
+    }
+
+    /// <inheritdoc />
+    public Task<string> ApplyPatchAsync(string workingCopyPath, string patchFile, bool dryRun, CancellationToken ct)
+        => RunSvnAsync(dryRun ? ["patch", "--dry-run", patchFile, "."] : ["patch", patchFile, "."], workingCopyPath, ct);
 
     internal static string BuildTortoiseDiffArguments(string filePath) => $"/command:diff /path:\"{filePath}\"";
 

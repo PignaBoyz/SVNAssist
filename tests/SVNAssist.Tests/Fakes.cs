@@ -58,6 +58,23 @@ internal sealed class FakeSvnService : ISvnService
     public List<(string Path, SvnConflictChoice Choice)> Resolved { get; } = [];
     public List<string> Ignored { get; } = [];
     public List<string> FileDiffs { get; } = [];
+    /// <summary>Testo restituito da GetPatchAsync (vuoto = niente da salvare) e output di ApplyPatchAsync; registrano le chiamate.</summary>
+    public string PatchText { get; set; } = "";
+    public string PatchOutput { get; set; } = "";
+    public List<IReadOnlyList<string>> PatchRequests { get; } = [];
+    public List<(string File, bool DryRun)> PatchApplied { get; } = [];
+    public Task<string> GetPatchAsync(string workingCopyPath, IEnumerable<string> paths, CancellationToken ct)
+    {
+        PatchRequests.Add(paths.ToList());
+        return Task.FromResult(PatchText);
+    }
+
+    public Task<string> ApplyPatchAsync(string workingCopyPath, string patchFile, bool dryRun, CancellationToken ct)
+    {
+        PatchApplied.Add((patchFile, dryRun));
+        return Task.FromResult(PatchOutput);
+    }
+
     public List<IReadOnlyList<string>> AiDiffRequests { get; } = [];
     public int StatusCalls { get; private set; }
     public int BranchCalls { get; private set; }
@@ -98,8 +115,10 @@ internal sealed class FakeSvnService : ISvnService
     public Task AddAsync(IEnumerable<string> paths, CancellationToken ct) { Added.Add(paths.ToList()); return Task.CompletedTask; }
     public Task DeleteAsync(IEnumerable<string> paths, CancellationToken ct, bool force = false) { Deleted.Add(paths.ToList()); DeleteForced.Add(force); return Task.CompletedTask; }
     public List<bool> RevertRecursive { get; } = [];
+    public Exception? RevertError { get; set; }
     public Task RevertAsync(IEnumerable<string> paths, CancellationToken ct, bool recursive = true)
     {
+        if (RevertError is not null) throw RevertError;
         Reverted.Add(paths.ToList());
         RevertRecursive.Add(recursive);
         // Il revert vero fa sparire dallo stato le modifiche dei percorsi indicati (i non versionati restano).

@@ -80,7 +80,7 @@ internal static class WorkingCopyPathFilter
 {
     private static readonly HashSet<string> NoiseFolders = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".svn", ".vs", "bin", "obj", "node_modules",
+        ".svn", ".vs", ".svn-assist", "bin", "obj", "node_modules",
     };
 
     /// <summary><c>true</c> se l'evento su <paramref name="fullPath"/> va ignorato.</summary>
