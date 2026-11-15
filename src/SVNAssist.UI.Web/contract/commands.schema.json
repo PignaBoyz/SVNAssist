@@ -68,6 +68,22 @@
       }
     },
     {
+      "title": "revealInExplorer",
+      "description": "Apri in Esplora file: seleziona il file o la cartella della riga (se non esiste piu', apre la cartella piu' vicina). Solo dentro la working copy.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "args"],
+      "properties": {
+        "name": { "const": "revealInExplorer" },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["key"],
+          "properties": { "key": { "type": "string", "description": "Chiave di riga." } }
+        }
+      }
+    },
+    {
       "title": "createPatch",
       "description": "Create Patch: svn diff dei file indicati (key/keys; nessuna = tutte le modifiche versionate) nel file .patch scelto con il dialogo Salva dell'host.",
       "type": "object",

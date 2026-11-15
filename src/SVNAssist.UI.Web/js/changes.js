@@ -241,6 +241,7 @@
       A('revert', isF ? t('SVN Revert (annulla le modifiche)…') : t('SVN Revert della cartella (annulla le modifiche)…'), c.revert), isF ? A('resolve', t('Risolvi conflitto…'), c.resolve) : null,
       isF && (c.lock || c.unlock) ? { sep: true } : null, isF && c.lock ? A('lock', 'SVN Lock…', true) : null, isF && c.unlock ? A('unlock', 'SVN Unlock', true) : null,
       { label: t('Create Patch…'), cmd: 'createPatch', args: { key }, disabled: r.status === '?', hint: t('Salva le modifiche selezionate in un file .patch (svn diff)') },
+      { label: t('Apri in Esplora file'), cmd: 'revealInExplorer', args: { key } },
       { sep: true }, A('deleteFile', isF ? t('Elimina file…') : t('Elimina cartella…'), c.deleteFile, t('Canc')), isF ? null : { sep: true }, isF ? null : { label: t('Espandi tutto'), cmd: 'expandAll' }, isF ? null : { label: t('Comprimi tutto'), cmd: 'collapseAll' },
     ].filter(Boolean), row);
   }

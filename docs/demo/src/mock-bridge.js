@@ -241,6 +241,7 @@
     update: () => vmUpdate(),
     updateToRevision: () => vmUpdateRev(),
     createPatch: () => { setStatus('Patch creata: C:\\Users\\demo\\changes.patch (demo: nessun file scritto).'); render(); },
+    revealInExplorer: (a) => { setStatus('Esplora file: ' + a.key.slice(a.key.indexOf(':') + 1) + ' (demo).'); render(); },
     applyPatch: () => { setStatus('Patch applicata: 0 file toccati (demo: nessun file scelto).'); render(); },
     restoreBackup: () => { setStatus('Modifiche ripristinate: 0 file (demo).'); render(); },
     revPickerMore: () => rpMore(),

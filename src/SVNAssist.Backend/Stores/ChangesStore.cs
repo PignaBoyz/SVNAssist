@@ -558,6 +558,9 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             case "createPatch":
                 await RunExclusiveAsync(() => CreatePatchAsync(OptionalKeys(args), ct));
                 break;
+            case "revealInExplorer":
+                RevealInExplorer(args.GetProperty("key").GetString() ?? string.Empty);
+                break;
             case "applyPatch":
                 await RunExclusiveAsync(() => ApplyPatchFileAsync(ct));
                 break;
@@ -1282,6 +1285,21 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
     /// nello stato corrente (la lista potrebbe essere cambiata dopo l'invio): altrimenti errore. Il percorso della chiave
     /// serve solo a cercare tra gli elementi di <c>svn status</c>, non viene mai usato sul file system.
     /// </summary>
+    /// <summary>"Apri in Esplora file": seleziona il file o la cartella; se non esiste piu' (eliminato, mancante) apre la cartella piu' vicina.</summary>
+    private void RevealInExplorer(string key)
+    {
+        var wc = Path.GetFullPath(WorkingCopyPath);
+        var rel = key[(key.IndexOf(':') + 1)..].TrimEnd('/').Replace('/', Path.DirectorySeparatorChar);
+        var path = Path.GetFullPath(Path.Combine(wc, rel));
+        if (!path.StartsWith(wc, StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException(Loc.T("Chiave di riga non valida.")); // la chiave arriva dalla UI: mai fuori dalla working copy
+        var target = path;
+        while (!File.Exists(target) && !Directory.Exists(target) && target.Length > wc.Length)
+            target = Path.GetDirectoryName(target)!;
+        var args = target == path ? $"/select,\"{target}\"" : $"\"{target}\"";
+        using var _ = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", args) { UseShellExecute = false });
+    }
+
     private KeyTarget ResolveKey(string key)
     {
         var colon = key.IndexOf(':');

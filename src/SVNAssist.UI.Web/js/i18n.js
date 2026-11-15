@@ -6,6 +6,7 @@
   const U = w.SVNUI = w.SVNUI || { views: {} };
   const EN = {
     "Create Patch…": "Create Patch…",
+    "Apri in Esplora file": "Open in File Explorer",
     "Apply Patch…": "Apply Patch…",
     "Salva le modifiche di questa sezione in un file .patch (svn diff)": "Save the changes of this section in a .patch file (svn diff)",
     "Salva le modifiche selezionate in un file .patch (svn diff)": "Save the selected changes in a .patch file (svn diff)",
