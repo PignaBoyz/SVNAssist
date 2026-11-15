@@ -1,3 +1,4 @@
+using SVNAssist.Models;
 using SVNAssist.Services;
 
 namespace SVNAssist.Stores;
@@ -97,7 +98,8 @@ internal sealed class RevisionPickerStore
         Changed?.Invoke();
         try
         {
-            var log = await _svn.GetLogAsync(target, limit, ct);
+            // Stop on copy: prima della creazione del branch (o della rinomina) il percorso non esiste e svn update -r darebbe E160005.
+            var log = await _svn.GetLogAsync(target, limit, new SvnLogFilter(StopOnCopy: true), ct);
             lock (_lock)
             {
                 _items = log.Select(e => new RevItemDto(e.Revision, e.Author, e.Date.ToString("o"), FirstLine(e.Message))).ToList();
