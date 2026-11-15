@@ -116,7 +116,8 @@ public class SvnService : ISvnService
             if (propsStatus == "conflicted" || isTreeConflict)
                 kind = SvnStatusKind.Conflicted;
 
-            results.Add(new SvnFileStatus(path, kind, isTreeConflict, IsLocked: wcStatus?.Element("lock") is not null));
+            results.Add(new SvnFileStatus(path, kind, isTreeConflict, IsLocked: wcStatus?.Element("lock") is not null,
+                IsSwitched: wcStatus?.Attribute("switched")?.Value == "true", IsWcLocked: wcStatus?.Attribute("wc-locked")?.Value == "true"));
         }
 
         return results;
@@ -473,6 +474,8 @@ public class SvnService : ISvnService
             args.AddRange(["-r", "HEAD:" + D(f2, "00:00:00")]);
         else if (filter.To is { } t2)
             args.AddRange(["-r", D(t2, "23:59:59") + ":1"]);
+        else
+            args.AddRange(["-r", "HEAD:1"]); // senza -r svn parte da BASE: dopo un commit senza update il commit nuovo non si vedrebbe
 
         var first = true;
         foreach (var term in new[] { filter.Author, filter.Text, filter.Path?.Replace('\\', '/') })

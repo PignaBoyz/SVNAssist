@@ -36,13 +36,13 @@ public class LogDiffTests : IDisposable
 
     [Fact]
     public void BuildLogArgs_SenzaFiltro_EQuelliDiSempre()
-        => Assert.Equal(["log", "--xml", "-v", "-l", "50", "C:\\wc"], SvnService.BuildLogArgs("C:\\wc", 50, new SvnLogFilter()));
+        => Assert.Equal(["log", "--xml", "-v", "-l", "50", "-r", "HEAD:1", "C:\\wc"], SvnService.BuildLogArgs("C:\\wc", 50, new SvnLogFilter()));
 
     [Fact]
     public void BuildLogArgs_StopOnCopyEMerged_AggiungonoLeOpzioni()
     {
         var a = SvnService.BuildLogArgs("C:\\wc", 50, new SvnLogFilter(StopOnCopy: true, IncludeMerged: true));
-        Assert.Equal(["log", "--xml", "-v", "-l", "50", "--stop-on-copy", "-g", "C:\\wc"], a);
+        Assert.Equal(["log", "--xml", "-v", "-l", "50", "--stop-on-copy", "-g", "-r", "HEAD:1", "C:\\wc"], a);
     }
 
     [Fact]
@@ -75,7 +75,7 @@ public class LogDiffTests : IDisposable
     public void BuildLogArgs_AutoreTestoPercorso_DiventanoSearchInAnd()
     {
         var a = SvnService.BuildLogArgs("C:\\wc", 50, new SvnLogFilter("mario", "fix [bug]", "src\\Core"));
-        Assert.Equal(["--search", "*mario*", "--search-and", "*fix \\[bug]*", "--search-and", "*src/Core*"], a.Skip(5).Take(6));
+        Assert.Equal(["--search", "*mario*", "--search-and", "*fix \\[bug]*", "--search-and", "*src/Core*"], a.Skip(7).Take(6));
         Assert.Equal("C:\\wc", a[^1]);
     }
 
