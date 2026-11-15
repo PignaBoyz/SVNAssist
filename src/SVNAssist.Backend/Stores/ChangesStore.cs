@@ -2466,6 +2466,22 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
     /// <c>mine</c> / <c>theirs</c> = tieni tutto il mio / tutto il loro (con conferma: scartano l'altra parte), <c>resolved</c> = segna come risolto (working;
     /// rifiutato se restano i marcatori). Un conflitto ad albero ammette solo <c>resolved</c>, con conferma.
     /// </summary>
+    /// <summary>Il risultato del conflitto e' uguale alla base, mentre la tua o la loro erano diverse: si perderebbero entrambe.</summary>
+    private bool SameAsBase(ChangeEntry entry)
+    {
+        SvnConflictInfo? info;
+        lock (_stateLock)
+            _conflictInfo.TryGetValue(entry.FullPath, out info);
+        static string? Read(string? f) => f is not null && File.Exists(f) ? File.ReadAllText(f).Replace("\r\n", "\n") : null;
+        try
+        {
+            var result = Read(entry.FullPath);
+            var bas = Read(info?.Base);
+            return result is not null && bas is not null && result == bas && (Read(info?.Mine) != bas || Read(info?.Theirs) != bas);
+        }
+        catch (IOException) { return false; }
+    }
+
     private async Task ConflictOpAsync(string op, string key, CancellationToken ct)
     {
         var target = ResolveKey(key);
@@ -2495,8 +2511,10 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                     await ApplyResolveAsync(entry, SvnConflictChoice.TheirsFull, ct);
                 break;
             default:
-                if (!entry.IsTreeConflict || await ConfirmTreeConflictAsync(entry, ct))
-                    await ApplyResolveAsync(entry, SvnConflictChoice.Working, ct);
+                if (entry.IsTreeConflict ? !await ConfirmTreeConflictAsync(entry, ct)
+                    : SameAsBase(entry) && !await _dialogs.ConfirmAsync(Loc.T("\"{0}\" è identico alla versione di partenza: non contiene né le tue modifiche né quelle in arrivo (succede togliendo la spunta nell'editor di merge di VS). Segnare comunque come risolto?", entry.RelativePath), ct))
+                    break;
+                await ApplyResolveAsync(entry, SvnConflictChoice.Working, ct);
                 break;
         }
     }

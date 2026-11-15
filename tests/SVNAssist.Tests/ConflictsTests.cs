@@ -766,6 +766,18 @@ public class ConflictsTests
             Assert.EndsWith("x.txt.r3", info.Theirs);
             Assert.Equal("a\nLOCALE\nc\n", File.ReadAllText(info.Mine).Replace("\r\n", "\n"));
             Assert.Equal("a\nSERVER\nc\n", File.ReadAllText(info.Theirs).Replace("\r\n", "\n"));
+
+            // Collaudo: spunta tolta nell'editor di merge di VS = file uguale alla base. "Segna come risolto" deve chiedere.
+            File.WriteAllText(Path.Combine(wc2, "x.txt"), "a\r\nb\r\nc\r\n");
+            var settings = new StubSettings();
+            var dialogs = new FakeDialogs { ConfirmResult = false };
+            using var store = new ChangesStore(settings, svn, new FakeAiFactory(), new NoopAiPrompt(), dialogs, new FakeHost(),
+                new PrereqStore(new PrerequisitesService(settings, new PrerequisiteProbes())), recentTargetsFile: Path.Combine(root, "recent.json"))
+            { WorkingCopyPath = wc2, TempRoot = Path.Combine(root, "tmp") };
+            await store.RefreshAsync(Ct);
+            await store.DispatchAsync("conflictOp", System.Text.Json.JsonSerializer.SerializeToElement(new { op = "resolved", key = "changes:x.txt" }), Ct);
+            Assert.Contains(dialogs.Messages, m => m.Contains("versione di partenza"));
+            Assert.Contains(await svn.GetStatusAsync(wc2, Ct), s => s.Status == SvnStatusKind.Conflicted);
         }
         finally
         {
