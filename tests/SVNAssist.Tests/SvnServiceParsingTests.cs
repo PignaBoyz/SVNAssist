@@ -342,6 +342,16 @@ public class SvnServiceParsingTests : IDisposable
         Assert.False(SvnService.ContainsConflictMarkers(file));
     }
 
+    /// <summary>Caso del collaudo: marcatori rientrati (VS reindenta) e testo dopo =======.</summary>
+    [Fact]
+    public void HasMarkers_MarcatoriRientrati_SonoUnConflitto()
+    {
+        var file = Path.Combine(_tempDir, "Order.cs");
+        File.WriteAllText(file, "class A\n{\n    <<<<<<< mine\n    int a;\n    =======,\n    int b;\n    >>>>>>> theirs\n}\n");
+
+        Assert.True(ConflictMarkers.HasMarkers(file));
+    }
+
     // --- Diff sintetico per file nuovi (D3) ---
 
     [Fact]

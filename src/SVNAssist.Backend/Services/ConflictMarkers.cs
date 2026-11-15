@@ -18,10 +18,12 @@ internal static class ConflictMarkers
             if (Array.IndexOf(bytes, (byte)0, 0, Math.Min(bytes.Length, 8192)) >= 0)
                 return false; // binario
             var stage = 0; // 0 cerca <<<<<<<, 1 cerca =======, 2 cerca >>>>>>>
-            foreach (var line in System.Text.Encoding.UTF8.GetString(bytes).Split('\n'))
+            // Rientri tollerati: l'editor di VS reindenta quando si incolla o si risolve a mano.
+            foreach (var raw in System.Text.Encoding.UTF8.GetString(bytes).Split('\n'))
             {
+                var line = raw.TrimStart();
                 if (stage == 0 && line.StartsWith("<<<<<<<", StringComparison.Ordinal)) stage = 1;
-                else if (stage == 1 && line.TrimEnd('\r') == "=======") stage = 2;
+                else if (stage == 1 && line.StartsWith("=======", StringComparison.Ordinal)) stage = 2;
                 else if (stage == 2 && line.StartsWith(">>>>>>>", StringComparison.Ordinal)) return true;
             }
             return false;
