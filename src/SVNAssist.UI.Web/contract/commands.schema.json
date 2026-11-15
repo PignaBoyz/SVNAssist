@@ -2134,6 +2134,56 @@
           "properties": {}
         }
       }
+    },
+    {
+      "title": "branchTagOpen",
+      "description": "SVN Branch/Tag: apre il dialogo (stato branchTag). kind = branch | tag (scelta iniziale).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "args"],
+      "properties": {
+        "name": { "const": "branchTagOpen" },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": { "kind": { "enum": ["branch", "tag"] } }
+        }
+      }
+    },
+    {
+      "title": "branchTagCancel",
+      "description": "SVN Branch/Tag: chiude il dialogo senza creare nulla.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "args"],
+      "properties": {
+        "name": { "const": "branchTagCancel" },
+        "args": { "type": "object", "additionalProperties": false, "required": [], "properties": {} }
+      }
+    },
+    {
+      "title": "branchTagOk",
+      "description": "SVN Branch/Tag: controlla il nome (errore in branchTag.error, il dialogo resta aperto), svn copy sul server, poi se switch e vero lo switch al nuovo ramo. source: head (HEAD del ramo corrente), rev (revisione in rev), wc (working copy, con le modifiche locali).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "args"],
+      "properties": {
+        "name": { "const": "branchTagOk" },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "name", "message", "source", "rev", "switch"],
+          "properties": {
+            "kind": { "enum": ["branch", "tag"] },
+            "name": { "type": "string" },
+            "message": { "type": "string" },
+            "source": { "enum": ["head", "rev", "wc"] },
+            "rev": { "type": "string" },
+            "switch": { "type": "boolean" }
+          }
+        }
+      }
     }
   ]
 }

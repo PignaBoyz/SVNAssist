@@ -349,3 +349,5 @@ html[data-view=diff] body,html[data-view=log] body,html[data-view=changes] body{
 .osep.on{color:var(--chip-fail-fg);font-weight:600}
 .btn.danger{background:var(--chip-fail-fg);border-color:var(--chip-fail-fg);color:var(--bg1);font-weight:600}
 .btn.danger:disabled{opacity:.5}
+.wiz-b textarea{background:var(--bg1);border:1px solid var(--bd2);border-radius:4px;padding:5px 8px;width:100%;color:var(--fg);font:inherit;resize:vertical}
+.bt-row{display:flex;gap:12px;align-items:center}.bt-row input[type=text]{flex:1}

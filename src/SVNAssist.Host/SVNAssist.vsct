@@ -43,6 +43,7 @@
       <Button guid="guidSVNAssistCmdSet" id="CmdUpdateRev" priority="0x0005" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainSecondary" /><Strings><CommandName>SVNAssist.UpdateToRevision</CommandName><ButtonText>Update to revision...</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdSwitch" priority="0x0006" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainSecondary" /><Strings><CommandName>SVNAssist.Switch</CommandName><ButtonText>Switch...</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdMerge" priority="0x0007" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainSecondary" /><Strings><CommandName>SVNAssist.Merge</CommandName><ButtonText>Merge...</ButtonText></Strings></Button>
+      <Button guid="guidSVNAssistCmdSet" id="CmdBranchTag" priority="0x0008" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainSecondary" /><Strings><CommandName>SVNAssist.BranchTag</CommandName><ButtonText>Branch/Tag...</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdCleanup" priority="0x0030" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainSecondary" /><Strings><CommandName>SVNAssist.Cleanup</CommandName><ButtonText>Cleanup</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdNextChange" priority="0x0040" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainSecondary" /><Strings><CommandName>SVNAssist.NextChange</CommandName><ButtonText>Next Change in Diff</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdPrevChange" priority="0x0041" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainSecondary" /><Strings><CommandName>SVNAssist.PreviousChange</CommandName><ButtonText>Previous Change in Diff</ButtonText></Strings></Button>
@@ -103,6 +104,7 @@
       <IDSymbol name="CmdUpdateRev" value="0x0105" />
       <IDSymbol name="CmdSwitch" value="0x0107" />
       <IDSymbol name="CmdMerge" value="0x0108" />
+      <IDSymbol name="CmdBranchTag" value="0x0150" />
       <IDSymbol name="CmdCleanup" value="0x0106" />
     </GuidSymbol>
   </Symbols>

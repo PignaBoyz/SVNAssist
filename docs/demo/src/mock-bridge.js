@@ -145,6 +145,7 @@
       ...progSnap(),
       ...(v.warn ? (() => { const c = dirtyCounts(); return { switchWarn: { target: v.warn.name, counts: c, total: c.modified + c.added + c.deleted + c.conflicted + c.unversioned } }; })() : {}),
       ...(v.cwarn ? { commitWarn: v.cwarn } : {}),
+      ...(v.bt ? { branchTag: { kind: v.bt.kind, from: S.branch, rev: S.wcRev, dirty: S.files.some(f => f.st !== 'N'), branches: 'branches', tags: 'tags', error: tr(v.bt.error), busy: !!v.bt.busy } } : {}),
       ...(v.cl ? { cleanup: { extras: true, svnVersion: '1.14.3', from: v.cl.from || '' } } : {}),
       conflicts: S.files.filter(f => f.st === 'C').map(f => ({ key: key('changes', f.path), path: fwd(f.path), name: base(f.path), kind: f.tree ? 'tree' : 'text', files: f.tree ? [] : cflAux(f).map(fwd) })),
     };
@@ -268,6 +269,9 @@
     cleanup: () => vmCleanup(),
     cleanupOk: a => vmCleanupRun(a),
     cleanupCancel: () => vmCleanupCancel(),
+    branchTagOpen: a => btOpen(a),
+    branchTagCancel: () => { S.vm.bt = null; render(); },
+    branchTagOk: a => btOk(a),
     switchWarnContinue: () => vmWarn('go'),
     switchWarnCleanup: () => vmWarn('cleanup'),
     switchWarnCancel: () => vmWarn('cancel'),

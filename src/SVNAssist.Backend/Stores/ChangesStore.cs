@@ -121,6 +121,8 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         RevPicker.Changed += NotifyChanged;
         Switch = new SwitchPickerStore(svnService, settingsService, recentTargetsFile);
         Switch.Changed += NotifyChanged;
+        BranchTag = new BranchTagStore(svnService, Switch.Layouts);
+        BranchTag.Changed += NotifyChanged;
         Progress.Changed += NotifyChanged;
         // Accanto agli ultimi usati (nei test: un file temporaneo per test).
         _pendingSwitch = new PendingSwitch(recentTargetsFile is null ? null : recentTargetsFile + ".pending-switch.json");
@@ -155,6 +157,9 @@ internal sealed class ChangesStore : ViewStore, IDisposable
 
     /// <summary>Selettore di "SVN Switch..." (e della sorgente di "SVN Merge...").</summary>
     internal SwitchPickerStore Switch { get; }
+
+    /// <summary>Dialogo "SVN Branch/Tag...".</summary>
+    internal BranchTagStore BranchTag { get; }
 
     /// <summary>Finestra di avanzamento modale (switch, merge, update, cleanup), condivisa con la vista Log (il merge parte da li').</summary>
     internal OperationProgress Progress { get; } = new();
@@ -360,7 +365,8 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 Progress.GetSnapshot(),
                 _warnTarget is { } w ? BuildSwitchWarn(w) : null,
                 _cleanupOpen ? new CleanupDialogDto(CleanupOptions.ExtrasSupported(SvnVersionParsed), _svnVersion ?? string.Empty, _cleanupReturn?.Name ?? string.Empty) : null,
-                _commitWarn ? BuildCommitWarn() : null);
+                _commitWarn ? BuildCommitWarn() : null,
+                BranchTag.GetSnapshot(Total(CountDirty(_entries.Where(e => !IsVsFolder(e)).Select(e => e.Status))) > 0));
         }
     }
 
@@ -588,6 +594,22 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 break;
             case "cleanupOk":
                 await CleanupOkAsync(args, ct);
+                break;
+            case "branchTagOpen":
+                if (string.IsNullOrWhiteSpace(WorkingCopyPath))
+                    SetStatus(Loc.T("Nessuna working copy configurata."));
+                else
+                {
+                    Switch.Close(); // dal selettore Switch: il dialogo lo sostituisce
+                    await OpenBranchTagAsync(Args.Str(args, "kind"), ct);
+                }
+
+                break;
+            case "branchTagCancel":
+                BranchTag.Close();
+                break;
+            case "branchTagOk":
+                await BranchTagOkAsync(args, ct);
                 break;
             case "switchWarnContinue":
                 if (_warnTarget is { } go)
@@ -1613,7 +1635,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         try
         {
             var info = await _svnService.GetInfoAsync(path, ct);
-            label = RepoLayout.Parse(await _settingsService.GetRepoLayoutAsync(ct)).Deduce(info.RelativeUrl).Label;
+            label = (await Switch.Layouts.ResolveAsync(info, ct)).Deduce(info.RelativeUrl).Label;
             (url, root, rev) = (info.Url, info.RepositoryRoot, info.Revision);
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
@@ -1656,8 +1678,12 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             return;
         }
 
-        // Completare uno switch interrotto non porta altrove le modifiche: le cartelle "incomplete" non sono lavoro dell'utente.
-        // Working copy sporca: prima dello switch l'avviso con il riepilogo (continua / Cleanup / annulla).
+        await BeginSwitchAsync(target, ct);
+    }
+
+    /// <summary>Completare uno switch interrotto non porta altrove le modifiche: le cartelle "incomplete" non sono lavoro dell'utente. Working copy sporca: prima l'avviso con il riepilogo (continua / Cleanup / annulla).</summary>
+    private async Task BeginSwitchAsync(SwitchPickerStore.Target target, CancellationToken ct)
+    {
         int dirty;
         lock (_stateLock)
             dirty = target.Incomplete ? 0 : Total(CountDirty(_entries.Where(e => !IsVsFolder(e)).Select(e => e.Status)));
@@ -1670,6 +1696,54 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         }
 
         await StartSwitchAsync(target, ct);
+    }
+
+    private async Task OpenBranchTagAsync(string kind, CancellationToken ct)
+    {
+        try { await BranchTag.OpenAsync(WorkingCopyPath, kind, ct); }
+        catch (InvalidOperationException ex) { SetStatus(ex.Message); }
+    }
+
+    /// <summary>OK nel dialogo Branch/Tag: controlla il nome, <c>svn copy</c> sul server, poi (se spuntato) lo switch al nuovo ramo con il flusso di sempre.</summary>
+    private async Task BranchTagOkAsync(JsonElement args, CancellationToken ct)
+    {
+        if (!BranchTag.IsOpen)
+            return;
+        var plan = await BranchTag.PrepareAsync(WorkingCopyPath, Args.OneOf(args, "kind", "branch", "tag"), Args.Str(args, "name"),
+            Args.OneOf(args, "source", "head", "rev", "wc"), Args.Str(args, "rev"), ct);
+        if (plan is null)
+            return;
+        var message = Args.Str(args, "message").Trim();
+        if (message.Length == 0)
+            message = plan.Kind == "tag" ? Loc.T("Crea tag {0}", plan.Name) : Loc.T("Crea branch {0}", plan.Name);
+        var goSwitch = Args.Bool(args, "switch");
+        var created = false;
+        await RunExclusiveAsync(async () =>
+        {
+            BranchTag.SetBusy(true);
+            try
+            {
+                SetStatus(Loc.T("Creazione di {0} in corso...", plan.Name));
+                await _svnService.CopyAsync(plan.Source, plan.DestUrl, message, plan.Rev, ct);
+                created = true;
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                BackendLog.Warn("svn copy fallito: " + ex.Message);
+                BranchTag.SetError(Loc.T("Errore svn copy: {0}", ex.Message));
+            }
+            finally
+            {
+                BranchTag.SetBusy(false);
+            }
+        });
+        if (!created)
+            return;
+        BranchTag.Close();
+        Switch.InvalidateCache();
+        SetStatus(Loc.T("{0} creato sul server.", plan.Name));
+        if (goSwitch)
+            await BeginSwitchAsync(new SwitchPickerStore.Target(plan.Name, plan.Kind, plan.DestUrl, false, plan.DestUrl), ct);
     }
 
     private async Task StartSwitchAsync(SwitchPickerStore.Target target, CancellationToken ct)

@@ -20,6 +20,8 @@ internal sealed class SwitchPickerStore
     private readonly ISvnService _svn;
     private readonly ISvnAssistSettings _settings;
     private readonly string _recentFile;
+    /// <summary>Layout effettivo del repository (Options o dedotto): lo usano anche Branch/Tag e l'etichetta del ramo.</summary>
+    internal RepoLayoutResolver Layouts { get; }
     private readonly object _lock = new();
     private readonly Dictionary<string, IReadOnlyList<SvnListEntry>> _cache = new(StringComparer.OrdinalIgnoreCase);
     private bool _open, _loading;
@@ -34,6 +36,7 @@ internal sealed class SwitchPickerStore
     {
         _svn = svn;
         _settings = settings;
+        Layouts = new RepoLayoutResolver(svn, settings);
         _recentFile = recentFile ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SVNAssist", "recent-targets.json");
     }
 
@@ -115,7 +118,7 @@ internal sealed class SwitchPickerStore
         try
         {
             var info = await _svn.GetInfoAsync(workingCopy, ct);
-            var layout = RepoLayout.Parse(await _settings.GetRepoLayoutAsync(ct));
+            var layout = await Layouts.ResolveAsync(info, ct);
             var pos = layout.Deduce(info.RelativeUrl);
             var root = info.RepositoryRoot.TrimEnd('/');
             string Join(string a) => pos.Base.Length == 0 ? a : pos.Base + "/" + a;
@@ -164,6 +167,13 @@ internal sealed class SwitchPickerStore
     }
 
     internal Task RefreshAsync(CancellationToken ct) => IsOpen ? OpenAsync(_workingCopy, ct, refresh: true, mode: _mode) : Task.CompletedTask;
+
+    /// <summary>Dopo aver creato un branch/tag: gli elenchi in cache non lo conoscono.</summary>
+    internal void InvalidateCache()
+    {
+        lock (_lock)
+            _cache.Clear();
+    }
 
     internal string Mode { get { lock (_lock) return _mode; } }
 
