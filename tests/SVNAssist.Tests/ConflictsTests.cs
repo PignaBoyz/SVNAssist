@@ -304,6 +304,56 @@ public class ConflictsTests
     }
 
     [Fact]
+    public async Task ResolveAllConflicts_MiaPerTutti_SoloTesto_ConConferma()
+    {
+        using var f = new Fixture();
+        f.ConflictWithAuxFiles();   // README.txt: testo
+        f.Svn.Statuses.Add(new SvnFileStatus("t.cs", SvnStatusKind.Conflicted, IsTreeConflict: true));
+        f.Svn.Statuses.Add(new SvnFileStatus("p.cs", SvnStatusKind.Conflicted));
+        f.Svn.ConflictInfos[Path.Combine(Wc, "p.cs")] = new SvnConflictInfo("property", null, null, null, null);
+        await f.Store.RefreshAsync(Ct);
+
+        await f.Cmd("resolveAllConflicts", new { op = "mine" });
+
+        Assert.Equal([(Path.Combine(Wc, "README.txt"), SvnConflictChoice.MineFull)], f.Svn.Resolved);   // albero e proprieta' esclusi
+        Assert.Contains("README.txt", Assert.Single(f.Dialogs.Messages));
+
+        f.Svn.Resolved.Clear(); f.Dialogs.ConfirmResult = false;
+        await f.Cmd("resolveAllConflicts", new { op = "theirs" });
+        Assert.Empty(f.Svn.Resolved);
+    }
+
+    [Fact]
+    public void ParseRemoteLocks_SoloLockDiAltri()
+    {
+        var xml = """
+            <status><target path=".">
+              <entry path="a.cs"><wc-status item="normal" props="none"/><repos-status item="none" props="none"><lock><token>t</token><owner>mario</owner><comment>sto lavorando</comment><created>2026-11-10T09:00:00.000000Z</created></lock></repos-status></entry>
+              <entry path="mio.cs"><wc-status item="normal" props="none"><lock><token>t</token><owner>io</owner></lock></wc-status><repos-status item="none" props="none"><lock><owner>io</owner></lock></repos-status></entry>
+              <entry path="b.cs"><wc-status item="modified" props="none"/></entry>
+            </target></status>
+            """;
+
+        var l = Assert.Single(SvnService.ParseRemoteLocks(xml));
+        Assert.Equal(("a.cs", "mario", "sto lavorando"), (l.Path, l.Owner, l.Comment));
+        Assert.StartsWith("2026-11-10", l.Created);
+    }
+
+    [Fact]
+    public async Task LockDiAltri_VisibileSullaRiga_DopoIlControlloRemoto()
+    {
+        using var f = new Fixture();
+        f.Svn.Statuses.Add(new SvnFileStatus("a.cs", SvnStatusKind.Modified));
+        f.Svn.RemoteLocks.Add(new SvnRemoteLock("a.cs", "mario", "no", "2026-11-10T09:00:00Z"));
+        await f.Store.RefreshAsync(Ct);
+        await f.Store.HeadCheck.CheckAsync(Ct);
+
+        var row = ((ChangesState)f.Store.GetSnapshot()).Sections.SelectMany(s => s.Rows).Single(r => r.Name == "a.cs");
+        Assert.Contains("mario", row.LockedBy);
+        Assert.Contains("2026-11-10", row.LockedBy);
+    }
+
+    [Fact]
     public async Task ConflictOp_Edit_AvviaLEditorConBaseMiaLoroEFileDaRisolvere()
     {
         using var f = new Fixture();

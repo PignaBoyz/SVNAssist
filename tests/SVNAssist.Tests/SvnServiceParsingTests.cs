@@ -73,6 +73,21 @@ public class SvnServiceParsingTests : IDisposable
         Assert.Equal(SvnStatusKind.Unknown, result[6].Status);
     }
 
+    [Fact]
+    public void ParseStatusXml_ConflittoDiProprietaSuNormal_EAlberoSuFileNormale_SonoConflitti()
+    {
+        var xml = """
+            <status><target path=".">
+              <entry path="d"><wc-status item="normal" props="conflicted"/></entry>
+              <entry path="t"><wc-status item="normal" props="none" tree-conflicted="true"/></entry>
+            </target></status>
+            """;
+        var r = SvnService.ParseStatusXml(xml);
+        Assert.All(r, e => Assert.Equal(SvnStatusKind.Conflicted, e.Status));
+        Assert.False(r[0].IsTreeConflict);
+        Assert.True(r[1].IsTreeConflict);
+    }
+
     // --- Log (D4) ---
 
     [Fact]

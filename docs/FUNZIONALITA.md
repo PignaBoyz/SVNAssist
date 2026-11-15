@@ -86,7 +86,8 @@ Le voci del merge sono dettagliate nel piano 0.3.0 di `docs/ROADMAP.md` (~100 h 
 
 ### 0.3.0 — Merge da Visual Studio (USCITA: fatte le voci principali; restano Crea branch/tag, D10/D11, avanzamento per repo lenti, wizard, backup .patch)
 - [ ] **`svn info --xml` completo + versione svn** — URL, root, revisione, lock, conflitti; `svn --version` per nascondere funzioni non supportate · P0 · ~5 h
-- [ ] **D10/D11: marcatori residui e parser status** — avviso se restano `<<<<<<<`, `props="conflicted"`, ignored/external · P1 · ~6 h
+- [x] **D10/D11: marcatori residui e parser status** — 0.5.0: al commit avviso se un file ha marcatori `<<<<<<<`/`=======`/`>>>>>>>` (salta binari e file > 2 MB); parser status con `props="conflicted"`, tree-conflict, ostruito, incompleto (ignored/external restano fuori dall elenco) · P1
+- [x] **0.5.0 C: lock di altri e risoluzione di gruppo** — lucchetto "Bloccato da utente" sui file in elenco (da `svn status -u`, letto solo nel controllo remoto periodico); "Usa la mia / Usa la loro per tutti" sui conflitti di testo
 - [ ] **Layout repository personalizzabile** — `TrunkPath` / `BranchesPath` / `TagsPath` se non standard · P1 · ~2 h
 - [ ] **Switch con branch picker** — da `^/branches`, `^/tags`, trunk; ricerca, ultimi usati; controllo WC sporca · P1 · ~14 h
 - [ ] **Crea branch / tag** — `svn copy` server-side da WC o revisione, opzione "passa al nuovo" · P1 · ~8 h

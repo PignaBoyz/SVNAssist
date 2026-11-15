@@ -251,6 +251,7 @@
     mergeResolve: () => { S.ui.statusOpen = true; S.ui.view = 'dock'; S.ui.seOpen = false; S.ui.menu = null; render(); },
     conflictOp: a => conflictOp(a.op, a.key),
     resolveTreeConflicts: () => resolveTreeConflicts(),
+    resolveAllConflicts: a => resolveAllConflicts(a.op),
     mergeDismiss: () => { S.vm.mergeBanner = null; render(); },
     mergeToggle: a => { const m = S.lvm.merge; if (m && !m.busy && mgEligible(m.name).some(r => r.rev === +a.rev)) { m.sel = m.sel.includes(+a.rev) ? m.sel.filter(x => x !== +a.rev) : m.sel.concat(+a.rev); m.result = null; render(); } },
     mergeClear: () => { const m = S.lvm.merge; if (m) { m.sel = []; m.result = null; render(); } },

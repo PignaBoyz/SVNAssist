@@ -945,6 +945,17 @@ async function resolveTreeConflicts() {
   for (const f of trees) { await svn(`resolve --accept working "${fwd(f.path)}"`, 300); svnResolve(f.path, 'working'); }
   await vmRefresh(`Conflitti ad albero risolti: ${trees.length}.`);
 }
+// "Usa la mia / Usa la loro per tutti": solo i conflitti di testo (mai ad albero), con conferma che elenca i file
+async function resolveAllConflicts(op) {
+  const texts = S.files.filter(f => f.st === 'C' && !f.tree && !f.prop);
+  if (!texts.length) { setStatus('Nessun conflitto di testo da risolvere.'); return render(); }
+  const list = texts.map(f => '• ' + fwd(f.path) + ' (Conflitto)').join('\n');
+  if (!await confirmBox(op === 'mine' ? `Tenere la TUA versione in ${texts.length} conflitti di testo? Le modifiche arrivate dal server su questi file vengono scartate. I conflitti ad albero e di proprietà non sono toccati.\n\n${list}` : `Prendere la versione LORO (del server) in ${texts.length} conflitti di testo? Le TUE modifiche locali su questi file vengono scartate. I conflitti ad albero e di proprietà non sono toccati.\n\n${list}`)) return;
+  setStatus('Risoluzione conflitti in corso...'); render();
+  const mode = op === 'mine' ? 'mine-full' : 'theirs-full';
+  for (const f of texts) { await svn(`resolve --accept ${mode} "${fwd(f.path)}"`, 300); svnResolve(f.path, mode); }
+  await vmRefresh(`Conflitti di testo risolti: ${texts.length}.`);
+}
 async function vmSwitchOpen(refresh, mode) {
   if (!S.vm.wcPath.trim()) { setStatus('Nessuna working copy configurata.'); return render(); }
   if (refresh) S.swCache = false;

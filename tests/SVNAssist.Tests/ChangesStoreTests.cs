@@ -330,6 +330,30 @@ public class ChangesStoreTests
         Assert.Equal(string.Empty, f.Snap.Commit.Text);
     }
 
+    [Theory]
+    [InlineData("a\n<<<<<<< .mine\nx\n=======\ny\n>>>>>>> .r5\nb\n", true)]
+    [InlineData("Titolo\n=======\ntesto\n", false)]   // solo una riga di =, tipico del markdown
+    [InlineData("<<<<<<< .mine\nx\n", false)]          // marcatore non chiuso
+    public async Task Commit_ConMarcatoriDiConflitto_ChiedeConferma(string content, bool asks)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "SVNAssist_Mk_" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "a.cs"), content);
+            using var f = new Fixture(dir).With(("a.cs", SvnStatusKind.Modified));
+            f.Dialogs.ConfirmResult = false;
+            await f.Refresh();
+            await f.Cmd("setCommitText", new { text = "fix" });
+
+            await f.Cmd("commit");
+
+            Assert.Equal(asks, f.Dialogs.Messages.Any(m => m.Contains("marcatori di conflitto")));
+            Assert.Equal(asks ? 0 : 1, f.Svn.Commits.Count);   // rifiutato: nessun commit
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
     [Fact]
     public async Task Commit_NonVersionatoInStaged_VieneAggiuntoPrima_EMancanteCancellato()
     {
