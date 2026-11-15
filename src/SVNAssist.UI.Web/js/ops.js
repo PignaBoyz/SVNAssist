@@ -101,19 +101,31 @@
       `<button type="button" class="btn primary" data-bt-ok ${O.btValid(b) ? '' : 'disabled'} title="${esc(t('Crea la copia sul server (svn copy)'))}">${U.icon('branch')}<span>${b.busy ? esc(t('Creazione…')) : esc(t('Crea'))}</span></button></div></div></div>`;
   };
 
+  // Shelve: il dialogo e' solo della UI (nome e spunta) e va al backend con "shelve". L'HTML non dipende da quanto si digita: i ridisegni non rubano il focus.
+  let sh = null;
+  O.hasShelve = () => !!sh;
+  O.shelveHTML = () => `<div class="wiz-scrim"><div class="wiz" role="dialog" aria-modal="true" aria-labelledby="ops-t"><div class="wiz-h"><h3 id="ops-t" tabindex="-1">Shelve</h3><span class="fill"></span><button type="button" class="ib" data-sh-cancel title="${esc(t('Annulla (Esc)'))}" aria-label="${esc(t('Annulla (Esc)'))}">${U.icon('x')}</button></div><div class="wiz-b">` +
+    `<p class="muted">${esc(t('Mette da parte le modifiche in un file .patch dentro la working copy e le toglie da qui: le riprendi con Unshelve.'))}</p>` +
+    `<label for="sh-name">${esc(t('Nome'))}</label><input id="sh-name" type="text" autocomplete="off" spellcheck="false" value="${esc(sh.name0)}">` +
+    `<label class="ock"><input id="sh-keep" type="checkbox"><span><b>${esc(t('Tieni le modifiche nella working copy'))}</b><small class="muted">${esc(t('Salva solo la patch, senza annullare nulla'))}</small></span></label>` +
+    `</div><div class="wiz-f"><button type="button" class="btn ghost" data-sh-cancel title="${esc(t('Chiude senza mettere da parte nulla'))}"><span>${esc(t('Annulla'))}</span></button><span class="fill"></span>` +
+    `<button type="button" class="btn primary" data-sh-ok title="${esc(t('Salva la patch nello shelve'))}">${U.icon('check')}<span>Shelve</span></button></div></div></div>`;
+
   // Un solo contenitore (#ops) per vista; inert/modal-open sull'app li imposta la vista.
   O.render = (box, st) => {
-    const open = !!(st.progress || st.switchWarn || st.cleanup || st.commitWarn || st.branchTag), was = !!box.__open, a = document.activeElement;
-    const kind = st.progress ? 'p' : st.switchWarn ? 'w' : st.cleanup ? 'c' : st.commitWarn ? 'k' : st.branchTag ? 'b' : '';
+    const open = !!(st.progress || st.switchWarn || st.cleanup || st.commitWarn || st.branchTag || sh), was = !!box.__open, a = document.activeElement;
+    const kind = st.progress ? 'p' : st.switchWarn ? 'w' : st.cleanup ? 'c' : st.commitWarn ? 'k' : st.branchTag ? 'b' : sh ? 's' : '';
     if (open && (!was || box.__kind !== kind)) { if (kind === 'c') O.resetCleanup(); if (kind === 'b') O.btReset(st.branchTag); if (!was) box.__prev = a; }
     const btId = kind === 'b' && was && box.contains(a) ? a.id : '', btCaret = btId && 'selectionStart' in a ? a.selectionStart : 0;
     const lines = box.querySelector('#ops-lines'), stick = !lines || lines.scrollTop + lines.clientHeight >= lines.scrollHeight - 8, top = lines ? lines.scrollTop : 0;
     const focusKey = box.contains(a) ? (a.dataset && (a.dataset.ock || ('opsOk' in a.dataset ? 'ok' : ''))) : '';
-    const changed = U.setHTML(box, st.progress ? O.progressHTML(st.progress) : st.switchWarn ? O.warnHTML(st.switchWarn) : st.cleanup ? O.cleanupHTML(st.cleanup) : st.commitWarn ? O.commitWarnHTML(st.commitWarn) : st.branchTag ? O.branchTagHTML(st.branchTag) : '');
+    const changed = U.setHTML(box, st.progress ? O.progressHTML(st.progress) : st.switchWarn ? O.warnHTML(st.switchWarn) : st.cleanup ? O.cleanupHTML(st.cleanup) : st.commitWarn ? O.commitWarnHTML(st.commitWarn) : st.branchTag ? O.branchTagHTML(st.branchTag) : sh ? O.shelveHTML() : '');
     const l2 = box.querySelector('#ops-lines'); if (l2) l2.scrollTop = stick ? l2.scrollHeight : top;
     if (open && changed && kind === 'b') {
       const f = box.querySelector(btId ? '#' + btId : '#bt-name');   // primo giro: il campo nome; poi il campo in cui si stava scrivendo
       if (f) { f.focus(); if (btId && 'setSelectionRange' in f && btCaret != null && f.type !== 'checkbox' && f.type !== 'radio') f.setSelectionRange(btCaret, btCaret); }
+    } else if (open && changed && kind === 's') {
+      if (!was || box.__kind !== kind) box.querySelector('#sh-name').select();
     } else if (open && changed) {
       const f = (!was || box.__kind !== kind) ? box.querySelector('#ops-t') : focusKey === 'ok' ? box.querySelector('[data-ops-ok]') : focusKey ? box.querySelector(`[data-ock="${focusKey}"]`) : box.querySelector('.wiz-f .btn.primary,.wiz-f .btn.danger');
       if (f && !(was && box.contains(a) && !focusKey && a.matches('button'))) f.focus();
@@ -124,6 +136,12 @@
   };
   // Eventi (una volta per vista): spunte, OK del Cleanup, Esc, Tab dentro il modale.
   O.wire = (box, getState) => {
+    const shClose = () => { sh = null; O.render(box, getState()); };
+    const shOk = () => { const n = box.querySelector('#sh-name'), k = box.querySelector('#sh-keep'); U.bridge.send('shelve', { ...(sh.keys.length ? { keys: sh.keys } : {}), name: n.value, keep: k.checked }); shClose(); };
+    // keys vuote = tutte le modifiche; il nome proposto e' "Modifiche del <data ora>"
+    O.shelveShow = keys => { sh = { keys, name0: t('Modifiche del {0}', U.fmtDate(new Date().toISOString())) }; O.render(box, getState()); };
+    box.addEventListener('click', e => { if (!sh) return; if (e.target.closest('[data-sh-ok]')) shOk(); else if (e.target.closest('[data-sh-cancel]')) shClose(); });
+    box.addEventListener('keydown', e => { if (sh && e.key === 'Enter' && e.target.id === 'sh-name') { e.preventDefault(); shOk(); } });
     box.addEventListener('change', e => { const k = e.target.dataset && e.target.dataset.ock; if (k) { O.toggle(k); O.render(box, getState()); } });
     box.addEventListener('click', e => { if (e.target.closest('[data-ops-ok]') && O.cleanupValid()) U.bridge.send('cleanupOk', O.cleanupOpts()); });
     const btOk = () => { const b = getState().branchTag; if (b && O.btValid(b)) U.bridge.send('branchTagOk', O.btArgs(b)); };
@@ -144,7 +162,7 @@
     box.addEventListener('pointerdown', e => { const b = e.target.closest('[data-cmd="opCancel"]'); if (b && !b.disabled && e.button === 0) U.bridge.send('opCancel'); });
     document.addEventListener('keydown', e => {
       if (!box.__open) return; const st = getState();
-      if (e.key === 'Escape') { if (st.cleanup && !st.progress) { e.preventDefault(); U.bridge.send('cleanupCancel'); } else if (st.switchWarn && !st.progress) { e.preventDefault(); U.bridge.send('switchWarnCancel'); } else if (st.commitWarn && !st.progress) { e.preventDefault(); U.bridge.send('commitWarnCancel'); } else if (st.branchTag && !st.progress) { e.preventDefault(); if (!st.branchTag.busy) U.bridge.send('branchTagCancel'); } else if (st.progress && !st.progress.running) { e.preventDefault(); U.bridge.send('progressClose', { conflicts: false }); } return; }
+      if (e.key === 'Escape') { if (sh) { e.preventDefault(); shClose(); } else if (st.cleanup && !st.progress) { e.preventDefault(); U.bridge.send('cleanupCancel'); } else if (st.switchWarn && !st.progress) { e.preventDefault(); U.bridge.send('switchWarnCancel'); } else if (st.commitWarn && !st.progress) { e.preventDefault(); U.bridge.send('commitWarnCancel'); } else if (st.branchTag && !st.progress) { e.preventDefault(); if (!st.branchTag.busy) U.bridge.send('branchTagCancel'); } else if (st.progress && !st.progress.running) { e.preventDefault(); U.bridge.send('progressClose', { conflicts: false }); } return; }
       if (e.key !== 'Tab') return;
       const f = [...box.querySelectorAll('button:not(:disabled),input:not(:disabled),textarea:not(:disabled),[tabindex="0"]')]; if (!f.length) return;
       const a = document.activeElement, first = f[0], last = f[f.length - 1];

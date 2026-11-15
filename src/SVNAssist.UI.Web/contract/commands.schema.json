@@ -85,7 +85,7 @@
     },
     {
       "title": "createPatch",
-      "description": "Create Patch: svn diff dei file indicati (key/keys; nessuna = tutte le modifiche versionate) nel file .patch scelto con il dialogo Salva dell'host.",
+      "description": "Create Patch: svn diff dei file indicati (key/keys; nessuna = tutte le modifiche) nel file .patch scelto con il dialogo Salva dell'host; i non versionati (cartelle = i file dentro) come file nuovi.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -135,6 +135,138 @@
           "additionalProperties": false,
           "required": [],
           "properties": {}
+        }
+      }
+    },
+    {
+      "title": "shelve",
+      "description": "Shelve: la patch dei file indicati (key/keys; nessuna = tutte le modifiche, non versionati compresi) in .svn-assist/shelves; se keep e' false annulla i versionati (svn revert) e manda i non versionati/aggiunti nel Cestino. Binari e file vuoti restano dove sono (avviso prima).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "shelve"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "keep"
+          ],
+          "properties": {
+            "key": {
+              "type": "string",
+              "description": "Chiave di riga o \"section:<id>\"."
+            },
+            "keys": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string"
+              },
+              "description": "Selezione multipla (in alternativa a key)."
+            },
+            "name": {
+              "type": "string",
+              "description": "Nome dello shelve (vuoto = \"Modifiche del <data>\")."
+            },
+            "keep": {
+              "type": "boolean",
+              "description": "Tieni le modifiche nella working copy."
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "unshelve",
+      "description": "Unshelve / Applica e tieni: svn patch dello shelve; lo shelve si elimina solo se tutto e' stato applicato e keep non e' true.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "unshelve"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Id dello shelve (state.shelves[].id)."
+            },
+            "keep": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "shelveSave",
+      "description": "Salva come .patch: copia dello shelve nel file scelto con il dialogo Salva dell'host.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "shelveSave"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Id dello shelve (state.shelves[].id)."
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "shelveDelete",
+      "description": "Elimina lo shelve, dopo conferma.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "shelveDelete"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Id dello shelve (state.shelves[].id)."
+            }
+          }
         }
       }
     },
