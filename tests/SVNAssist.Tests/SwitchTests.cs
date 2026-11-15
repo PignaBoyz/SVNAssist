@@ -529,11 +529,43 @@ public class SwitchTests
         Assert.True(sw.Elapsed < TimeSpan.FromSeconds(5), "ping avrebbe girato per 60 secondi: il processo non e' stato ucciso");
     }
 
+    private static async Task<bool> PendingRestaDopoRefresh(string fromUrl, string toUrl, params SvnFileStatus[] statuses)
+    {
+        var recent = Path.Combine(Path.GetTempPath(), "SVNAssist_Recent_" + Guid.NewGuid().ToString("N")[..8] + ".json");
+        var file = recent + ".pending-switch.json";
+        new PendingSwitch(file).Set(@"C:\wc", new PendingSwitch.Entry("feature-grande", toUrl, fromUrl, 5, "trunk"));
+        using var f = new Fixture(recentFile: recent);   // la WC e' su ^/trunk = file:///repo/trunk
+        f.Svn.Statuses.AddRange(statuses);
+        await f.Store.RefreshAsync(Ct, reloadBranch: true);
+        return new PendingSwitch(file).Get(@"C:\wc") is not null;
+    }
+
+    [Fact]
+    public async Task PendingStantio_WcCoerenteSuFromUrl_VieneTolto()
+        => Assert.False(await PendingRestaDopoRefresh("file:///repo/trunk", "file:///repo/branches/feature-grande"));
+
+    [Fact]
+    public async Task PendingStantio_WcCoerenteSuUrlDestinazione_VieneTolto()
+        => Assert.False(await PendingRestaDopoRefresh("file:///repo/branches/x", "file:///repo/trunk"));
+
+    [Fact]
+    public async Task PendingStantio_ConCartellaSwitched_Resta()
+        => Assert.True(await PendingRestaDopoRefresh("file:///repo/trunk", "file:///repo/branches/feature-grande", new SvnFileStatus("sub", SvnStatusKind.Normal, IsSwitched: true)));
+
+    [Fact]
+    public async Task PendingStantio_ConElementoIncompleto_Resta()
+        => Assert.True(await PendingRestaDopoRefresh("file:///repo/trunk", "file:///repo/branches/feature-grande", new SvnFileStatus("sub", SvnStatusKind.Incomplete)));
+
+    [Fact]
+    public async Task PendingStantio_ConLockDellaWc_Resta()
+        => Assert.True(await PendingRestaDopoRefresh("file:///repo/trunk", "file:///repo/branches/feature-grande", new SvnFileStatus("sub", SvnStatusKind.Normal, IsWcLocked: true)));
+
     [Fact]
     public async Task Switch_Annullato_LasciaPendingSwitch_CleanupEAzioniNellaFinestra()
     {
         using var f = new Fixture();
         f.Svn.Hang = true;
+        f.Svn.Statuses.Add(new SvnFileStatus(@"C:\wc\managed", SvnStatusKind.Incomplete));   // svn si e' fermato a meta': la voce non e' stantia
         await f.Cmd("switchOpen");
         var run = f.Cmd("switchOk", new { name = "tags/1.0" });
         for (var i = 0; i < 200 && !f.Svn.SwitchLog.Contains("switch file:///repo/tags/1.0"); i++)
@@ -587,6 +619,7 @@ public class SwitchTests
         }
 
         using var g = new Fixture("^/tags/1.0", recent);   // nuova sessione di VS, stessa working copy
+        g.Svn.Statuses.Add(new SvnFileStatus(@"C:\wc\managed", SvnStatusKind.Incomplete));   // ancora a meta'
         await g.Store.RefreshAsync(Ct, reloadBranch: true);
 
         Assert.True(g.State.Status.Err);

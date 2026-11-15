@@ -1083,6 +1083,12 @@ internal sealed class ChangesStore : ViewStore, IDisposable
                 UpdateStagedAfterRefresh();
             }
 
+            // Voce di switch interrotto ormai stantia (tornati indietro a mano, switch riuscito altrove): la WC e' coerente, la voce si toglie.
+            if (branch is { } cur && _pendingSwitch.Get(path) is { } stale
+                && (SameUrl(cur.Url, stale.FromUrl) || SameUrl(cur.Url, stale.Url))
+                && !statuses.Any(s => s.IsSwitched || s.IsWcLocked || s.Status == SvnStatusKind.Incomplete))
+                _pendingSwitch.Clear(path);
+
             EntriesChanged?.Invoke();
 
             if (urlChanged)

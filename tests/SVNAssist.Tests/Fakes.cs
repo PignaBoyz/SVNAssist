@@ -287,7 +287,10 @@ internal sealed class FakeSvnService : ISvnService
         if (SwitchError is not null && (SwitchFailTimes is null || SwitchFailTimes-- > 0))
         {
             if (InfoAfterFailedSwitch is not null)
+            {
                 InfoRelativeUrl = InfoAfterFailedSwitch;
+                Statuses.Add(new SvnFileStatus(workingCopyPath + @"\managed", SvnStatusKind.Incomplete));   // a meta': cartelle "!" lasciate da svn
+            }
             throw new InvalidOperationException(SwitchError);
         }
         Switched.Add((workingCopyPath, url));

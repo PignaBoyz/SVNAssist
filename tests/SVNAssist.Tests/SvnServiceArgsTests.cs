@@ -162,7 +162,7 @@ public class SvnServiceArgsTests
 
         await sut.GetLogAsync("file:///repo", 25, CancellationToken.None);
 
-        Assert.Equal(["log", "--non-interactive", "--xml", "-v", "-l", "25", "file:///repo"], runner.LastArguments);
+        Assert.Equal(["log", "--non-interactive", "--xml", "-v", "-l", "25", "-r", "HEAD:1", "file:///repo"], runner.LastArguments);
     }
 
     [Fact]

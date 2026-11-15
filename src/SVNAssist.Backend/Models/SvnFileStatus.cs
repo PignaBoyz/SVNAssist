@@ -14,7 +14,9 @@ namespace SVNAssist.Models;
 /// <c>true</c> se la working copy tiene un lock (<c>svn lock</c>) su questo file (elemento <c>&lt;lock&gt;</c> in
 /// <c>wc-status</c>, "K" di svn): è un dato locale, non serve la rete. I lock di altri richiedono <c>status -u</c> e non sono letti.
 /// </param>
-public sealed record SvnFileStatus(string Path, SvnStatusKind Status, bool IsTreeConflict = false, bool IsLocked = false);
+/// <param name="IsSwitched">Attributo <c>switched</c> di <c>wc-status</c>: l'elemento sta su un ramo diverso dal padre.</param>
+/// <param name="IsWcLocked">Attributo <c>wc-locked</c>: lock della working copy lasciato da un'operazione interrotta (serve cleanup).</param>
+public sealed record SvnFileStatus(string Path, SvnStatusKind Status, bool IsTreeConflict = false, bool IsLocked = false, bool IsSwitched = false, bool IsWcLocked = false);
 
 /// <summary>
 /// Enumerazione degli stati possibili di un file in SVN.
