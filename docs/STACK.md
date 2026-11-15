@@ -1,6 +1,6 @@
 # SVNAssist — Stack tecnologico
 
-Versione di riferimento: **0.3.2** (`Directory.Build.props`). Documento ricavato dai file di progetto,
+Versione di riferimento: **0.4.0** (`Directory.Build.props`). Documento ricavato dai file di progetto,
 dal codice e dalla CI; dove un documento storico non corrisponde al codice, vale il codice (vedi §9).
 
 ## 0. Riepilogo

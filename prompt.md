@@ -1,4 +1,4 @@
-# Prompt di ripresa — SVNAssist 0.3.0 (Merge da Visual Studio)
+# Prompt di ripresa — SVNAssist dopo la 0.4.0
 
 ```
 Sei l'ORCHESTRATORE del progetto SVNAssist (estensione Visual Studio per SVN, C#).
@@ -42,10 +42,12 @@ DECISIONI DELL'UTENTE (non rimetterle in discussione):
 - Release solo quando tutto è pronto e provato dall'utente con la checklist; la 0.1.0 è deprecata, tag v0.1.0 NON va cancellato.
 - L'utente lavora in azienda con SVN e accesso integrato di Windows: il login SVN deve comparire solo su errore di autenticazione.
 
-DA FARE (dopo la 0.3.0, uscita il 2026-11-12):
-1. Pianificare con l'utente la 0.4.0 dai candidati in docs/ROADMAP.md §5 e dagli aperti in HANDOFF.md.
-2. Ogni release: branch di lavoro → develop → main, tag vX.Y.Z su main, Release con demo + vsix + sorgenti, verifica via API.
-3. Collaudo: tools/setup-sim.ps1 (simulazione realistica) e tools/collaudo-mirato.ps1 (installa VSIX, ricrea, apre VS).
+DA FARE (dopo la 0.4.0, uscita il 2026-11-15; la 0.3.2 e' confluita nella 0.4.0):
+1. Scegliere con l'utente la 0.5.0: flusso branch (crea branch/tag, patch con backup, lock altrui, Usa mia/loro per tutti, VS 2022)
+   oppure AI e lettura codice (Blame, AI spiega revisione, AI cosa sta per arrivare, modelli dinamici). Vedi docs/ROADMAP.md §5 e §2.
+2. Ogni release: branch di lavoro → develop → main, tag vX.Y.Z su main (il workflow release.yml pubblica demo + vsix), verifica via API.
+3. Collaudo: tools/collaudo-mirato.ps1 (installa VSIX, ricrea simulazione con feature-grande 2000 file, apre VS); -SoloSim senza reinstallare; -Parte B.
+4. Stack: docs/STACK.md. Glifi custom in Solution Explorer NON possibili in VS 18 (IVsSccGlyphs mai chiamato): restano le icone standard.
 
 RISCHI NOTI (da 0.2.0):
 - Mai visti in VS dall'utente: Commit All/Staged, Log come documento MDI, Update to revision con elenco, login SVN reale,
