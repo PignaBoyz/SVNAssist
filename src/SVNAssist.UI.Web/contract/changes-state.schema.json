@@ -990,6 +990,22 @@
           "minimum": 0
         }
       }
+    },
+    "branchTag": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Dialogo SVN Branch/Tag (branchTagOk / branchTagCancel). from = ramo della working copy, branches/tags = cartelle di destinazione dal layout (dalla radice), dirty = modifiche locali (offre la copia dalla working copy).",
+      "required": ["kind", "from", "rev", "dirty", "branches", "tags", "error", "busy"],
+      "properties": {
+        "kind": { "enum": ["branch", "tag"] },
+        "from": { "type": "string" },
+        "rev": { "type": "integer", "minimum": 0 },
+        "dirty": { "type": "boolean" },
+        "branches": { "type": "string" },
+        "tags": { "type": "string" },
+        "error": { "type": "string" },
+        "busy": { "type": "boolean" }
+      }
     }
   },
   "$defs": {

@@ -128,6 +128,7 @@
     return [
       { header: true, label: 'SVN' },
       { label: 'SVN Switch…', cmd: 'switchOpen', hint: t('Porta la working copy su un altro branch o tag (svn switch)') },
+      { label: 'SVN Branch/Tag…', cmd: 'branchTagOpen', args: { kind: 'branch' }, hint: t('Crea sul server un branch o un tag dalla working copy (svn copy)') },
       { label: 'SVN Merge…', cmd: 'mergeOpen', hint: t('Unisce nella working copy le modifiche di un altro branch (svn merge)'), disabled: !mergeOk() },
       { label: 'SVN Update to revision…', cmd: 'updateToRevision', hint: t('Aggiorna a una revisione precisa (svn update -r)') },
       { label: 'SVN Cleanup', cmd: 'cleanup', hint: t("Ripulisce la working copy da un'operazione interrotta (svn cleanup)") }, { sep: true },
@@ -273,7 +274,7 @@
     if (changed) { list.scrollTop = top; if (had) { const r = list.querySelector(`.tr[data-key="${CSS.escape(cursor)}"]`); if (r) r.focus(); } }
     list.setAttribute('aria-busy', !!st.loading);
     U.setHTML(root.querySelector('#foot'), foot(st));
-    const anyModal = !!(st.wizard && st.wizard.open) || !!(st.revPicker && st.revPicker.open) || !!(st.switchPicker && st.switchPicker.open) || !!(st.progress || st.switchWarn || st.cleanup || st.commitWarn);
+    const anyModal = !!(st.wizard && st.wizard.open) || !!(st.revPicker && st.revPicker.open) || !!(st.switchPicker && st.switchPicker.open) || !!(st.progress || st.switchWarn || st.cleanup || st.commitWarn || st.branchTag);
     if (anyModal) rcClose(false); else rcRefresh();
     renderWizard(root, anyModal);
     renderRev(root, anyModal);
@@ -433,6 +434,7 @@
       `<div class="wiz-b"><p class="muted">${merge ? t('Scegli il branch, il trunk o il tag da cui unire le modifiche nella working copy.') : t('Scegli il branch o il tag su cui portare la working copy.')}</p>${body}` +
       (s.error ? `<div class="rp-err" role="alert">${U.icon('warn')}<span>${esc(s.error)}</span></div>` : '') + `</div>` +
       `<div class="wiz-f">${U.btn('btn ghost', t('Annulla'), null, 'switchCancel', null, merge ? t('Chiude senza unire nulla') : t('Chiude senza cambiare ramo'))}${U.btn('btn sm', t('Aggiorna'), 'refresh', 'switchRefresh', null, t("Rilegge l'elenco di branch e tag dal server"))}` +
+      (merge ? '' : U.btn('btn sm', t('Crea branch/tag…'), 'branch', 'branchTagOpen', { kind: 'branch' }, t('Crea sul server un branch o un tag dalla working copy (svn copy)'))) +
       (s.items.length ? `<button type="button" class="btn sm" data-sw-ext aria-pressed="${!!u.ext}" title="${esc(u.ext ? t('Torna al selettore veloce') : t('Tabella con filtri per nome e tipo, revisione, autore e data'))}"><span>${u.ext ? t('Vista rapida') : t('Mostra tutti / vista estesa…')}</span></button>` : '') + `<span class="fill"></span>` +
       `<button type="button" class="btn primary" data-sw-ok ${swSelOk(s) && !s.loading ? '' : 'disabled'} title="${esc(merge ? t('Mostra le revisioni di questo ramo ancora da unire (svn mergeinfo)') : t('Porta la working copy sul ramo scelto (svn switch)'))}">${U.icon('branch')}<span>${merge ? 'Merge…' : 'Switch'}</span></button></div></div></div>`;
   }

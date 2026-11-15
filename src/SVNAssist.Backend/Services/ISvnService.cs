@@ -229,6 +229,12 @@ public interface ISvnService
     /// <summary>Porta la working copy su un altro URL (<c>svn switch --accept postpone</c>), dalla sua radice. I conflitti restano da risolvere.</summary>
     Task<UpdateResult> SwitchAsync(string workingCopyPath, string url, CancellationToken ct, long? revision = null);
 
+    /// <summary>
+    /// Crea branch/tag sul server (<c>svn copy --parents -F msg SRC DESTURL</c>, un commit). <paramref name="source"/> = percorso della working copy (copia anche le modifiche locali)
+    /// o URL (con <paramref name="revision"/> opzionale; senza, HEAD).
+    /// </summary>
+    Task CopyAsync(string source, string destinationUrl, string message, long? revision, CancellationToken ct);
+
     /// <summary>Revisioni del sorgente ancora da unire nella working copy (<c>svn mergeinfo --show-revs eligible SRC .</c>), in ordine crescente. Richiede svn 1.5+ (l'unione automatica 1.8+).</summary>
     Task<IReadOnlyList<long>> GetEligibleRevisionsAsync(string workingCopyPath, string sourceUrl, CancellationToken ct);
 

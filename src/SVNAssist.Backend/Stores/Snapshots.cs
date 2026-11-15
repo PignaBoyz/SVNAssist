@@ -119,7 +119,11 @@ internal sealed record ChangesState(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ProgressDto? Progress = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SwitchWarnDto? SwitchWarn = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CleanupDialogDto? Cleanup = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CommitWarnDto? CommitWarn = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CommitWarnDto? CommitWarn = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BranchTagDto? BranchTag = null);
+
+/// <summary>Dialogo "SVN Branch/Tag...": <c>From</c> = ramo della working copy, <c>Branches</c>/<c>Tags</c> = cartelle di destinazione dal layout (dalla radice, senza <c>^/</c>), <c>Dirty</c> = ci sono modifiche locali.</summary>
+internal sealed record BranchTagDto(string Kind, string From, long Rev, bool Dirty, string Branches, string Tags, string Error, bool Busy);
 
 /// <param name="K"><c>dir</c> per le cartelle (non si aprono nel diff); assente altrimenti.</param>
 internal sealed record LogPathDto(string A, string P, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? K = null);

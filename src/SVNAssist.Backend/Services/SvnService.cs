@@ -1052,6 +1052,33 @@ public class SvnService : ISvnService
         => ParseUpdateOutput(await RunSvnAsync(BuildSwitchArgs(url, revision), workingCopyPath, ct, applyTimeout: false));
 
     /// <inheritdoc />
+    public async Task CopyAsync(string source, string destinationUrl, string message, long? revision, CancellationToken ct)
+    {
+        // Messaggio da file UTF-8, come il commit.
+        var messageFile = Path.Combine(Path.GetTempPath(), $"svnassist-msg-{Guid.NewGuid():N}.txt");
+        try
+        {
+            await File.WriteAllTextAsync(messageFile, message, new UTF8Encoding(false), ct);
+            await RunSvnAsync(BuildCopyArgs(source, destinationUrl, messageFile, revision), workingDirectory: null, ct, applyTimeout: false);
+        }
+        finally
+        {
+            try { File.Delete(messageFile); }
+            catch (IOException) { /* best effort */ }
+            catch (UnauthorizedAccessException) { /* idem */ }
+        }
+    }
+
+    internal static List<string> BuildCopyArgs(string source, string destinationUrl, string messageFile, long? revision)
+    {
+        var args = new List<string> { "copy", "--parents", "-F", messageFile, "--encoding", "utf-8" };
+        if (revision is { } r)
+            args.AddRange(["-r", r.ToString(CultureInfo.InvariantCulture)]);
+        args.AddRange([Peg(source), Peg(destinationUrl)]);
+        return args;
+    }
+
+    /// <inheritdoc />
     public async Task<IReadOnlyList<long>> GetEligibleRevisionsAsync(string workingCopyPath, string sourceUrl, CancellationToken ct)
         => MergeParser.ParseRevisions(await RunSvnAsync(["mergeinfo", "--show-revs", "eligible", Peg(sourceUrl)], workingCopyPath, ct));
 

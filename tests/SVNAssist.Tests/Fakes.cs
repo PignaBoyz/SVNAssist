@@ -318,6 +318,17 @@ internal sealed class FakeSvnService : ISvnService
         return Task.FromResult(new UpdateResult(9, []));
     }
 
+    public List<(string Source, string Dest, string Message, long? Rev)> Copies { get; } = [];
+    public string? CopyError { get; set; }
+
+    public Task CopyAsync(string source, string destinationUrl, string message, long? revision, CancellationToken ct)
+    {
+        if (CopyError is not null)
+            throw new InvalidOperationException(CopyError);
+        Copies.Add((source, destinationUrl, message, revision));
+        return Task.CompletedTask;
+    }
+
     public IReadOnlyList<long> Eligible { get; set; } = [];
     public IReadOnlyList<SvnLogEntry> RangeLog { get; set; } = [];
     public string? MergeError { get; set; }

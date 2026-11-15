@@ -167,6 +167,7 @@ namespace SVNAssist.Host
             Add(Ids.CmdCleanup, () => Host.SendCommandAsync("changes", "cleanup", null));
             Add(Ids.CmdSwitch, () => Host.SendCommandAsync("changes", "switchOpen", null));
             Add(Ids.CmdMerge, () => Host.SendCommandAsync("changes", "mergeOpen", null));
+            Add(Ids.CmdBranchTag, () => Host.SendCommandAsync("changes", "branchTagOpen", new JObject { ["kind"] = "branch" }));
             Add(Ids.CmdCreatePatch, () => Host.SendCommandAsync("changes", "createPatch", null));
             Add(Ids.CmdApplyPatch, () => Host.SendCommandAsync("changes", "applyPatch", null));
             Add(Ids.CmdRevertSel, RevertSelectedAsync);

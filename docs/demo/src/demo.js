@@ -988,6 +988,28 @@ async function swGo(name) {
     progDone(true, n ? `Switch a ${name} completato (revisione ${S.wcRev}): completato con ${n} conflitti.` : `Switch a ${name} completato (revisione ${S.wcRev}).`, n);
   } catch (e) { if (e.cancelled) return render(); setStatus('Errore switch: ' + e.message); progDone(false, 'Errore switch: ' + e.message); render(); }
 }
+// SVN Branch/Tag: stesse regole del backend (nome, esistente, errore chiaro nel dialogo), poi svn copy e, se spuntato, lo switch di sempre
+function btOpen(a) {
+  if (!S.vm.wcPath.trim()) { setStatus('Nessuna working copy configurata.'); return render(); }
+  S.vm.sw = null; S.vm.bt = { kind: a.kind === 'tag' ? 'tag' : 'branch', error: '', busy: false }; render();
+}
+async function btOk(a) {
+  const b = S.vm.bt; if (!b) return;
+  const name = String(a.name || ''), kind = a.kind === 'tag' ? 'tag' : 'branch', path = (kind === 'tag' ? 'tags/' : 'branches/') + name;
+  b.error = !name ? 'Inserisci il nome.' : name !== name.trim() ? 'Il nome non può iniziare o finire con spazi.'
+    : /[\\:*?"<>|]/.test(name) ? 'Il nome contiene caratteri non validi: \\ : * ? " < > |'
+    : name.split('/').some(s => !s || s === '.' || s === '..') ? 'Il nome non è valido: niente / iniziali o finali, segmenti vuoti, "." o "..".'
+    : a.source === 'rev' && !(+String(a.rev).replace(/^r/i, '') > 0) ? 'Numero di revisione non valido.'
+    : SW_ITEMS.some(i => i[0] === path) ? `${path} esiste già nel repository: scegli un altro nome.` : '';
+  if (b.error) return render();
+  b.busy = true; render();
+  await svn(`copy ${a.source === 'wc' ? '.' : (a.source === 'rev' ? '-r ' + String(a.rev).replace(/^r/i, '') + ' ' : '') + '^/' + S.branch} ^/${path} -m "${a.message}"`, 700);
+  S.headRev += 1; S.vm.bt = null;
+  SW_ITEMS.push([path, kind, S.headRev, 'mrossi', 0]); SW_ITEMS.sort((x, y) => x[0].localeCompare(y[0], 'en', { numeric: true }));
+  setStatus(`${path} creato sul server.`);
+  if (a.switch) { if (S.files.some(f => f.st !== 'N')) { S.vm.warn = { name: path }; return render(); } return swGo(path); }
+  render();
+}
 // Avanzamento modale (switch, merge, update, cleanup): righe di svn in streaming, barra indeterminata + contatore, resta aperta con il riepilogo.
 const progKind = l => { const m = /^([ ADUCGER][ UCGM][ B][ C])\s+\S/.exec(l); return m ? (m[1].includes('C') ? 'C' : /^[ADGR]/.test(m[1]) ? m[1][0] : 'U') : /^Reverted /.test(l) ? 'R' : 'i'; };
 async function progRun(op, title, phase, lines) {
