@@ -21,6 +21,7 @@ Segna ogni passo: ✅ ok / ❌ + cosa hai visto.
 | 5 | Di nuovo Revert di tutto, poi un'altra operazione (es. SVN Update). | Il pulsante sparisce e il backup viene eliminato. | |
 | 6 | Extensions > SVNAssist > **Apply Patch...** > il file del passo 2. | Anteprima (file toccati), poi applica: modifiche di nuovo presenti. | |
 | 7 | In `Order.cs` scrivi tre righe `<<<<<<< mine`, `=======`, `>>>>>>> theirs`, salva, messaggio, **Commit**. | Avviso "contiene marcatori di conflitto. Committare comunque?". Rispondi **No**: niente commit. Poi togli le righe. | |
+| 7b | Da un prompt: `svn checkout file:///%TEMP%/svnsim/repo/trunk %TEMP%\collega`, modifica un file che NON hai toccato e committalo da lì. Poi in VS committa un tuo file. | Prima del commit: "Sul server ci sono revisioni più recenti…" (Committa comunque / Annulla). Con Committa comunque: messaggio ATTENZIONE + pulsante **SVN Update ora**, indicatore arancio. | |
 | 8 | Extensions > SVNAssist > **Branch/Tag...**: Branch, nome `prova-050`, spunta **Passa subito**, Crea. | Branch creato (messaggio precompilato), switch con barra in **percentuale** e "N di circa M elementi". | |
 | 9 | Riapri Branch/Tag: stesso nome; poi `  x` (spazio iniziale); poi `a:b`. | "esiste già" / nome non valido, il dialogo resta aperto. | |
 | 10 | Changes > Switch... : c'è il pulsante **Crea branch/tag...**. Torna su trunk. | Pulsante presente, switch ok. | |

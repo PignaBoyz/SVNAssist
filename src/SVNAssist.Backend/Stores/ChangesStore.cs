@@ -74,6 +74,8 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
     private string _branchName = string.Empty;
     private string? _svnVersion;
     private string? _branchUrl, _repoRoot, _lastCommitWc;
+    /// <summary>Messaggio di stato che mostra il pulsante "SVN Update ora" anche se non e' un errore (commit con working copy indietro).</summary>
+    private string? _updateHint;
     private long? _wcRev, _lastCommitRev;
     private int _statusSeq;
     private string _themeMode = "auto";
@@ -1479,6 +1481,30 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             }
         }
 
+        // Revisioni di altri sul ramo che la working copy non ha: il commit passerebbe (file diversi) ma la copia locale,
+        // e quindi la build, non conterrebbe il loro lavoro. Si controlla adesso, non si aspetta il giro periodico.
+        string? branchUrl;
+        long? wcRevBefore;
+        lock (_stateLock)
+        {
+            branchUrl = _branchUrl;
+            wcRevBefore = _wcRev;
+        }
+        long? headBefore = null;
+        if (!string.IsNullOrEmpty(branchUrl) && wcRevBefore is > 0)
+        {
+            SetStatus(Loc.T("Controllo delle nuove revisioni sul server..."));
+            try { headBefore = await _svnService.GetHeadRevisionAsync(branchUrl, ct); }
+            catch (Exception) when (!ct.IsCancellationRequested) { } // offline: decide svn al commit (rifiuta i file non aggiornati)
+            if (headBefore > wcRevBefore && !await _dialogs.AskAsync(
+                    Loc.T("Sul server ci sono revisioni più recenti della tua working copy (r{0}, tu sei a r{1}): qualcuno ha committato.\n\nIl commit può riuscire, ma la tua copia locale NON avrà le loro modifiche: una build o una consegna fatta da qui le perderebbe.\n\nConsigliato: SVN Update, poi commit.", headBefore, wcRevBefore),
+                    Loc.T("Committa comunque"), Loc.T("Annulla"), ct))
+            {
+                SetUpdateHint(Loc.T("Commit annullato: fai SVN Update, controlla e poi committa."));
+                return;
+            }
+        }
+
         var toAddCount = 0;
         try
         {
@@ -1508,12 +1534,22 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             var message = CommitMessage.Text.Trim();
             var revision = await _svnService.CommitAsync(paths, message, ct, wholeFolders);
 
+            // Anche senza avviso prima (server non raggiungibile, commit altrui negli ultimi secondi): se il ramo e' cambiato
+            // tra la nostra revisione e il nostro commit, la working copy e' indietro.
+            var behind = headBefore > wcRevBefore;
+            if (!behind && revision is > 1 && wcRevBefore is > 0 && !string.IsNullOrEmpty(branchUrl))
+            {
+                try { behind = await _svnService.GetHeadRevisionAsync($"{branchUrl}@{revision - 1}", ct) > wcRevBefore; }
+                catch (Exception) when (!ct.IsCancellationRequested) { }
+            }
+
             string? repo;
             lock (_stateLock)
             {
                 repo = _repoRoot;
-                _lastCommitWc = _workingCopyPath;
-                _lastCommitRev = revision;
+                // Indietro: niente "minimo = revisione del commit", cosi' l'indicatore resta arancio finche' non si fa Update.
+                _lastCommitWc = behind ? null : _workingCopyPath;
+                _lastCommitRev = behind ? null : revision;
             }
 
             if (!string.IsNullOrEmpty(repo))
@@ -1521,9 +1557,15 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             CommitMessage.Clear();
             ClearMergeBanner();
 
-            await RefreshAsync(ct, reloadBranch: true, revision is { } rev
+            var done = revision is { } rev
                 ? Loc.T("Commit completato: revisione {0} ({1} elementi).", rev, selected.Count)
-                : Loc.T("Commit completato: {0} elementi.", selected.Count));
+                : Loc.T("Commit completato: {0} elementi.", selected.Count);
+            if (behind)
+                done += " " + Loc.T("ATTENZIONE: altri hanno committato sul ramo e la tua working copy non ha le loro modifiche. Fai SVN Update prima di compilare o consegnare.");
+            await RefreshAsync(ct, reloadBranch: true, done);
+            if (behind)
+                SetUpdateHint(done);
+            HeadCheck.Nudge();
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
@@ -2089,7 +2131,8 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
         // "Errore..." (it) e "Error..." (en) iniziano uguale: il test non dipende dalla lingua.
         var isError = _statusMessage.StartsWith("Error", StringComparison.Ordinal);
         return new StatusDto(_statusMessage, isError,
-            !isError ? (_restoreBackup is null ? null : new StatusActionDto(Loc.T("Ripristina modifiche"), "restoreBackup"))
+            !isError ? (_restoreBackup is not null ? new StatusActionDto(Loc.T("Ripristina modifiche"), "restoreBackup")
+                    : _statusMessage == _updateHint ? new StatusActionDto(Loc.T("SVN Update ora"), "update") : null)
                 : _pendingSwitch.Get(_workingCopyPath) is not null ? new StatusActionDto(Loc.T("Completa switch"), "switchResume")
                 : SvnErrors.IsWorkingCopyLocked(_statusMessage) ? new StatusActionDto(Loc.T("Esegui Cleanup"), "cleanup")
                 : SvnErrors.SuggestsUpdate(_statusMessage) ? new StatusActionDto(Loc.T("SVN Update ora"), "update") : null, _statusSeq,
@@ -2822,6 +2865,13 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
     // ── Utilita' ─────────────────────────────────────────────────────
 
     /// <summary>Imposta un messaggio d'azione: resta visibile finche' non lo sostituisce un altro (i refresh automatici non lo toccano).</summary>
+    /// <summary>Stato non di errore con il pulsante "SVN Update ora".</summary>
+    private void SetUpdateHint(string message)
+    {
+        _updateHint = message;
+        SetStatus(message);
+    }
+
     private void SetStatus(string message)
     {
         _statusIsAuto = false;

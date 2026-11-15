@@ -78,4 +78,56 @@ public class CommitWarnRealTests
             try { Directory.Delete(root, true); } catch { /* file .svn in sola lettura */ }
         }
     }
+
+    /// <summary>Il caso reale: un collega committa un ALTRO file poco prima; il nostro commit passerebbe senza dire nulla e la build perderebbe il suo lavoro.</summary>
+    [Theory]
+    [InlineData(false)] // "Annulla": niente commit, pulsante SVN Update
+    [InlineData(true)]  // "Committa comunque": commit fatto, avviso e indicatore arancio
+    public async Task SvnVero_CommitConWorkingCopyIndietro_AvvisaPrimaEDopo(bool committaComunque)
+    {
+        var svnExe = SvnLocator.FindSvn() ?? throw new InvalidOperationException("svn.exe non trovato");
+        var admin = SvnLocator.FindSvnAdmin() ?? throw new InvalidOperationException("svnadmin.exe non trovato");
+        var root = Path.Combine(Path.GetTempPath(), "SVNAssist_Behind_" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(root);
+        try
+        {
+            var repo = Path.Combine(root, "repo");
+            var url = "file:///" + repo.Replace('\\', '/');
+            Run(admin, $"create \"{repo}\"", root);
+            var wc = Path.Combine(root, "wc");
+            var collega = Path.Combine(root, "collega");
+            Run(svnExe, $"checkout \"{url}\" \"{wc}\"", root);
+            File.WriteAllText(Path.Combine(wc, "Mio.cs"), "x\n");
+            File.WriteAllText(Path.Combine(wc, "Suo.cs"), "x\n");
+            Run(svnExe, "add Mio.cs Suo.cs", wc);
+            Run(svnExe, "commit -m base", wc);
+            Run(svnExe, "update", wc);
+            Run(svnExe, $"checkout \"{url}\" \"{collega}\"", root);
+            File.WriteAllText(Path.Combine(collega, "Suo.cs"), "lavoro del collega\n");
+            Run(svnExe, "commit -m collega", collega);
+            File.WriteAllText(Path.Combine(wc, "Mio.cs"), "mio\n");
+
+            var settings = new StubSettings();
+            var dialogs = new FakeDialogs { AskResult = committaComunque };
+            using var store = new ChangesStore(settings, new SvnService(svnExe), new FakeAiFactory(), new NoopAiPrompt(), dialogs, new FakeHost(),
+                new PrereqStore(new PrerequisitesService(settings, new PrerequisiteProbes())),
+                recentTargetsFile: Path.Combine(root, "recent.json"))
+            { WorkingCopyPath = wc, TempRoot = Path.Combine(root, "tmp") };
+            await store.RefreshAsync(Ct, reloadBranch: true);
+            store.CommitMessage.SetTextQuietly("mio commit");
+            await store.DispatchAsync("commit", JsonSerializer.SerializeToElement(new { }), Ct);
+
+            Assert.Single(dialogs.Asked);
+            var snap = (ChangesState)store.GetSnapshot();
+            Assert.Equal("update", snap.Status.Action?.Cmd);
+            var log = Run(svnExe, $"log -q \"{url}\"", root);
+            Assert.Equal(committaComunque, log.Contains("r3 "));
+            if (committaComunque)
+                Assert.Contains("SVN Update", snap.Status.Msg); // l'indicatore arancio arriva dal controllo HEAD rilanciato (Nudge), qui non attivo
+        }
+        finally
+        {
+            try { Directory.Delete(root, true); } catch { /* file .svn in sola lettura */ }
+        }
+    }
 }
