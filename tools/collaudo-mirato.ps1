@@ -3,8 +3,9 @@
     Uso (PowerShell, nella cartella del repo, con VS CHIUSO):
       .\tools\collaudo-mirato.ps1              # parte A: lavoro in corso (wc)
       .\tools\collaudo-mirato.ps1 -Parte B     # parte B: Switch, Merge, conflitti (wc-merge), senza ricreare
+      .\tools\collaudo-mirato.ps1 -SoloSim     # parte A senza reinstallare il VSIX: ricrea solo la simulazione
 #>
-param([ValidateSet('A', 'B')][string]$Parte = 'A')
+param([ValidateSet('A', 'B')][string]$Parte = 'A', [switch]$SoloSim)
 $ErrorActionPreference = 'Stop'
 $ide = 'C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE'
 $vsix = Join-Path $PSScriptRoot '..\src\SVNAssist.Host\bin\Release\net472\SVNAssist.vsix'
@@ -12,13 +13,15 @@ $sim = Join-Path $env:TEMP 'svnsim'
 
 if (Get-Process devenv -ErrorAction SilentlyContinue) { throw 'Chiudi Visual Studio e rilancia lo script.' }
 
-if ($Parte -eq 'A') {
+if ($Parte -eq 'A' -and !$SoloSim) {
     Write-Host '[..] Installazione VSIX in SvnHost...'
     # stessa versione gia' installata = errore 1001 anche con /force: prima si disinstalla (codice ignorato se assente)
     Start-Process "$ide\VSIXInstaller.exe" -ArgumentList '/rootSuffix:SvnHost', '/quiet', '/u:SVNAssist' -Wait
     $p = Start-Process "$ide\VSIXInstaller.exe" -ArgumentList '/rootSuffix:SvnHost', '/quiet', '/force', "`"$((Resolve-Path $vsix).Path)`"" -Wait -PassThru
     if ($p.ExitCode) { throw "VSIXInstaller: codice $($p.ExitCode)" }
     Start-Process "$ide\devenv.exe" -ArgumentList '/rootsuffix', 'SvnHost', '/updateconfiguration' -Wait
+}
+if ($Parte -eq 'A') {
     Write-Host '[..] Ricreo la simulazione...'
     & (Join-Path $PSScriptRoot 'setup-sim.ps1') -Root $sim -Force | Out-Null
 }
