@@ -45,9 +45,9 @@ DECISIONI DELL'UTENTE (non rimetterle in discussione):
 - L'utente lavora in azienda con SVN e accesso integrato di Windows: il login SVN deve comparire solo su errore di autenticazione.
 
 TODO 0.5.0 (decisa dall'utente il 2026-11-15: flusso branch + debiti tecnici; [ ] da fare, [x] fatto):
-[ ] A. Crea branch/tag da VS (svn copy WC o URL → branches/tags, messaggio, opzione switch subito) + percorsi trunk/branches/tags
+[x] A. Crea branch/tag da VS (svn copy WC o URL → branches/tags, messaggio, opzione switch subito) + percorsi trunk/branches/tags
        configurabili (impostazione repoLayout esiste: esporla nelle Options e/o rilevarla, usarla ovunque).
-[ ] B. Crea/applica patch (svn diff / svn patch) + backup automatico in patch prima di "Revert di tutto" e "Annulla merge".
+[x] B. Crea/applica patch (svn diff / svn patch) + backup automatico in patch prima di "Revert di tutto" e "Annulla merge".
        Backup (utente): in <WC>/.svn-assist/backups; controllo spazio, se manca avvisa e chiedi se procedere senza; backup eliminato a operazione riuscita o dopo ripristino.
 [x] C. Lock di altri utenti visibili nell'albero (svn status -u --xml) + "Usa la mia/loro per tutti" nei conflitti.
 [x] D. Debito D10/D11: avviso al commit di file con marcatori <<<<<<< ; parser status completo (props conflicted, external, obstructed).
