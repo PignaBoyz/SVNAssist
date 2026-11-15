@@ -48,12 +48,13 @@ TODO 0.5.0 (decisa dall'utente il 2026-11-15: flusso branch + debiti tecnici; [ 
 [ ] A. Crea branch/tag da VS (svn copy WC o URL → branches/tags, messaggio, opzione switch subito) + percorsi trunk/branches/tags
        configurabili (impostazione repoLayout esiste: esporla nelle Options e/o rilevarla, usarla ovunque).
 [ ] B. Crea/applica patch (svn diff / svn patch) + backup automatico in patch prima di "Revert di tutto" e "Annulla merge".
+       Backup (utente): in <WC>/.svn-assist/backups; controllo spazio, se manca avvisa e chiedi se procedere senza; backup eliminato a operazione riuscita o dopo ripristino.
 [ ] C. Lock di altri utenti visibili nell'albero (svn status -u --xml) + "Usa la mia/loro per tutti" nei conflitti.
 [ ] D. Debito D10/D11: avviso al commit di file con marcatori <<<<<<< ; parser status completo (props conflicted, external, obstructed).
 [ ] E. Debito D16: limiti AI per provider (max_tokens, soglie) invece del più stretto.
 [ ] F. Avanzamento: percentuale vera quando il totale è ricavabile (es. svn diff --summarize prima dello switch/update) +
        finestra di avanzamento anche per Update to revision.
-[ ] G. Verifica su VS 2022 (manifest [17.0,19.0)): serve una macchina con VS 2022, chiedere all'utente.
+[-] G. SALTATA (utente 2026-11-15: nessuna macchina con VS 2022): resta rischio noto nelle note di rilascio.
 [ ] H. Note di rilascio v0.5.0, versione 0.5.0, collaudo mirato, release.
 
 COME LAVORARE (0.5.0):
