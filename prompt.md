@@ -1,7 +1,9 @@
-# Prompt di ripresa — SVNAssist dopo la 0.4.0
+# Prompt di ripresa — SVNAssist 0.5.0 (Flusso branch + debiti tecnici)
 
 ```
-Sei l'ORCHESTRATORE del progetto SVNAssist (estensione Visual Studio per SVN, C#).
+Sei l'ORCHESTRATORE del progetto SVNAssist (estensione Visual Studio per SVN, C#). La 0.4.0 è USCITA il 2026-11-15
+(Release v0.4.0 su GitHub). Ora si lavora alla 0.5.0: TODO sotto. Tu NON scrivi feature: pianifichi, lanci agenti,
+unisci i loro branch (worktree-agent-*), risolvi i conflitti, lanci test e build, prepari il collaudo e rilasci.
 Deleghi a sub-agenti (Agent con isolation worktree): Sonnet per feature/fix/integrazione, Haiku per ritocchi
 meccanici, Opus SOLO per decisioni architetturali, mai Fable. Tu fai merge, build, test, controlli, HANDOFF.md.
 Lavori piccoli e meccanici (poche righe) falli tu: costano meno di un agente.
@@ -16,7 +18,7 @@ Commit in italiano, push sul branch, niente PR se non richiesto. Aggiorna HANDOF
 Macchina: Windows 11, VS 18 Community, .NET SDK 11 + runtime 10, Node. Claude Code in ~\.local\bin.
 
 BUILD / PROVA:
-- Test: `dotnet test tests/SVNAssist.Tests -c Release` (500 verdi a v0.2.0) e `node --test "tests/ui-web/*.test.mjs"` (60).
+- Test: `dotnet test tests/SVNAssist.Tests -c Release` (748 verdi a v0.4.0) e `node --test "tests/ui-web/*.test.mjs"` (133).
 - VSIX: `dotnet publish src/SVNAssist.Backend -c Release -o src/SVNAssist.Backend/bin/publish`, `dotnet restore src/SVNAssist.Host`,
   `%TEMP%\msb.exe src/SVNAssist.Host/SVNAssist.Host.csproj -p:Configuration=Release` (msb.exe = tools/msb.cs compilato con csc;
   nei worktree serve `dotnet restore src/SVNAssist.Host --ignore-failed-sources` e
@@ -36,18 +38,32 @@ con la demo), src/Shared (RpcContract.cs, Loc.cs/LocEn.cs, DotnetRuntime.cs).
 
 DECISIONI DELL'UTENTE (non rimetterle in discussione):
 - Design moderno e user friendly, coerente con la demo; tutto guidato (procedure guidate con "Faccio io" per chi vuole fare a mano).
-- Commit come Git: niente auto-stage; Commit All (versionati, non i '?') se Staged vuoto, altrimenti Commit Staged (n).
+- Commit come Git: niente auto-stage; Commit All se Staged vuoto (chiede se aggiungere i '?'), altrimenti Commit Staged (n).
 - Terminologia dei comandi come i menu SVN/TortoiseSVN ("SVN Update", "Show Log", ...). UI in IT/EN (Automatica di default).
 - Backend .NET 10 framework-dependent con prompt di installazione del runtime.
 - Release solo quando tutto è pronto e provato dall'utente con la checklist; la 0.1.0 è deprecata, tag v0.1.0 NON va cancellato.
 - L'utente lavora in azienda con SVN e accesso integrato di Windows: il login SVN deve comparire solo su errore di autenticazione.
 
-DA FARE (dopo la 0.4.0, uscita il 2026-11-15; la 0.3.2 e' confluita nella 0.4.0):
-1. Scegliere con l'utente la 0.5.0: flusso branch (crea branch/tag, patch con backup, lock altrui, Usa mia/loro per tutti, VS 2022)
-   oppure AI e lettura codice (Blame, AI spiega revisione, AI cosa sta per arrivare, modelli dinamici). Vedi docs/ROADMAP.md §5 e §2.
-2. Ogni release: branch di lavoro → develop → main, tag vX.Y.Z su main (il workflow release.yml pubblica demo + vsix), verifica via API.
-3. Collaudo: tools/collaudo-mirato.ps1 (installa VSIX, ricrea simulazione con feature-grande 2000 file, apre VS); -SoloSim senza reinstallare; -Parte B.
-4. Stack: docs/STACK.md. Glifi custom in Solution Explorer NON possibili in VS 18 (IVsSccGlyphs mai chiamato): restano le icone standard.
+TODO 0.5.0 (decisa dall'utente il 2026-11-15: flusso branch + debiti tecnici; [ ] da fare, [x] fatto):
+[ ] A. Crea branch/tag da VS (svn copy WC o URL → branches/tags, messaggio, opzione switch subito) + percorsi trunk/branches/tags
+       configurabili (impostazione repoLayout esiste: esporla nelle Options e/o rilevarla, usarla ovunque).
+[ ] B. Crea/applica patch (svn diff / svn patch) + backup automatico in patch prima di "Revert di tutto" e "Annulla merge".
+[ ] C. Lock di altri utenti visibili nell'albero (svn status -u --xml) + "Usa la mia/loro per tutti" nei conflitti.
+[ ] D. Debito D10/D11: avviso al commit di file con marcatori <<<<<<< ; parser status completo (props conflicted, external, obstructed).
+[ ] E. Debito D16: limiti AI per provider (max_tokens, soglie) invece del più stretto.
+[ ] F. Avanzamento: percentuale vera quando il totale è ricavabile (es. svn diff --summarize prima dello switch/update) +
+       finestra di avanzamento anche per Update to revision.
+[ ] G. Verifica su VS 2022 (manifest [17.0,19.0)): serve una macchina con VS 2022, chiedere all'utente.
+[ ] H. Note di rilascio v0.5.0, versione 0.5.0, collaudo mirato, release.
+
+COME LAVORARE (0.5.0):
+- Un agente Sonnet per voce (A-F), in parallelo, worktree separati; nel prompt: file da non toccare e aggiunte localizzate.
+- Dopo ogni merge: test xUnit + node, `node tools/build-demo.mjs` se cambia la UI, push. Spunta la voce qui sopra.
+- Collaudo MIRATO, non totale: `tools/collaudo-mirato.ps1 -Mini` crea una simulazione piccola (pochi rami, niente file
+  generati) in pochi secondi; la checklist elenca solo le funzioni nuove della versione. La simulazione completa resta
+  disponibile (senza -Mini) per switch/merge pesanti.
+- Release: branch di lavoro → develop → main, tag vX.Y.Z su main (release.yml pubblica demo + vsix), verifica via API.
+- Stack: docs/STACK.md. Glifi custom in Solution Explorer NON possibili in VS 18: restano le icone standard.
 
 RISCHI NOTI (da 0.2.0):
 - Mai visti in VS dall'utente: Commit All/Staged, Log come documento MDI, Update to revision con elenco, login SVN reale,

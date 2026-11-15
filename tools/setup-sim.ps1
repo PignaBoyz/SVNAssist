@@ -10,7 +10,8 @@
 #>
 param(
     [string]$Root = (Join-Path $env:TEMP 'svnsim'),
-    [switch]$Force
+    [switch]$Force,
+    [switch]$Mini   # collaudo mirato: niente feature-grande, 5 branch e 2 tag invece di 150 e 20 (pochi secondi)
 )
 $ErrorActionPreference = 'Stop'
 
@@ -73,7 +74,7 @@ Remove-Item -Recurse -Force $hw
 
 # ---- 0.4.0: branch grande (2000 file) per vedere avanzamento e Annulla dello switch ----
 Svn copy -q --username dev3 "$repo/trunk" "$repo/branches/feature-grande" -m 'Branch grande: codice generato'
-$gen = Join-Path $Root '_gen'; for ($i = 1; $i -le 2000; $i++) { W "$gen\Mod$([int]($i / 100))\Gen$($i.ToString('0000')).cs" @("namespace Shop.Generated;", "public static class Gen$i { public const int Id = $i; }") }
+$gen = Join-Path $Root '_gen'; for ($i = 1; $i -le $(if ($Mini) { 20 } else { 2000 }); $i++) { W "$gen\Mod$([int]($i / 100))\Gen$($i.ToString('0000')).cs" @("namespace Shop.Generated;", "public static class Gen$i { public const int Id = $i; }") }
 Svn import -q --username dev3 $gen "$repo/branches/feature-grande/src/Generated" -m 'Generated: 2000 file'
 Remove-Item -Recurse -Force $gen
 
@@ -87,8 +88,8 @@ Svn update -q $wc; Svn merge -q "$repo/branches/hotfix-login" $wc; As 'gverdi'; 
 # ---- molti branch e tag ----
 Write-Host '[..] Creazione di 150 branch e 20 tag (qualche minuto)...'
 $areas = 'checkout', 'login', 'report', 'export', 'api', 'ui', 'perf', 'fix', 'release', 'search'
-for ($i = 1; $i -le 150; $i++) { Svn copy -q --username ('dev' + ($i % 7)) "$repo/trunk" "$repo/branches/feature-$($areas[$i % 10])-$($i.ToString('000'))" -m "Branch $i" }
-for ($i = 1; $i -le 20; $i++) { Svn copy -q --username release "$repo/trunk" "$repo/tags/v1.$i.0" -m "Tag v1.$i.0" }
+for ($i = 1; $i -le $(if ($Mini) { 5 } else { 150 }); $i++) { Svn copy -q --username ('dev' + ($i % 7)) "$repo/trunk" "$repo/branches/feature-$($areas[$i % 10])-$($i.ToString('000'))" -m "Branch $i" }
+for ($i = 1; $i -le $(if ($Mini) { 2 } else { 20 }); $i++) { Svn copy -q --username release "$repo/trunk" "$repo/tags/v1.$i.0" -m "Tag v1.$i.0" }
 
 # ---- un collega committa dopo: wc NON e' piu' alla HEAD (indicatore arancio) ----
 Svn update -q $wc
