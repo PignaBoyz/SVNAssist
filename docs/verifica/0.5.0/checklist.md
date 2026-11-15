@@ -14,7 +14,7 @@ Segna ogni passo: ✅ ok / ❌ + cosa hai visto.
 
 | # | Passo | Atteso | Esito |
 |---|-------|--------|-------|
-| 1 | Options > SVNAssist: controllo HEAD attivo (minuti ≥ 1). Aspetta un ciclo. | In Changes `Catalog.cs` ha il lucchetto; tooltip "Bloccato da mrossi … Sto rifacendo il catalogo". | |
+| 1 | Options > SVNAssist > General: **New revision check (minutes)** = 1. Aspetta un ciclo. | In Changes `Catalog.cs` ha il lucchetto; tooltip "Bloccato da mrossi … Sto rifacendo il catalogo". | |
 | 2 | Tasto destro sull'intestazione della sezione Modifiche > **Create Patch...** > salva sul Desktop. | File `.patch` creato, contiene i diff dei file modificati. | |
 | 3 | Stessa sezione > **Revert di tutto**. | Revert fatto; compare **Ripristina modifiche**. In `wc\.svn-assist\backups` c'è un `.patch`. `.svn-assist` NON compare tra i non versionati. | |
 | 4 | Clic su **Ripristina modifiche**. | Le modifiche tornano; il backup in `.svn-assist\backups` sparisce. | |

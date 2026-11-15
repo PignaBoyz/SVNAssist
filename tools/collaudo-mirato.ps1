@@ -36,7 +36,7 @@ Start-Process "$ide\devenv.exe" -ArgumentList '/rootsuffix', 'SvnHost', "`"$sln`
 Write-Host ''
 if ($Parte -eq 'A') {
     Write-Host 'PARTE A - wc (Shop.sln) - novita'' 0.5.0 (dettagli in docs/verifica/0.5.0/checklist.md):'
-    Write-Host ' 1. Lock: Options > controllo HEAD attivo; dopo il ciclo Catalog.cs in Changes ha il lucchetto "Bloccato da mrossi".'
+    Write-Host ' 1. Lock: Options > SVNAssist > General: New revision check (minutes) = 1; dopo il ciclo Catalog.cs in Changes ha il lucchetto "Bloccato da mrossi".'
     Write-Host ' 2. Create Patch: tasto destro sulla sezione Modifiche > Create Patch... > salva. Poi Revert di tutto: compare Ripristina modifiche, cliccalo.'
     Write-Host ' 3. Apply Patch: Extensions > SVNAssist > Apply Patch... sul file salvato prima (dopo un nuovo Revert): anteprima e applica.'
     Write-Host ' 4. Marcatori: scrivi <<<<<<< / ======= / >>>>>>> in Order.cs e premi Commit: avviso marcatori, rispondi No.'
