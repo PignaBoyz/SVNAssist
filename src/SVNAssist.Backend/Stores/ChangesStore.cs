@@ -1051,6 +1051,8 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             var conflictInfo = conflictedPaths.Count > 0
                 ? await _svnService.GetConflictInfoAsync(conflictedPaths, ct)
                 : new Dictionary<string, SvnConflictInfo>();
+            // .vs = stato interno di Visual Studio (sempre bloccato mentre VS e' aperto): mai mostrato, contato o proposto.
+            newEntries.RemoveAll(e => e.Status == SvnStatusKind.Unversioned && e.FullPath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Contains(".vs", StringComparer.OrdinalIgnoreCase));
             var auxFiles = conflictInfo.Values.SelectMany(i => i.Files).ToHashSet(StringComparer.OrdinalIgnoreCase);
             if (auxFiles.Count > 0)
                 newEntries.RemoveAll(e => e.Status == SvnStatusKind.Unversioned && auxFiles.Contains(e.FullPath));
@@ -1737,7 +1739,6 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             List<ProgressActionDto> next = [new(Loc.T("Completa switch"), "switchResume")];
             if (_pendingSwitch.Get(wc) is { CanGoBack: true })
                 next.Add(new(Loc.T("Torna a prima dello switch"), "switchBack"));
-            next.Add(new(Loc.T("Cleanup…"), "cleanup"));
             await FinishCancelledAsync(wc, Loc.T("Switch a {0} annullato", target.Name), next, ct);
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)

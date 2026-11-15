@@ -71,7 +71,7 @@ public class CommitWarnRealTests
             var json = UiJson.Serialize(snap);
             
             using var doc = JsonDocument.Parse(json);
-            Assert.True(doc.RootElement.GetProperty("commitWarn").GetProperty("count").GetInt32() == 3);
+            Assert.True(doc.RootElement.GetProperty("commitWarn").GetProperty("count").GetInt32() == 2); // .vs non conta: nascosta
         }
         finally
         {

@@ -546,7 +546,7 @@ public class SwitchTests
         var p = f.State.Progress!;
         Assert.True(p.Cancelled);
         Assert.False(p.Running);
-        Assert.Equal(["switchResume", "switchBack", "cleanup"], p.Actions!.Select(a => a.Cmd));
+        Assert.Equal(["switchResume", "switchBack"], p.Actions!.Select(a => a.Cmd));
         Assert.Equal(["switch file:///repo/tags/1.0", "cleanup"], f.Svn.SwitchLog);   // cleanup normale dopo l'annullamento
         Assert.Equal("switchResume", f.State.Status.Action?.Cmd);   // PendingSwitch resta: flusso esistente
         Assert.Empty(f.Svn.Switched);
