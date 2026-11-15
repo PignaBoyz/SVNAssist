@@ -120,7 +120,11 @@ internal sealed record ChangesState(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SwitchWarnDto? SwitchWarn = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CleanupDialogDto? Cleanup = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CommitWarnDto? CommitWarn = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BranchTagDto? BranchTag = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BranchTagDto? BranchTag = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ShelveDto>? Shelves = null);
+
+/// <summary>Uno shelve (sezione "Shelved" di Changes): <c>Date</c> ISO locale, <c>Files</c> = file nella patch.</summary>
+internal sealed record ShelveDto(string Id, string Name, string Date, int Files);
 
 /// <summary>Dialogo "SVN Branch/Tag...": <c>From</c> = ramo della working copy, <c>Branches</c>/<c>Tags</c> = cartelle di destinazione dal layout (dalla radice, senza <c>^/</c>), <c>Dirty</c> = ci sono modifiche locali.</summary>
 internal sealed record BranchTagDto(string Kind, string From, long Rev, bool Dirty, string Branches, string Tags, string Error, bool Busy);

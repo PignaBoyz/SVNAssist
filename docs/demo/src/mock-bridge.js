@@ -146,6 +146,7 @@
       ...(v.warn ? (() => { const c = dirtyCounts(); return { switchWarn: { target: v.warn.name, counts: c, total: c.modified + c.added + c.deleted + c.conflicted + c.unversioned } }; })() : {}),
       ...(v.cwarn ? { commitWarn: v.cwarn } : {}),
       ...(v.bt ? { branchTag: { kind: v.bt.kind, from: S.branch, rev: S.wcRev, dirty: S.files.some(f => f.st !== 'N'), branches: 'branches', tags: 'tags', error: tr(v.bt.error), busy: !!v.bt.busy } } : {}),
+      ...((S.shelves || []).length ? { shelves: S.shelves.map(({ id, name, date, files }) => ({ id, name, date, files })) } : {}),
       ...(v.cl ? { cleanup: { extras: true, svnVersion: '1.14.3', from: v.cl.from || '' } } : {}),
       conflicts: S.files.filter(f => f.st === 'C').map(f => ({ key: key('changes', f.path), path: fwd(f.path), name: base(f.path), kind: f.tree ? 'tree' : 'text', files: f.tree ? [] : cflAux(f).map(fwd) })),
     };
@@ -243,6 +244,30 @@
     createPatch: () => { setStatus('Patch creata: C:\\Users\\demo\\changes.patch (demo: nessun file scritto).'); render(); },
     revealInExplorer: (a) => { setStatus('Esplora file: ' + a.key.slice(a.key.indexOf(':') + 1) + ' (demo).'); render(); },
     applyPatch: () => { setStatus('Patch applicata: 0 file toccati (demo: nessun file scelto).'); render(); },
+    shelve: async a => {   // la patch non si scrive: lo shelve tiene una copia dei file e, senza "keep", li toglie dalla working copy
+      const row = a.keys || a.key ? getRow(a.keys || a.key) : null, fs = (row ? row.entries : S.files).filter(f => f.st !== 'N' && !f.dir);
+      if (!fs.length) { setStatus('Nessuna modifica da mettere da parte.'); return render(); }
+      setStatus('Shelve in corso...'); render(); await svn(`diff --targets (${fs.length} elementi) > .svn-assist/shelves/…patch`, 500);
+      const name = a.name.trim() || 'Modifiche del ' + new Date().toLocaleString();
+      (S.shelves = S.shelves || []).unshift({ id: 'sh' + Date.now(), name, date: new Date().toISOString(), files: fs.length, saved: fs.map(f => ({ ...f })) });
+      if (!a.keep) { fs.forEach(f => svnRevert(f.path)); S.files = S.files.filter(f => !(fs.includes(f) && f.st === '?')); }
+      await vmRefresh(`Shelve creato: ${name} (${fs.length} file).`);
+    },
+    unshelve: async a => {
+      const sh = (S.shelves || []).find(x => x.id === a.id); if (!sh) return;
+      setStatus('Applicazione dello shelve in corso...'); render(); await svn('patch .svn-assist/shelves/' + sh.id + '.patch .', 500);
+      sh.saved.forEach(c => { const f = fileBy(c.path); if (f) Object.assign(f, c); else S.files.push({ ...c }); });
+      if (!a.keep) S.shelves = S.shelves.filter(x => x !== sh);
+      await vmRefresh(a.keep ? `Shelve applicato: ${sh.files} file (resta in Shelved).` : `Shelve applicato ed eliminato: ${sh.files} file.`);
+    },
+    shelveSave: () => { setStatus('Patch salvata: C:\Users\demo\shelve.patch (demo: nessun file scritto).'); render(); },
+    shelveDelete: async a => {
+      const sh = (S.shelves || []).find(x => x.id === a.id); if (!sh) return;
+      if (!await confirmBox(`Eliminare lo shelve "${sh.name}"?
+
+Il file .patch viene cancellato e non si recupera.`)) return;
+      S.shelves = S.shelves.filter(x => x !== sh); setStatus(`Shelve eliminato: ${sh.name}.`); render();
+    },
     restoreBackup: () => { setStatus('Modifiche ripristinate: 0 file (demo).'); render(); },
     revPickerMore: () => rpMore(),
     revPickerCancel: () => { S.vm.rp = null; render(); },

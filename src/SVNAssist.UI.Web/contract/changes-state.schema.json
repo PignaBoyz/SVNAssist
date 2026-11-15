@@ -991,6 +991,21 @@
         }
       }
     },
+    "shelves": {
+      "type": "array",
+      "description": "Shelve della working copy (.svn-assist/shelves), il piu' recente per primo; assente se non ce ne sono (la UI non disegna la sezione Shelved). Comandi: unshelve, shelveSave, shelveDelete.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "date", "files"],
+        "properties": {
+          "id": { "type": "string", "description": "Nome del file senza estensione: va in unshelve/shelveSave/shelveDelete." },
+          "name": { "type": "string" },
+          "date": { "type": "string", "description": "ISO 8601 locale." },
+          "files": { "type": "integer", "minimum": 0, "description": "File nella patch." }
+        }
+      }
+    },
     "branchTag": {
       "type": "object",
       "additionalProperties": false,

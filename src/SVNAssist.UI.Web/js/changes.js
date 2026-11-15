@@ -124,6 +124,19 @@
     return `<section class="cfl" aria-label="${esc(t('Conflitti'))}"><div class="cfl-h"><button type="button" class="ib" data-cfl-toggle aria-expanded="${!!u.open}" title="${esc(u.open ? t('Comprimi il riquadro dei conflitti') : t('Espandi il riquadro dei conflitti'))}" aria-label="${esc(u.open ? t('Comprimi il riquadro dei conflitti') : t('Espandi il riquadro dei conflitti'))}">${U.icon(u.open ? 'chev-d' : 'chev-r')}</button>${U.icon('warn')}<b>${t('Conflitti')}</b><span class="pill">${c.length}</span><span class="muted cfl-n">${t('Svn non committa file in conflitto: risolvili qui.')}</span></div>` +
       (u.open ? `<ul class="cfl-l">${bulk}${others.map(one).join('')}${group}</ul>` : '') + `</section>`;
   }
+  // Sezione "Shelved (n)" sotto l'elenco: chiusa di default, solo se ci sono shelve; tasto destro su una riga = Unshelve, Applica e tieni, Salva come .patch, Elimina.
+  let shlOpen = false;
+  function shelvedHTML(s, open) {
+    const l = s.shelves || []; if (!l.length) return '';
+    const o = open == null ? shlOpen : open;
+    return `<section class="shl" aria-label="Shelved"><div class="shl-h"><button type="button" class="ib" data-shl-toggle aria-expanded="${!!o}" title="${esc(o ? t('Comprimi gli shelve') : t('Espandi gli shelve'))}" aria-label="${esc(o ? t('Comprimi gli shelve') : t('Espandi gli shelve'))}">${U.icon(o ? 'chev-d' : 'chev-r')}</button><b>Shelved</b><span class="pill">${l.length}</span><span class="muted small">${esc(t('Tasto destro su una riga per Unshelve'))}</span></div>` +
+      (o ? `<ul class="shl-l">${l.map(x => `<li class="shl-r" tabindex="0" data-shelve="${esc(x.id)}" title="${esc(x.name)}"><b class="shl-n">${esc(x.name)}</b><span class="fill"></span><span class="muted small">${esc(U.fmtDate(x.date))}</span><span class="muted small">${esc(t('{0} file', x.files))}</span></li>`).join('')}</ul>` : '') + `</section>`;
+  }
+  const shelveMenu = id => [
+    { label: 'Unshelve', cmd: 'unshelve', args: { id }, hint: t('Applica lo shelve alla working copy (svn patch) e, se tutto va bene, lo elimina') },
+    { label: t('Applica e tieni'), cmd: 'unshelve', args: { id, keep: true }, hint: t('Applica lo shelve senza eliminarlo') },
+    { label: t('Salva come .patch…'), cmd: 'shelveSave', args: { id }, hint: t('Copia lo shelve in un file .patch a tua scelta') }, { sep: true },
+    { label: t('Elimina…'), cmd: 'shelveDelete', args: { id }, hint: t('Cancella lo shelve, dopo conferma') }];
   function moreMenu() {
     return [
       { header: true, label: 'SVN' },
@@ -209,7 +222,8 @@
   function sectionMenu(sec, key, s) {
     return [{ label: sec === 'staged' ? t('Rimuovi tutto dai file da committare') : t('Aggiungi tutto ai file da committare'), cmd: sec === 'staged' ? 'unstage' : 'stage', args: { key } }, { sep: true },
       sec === 'unversioned' ? null : { label: t('SVN Revert di tutto…'), cmd: 'rowOp', args: { op: 'revert', key }, disabled: !(s && s.count), hint: t('Annulla tutte le modifiche di questa sezione (anche in più cartelle), dopo conferma con l’elenco dei file; i non versionati non si toccano') },
-      sec === 'unversioned' ? null : { label: t('Create Patch…'), cmd: 'createPatch', args: { key }, disabled: !(s && s.count), hint: t('Salva le modifiche di questa sezione in un file .patch (svn diff)') },
+      { label: t('Create Patch…'), cmd: 'createPatch', args: { key }, disabled: !(s && s.count), hint: t('Salva le modifiche di questa sezione in un file .patch (svn diff)') },
+      { label: t('Shelve…'), run: () => U.ops.shelveShow([key]), disabled: !(s && s.count), hint: t('Mette da parte le modifiche in una patch dentro la working copy e le annulla (Unshelve le riprende)') },
       { label: t('Apply Patch…'), cmd: 'applyPatch', hint: t('Applica un file .patch alla working copy, con anteprima prima di scrivere') },
       sec === 'unversioned' ? null : { sep: true }, { label: t('Espandi tutto'), cmd: 'expandAll' }, { label: t('Comprimi tutto'), cmd: 'collapseAll' }].filter(Boolean);
   }
@@ -222,7 +236,8 @@
       I(t('Rimuovi dai file da committare ({0})', n), 'unstage', { keys }, all('unstage'), t('Alcuni elementi non sono tra i file da committare')),
       { sep: true }, I(t('Aggiungi alla ignore list ({0})', n), 'rowOp', { op: 'ignore', keys }, all('ignore'), t('Disponibile solo se tutti gli elementi sono non versionati')),
       I(t('SVN Revert ({0})…', n), 'rowOp', { op: 'revert', keys }, all('revert'), t('Alcuni elementi non hanno modifiche da annullare')),
-      I(t('Create Patch…'), 'createPatch', { keys }, rows.every(r => r.status !== '?'), t('Salva le modifiche selezionate in un file .patch (svn diff)')),
+      I(t('Create Patch…'), 'createPatch', { keys }, true, t('Salva le modifiche selezionate in un file .patch (svn diff)')),
+      { label: t('Shelve…'), run: () => U.ops.shelveShow(keys), hint: t('Mette da parte le modifiche in una patch dentro la working copy e le annulla (Unshelve le riprende)') },
       { sep: true }, I(t('Elimina ({0})…', n), 'rowOp', { op: 'deleteFile', keys }, all('deleteFile'), t('Alcuni elementi non si possono eliminare'), t('Canc'))];
   }
   function rowMenu(row, x, y) {
@@ -240,7 +255,8 @@
       { sep: true }, A('add', t('SVN Add (aggiungi al controllo di versione)'), c.add), A('ignore', t('Aggiungi alla ignore list'), c.ignore),
       A('revert', isF ? t('SVN Revert (annulla le modifiche)…') : t('SVN Revert della cartella (annulla le modifiche)…'), c.revert), isF ? A('resolve', t('Risolvi conflitto…'), c.resolve) : null,
       isF && (c.lock || c.unlock) ? { sep: true } : null, isF && c.lock ? A('lock', 'SVN Lock…', true) : null, isF && c.unlock ? A('unlock', 'SVN Unlock', true) : null,
-      { label: t('Create Patch…'), cmd: 'createPatch', args: { key }, disabled: r.status === '?', hint: t('Salva le modifiche selezionate in un file .patch (svn diff)') },
+      { label: t('Create Patch…'), cmd: 'createPatch', args: { key }, hint: t('Salva le modifiche selezionate in un file .patch (svn diff)') },
+      { label: t('Shelve…'), run: () => U.ops.shelveShow([key]), hint: t('Mette da parte le modifiche in una patch dentro la working copy e le annulla (Unshelve le riprende)') },
       { label: t('Apri in Esplora file'), cmd: 'revealInExplorer', args: { key } },
       { sep: true }, A('deleteFile', isF ? t('Elimina file…') : t('Elimina cartella…'), c.deleteFile, t('Canc')), isF ? null : { sep: true }, isF ? null : { label: t('Espandi tutto'), cmd: 'expandAll' }, isF ? null : { label: t('Comprimi tutto'), cmd: 'collapseAll' },
     ].filter(Boolean), row);
@@ -274,8 +290,9 @@
     const changed = U.setHTML(list, U.treeHTML(st.sections.filter(s => s.id === 'staged' || s.count), cursor, filter, list.__sel) + html);
     if (changed) { list.scrollTop = top; if (had) { const r = list.querySelector(`.tr[data-key="${CSS.escape(cursor)}"]`); if (r) r.focus(); } }
     list.setAttribute('aria-busy', !!st.loading);
+    U.setHTML(root.querySelector('#shl'), shelvedHTML(st));
     U.setHTML(root.querySelector('#foot'), foot(st));
-    const anyModal = !!(st.wizard && st.wizard.open) || !!(st.revPicker && st.revPicker.open) || !!(st.switchPicker && st.switchPicker.open) || !!(st.progress || st.switchWarn || st.cleanup || st.commitWarn || st.branchTag);
+    const anyModal = !!(st.wizard && st.wizard.open) || !!(st.revPicker && st.revPicker.open) || !!(st.switchPicker && st.switchPicker.open) || !!(st.progress || st.switchWarn || st.cleanup || st.commitWarn || st.branchTag) || U.ops.hasShelve();
     if (anyModal) rcClose(false); else rcRefresh();
     renderWizard(root, anyModal);
     renderRev(root, anyModal);
@@ -518,7 +535,7 @@
     else if (!e.shiftKey && (a === last || !box.contains(a))) { e.preventDefault(); first.focus(); }
   }
 
-  U.changesHTML = { sectionMenu, multiMenu, header, commitBar, foot, revHTML, switchHTML, mergeBanner, conflictsHTML, revIndicator, statusKind, OK_TTL, recentHTML, trackStatus, listHTML };   // parti pure, provate senza DOM (tests/ui-web)
+  U.changesHTML = { sectionMenu, multiMenu, header, commitBar, foot, revHTML, switchHTML, mergeBanner, conflictsHTML, shelvedHTML, revIndicator, statusKind, OK_TTL, recentHTML, trackStatus, listHTML };   // parti pure, provate senza DOM (tests/ui-web)
 
   U.views.changes = {
     mount(root) {
@@ -526,7 +543,7 @@
         <section class="commit"><textarea id="msg" rows="3"></textarea>
         <div class="bar" id="cbar"></div><div id="aist"></div></section><div id="prq"></div><div id="mrg"></div><div id="cfl"></div>
         <div class="flt"><input id="flt" type="search" spellcheck="false" autocomplete="off"></div>
-        <div class="list" id="list" role="tree"></div>
+        <div class="list" id="list" role="tree"></div><div id="shl"></div>
         <footer class="foot" id="foot"></footer></div><div id="wiz"></div><div id="rev"></div><div id="sw"></div><div id="ops"></div><div id="rec" hidden></div>`;
       U.views.changes.relang(root);
       const ta = root.querySelector('#msg');
@@ -549,6 +566,8 @@
         if (k === 'data-cfl-toggle') cflOpen = !cflOpen; else cflTreeOpen = !cflTreeOpen;
         render(); const b = root.querySelector('[' + k + ']'); if (b) b.focus();   // il riquadro e' stato ridisegnato: il focus resta sul pulsante
       });
+      root.addEventListener('click', e => { if (e.target.closest('[data-shl-toggle]')) { shlOpen = !shlOpen; render(); const b = root.querySelector('[data-shl-toggle]'); if (b) b.focus(); } });
+      root.addEventListener('contextmenu', e => { const r = e.target.closest('.shl-r'); if (r) { e.preventDefault(); U.menu.open(e.clientX, e.clientY, shelveMenu(r.dataset.shelve), r); } });
       root.addEventListener('mouseover', e => { const row = e.target.closest('#rec .rc-row'); if (row && rcOpen && +row.dataset.n !== rcSel) rcSetSel(+row.dataset.n); });
       root.addEventListener('input', e => { if (e.target.id === 'rc-q') { rcQ = e.target.value; rcSel = 0; rcRefresh(); rcSetSel(0); } });
       w.addEventListener('blur', () => rcClose(false));

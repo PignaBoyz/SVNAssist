@@ -354,3 +354,9 @@ progress.obar::-webkit-progress-value{background:var(--acc2);border-radius:3px;t
 .btn.danger:disabled{opacity:.5}
 .wiz-b textarea{background:var(--bg1);border:1px solid var(--bd2);border-radius:4px;padding:5px 8px;width:100%;color:var(--fg);font:inherit;resize:vertical}
 .bt-row{display:flex;gap:12px;align-items:center}.bt-row input[type=text]{flex:1}
+.shl{margin:4px 8px 8px;border:1px solid var(--bd2);border-radius:6px;background:var(--bg3);flex:none;max-height:30vh;display:flex;flex-direction:column}
+.shl-h{display:flex;align-items:center;gap:10px;padding:4px 8px;flex:none}
+.shl-l{list-style:none;margin:0;padding:0;overflow:auto;min-height:0}
+.shl-r{display:flex;align-items:center;gap:10px;padding:6px 12px;border-top:1px solid var(--bd);min-width:0}
+.shl-r:hover,.shl-r:focus-visible{background:var(--bg2)}
+.shl-n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}

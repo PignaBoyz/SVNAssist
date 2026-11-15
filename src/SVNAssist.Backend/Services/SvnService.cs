@@ -730,9 +730,12 @@ public class SvnService : ISvnService
     /// </summary>
     /// <param name="fullPath">Percorso su disco.</param>
     /// <param name="displayPath">Nome da mostrare nell'intestazione.</param>
+    /// <param name="complete">Per Create Patch/Shelve: tutte le righe per intero; cartelle, binari e file vuoti (<c>svn patch</c> non li crea) danno stringa vuota.</param>
     /// <returns>Il diff, o stringa vuota se l'elemento non esiste più.</returns>
-    internal static string BuildNewFileDiff(string fullPath, string displayPath)
+    internal static string BuildNewFileDiff(string fullPath, string displayPath, bool complete = false)
     {
+        if (complete && (!File.Exists(fullPath) || new FileInfo(fullPath).Length == 0 || IsBinaryFile(fullPath)))
+            return string.Empty;
         if (Directory.Exists(fullPath))
             return $"Index: {displayPath}\n{Loc.T("(nuova cartella non versionata)")}\n";
 
@@ -749,9 +752,9 @@ public class SvnService : ISvnService
         // Su file enormi non si conta il totale: basta sapere che c'è dell'altro.
         var countAll = length <= NewFileCountLinesMaxBytes;
 
-        foreach (var (text, lineTruncated) in ReadLinesBounded(fullPath, NewFileMaxLineChars))
+        foreach (var (text, lineTruncated) in ReadLinesBounded(fullPath, complete ? int.MaxValue : NewFileMaxLineChars))
         {
-            if (shown.Count < NewFilePreviewLines)
+            if (complete || shown.Count < NewFilePreviewLines)
             {
                 // Righe lunghissime (minificati, base64) sprecherebbero il budget dell'AI.
                 shown.Add(lineTruncated ? text + "..." : text);

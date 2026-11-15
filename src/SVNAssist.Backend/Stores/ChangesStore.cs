@@ -392,7 +392,8 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                 _warnTarget is { } w ? BuildSwitchWarn(w) : null,
                 _cleanupOpen ? new CleanupDialogDto(CleanupOptions.ExtrasSupported(SvnVersionParsed), _svnVersion ?? string.Empty, _cleanupReturn?.Name ?? string.Empty) : null,
                 _commitWarn ? BuildCommitWarn() : null,
-                BranchTag.GetSnapshot(Total(CountDirty(_entries.Where(e => !IsVsFolder(e)).Select(e => e.Status))) > 0));
+                BranchTag.GetSnapshot(Total(CountDirty(_entries.Where(e => !IsVsFolder(e)).Select(e => e.Status))) > 0),
+                _shelves.Count == 0 ? null : _shelves.Select(s => new ShelveDto(s.Id, s.Name, s.Date.ToString("yyyy-MM-ddTHH:mm:ss"), s.Files)).ToList());
         }
     }
 
@@ -557,6 +558,18 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                 break;
             case "createPatch":
                 await RunExclusiveAsync(() => CreatePatchAsync(OptionalKeys(args), ct));
+                break;
+            case "shelve":
+                await RunExclusiveAsync(() => ShelveAsync(OptionalKeys(args), Args.Str(args, "name"), Args.Bool(args, "keep"), ct));
+                break;
+            case "unshelve":
+                await RunExclusiveAsync(() => UnshelveAsync(Args.Str(args, "id"), args.TryGetProperty("keep", out _) && Args.Bool(args, "keep"), ct));
+                break;
+            case "shelveSave":
+                await RunExclusiveAsync(() => SaveShelveAsync(Args.Str(args, "id"), ct));
+                break;
+            case "shelveDelete":
+                await RunExclusiveAsync(() => DeleteShelveAsync(Args.Str(args, "id"), ct));
                 break;
             case "revealInExplorer":
                 RevealInExplorer(args.GetProperty("key").GetString() ?? string.Empty);
@@ -1133,6 +1146,7 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             if (auxFiles.Count > 0)
                 newEntries.RemoveAll(e => e.Status == SvnStatusKind.Unversioned && auxFiles.Contains(e.FullPath));
 
+            var shelves = ShelveFiles.List(path);
             lock (_stateLock)
             {
                 if (branch is { } b)
@@ -1153,6 +1167,7 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                     return;
 
                 _entries = newEntries;
+                _shelves = shelves;
                 _conflictInfo = conflictInfo;
                 // Una working copy digitata a mano resta modificabile; una rilevata dalla solution nasconde il campo.
                 _showWorkingCopyInput = !_autoDetected;
@@ -2319,16 +2334,7 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
         try
         {
             SetStatus(Loc.T("Revert in corso..."));
-            // Cartelle aggiunte/sostituite: svn le annulla solo con i figli (E155038), che sono gia' in elenco.
-            // Tutto il resto, cartelle comprese (es. solo svn:ignore), a --depth empty: niente effetti sul sottoalbero.
-            var recursive = targets.Where(IsNewFolder).Select(e => e.FullPath).ToList();
-            var shallow = targets.Select(e => e.FullPath)
-                .Where(p => !recursive.Any(r => IsUnder(p, r) || string.Equals(p, r, StringComparison.OrdinalIgnoreCase)))
-                .ToList();
-            if (recursive.Count > 0)
-                await _svnService.RevertAsync(recursive, ct, recursive: true);
-            if (shallow.Count > 0)
-                await _svnService.RevertAsync(shallow, ct, recursive: false);
+            await RevertTargetsAsync(targets, ct);
             await RefreshAsync(ct, reloadBranch: false, Loc.T("Revert completato su {0} elementi.", targets.Count) + note);
             OfferRestore(backup);
             bool left;
@@ -2341,6 +2347,20 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
         {
             SetStatus(Loc.T("Errore revert: {0}", ex.Message) + BackupKept(backup));
         }
+    }
+
+    private async Task RevertTargetsAsync(List<ChangeEntry> targets, CancellationToken ct)
+    {
+        // Cartelle aggiunte/sostituite: svn le annulla solo con i figli (E155038), che sono gia' in elenco.
+        // Tutto il resto, cartelle comprese (es. solo svn:ignore), a --depth empty: niente effetti sul sottoalbero.
+        var recursive = targets.Where(IsNewFolder).Select(e => e.FullPath).ToList();
+        var shallow = targets.Select(e => e.FullPath)
+            .Where(p => !recursive.Any(r => IsUnder(p, r) || string.Equals(p, r, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+        if (recursive.Count > 0)
+            await _svnService.RevertAsync(recursive, ct, recursive: true);
+        if (shallow.Count > 0)
+            await _svnService.RevertAsync(shallow, ct, recursive: false);
     }
 
     private bool IsNewFolder(ChangeEntry entry)

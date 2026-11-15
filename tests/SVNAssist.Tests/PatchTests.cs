@@ -319,4 +319,159 @@ public class PatchTests : IDisposable
 
         Assert.True(ChangesStore.AddedSkipped(output, patch).SequenceEqual([Path.Combine("sub", "Nuovo.cs")]), output + "\n=====\n" + patch);
     }
+
+    // ── Shelve (svn vero) ────────────────────────────────────────────
+
+    private sealed class Real : IDisposable
+    {
+        public string Wc { get; }
+        public FakeHost Host { get; } = new();
+        public FakeDialogs Dialogs { get; } = new();
+        public ChangesStore Store { get; }
+        public string Svn { get; }
+        public Real(string dir)
+        {
+            Svn = Find("svn.exe");
+            var repo = Path.Combine(dir, "repo");
+            Wc = Path.Combine(dir, "wc");
+            Run(Find("svnadmin.exe"), $"create \"{repo}\"", dir);
+            Run(Svn, $"checkout \"file:///{repo.Replace('\\', '/')}\" \"{Wc}\"", dir);
+            File.WriteAllText(Path.Combine(Wc, "t.txt"), "uno\ndue\ntre\n");
+            File.WriteAllBytes(Path.Combine(Wc, "bin.dat"), [0, 0]);
+            Run(Svn, "add t.txt bin.dat", Wc);
+            Run(Svn, "commit -m base", Wc);
+            var settings = new StubSettings();
+            Store = new ChangesStore(settings, new SvnService(Svn), new FakeAiFactory(), new NoopAiPrompt(), Dialogs, Host,
+                new PrereqStore(new PrerequisitesService(settings, new PrerequisiteProbes()))) { WorkingCopyPath = Wc, TempRoot = Path.Combine(dir, "tmp") };
+            Store.DeleteFromDisk = p => { if (Directory.Exists(p)) Directory.Delete(p, true); else File.Delete(p); };   // niente Cestino nei test
+        }
+
+        public string At(string rel) => Path.Combine(Wc, rel);
+        public Task Cmd(string name, object? args = null) => Store.DispatchAsync(name, JsonSerializer.SerializeToElement(args ?? new { }), Ct);
+        public ChangesState Snap => (ChangesState)Store.GetSnapshot();
+
+        /// <summary>Output di <c>svn status</c> senza la cartella .svn-assist.</summary>
+        public string Status()
+        {
+            using var p = Process.Start(new ProcessStartInfo(Svn, "status") { WorkingDirectory = Wc, RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true })!;
+            var text = p.StandardOutput.ReadToEnd();
+            p.WaitForExit();
+            return string.Join("\n", text.Split('\n').Select(l => l.TrimEnd('\r')).Where(l => l.Length > 0 && !l.Contains(".svn-assist")));
+        }
+
+        public void Dispose() => Store.Dispose();
+    }
+
+    private async Task<Real> RealWithChanges()
+    {
+        var r = new Real(_dir);
+        File.WriteAllText(r.At("t.txt"), "uno\nDUE\ntre\n");                       // M
+        File.WriteAllText(r.At("nuovo.txt"), "nuovo\n");                            // A
+        Run(r.Svn, "add nuovo.txt", r.Wc);
+        Directory.CreateDirectory(r.At("cartella"));                                // ? (cartella con un file)
+        File.WriteAllText(r.At(Path.Combine("cartella", "x.txt")), "x1\nx2\n");
+        File.WriteAllText(r.At("libero.txt"), "libero\n");                          // ?
+        await r.Store.RefreshAsync(Ct);
+        return r;
+    }
+
+    [Fact]
+    public async Task SvnVero_Shelve_PuliscePoiUnshelveRipristinaTutto()
+    {
+        using var r = await RealWithChanges();
+
+        await r.Cmd("shelve", new { name = "Prova / nome:strano", keep = false });
+
+        Assert.Equal(string.Empty, r.Status());   // working copy pulita
+        Assert.Equal("uno\ndue\ntre\n", File.ReadAllText(r.At("t.txt")).Replace("\r\n", "\n"));
+        Assert.False(File.Exists(r.At("nuovo.txt")));
+        Assert.False(Directory.Exists(r.At("cartella")));
+        Assert.False(File.Exists(r.At("libero.txt")));
+        var shelf = Assert.Single(r.Snap.Shelves!);
+        Assert.Equal("Prova / nome:strano", shelf.Name);
+        Assert.Equal(4, shelf.Files);
+        var patch = File.ReadAllText(Path.Combine(ShelveFiles.Folder(r.Wc), shelf.Id + ".patch"));
+        Assert.Contains("--- cartella/x.txt\t(nonexistent)", patch);   // percorsi relativi con '/'
+
+        await r.Cmd("unshelve", new { id = shelf.Id });
+
+        Assert.Equal("uno\nDUE\ntre\n", File.ReadAllText(r.At("t.txt")).Replace("\r\n", "\n"));
+        Assert.Equal("x1\nx2\n", File.ReadAllText(r.At(Path.Combine("cartella", "x.txt"))).Replace("\r\n", "\n"));
+        var status = r.Status();
+        Assert.Matches(@"M\s+t\.txt", status);
+        Assert.Matches(@"A\s+nuovo\.txt", status);
+        Assert.Matches(@"A\s+libero\.txt", status);
+        Assert.Matches(@"A\s+cartella", status);
+        Assert.Null(r.Snap.Shelves);   // tutto ok: lo shelve e' stato eliminato
+    }
+
+    [Fact]
+    public async Task SvnVero_ShelveConTieni_LasciaLaWorkingCopy_EUnshelveSuFileGiaPresentiNonDuplica()
+    {
+        using var r = await RealWithChanges();
+        var before = r.Status();
+
+        await r.Cmd("shelve", new { name = "k", keep = true });
+
+        Assert.Equal(before, r.Status());
+        Assert.Equal("nuovo\n", File.ReadAllText(r.At("nuovo.txt")).Replace("\r\n", "\n"));
+        var id = Assert.Single(r.Snap.Shelves!).Id;
+
+        await r.Cmd("unshelve", new { id, keep = true });   // i '?' sono su disco: svn patch li salta, AddedSkipped li mette in add
+
+        Assert.Matches(@"A\s+libero\.txt", r.Status());
+        Assert.Single(r.Snap.Shelves!);   // "Applica e tieni": resta
+    }
+
+    [Fact]
+    public async Task SvnVero_ShelveConBinario_ChiedeConfermaENonLoTocca()
+    {
+        using var r = await RealWithChanges();
+        File.WriteAllBytes(r.At("bin.dat"), [0, 1, 2, 0]);
+        await r.Store.RefreshAsync(Ct);
+
+        r.Dialogs.ConfirmResult = false;
+        await r.Cmd("shelve", new { name = "b", keep = false });
+        Assert.Contains("bin.dat", Assert.Single(r.Dialogs.Messages));
+        Assert.Null(r.Snap.Shelves);   // rifiutato: niente e' cambiato
+        Assert.True(File.Exists(r.At("libero.txt")));
+
+        r.Dialogs.ConfirmResult = true;
+        await r.Cmd("shelve", new { name = "b", keep = false });
+
+        Assert.Equal([0, 1, 2, 0], File.ReadAllBytes(r.At("bin.dat")));   // il binario resta com'era
+        Assert.False(File.Exists(r.At("libero.txt")));
+        Assert.Matches(@"M\s+bin\.dat", r.Status());
+    }
+
+    [Fact]
+    public async Task SvnVero_CreatePatch_IncludeINonVersionatiComeFileNuovi_ESvnPatchLiCrea()
+    {
+        using var r = await RealWithChanges();
+        var file = Path.Combine(_dir, "out.patch");
+        r.Host.PickedFile = file;
+
+        await r.Cmd("createPatch", new { key = "section:unversioned" });
+
+        var text = File.ReadAllText(file);
+        Assert.Contains("+++ libero.txt\t(working copy)", text);
+        Assert.Contains("@@ -0,0 +1,2 @@", text);   // cartella/x.txt: tutte le righe, non un'anteprima
+        File.Delete(r.At("libero.txt"));
+        Directory.Delete(r.At("cartella"), true);
+        await new SvnService(r.Svn).ApplyPatchAsync(r.Wc, file, dryRun: false, Ct);
+        Assert.Matches(@"A\s+libero\.txt", r.Status());
+        Assert.Matches(@"A\s+cartella", r.Status());
+    }
+
+    [Fact]
+    public void Prune_NonToccaGliShelve_ElaCartellaNonSporcaLoStatus()
+    {
+        var path = ShelveFiles.Write(_dir, "vecchio", Diff, 1, string.Empty, new DateTime(2020, 1, 1));
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddDays(-400));
+        PatchBackup.Prune(_dir);
+
+        Assert.True(File.Exists(path));
+        Assert.Equal("vecchio", Assert.Single(ShelveFiles.List(_dir)).Name);
+        Assert.Empty(SvnService.ParseStatusXml("<status><target path=\".\"><entry path=\".svn-assist/shelves/x.patch\"><wc-status item=\"unversioned\" props=\"none\"/></entry></target></status>"));
+    }
 }
