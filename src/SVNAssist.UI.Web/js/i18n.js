@@ -7,6 +7,7 @@
   const EN = {
     "Esegue svn cleanup e riporta la working copy al ramo e alla revisione di prima dello switch; le modifiche locali restano": "Runs svn cleanup and takes the working copy back to the branch and revision it had before the switch; local changes are kept",
     "{0} elementi elaborati": "{0} items processed",
+    "{0} di circa {1} elementi": "{0} of about {1} items",
     "{0} in conflitto": "{0} in conflict",
     "Righe di notifica di svn": "svn notification lines",
     "… altre righe precedenti non mostrate": "… earlier lines not shown",

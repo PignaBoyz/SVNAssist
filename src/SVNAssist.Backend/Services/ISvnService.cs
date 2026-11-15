@@ -102,6 +102,14 @@ public interface ISvnService
     /// <exception cref="ArgumentException">Se la revisione non è valida.</exception>
     Task<UpdateResult> UpdateToRevisionAsync(string workingCopyPath, string revision, CancellationToken ct);
 
+    /// <summary>
+    /// Numero di elementi che uno switch/update toccherà (<c>svn diff --summarize</c> tra URL@revisione corrente e destinazione, solo lato server),
+    /// per la percentuale della barra di avanzamento. <c>null</c> se non ricavabile o troppo lento (timeout breve): barra indeterminata.
+    /// </summary>
+    /// <param name="targetUrl">URL di destinazione (switch); <c>null</c> = lo stesso URL della working copy (update).</param>
+    /// <param name="revision">Revisione di destinazione (intero o <c>HEAD</c>); <c>null</c> = HEAD.</param>
+    Task<int?> CountChangesAsync(string path, string? targetUrl, string? revision, CancellationToken ct) => Task.FromResult<int?>(null);
+
     /// <summary>Ripulisce la working copy da un'operazione interrotta (<c>svn cleanup</c>); su un file agisce sulla sua cartella.</summary>
     Task CleanupAsync(string path, CancellationToken ct);
 

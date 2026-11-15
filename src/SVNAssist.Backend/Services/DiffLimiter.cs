@@ -18,6 +18,9 @@ public static class DiffLimiter
     private const string FileMarker = "Index: ";
     public const string TruncatedMarker = "... (troncato)";
 
+    /// <summary>Come <see cref="Limit(string,int,int)"/> con i limiti del provider attivo.</summary>
+    public static Result Limit(string diff, AiLimits limits) => Limit(diff, limits.DiffMaxTotalChars, limits.DiffMaxFileChars);
+
     /// <summary>Risultato: il diff ridotto e se qualcosa è stato tagliato.</summary>
     public sealed record Result(string Diff, bool WasTruncated, int OmittedFiles);
 

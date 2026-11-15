@@ -156,6 +156,8 @@ namespace SVNAssist
             ["I file nuovi restano aggiunti (A): rifai il commit o annullali con Revert."] = "The new files stay added (A): commit again or undo them with Revert.",
             ["Nessuna working copy configurata."] = "No working copy configured.",
             ["Update in corso..."] = "Update in progress...",
+            ["Calcolo del totale..."] = "Counting items...",
+            ["Update alla revisione {0}"] = "Update to revision {0}",
             ["Aggiornato alla revisione {0}"] = "Updated to revision {0}",
             ["Update completato"] = "Update completed",
             ["{0}: {1} file in conflitto."] = "{0}: {1} files in conflict.",

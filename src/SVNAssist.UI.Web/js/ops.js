@@ -19,8 +19,10 @@
   O.lineHTML = l => `<li class="ol ${l.k === 'C' ? 'c' : l.k === 'i' ? 'i' : ''}"><span class="st ${l.k === 'i' ? '' : kcls(l.k)}">${l.k === 'i' ? '' : esc(l.k)}</span><span class="pt">${esc(l.t)}</span></li>`;
 
   O.progressHTML = p => {
-    const done = !p.running, bar = `<div class="obar${done ? (p.ok ? ' ok' : ' err') : ''}" role="progressbar" aria-label="${esc(p.title)}"${done ? ' aria-valuenow="100" aria-valuemin="0" aria-valuemax="100"' : ''}><i></i></div>`;
-    const counts = `<span class="muted">${t('{0} elementi elaborati', p.processed)}</span>` + (p.conflicts ? ` <span class="chip fail">${U.icon('warn')}${t('{0} in conflitto', p.conflicts)}</span>` : '');
+    const done = !p.running, det = !done && p.total > 0; // totale stimato da svn diff --summarize: barra vera (<progress>, niente style inline per la CSP)
+    const bar = det ? `<progress class="obar det" max="${p.total}" value="${Math.min(p.processed, p.total)}" aria-label="${esc(p.title)}"></progress>`
+      : `<div class="obar${done ? (p.ok ? ' ok' : ' err') : ''}" role="progressbar" aria-label="${esc(p.title)}"${done ? ' aria-valuenow="100" aria-valuemin="0" aria-valuemax="100"' : ''}><i></i></div>`;
+    const counts = `<span class="muted">${det ? t('{0} di circa {1} elementi', p.processed, p.total) : t('{0} elementi elaborati', p.processed)}</span>` + (p.conflicts ? ` <span class="chip fail">${U.icon('warn')}${t('{0} in conflitto', p.conflicts)}</span>` : '');
     const lines = p.lines.length ? `<ul class="olines" id="ops-lines" tabindex="0" aria-label="${esc(t('Righe di notifica di svn'))}">${p.omitted ? `<li class="ol i"><span class="st"></span><span class="pt muted">${esc(t('… altre righe precedenti non mostrate'))}</span></li>` : ''}${p.lines.map(O.lineHTML).join('')}</ul>`
       : `<div class="olines empty muted">${esc(done ? t('Nessun output da svn') : t('In attesa delle prime righe da svn…'))}</div>`;
     const summary = done ? `<div class="${p.cancelled ? 'rp-err warnb' : p.ok ? (p.conflicts || p.warnings ? 'rp-err warnb' : 'osum ok') : 'rp-err'}" role="alert">${U.icon(p.ok && !p.conflicts && !p.warnings ? 'check' : p.ok || p.cancelled ? 'warn' : 'x')}<span>${esc(p.summary)}</span></div>` : '';

@@ -51,6 +51,7 @@ internal sealed class ReloadableSvnService : ISvnService
     public Task AddToIgnoreListAsync(string path, CancellationToken ct) => Current.AddToIgnoreListAsync(path, ct);
     public Task<UpdateResult> UpdateAsync(string workingCopyPath, CancellationToken ct) => Current.UpdateAsync(workingCopyPath, ct);
     public Task<UpdateResult> UpdateToRevisionAsync(string workingCopyPath, string revision, CancellationToken ct) => Current.UpdateToRevisionAsync(workingCopyPath, revision, ct);
+    public Task<int?> CountChangesAsync(string path, string? targetUrl, string? revision, CancellationToken ct) => Current.CountChangesAsync(path, targetUrl, revision, ct);
     public Task CleanupAsync(string path, CancellationToken ct) => Current.CleanupAsync(path, ct);
     public Task<CleanupReport> CleanupAsync(string path, CleanupOptions options, CancellationToken ct) => Current.CleanupAsync(path, options, ct);
     public Task LockAsync(IEnumerable<string> paths, string? message, bool force, CancellationToken ct) => Current.LockAsync(paths, message, force, ct);

@@ -337,6 +337,28 @@ public class SvnService : ISvnService
             ? UpdateCoreAsync(workingCopyPath, normalized, ct)
             : throw new ArgumentException(Loc.T("Revisione non valida: serve un numero intero positivo oppure HEAD."), nameof(revision));
 
+    /// <summary>Attesa massima del conteggio per la barra di avanzamento: oltre, barra indeterminata.</summary>
+    internal TimeSpan CountTimeout { get; set; } = TimeSpan.FromSeconds(10);
+
+    /// <inheritdoc />
+    public async Task<int?> CountChangesAsync(string path, string? targetUrl, string? revision, CancellationToken ct)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(CountTimeout);
+        try
+        {
+            var info = await GetInfoAsync(path, cts.Token);
+            var to = (targetUrl ?? info.Url) + "@" + (revision ?? "HEAD");
+            var output = await SvnProgress.RunAsync(_ => { }, () => RunSvnAsync(
+                ["diff", "--summarize", "--old=" + info.Url + "@" + info.Revision.ToString(CultureInfo.InvariantCulture), "--new=" + to], workingDirectory: null, cts.Token));
+            return output.Split('\n').Count(l => l.Trim().Length > 0);
+        }
+        catch (Exception) when (!ct.IsCancellationRequested)
+        {
+            return null; // timeout o errore: il totale e' solo un'informazione in piu'
+        }
+    }
+
     private async Task<UpdateResult> UpdateCoreAsync(string workingCopyPath, string? revision, CancellationToken ct)
     {
         // L'update di una working copy grande può durare a lungo: niente timeout, l'utente può annullare.

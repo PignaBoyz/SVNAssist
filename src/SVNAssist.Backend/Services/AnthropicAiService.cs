@@ -25,7 +25,7 @@ internal sealed class AnthropicAiService : AiServiceBase
     }
 
     /// <inheritdoc />
-    protected override int MaxUserMessageChars => LargeContextUserMessageChars;
+    public override AiLimits Limits => AiLimits.Anthropic;
 
     /// <inheritdoc />
     protected override async Task<string> CompleteAsync(string systemPrompt, string userMessage, CancellationToken ct)
@@ -36,7 +36,7 @@ internal sealed class AnthropicAiService : AiServiceBase
         {
             Model = _model,
             // Margine ampio: sui modelli recenti il ragionamento consuma token prima del testo.
-            MaxTokens = 16000,
+            MaxTokens = Limits.MaxResponseTokens,
             // Un commit message non richiede ragionamento profondo.
             OutputConfig = new() { Effort = Effort.Low },
             System = systemPrompt,

@@ -1493,6 +1493,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         {
             SetStatus(Loc.T("Update in corso..."));
             var ot = Progress.Begin("update", "SVN Update", Loc.T("Update in corso..."), ct);
+            await SetProgressTotalAsync(wc, null, null, Loc.T("Update in corso..."), ot);
             var update = await Streaming(() => _svnService.UpdateAsync(wc, ot));
             var updated = update.Revision is { } rev ? Loc.T("Aggiornato alla revisione {0}", rev) : Loc.T("Update completato");
             await RefreshAsync(ct, reloadBranch: true, update.ConflictedPaths.Count > 0
@@ -1584,11 +1585,17 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         try
         {
             SetStatus(Loc.T("Update alla revisione {0} in corso...", revision));
+            var ot = Progress.Begin("update", Loc.T("Update alla revisione {0}", revision), Loc.T("Calcolo del totale..."), ct);
+            int? total = 0;
+            foreach (var target in targets)
+                total += await _svnService.CountChangesAsync(target, null, revision, ot); // un percorso senza stima: totale ignoto (null)
+            Progress.SetTotal(total);
+            Progress.SetPhase(Loc.T("Update in corso..."));
             UpdateResult? last = null;
             var conflicts = 0;
             foreach (var target in targets)
             {
-                last = await _svnService.UpdateToRevisionAsync(target, revision, ct);
+                last = await Streaming(() => _svnService.UpdateToRevisionAsync(target, revision, ot));
                 conflicts += last.ConflictedPaths.Count;
             }
 
@@ -1596,12 +1603,26 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             await RefreshAsync(ct, reloadBranch: true, conflicts > 0
                 ? Loc.T("{0}: {1} file in conflitto.", updated, conflicts)
                 : $"{updated}.");
+            Progress.Done(true, conflicts > 0 ? Loc.T("{0}: completato con {1} conflitti.", updated, conflicts) : $"{updated}.", conflicts);
             await RevealConflictsAsync(conflicts, ct);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested && Progress.IsCancelling)
+        {
+            await FinishCancelledAsync(WorkingCopyPath, Loc.T("Update annullato"), [new(Loc.T("Cleanup…"), "cleanup"), new(Loc.T("Lascia così"), "progressClose")], ct);
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
             SetStatus(Loc.T("Errore update: {0}", ex.Message));
+            Progress.Done(false, _statusMessage);
         }
+    }
+
+    /// <summary>Totale della barra di avanzamento (<c>svn diff --summarize</c>, max ~10 s); senza, resta indeterminata. Poi rimette la fase.</summary>
+    private async Task SetProgressTotalAsync(string path, string? url, string? revision, string phase, CancellationToken ot)
+    {
+        Progress.SetPhase(Loc.T("Calcolo del totale..."));
+        Progress.SetTotal(await _svnService.CountChangesAsync(path, url, revision, ot));
+        Progress.SetPhase(phase);
     }
 
     /// <summary>Ramo corrente (dall'URL di <c>svn info</c> e dal layout del repository) e versione di svn. Un errore non blocca lo stato: ramo vuoto ("—").</summary>
@@ -1716,7 +1737,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             }
 
             SetStatus(Loc.T("Switch a {0} in corso...", target.Name));
-            Progress.SetPhase(Loc.T("Switch in corso..."));
+            await SetProgressTotalAsync(wc, target.Url, backToRevision?.ToString(System.Globalization.CultureInfo.InvariantCulture), Loc.T("Switch in corso..."), ot);
             UpdateResult result;
             try
             {

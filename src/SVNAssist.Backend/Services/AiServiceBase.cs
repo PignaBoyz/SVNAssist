@@ -14,25 +14,20 @@ namespace SVNAssist.Services;
 /// </remarks>
 public abstract class AiServiceBase : IAiService
 {
-    private const int ApproxCharsPerToken = 4;
-    private const int MaxRequestTokens = 8000;
-    private const int MaxResponseTokens = 200;
-    private const int SafetyPromptTokens = 800;
-    private const int MaxUserTokens = MaxRequestTokens - MaxResponseTokens - SafetyPromptTokens;
     private const int DiffChunkSizeChars = 12000;
     private const int MaxSummaryChars = 1200;
     private const int MaxFileListChars = 6000;
     private const int MinDiffContextChars = 2000;
-
-    /// <summary>Budget del messaggio utente per i provider con contesto ampio (~25k token).</summary>
-    protected const int LargeContextUserMessageChars = 100_000;
 
     /// <summary>
     /// Limite del messaggio utente in caratteri. Il default è tarato sul limite più stretto
     /// (GitHub Models, ~8000 token per richiesta); i provider con contesto ampio lo alzano.
     /// Un diff che sta nel budget viene inviato intero, altrimenti viene riassunto a blocchi.
     /// </summary>
-    protected virtual int MaxUserMessageChars => MaxUserTokens * ApproxCharsPerToken;
+    protected virtual int MaxUserMessageChars => Limits.MaxUserChars;
+
+    /// <summary>Limiti del provider (messaggio, risposta, diff): ogni provider dichiara i suoi in <see cref="AiLimits"/>.</summary>
+    public virtual AiLimits Limits => AiLimits.GitHubModels;
 
     /// <summary>
     /// Invia una singola richiesta al modello e restituisce il testo della risposta.

@@ -44,6 +44,9 @@ public class AiService : AiServiceBase
     }
 
     /// <inheritdoc />
+    public override AiLimits Limits => AiServiceFactory.IsGitHubModelsEndpoint(_endpoint) ? AiLimits.GitHubModels : AiLimits.OpenAiCompatible;
+
+    /// <inheritdoc />
     protected override Task<string> CompleteAsync(string systemPrompt, string userMessage, CancellationToken ct)
     {
         EnsureSafeEndpoint(_endpoint, _apiKey);
@@ -88,7 +91,7 @@ public class AiService : AiServiceBase
         var requestBody = new
         {
             model = _model,
-            max_tokens = 500,
+            max_tokens = Limits.MaxResponseTokens,
             messages = new[]
             {
                 new { role = "system", content = systemPrompt },

@@ -23,7 +23,8 @@ internal sealed record ProgressDto(
     IReadOnlyList<ProgressLineDto> Lines, string Summary,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? ConflictPaths = null,
     bool Cancellable = false, bool Cancelling = false, bool Cancelled = false,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ProgressActionDto>? Actions = null, bool Warnings = false);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ProgressActionDto>? Actions = null, bool Warnings = false,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? Total = null);
 
 /// <summary>Stato condiviso della finestra di avanzamento: lo scrive l'operazione (anche da thread di svn), lo legge lo snapshot di Changes e di Log.</summary>
 internal sealed partial class OperationProgress
@@ -39,6 +40,7 @@ internal sealed partial class OperationProgress
     private IReadOnlyList<ProgressActionDto>? _actions;
     private CancellationTokenSource? _cts;
     private int _processed, _conflictCount, _omitted;
+    private int? _total;
 
     public event Action? Changed;
 
@@ -51,7 +53,7 @@ internal sealed partial class OperationProgress
         lock (_lock)
         {
             (_open, _running, _ok, _op, _title, _phase, _summary) = (true, true, false, op, title, phase, string.Empty);
-            (_processed, _conflictCount, _omitted) = (0, 0, 0);
+            (_processed, _conflictCount, _omitted, _total) = (0, 0, 0, null);
             (_cancelling, _cancelled, _actions, _warnings) = (false, false, null, false);
             _lines.Clear();
             _conflicts.Clear();
@@ -79,6 +81,14 @@ internal sealed partial class OperationProgress
 
         Changed?.Invoke();
         return true;
+    }
+
+    /// <summary>Totale stimato degli elementi (<c>svn diff --summarize</c>): la barra diventa determinata. <c>null</c>/0 = resta indeterminata.</summary>
+    internal void SetTotal(int? total)
+    {
+        lock (_lock)
+            _total = total is > 0 ? total : null;
+        Changed?.Invoke();
     }
 
     internal void SetPhase(string phase)
@@ -147,7 +157,7 @@ internal sealed partial class OperationProgress
         lock (_lock)
             return !_open ? null
                 : new ProgressDto(_op, _title, _phase, _running, _ok, _processed, _conflictCount, _omitted, _lines.ToList(), _summary, _conflicts.Count > 0 ? _conflicts.ToList() : null,
-                    _running && IsCancellableOp(_op), _cancelling, _cancelled, _actions, _warnings);
+                    _running && IsCancellableOp(_op), _cancelling, _cancelled, _actions, _warnings, _total);
     }
 
     /// <summary>

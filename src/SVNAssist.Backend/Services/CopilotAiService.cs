@@ -35,10 +35,7 @@ internal sealed class CopilotAiService : AiServiceBase
     }
 
     /// <inheritdoc />
-    protected override int MaxUserMessageChars => CopilotUserMessageChars;
-
-    // Prompt troppo grandi (decine di file) fanno rispondere Copilot con "No response was returned": budget piu' prudente di LargeContext.
-    internal const int CopilotUserMessageChars = 60_000;
+    public override AiLimits Limits => AiLimits.Copilot;
 
     /// <summary>Solo test: sostituisce la chiamata reale al runtime Copilot.</summary>
     internal Func<string, string, CancellationToken, Task<string>>? CoreOverride { get; init; }
