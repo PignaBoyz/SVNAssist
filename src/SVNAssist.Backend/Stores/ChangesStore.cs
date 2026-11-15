@@ -185,6 +185,11 @@ internal sealed class ChangesStore : ViewStore, IDisposable
     }
 
     /// <summary>Conteggi per tipo delle modifiche locali (i non versionati si contano a parte: non vengono portati dallo switch).</summary>
+    /// <summary>.vs = stato interno di Visual Studio (bloccato mentre VS e' aperto): resta visibile tra i non versionati (per Ignora) ma non sporca la WC e non si aggiunge col Commit All.</summary>
+    private static bool IsVsFolder(ChangeEntry e) => e.FullPath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Contains(".vs", StringComparer.OrdinalIgnoreCase);
+
+    private static IEnumerable<ChangeEntry> NewFiles(IEnumerable<ChangeEntry> entries) => entries.Where(e => e.Status == SvnStatusKind.Unversioned && !IsVsFolder(e));
+
     internal static DirtyCountsDto CountDirty(IEnumerable<SvnStatusKind> statuses)
     {
         int m = 0, a = 0, d = 0, c = 0, u = 0;
@@ -361,7 +366,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
 
     private CommitWarnDto BuildCommitWarn()
     {
-        var names = _entries.Where(e => e.Status == SvnStatusKind.Unversioned).Select(e => e.RelativePath).ToList();
+        var names = NewFiles(_entries).Select(e => e.RelativePath).ToList();
         return new CommitWarnDto(names.Count, names.Take(10).ToList(), Math.Max(0, names.Count - 10));
     }
 
@@ -371,14 +376,14 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         if (string.IsNullOrWhiteSpace(CommitMessage.Text))
             return false;
         lock (_stateLock)
-            return CommitSet().All && _entries.Any(e => e.Status == SvnStatusKind.Unversioned);
+            return CommitSet().All && NewFiles(_entries).Any();
     }
 
     private Version? SvnVersionParsed => Version.TryParse(_svnVersion, out var v) ? v : null;
 
     private SwitchWarnDto BuildSwitchWarn(SwitchPickerStore.Target target)
     {
-        var counts = CountDirty(_entries.Select(e => e.Status));
+        var counts = CountDirty(_entries.Where(e => !IsVsFolder(e)).Select(e => e.Status));
         return new SwitchWarnDto(target.Name, counts, Total(counts));
     }
 
@@ -1051,8 +1056,6 @@ internal sealed class ChangesStore : ViewStore, IDisposable
             var conflictInfo = conflictedPaths.Count > 0
                 ? await _svnService.GetConflictInfoAsync(conflictedPaths, ct)
                 : new Dictionary<string, SvnConflictInfo>();
-            // .vs = stato interno di Visual Studio (sempre bloccato mentre VS e' aperto): mai mostrato, contato o proposto.
-            newEntries.RemoveAll(e => e.Status == SvnStatusKind.Unversioned && e.FullPath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Contains(".vs", StringComparer.OrdinalIgnoreCase));
             var auxFiles = conflictInfo.Values.SelectMany(i => i.Files).ToHashSet(StringComparer.OrdinalIgnoreCase);
             if (auxFiles.Count > 0)
                 newEntries.RemoveAll(e => e.Status == SvnStatusKind.Unversioned && auxFiles.Contains(e.FullPath));
@@ -1368,7 +1371,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
 
         // Commit All con "Si', aggiungi": anche i non versionati ('?'), che piu' sotto vengono aggiunti con svn add.
         if (addNew && all)
-            selected = selected.Concat(allEntries.Where(e => e.Status == SvnStatusKind.Unversioned)).ToList();
+            selected = selected.Concat(NewFiles(allEntries)).ToList();
 
         if (selected.Count == 0)
         {
@@ -1651,7 +1654,7 @@ internal sealed class ChangesStore : ViewStore, IDisposable
         // Working copy sporca: prima dello switch l'avviso con il riepilogo (continua / Cleanup / annulla).
         int dirty;
         lock (_stateLock)
-            dirty = target.Incomplete ? 0 : Total(CountDirty(_entries.Select(e => e.Status)));
+            dirty = target.Incomplete ? 0 : Total(CountDirty(_entries.Where(e => !IsVsFolder(e)).Select(e => e.Status)));
         if (dirty > 0)
         {
             Switch.Close();
