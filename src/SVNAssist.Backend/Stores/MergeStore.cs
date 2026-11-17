@@ -764,9 +764,6 @@ internal sealed class MergeStore
     {
         var wc = entry.Wc;
         await _changes.RefreshAsync(ct, reloadBranch: true);
-        var open = _changes.UnresolvedConflicts;
-        if (open > 0)
-            return (null, Loc.T("Restano {0} file in conflitto: risolvili e segnali come risolti, poi premi \"Continua merge\".", open));
         if (entry.State == PendingMerge.Running || entry.InFlightFrom is not null)
         {
             var failed = await _changes.CleanupQuietlyAsync(wc, ct);
@@ -779,6 +776,9 @@ internal sealed class MergeStore
             return (null, IncompatibleText(Loc.T("la working copy è su un altro ramo ({0}) rispetto a quando è iniziato il merge ({1})", info.Url, entry.WcUrl)));
         if (info is not null && entry.WcRev is { } rev0 && info.Revision != rev0)
             return (null, IncompatibleText(Loc.T("la working copy è stata aggiornata (da r{0} a r{1})", rev0, info.Revision)));
+        var open = _changes.UnresolvedConflicts;
+        if (open > 0)
+            return (null, Loc.T("Restano {0} file in conflitto: risolvili e segnali come risolti, poi premi \"Continua merge\".", open));
         IReadOnlyList<long> eligible;
         try { eligible = await _svn.GetEligibleRevisionsAsync(wc, source.Url, ct); }
         catch (Exception ex) when (!ct.IsCancellationRequested)

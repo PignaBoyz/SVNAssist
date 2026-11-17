@@ -60,10 +60,12 @@ internal sealed class MergeRunResult
 internal sealed class MergeRunner
 {
     /// <summary>Revisioni per intervallo applicato in un colpo. 1 = una chiamata a svn per revisione (esatto, lento).</summary>
-    internal static int ChunkSize { get; set; } = 25;
+    internal const int DefaultChunkSize = 50, DefaultDryRunWindow = 200;
+
+    internal static int ChunkSize { get; set; } = DefaultChunkSize;
 
     /// <summary>Revisioni per dry-run (un dry-run costa quanto il merge vero dello stesso intervallo: a finestre, cosi' il primo avanzamento arriva presto).</summary>
-    internal static int DryRunWindow { get; set; } = 200;
+    internal static int DryRunWindow { get; set; } = DefaultDryRunWindow;
 
     private readonly ISvnService _svn;
     private readonly string _wc, _url;
