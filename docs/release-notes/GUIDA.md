@@ -64,6 +64,17 @@ Prima l'italiano, validato dall'utente. Poi la traduzione inglese in `docs/relea
 3. Aggiornamento di `CHANGELOG.md`.
 4. Aggiornamento del testo della Release su GitHub dalla sessione locale, con token. Il tag non si cancella mai.
 
+## Pubblicazione
+
+- Sorgenti per ogni versione: `docs/release-notes/<tag>.user.md` (italiano) e `docs/release-notes/<tag>.user.en.md` (inglese).
+- `tools/build-release-body.mjs <tag> <sha> [--out file]` costruisce il testo della Release: due blocchi `<details>`, Italiano (aperto) e English (chiuso). GitHub non esegue JS, quindi il "toggle" di lingua è questo. Dopo `<summary>` e prima di `</details>` ci vuole una riga vuota, altrimenti il markdown interno non viene reso. Se manca il file inglese, il testo contiene solo l'italiano (avviso su stderr); se manca l'italiano il comando fallisce.
+- Il titolo `# SVNAssist X.Y.Z` non entra nel testo (lo mostra già il titolo della Release).
+- Immagini: gli URL `raw.githubusercontent.com/PignaBoyz/SVNAssist/main/` sono riscritti con lo SHA del commit del workflow (su main i file possono non esistere ancora).
+- Segnaposto `> [IMMAGINE DA FORNIRE ...` e `> [IMAGE TO BE PROVIDED ...` diventano commenti HTML, quindi invisibili, riga per riga.
+- Aggiornare Release già pubblicate: scrivere i tag in `docs/release-notes/.publish` (uno per riga; righe vuote e `#` ignorate) e fare push. Il workflow `Release notes` modifica solo il testo (`gh release edit --notes-file`), non titolo, asset o tag. Le Release inesistenti sono saltate, non create. Alternativa: avvio manuale con l'input `tags`. Mai `v0.1.0`.
+- Nuove Release: `release.yml` usa lo stesso builder se esiste `<tag>.user.md`, altrimenti `<tag>.md`.
+- Il tag non si cancella mai.
+
 ## 9. Checklist "prima di pubblicare"
 
 - [ ] Nessun aggettivo di valutazione o di marketing, nessuno slogan nel titolo.
