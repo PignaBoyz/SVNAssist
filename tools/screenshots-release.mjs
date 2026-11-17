@@ -241,7 +241,8 @@ if (needDemo && !demoPath) {
 if (needDemo && !existsSync(demoPath)) { console.error('Demo non trovata: ' + demoPath); process.exit(1); }
 
 // ---------- esecuzione ----------
-const browser = await chromium.launch();
+// CHROME_PATH: usa un browser già installato (es. Edge) invece di quello scaricato da `npx playwright install`
+const browser = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {});
 try {
   for (const lang of langs) {
     const out = path.join(outBase, lang);
