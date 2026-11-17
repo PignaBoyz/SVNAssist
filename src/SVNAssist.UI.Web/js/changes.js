@@ -88,6 +88,7 @@
   const mergeOk = () => { const v = (st.workingCopy.svnVersion || '').split('.').map(Number); return !v[0] || v[0] > 1 || (v[0] === 1 && v[1] >= 8); };
   function mergeBanner(s) {
     const m = s.merge; if (!m) return '';
+    if (m.pending) return U.ops.pendingMergeHTML(m.pending);
     return `<div class="mb${m.conflicts ? ' warn' : ''}" role="status">${U.icon(m.conflicts ? 'warn' : 'branch')}<span>${esc(m.text)}${m.conflicts ? ' ' + esc(m.conflicts === 1 ? t('{0} conflitto: risolvilo qui sotto, poi committa.', m.conflicts) : t('{0} conflitti: risolvili qui sotto, poi committa.', m.conflicts)) : ''}</span><span class="fill"></span>` +
       U.btn('btn sm', t('Annulla merge'), null, 'mergeUndo', null, t("Annulla il merge: ripristina la working copy com'era (svn revert)")) + U.btn('ib', '', 'x', 'mergeDismiss', null, t('Nascondi questo avviso')) + `</div>`;
   }

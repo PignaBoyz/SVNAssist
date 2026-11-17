@@ -534,6 +534,20 @@
     "Chiude senza creare nulla": "Closes without creating anything",
     "Crea sul server un branch o un tag dalla working copy (svn copy)": "Creates a branch or a tag on the server from the working copy (svn copy)",
     "Crea branch/tag…": "Create branch/tag…",
+    "Applico {0} ({1} di {2})": "Applying {0} ({1} of {2})",
+    "Applico {0} ({1}-{2} di {3})": "Applying {0} ({1}-{2} of {3})",
+    "{0} di {1} revisioni applicate": "{0} of {1} revisions applied",
+    "Si ferma al termine del passaggio in corso: le revisioni già applicate restano e il merge si può continuare": "Stops when the current step ends: the revisions already applied stay and the merge can be continued",
+    "Merge interrotto": "Merge interrupted",
+    "Continua merge": "Continue merge",
+    "Applica solo le {0} revisioni rimaste": "Applies only the {0} remaining revisions",
+    "Non disponibile": "Not available",
+    "Scarta stato": "Discard state",
+    "Toglie lo stato del merge interrotto: le modifiche applicate restano nella working copy, \"Continua merge\" non è più disponibile": "Removes the state of the interrupted merge: the applied changes stay in the working copy, \"Continue merge\" is no longer available",
+    "Merge interrotto: applicate {0} di {1}": "Merge interrupted: {0} of {1} applied",
+    "Applicate in questo merge ({0})": "Applied in this merge ({0})",
+    "applicata in questo merge": "applied in this merge",
+    "… e altre {0} revisioni.": "… and {0} more revisions.",
   };
   let lang = 'it';
   // ritorna true se la lingua e' cambiata

@@ -18,22 +18,43 @@
   const kcls = k => 'st-' + (k === 'G' || k === 'U' ? 'M' : k);
   O.lineHTML = l => `<li class="ol ${l.k === 'C' ? 'c' : l.k === 'i' ? 'i' : ''}"><span class="st ${l.k === 'i' ? '' : kcls(l.k)}">${l.k === 'i' ? '' : esc(l.k)}</span><span class="pt">${esc(l.t)}</span></li>`;
 
+  // Merge a passaggi: "Applico r14041 (3 di 7)" oppure, per un gruppo applicato in un colpo, "Applico r14041-r14060 (3-22 di 420)"
+  O.stepText = s => s.first === s.last ? t('Applico {0} ({1} di {2})', s.label, s.first, s.total) : t('Applico {0} ({1}-{2} di {3})', s.label, s.first, s.last, s.total);
   O.progressHTML = p => {
-    const done = !p.running, det = !done && p.total > 0; // totale stimato da svn diff --summarize: barra vera (<progress>, niente style inline per la CSP)
-    const bar = det ? `<progress class="obar det" max="${p.total}" value="${Math.min(p.processed, p.total)}" aria-label="${esc(p.title)}"></progress>`
+    const step = p.running && p.step ? p.step : null;
+    const done = !p.running, det = !done && (step ? step.total > 0 : p.total > 0); // totale stimato da svn diff --summarize: barra vera (<progress>, niente style inline per la CSP)
+    const bar = det ? (step ? `<progress class="obar det" max="${step.total}" value="${Math.min(step.done, step.total)}" aria-label="${esc(p.title)}"></progress>`
+      : `<progress class="obar det" max="${p.total}" value="${Math.min(p.processed, p.total)}" aria-label="${esc(p.title)}"></progress>`)
       : `<div class="obar${done ? (p.ok ? ' ok' : ' err') : ''}" role="progressbar" aria-label="${esc(p.title)}"${done ? ' aria-valuenow="100" aria-valuemin="0" aria-valuemax="100"' : ''}><i></i></div>`;
     const idle = !done && !det && !p.processed;   // svn non ha ancora scritto nulla (legge la storia dal server): niente "0 elementi", testo onesto
-    const counts = idle ? '' : `<span class="muted">${det ? t('{0} di circa {1} elementi', p.processed, p.total) : t('{0} elementi elaborati', p.processed)}</span>` + (p.conflicts ? ` <span class="chip fail">${U.icon('warn')}${t('{0} in conflitto', p.conflicts)}</span>` : '');
+    const counts = idle ? '' : `<span class="muted">${step ? t('{0} di {1} revisioni applicate', step.done, step.total) : det ? t('{0} di circa {1} elementi', p.processed, p.total) : t('{0} elementi elaborati', p.processed)}</span>` + (p.conflicts ? ` <span class="chip fail">${U.icon('warn')}${t('{0} in conflitto', p.conflicts)}</span>` : '');
     const lines = p.lines.length ? `<ul class="olines" id="ops-lines" tabindex="0" aria-label="${esc(t('Righe di notifica di svn'))}">${p.omitted ? `<li class="ol i"><span class="st"></span><span class="pt muted">${esc(t('… altre righe precedenti non mostrate'))}</span></li>` : ''}${p.lines.map(O.lineHTML).join('')}</ul>`
       : `<div class="olines empty muted">${esc(done ? t('Nessun output da svn') : t('svn sta preparando l\'operazione (legge la storia dal server) e non ha ancora scritto nulla: le righe compaiono man mano. La barra in movimento indica che è al lavoro.'))}</div>`;
     const summary = done ? `<div class="${p.cancelled ? 'rp-err warnb' : p.ok ? (p.conflicts || p.warnings ? 'rp-err warnb' : 'osum ok') : 'rp-err'}" role="alert">${U.icon(p.ok && !p.conflicts && !p.warnings ? 'check' : p.ok || p.cancelled ? 'warn' : 'x')}<span>${esc(p.summary)}</span></div>` : '';
     return `<div class="wiz-scrim"><div class="wiz ops" role="dialog" aria-modal="true" aria-labelledby="ops-t"><div class="wiz-h"><h3 id="ops-t" tabindex="-1">${esc(p.title)}</h3></div>` +
-      `<div class="wiz-b"><div class="ophase">${done ? '' : '<span class="spin" aria-hidden="true"></span>'}<b>${esc(done ? (p.cancelled ? t('Operazione annullata') : p.ok ? t('Completato') : t('Operazione non riuscita')) : p.phase)}</b><span class="fill"></span>${counts}</div>${bar}${lines}${summary}</div>` +
+      `<div class="wiz-b"><div class="ophase">${done ? '' : '<span class="spin" aria-hidden="true"></span>'}<b>${esc(done ? (p.cancelled ? t('Operazione annullata') : p.ok ? t('Completato') : t('Operazione non riuscita')) : step ? O.stepText(step) : p.phase)}</b><span class="fill"></span>${counts}</div>${bar}${lines}${summary}</div>` +
       `<div class="wiz-f"><span class="muted">${done ? '' : esc(t('Operazione in corso: la finestra si sblocca da sola al termine.'))}</span><span class="fill"></span>` +
-      (p.cancellable ? U.btn('btn', p.cancelling ? t('Annullamento…') : t('Annulla'), 'x', 'opCancel', null, t('Ferma svn: la working copy può restare a metà'), p.cancelling ? 'disabled' : '') : '') +
+      (p.cancellable ? U.btn('btn', p.cancelling ? t('Annullamento…') : t('Annulla'), 'x', 'opCancel', null, p.op === 'merge' ? t('Si ferma al termine del passaggio in corso: le revisioni già applicate restano e il merge si può continuare') : t('Ferma svn: la working copy può restare a metà'), p.cancelling ? 'disabled' : '') : '') +
       (done ? (p.actions || []).map(a => U.btn('btn', a.label, null, a.cmd, a.cmd === 'progressClose' ? { conflicts: false } : null)).join('') : '') +
       (done && p.conflicts ? U.btn('btn', t('Apri i conflitti'), 'diff', 'progressClose', { conflicts: true }, t('Chiude e porta in primo piano Changes, sezione Conflitti')) : '') +
       (done && !(p.actions || []).some(a => a.cmd === 'progressClose') ? U.btn('btn primary', t('Chiudi'), null, 'progressClose', { conflicts: false }, t('Chiude la finestra')) : '') + `</div></div></div>`;
+  };
+
+  // Merge interrotto (conflitto, "Annulla", errore, VS chiuso): cosa e' applicato, cosa manca, passi numerati e pulsanti. Condiviso da banner (Changes) e pannello (Log).
+  // p = state.merge.pending / state.merge.interrupted (PendingMergeDto); opts.extra = pulsanti in piu'.
+  O.pendingMergeHTML = (p, opts) => {
+    opts = opts || {};
+    const off = p.busy ? 'disabled' : '';
+    const cont = U.btn('btn sm primary', t('Continua merge'), 'branch', 'mergeContinue', null, p.canContinue ? t('Applica solo le {0} revisioni rimaste', p.remaining) : (p.whyNot || t('Non disponibile')), p.canContinue ? off : 'disabled');
+    return `<div class="mb warn mb-pend" role="status" data-pending-merge>${U.icon('warn')}<div class="mb-body"><b>${esc(t('Merge interrotto'))}</b> <span class="muted">· ${esc(p.source)}</span>` +
+      `<p class="mb-l">${esc(p.appliedText)}</p><p class="mb-l">${esc(p.remainingText)}</p>` +
+      (p.warning ? `<p class="mb-l mb-warn">${esc(p.warning)}</p>` : '') +
+      (p.incompatible ? '' : `<ol class="mb-steps">${p.steps.map(x => `<li>${esc(x)}</li>`).join('')}</ol>`) +
+      (!p.canContinue && p.whyNot ? `<p class="mb-l mb-why" role="note">${esc(p.whyNot)}</p>` : '') +
+      `<p class="mb-l muted">${esc(p.alternative)}</p></div><div class="mb-act">${p.incompatible ? '' : cont}` +
+      U.btn('btn sm', t('Annulla merge'), 'undo', 'mergeUndo', null, t("Annulla il merge: ripristina la working copy com'era (svn revert)"), off) +
+      (p.incompatible ? U.btn('btn sm', t('Scarta stato'), 'x', 'mergeDiscard', null, t('Toglie lo stato del merge interrotto: le modifiche applicate restano nella working copy, "Continua merge" non è più disponibile'), off) : '') +
+      (opts.extra || '') + `</div></div>`;
   };
 
   // Operazione avviata dall'altra vista: solo una striscia sottile non bloccante col rimando (la finestra completa sta dove e' partita).

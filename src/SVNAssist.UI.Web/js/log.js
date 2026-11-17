@@ -14,7 +14,7 @@
   };
   const fld =(name, label, val, ph, type) => `<label for="lf-${name}">${label}</label><input id="lf-${name}" name="${name}" type="${type || 'text'}" value="${esc(val)}"${ph ? ` placeholder="${esc(ph)}"` : ''} spellcheck="false">`;
   // finche' il merge non e' committato o annullato non e' "0 da unire": le revisioni da unire sono gia' ricalcolate
-  const mgState = m => m.pending ? t('Merge eseguito, da committare') : t('{0} revisioni da unire', m.eligible);
+  const mgState = m => m.interrupted ? t('Merge interrotto: applicate {0} di {1}', m.interrupted.applied, m.interrupted.total) : m.pending ? t('Merge eseguito, da committare') : t('{0} revisioni da unire', m.eligible);
   let onlyAffected = false;   // "Solo percorsi interessati" (come TortoiseSVN): nasconde i percorsi della revisione fuori dalla cartella/file di cui si legge il log
   const inBase = (p, b) => !b || b === '/' || p === b || p.startsWith(b + '/');
   const copyText = txt => {
@@ -41,6 +41,11 @@
     if (s.sel != null && s.sel !== rev) items.push({ label: t('Confronta con r{0}', s.sel), cmd: 'logCompare', args: { a: s.sel, b: rev }, hint: t('Elenca i file cambiati tra le due revisioni') });
     return [...items, { sep: true }, ...tail];
   };
+  // Merge interrotto nel Log: lo stesso blocco di Changes (una volta sola: l'errore non si ripete) + le revisioni gia' applicate "in questo merge"
+  const O_pending = (p, m) => U.ops.pendingMergeHTML(p, { extra: U.btn('btn sm', t('Vai a Changes'), 'diff', 'mergeResolve', null, t('Apre Changes, sezione Conflitti, con le azioni per ogni file')) }) +
+    `<details class="mapp" open><summary>${esc(t('Applicate in questo merge ({0})', p.applied))}</summary><ul class="mapl">` +
+    (m.appliedInfo || p.appliedRevs.map(r => ({ rev: r, author: '', msg: '' }))).map(a => `<li><span class="mtag">${U.icon('check')}${esc(t('applicata in questo merge'))}</span> <b>r${a.rev}</b> <span class="muted">${esc(a.author || '')}</span> ${esc(a.msg || '')}</li>`).join('') +
+    (p.applied > (m.appliedInfo || []).length && m.appliedInfo ? `<li class="muted">${esc(t('… e altre {0} revisioni.', p.applied - m.appliedInfo.length))}</li>` : '') + `</ul></details>`;
   let mcur = null;   // revisione col focus nella tabella del merge (roving tabindex): sopravvive ai ridisegni
   U.logHTML = {
     top(s) {
@@ -84,9 +89,10 @@
         : `<div class="empty-state"><b>${s.merge.loading ? t('Lettura delle revisioni da unire…') : t('Nessuna revisione da unire')}</b><span class="muted">${s.merge.loading ? '' : t('Il ramo scelto non ha modifiche che la working copy non abbia già.')}</span></div>`;
       if (!s.entries.length) return `<div class="empty-state"><b>${t('Nessuna revisione caricata')}</b><span class="muted">${t('Inserisci il percorso e premi Carica log.')}</span></div>`;
       const h = (c, label) => `<span role="columnheader">${label}<i class="rz" data-c="${c}" aria-hidden="true"></i></span>`;
+      const remain = new Set(s.merge && s.merge.interrupted ? s.merge.interrupted.remainingRevs : []);
       const picked = s.merge ? new Set(s.merge.selected) : null, cur = s.merge ? (s.entries.some(e => e.rev === mcur) ? mcur : s.entries[0].rev) : (s.sel == null ? s.entries[0].rev : s.sel);
       return `<div class="lh" role="row">${h(1, t('Rev.'))}${h(2, t('Autore'))}${h(3, t('Data'))}<span role="columnheader">${t('Messaggio')}</span></div>` +
-        s.entries.map(e => { const on = picked ? picked.has(e.rev) : s.sel === e.rev; const d = e.depth ? Math.min(e.depth, 3) : 0; return `<div class="lr${on ? ' sel' : ''}${d ? ' mg d' + d : ''}${e.reverse ? ' rvm' : ''}" role="row" aria-selected="${on}"${d ? ` aria-level="${d + 1}"` : ''} tabindex="${cur === e.rev ? 0 : -1}" data-rev="${e.rev}">` +
+        s.entries.map(e => { const on = picked ? picked.has(e.rev) : s.sel === e.rev; const d = e.depth ? Math.min(e.depth, 3) : 0; return `<div class="lr${on ? ' sel' : ''}${d ? ' mg d' + d : ''}${e.reverse ? ' rvm' : ''}${remain.has(e.rev) ? ' mrem' : ''}" role="row" aria-selected="${on}"${d ? ` aria-level="${d + 1}"` : ''} tabindex="${cur === e.rev ? 0 : -1}" data-rev="${e.rev}">` +
           `<b class="rv" role="gridcell">${picked ? `<span class="ck${on ? ' on' : ''}" aria-hidden="true">${on ? U.icon('check') : ''}</span>` : ''}${d ? `<i class="mgi" title="${esc(t('Entrata per merge'))}" aria-hidden="true">↳</i>` : ''}r${e.rev}</b><span class="au" role="gridcell" title="${esc(e.author)}">${esc(e.author)}</span><span class="dtm muted" role="gridcell">${U.fmtDate(e.date)}</span><span class="m" role="gridcell" title="${esc(e.msg)}">${e.reverse ? `<em class="rvt">${esc(t('merge inverso'))}</em> ` : ''}${esc((e.msg || '').split('\n')[0])}</span></div>`; }).join('') +
         (s.canMore ? `<div class="lmore">${U.btn('btn', t('Carica altre 50'), null, 'logMore', null, t('Carica altre 50 revisioni più vecchie'))}</div>` : '');
     },
@@ -128,13 +134,14 @@
         (r.byRevMore ? `<p class="muted">${t('… e altre {0} revisioni non elencate.', r.byRevMore)}</p>` : '');
     },
     mergePanel(s) {
-      const m = s.merge, n = m.selected.length, off = m.busy || m.loading || !m.eligible ? 'disabled' : '';
+      const m = s.merge, n = m.selected.length, intr = m.interrupted, off = m.busy || m.loading || !m.eligible || intr ? 'disabled' : '';
       return `<div class="ld-h mp"><b>${esc(m.title)}</b> <span class="muted">· ${mgState(m)}${n && !m.pending ? ' · ' + t('{0} scelte', n) : ''}</span>` +
         `<p class="muted">${t('Clic su una revisione per sceglierla (cherry-pick). Senza scelta, Anteprima e Merge tutto valgono per tutte le revisioni da unire.')}</p>` +
-        (m.blocked ? `<div class="mb warn" role="alert">${U.icon('warn')}<span>${esc(m.blocked)}</span><span class="fill"></span>` +
+        (intr ? O_pending(intr, m) : '') +
+        (m.blocked && !intr ? `<div class="mb warn" role="alert">${U.icon('warn')}<span>${esc(m.blocked)}</span><span class="fill"></span>` +
           U.btn('btn sm primary', t('SVN Revert di tutto…'), 'undo', 'mergeRevertAll', null, t('Annulla tutte le modifiche locali (conferma con l’elenco dei file; i non versionati non si toccano), poi il merge si può rifare'), m.busy ? 'disabled' : '') +
           U.btn('btn sm', t('Vai a Changes'), 'diff', 'mergeResolve', null, t('Apre Changes per committare o rivedere le modifiche locali')) + `</div>` : '') +
-        (m.dirty && !m.blocked && !m.pending ? `<div class="mb info" role="note">${U.icon('warn')}<span>${t('Hai {0} elementi con modifiche non committate: puoi unire lo stesso. Prima del merge ti chiedo conferma (con i file in comune, a rischio di conflitto) e salvo una copia di sicurezza; "Annulla merge" le ripristina.', m.dirty)}</span></div>` : '') +
+        (m.dirty && !m.blocked && !m.pending && !intr ? `<div class="mb info" role="note">${U.icon('warn')}<span>${t('Hai {0} elementi con modifiche non committate: puoi unire lo stesso. Prima del merge ti chiedo conferma (con i file in comune, a rischio di conflitto) e salvo una copia di sicurezza; "Annulla merge" le ripristina.', m.dirty)}</span></div>` : '') +
         (m.error ? `<div class="rp-err" role="alert">${U.icon('x')}<span>${esc(m.error)}</span>${m.needsUpdate ? '<span class="fill"></span>' + U.btn('btn sm primary', t('SVN Update ora'), 'refresh', 'mergeUpdate', null, t('Aggiorna la working copy (svn update) e ricalcola le revisioni da unire'), m.busy ? 'disabled' : '') : ''}</div>` : '') +
         `<div class="mact">` +
         U.btn('btn', t('Anteprima'), 'refresh', 'mergePreview', null, n ? t('Simula il merge delle {0} revisioni scelte (svn merge --dry-run)', n) : t('Simula il merge di tutte le revisioni da unire (svn merge --dry-run)'), off) +
