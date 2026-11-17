@@ -19,9 +19,11 @@ internal sealed record DownloadDto(double Pct, string Label);
 /// <param name="AiLevel">Gravita' di <c>AiStatus</c> per la UI: busy | ok | warn | err | info (vuoto se nessun messaggio).</param>
 /// <param name="Count">Elementi del prossimo commit: quelli in Staged, oppure (Staged vuoto) tutte le modifiche dei file versionati.</param>
 /// <param name="All">true se Staged e' vuoto e il commit prende tutte le modifiche (pulsante "Commit All").</param>
+/// <param name="AiAction">Pulsante accanto all'errore AI (es. "Aggiorna elenco modelli" quando il modello scelto non esiste piu').</param>
 /// <param name="AiSeq">Cresce a ogni messaggio AI: la UI lo usa per rendere visibile anche un messaggio ripetuto.</param>
 internal sealed record CommitDto(string Text, string AiStatus, string AiLevel, int AiSeq, bool Busy, string Lang, IReadOnlyList<TraceDto> Trace, DownloadDto? Download, int Count = 0, bool All = false,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? Recent = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? Recent = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] StatusActionDto? AiAction = null);
 
 internal sealed record ThemeDto(string Mode, string Kind);
 
@@ -57,7 +59,8 @@ internal sealed record PrereqDto(bool Open, string Summary, string Ai, string Fe
 
 internal sealed record WizardProviderDto(string Id, string Title, string Cost);
 
-internal sealed record WizardModelDto(string Value, string Label);
+/// <param name="Cost">Costo dichiarato dal provider (es. richieste premium di Copilot); vuoto = non disponibile.</param>
+internal sealed record WizardModelDto(string Value, string Label, string Cost = "");
 
 /// <summary>Procedura guidata "Configura l'AI": passo 1 provider, 2 prerequisiti, 3 accesso, 4 modello.</summary>
 internal sealed record WizardDto(
@@ -76,7 +79,14 @@ internal sealed record WizardDto(
     string Endpoint,
     IReadOnlyList<WizardModelDto> Models,
     string Model,
-    bool CanNext);
+    bool CanNext,
+    bool ModelsLoading = false,
+    string ModelsUpdated = "",
+    string ModelsNote = "",
+    bool ModelsError = false,
+    string ModelsAccount = "",
+    string ModelsSource = "",
+    string ModelSaved = "");
 
 internal sealed record RevItemDto(long Rev, string Author, string Date, string Msg);
 

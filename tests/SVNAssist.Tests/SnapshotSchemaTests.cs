@@ -105,6 +105,32 @@ public class SnapshotSchemaTests
             new PrereqStore(new PrerequisitesService(new StubSettings(), new PrerequisiteProbes()))).GetSnapshot()));
 
     [Fact]
+    public async Task SnapshotChanges_PassoModelloEErroreAiConAzione_RispettaLoSchema()
+    {
+        var settings = new StubSettings();
+        var ai = new FakeAiFactory();
+        var prereq = new PrereqStore(new PrerequisitesService(settings, new PrerequisiteProbes()));
+        var src = new SchemaModelSource();
+        var wizard = new WizardStore(prereq, settings, new AiModelCatalog(src));
+        var store = new ChangesStore(settings, new FakeSvnService(), ai, new NoopAiPrompt(), new FakeDialogs(), new FakeHost(), prereq, wizard);
+        await wizard.OpenModelsAsync("claude", Ct);
+        AssertValid("changes-state", UiJson.Serialize(store.GetSnapshot()));
+
+        store.CommitMessage.SetAiError("unknown model foo"); // errore "modello non disponibile": compare commit.aiAction
+        var json = UiJson.Serialize(store.GetSnapshot());
+        Assert.Contains("\"aiAction\"", json);
+        AssertValid("changes-state", json);
+    }
+
+    private sealed class SchemaModelSource : IAiModelSource
+    {
+        public Task<string> IdentityAsync(string provider, CancellationToken ct) => Task.FromResult(string.Empty);
+
+        public Task<AiModelsFetched?> ListAsync(string provider, bool force, CancellationToken ct)
+            => Task.FromResult<AiModelsFetched?>(new AiModelsFetched([new AiModelInfo("m1", "Modello 1", "1× richieste premium per richiesta")], "Account: x"));
+    }
+
+    [Fact]
     public async Task SnapshotChanges_HaLeStesseChiaviDellaFixtureUfficiale()
     {
         var store = NewStore(SvnWithEverything());

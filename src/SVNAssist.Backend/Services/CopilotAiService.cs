@@ -59,15 +59,19 @@ internal sealed class CopilotAiService : AiServiceBase
     private async Task<string> CompleteWithRetryAsync(string systemPrompt, string userMessage, CancellationToken ct)
     {
         var core = CoreOverride ?? CompleteCoreAsync;
+        Exception? firstError = null;
         try
         {
             var first = await core(systemPrompt, userMessage, ct);
             if (!string.IsNullOrWhiteSpace(first))
                 return first;
         }
-        catch (Exception) when (!ct.IsCancellationRequested)
+        catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            // si riprova sotto
+            // Modello ritirato/non disponibile: riprovare con lo stesso modello non serve, l'errore vero va mostrato subito.
+            if (AiErrors.Classify(ex.Message) == AiErrorKind.ModelUnavailable)
+                throw;
+            firstError = ex; // si riprova sotto
         }
 
         try
@@ -75,7 +79,8 @@ internal sealed class CopilotAiService : AiServiceBase
             var second = await core(systemPrompt, TrimToMaxChars(userMessage, Math.Max(2000, userMessage.Length / 2)), ct);
             if (!string.IsNullOrWhiteSpace(second))
                 return second;
-            throw new InvalidOperationException(Loc.T("Copilot non ha risposto: riprova o scegli un modello diverso."));
+            throw new InvalidOperationException(Loc.T("Copilot non ha risposto: riprova o scegli un modello diverso.")
+                + (firstError is null ? string.Empty : " (" + firstError.Message + ")"));
         }
         catch (Exception ex) when (!ct.IsCancellationRequested && ex is not InvalidOperationException { InnerException: null })
         {
@@ -105,7 +110,7 @@ internal sealed class CopilotAiService : AiServiceBase
 
     private async Task<string> CompleteCoreAsync(string systemPrompt, string userMessage, CancellationToken ct)
     {
-        var client = await GetClientAsync(ct);
+        var client = await GetSharedClientAsync(_httpClient, _gitHubToken, ct);
 
         await using var session = await client.CreateSessionAsync(new SessionConfig
         {
@@ -128,27 +133,55 @@ internal sealed class CopilotAiService : AiServiceBase
             ?? throw new InvalidOperationException(Loc.T("Copilot non ha restituito alcun messaggio."));
     }
 
-    private async Task<CopilotClient> GetClientAsync(CancellationToken ct)
+    /// <summary>
+    /// Modelli e account di Copilot dal runtime (<c>ListModelsAsync</c>, <c>GetAuthStatusAsync</c>). L'SDK tiene l'elenco in cache finche' il client
+    /// resta connesso: con <paramref name="force"/> si riavvia il client, cosi' "Aggiorna elenco" interroga davvero Copilot.
+    /// </summary>
+    internal static async Task<(IReadOnlyList<(string Id, string? Name, string? State, double? Multiplier)> Models, string? Account)> ListModelsAsync(
+        HttpClient httpClient, string? token, bool force, CancellationToken ct)
+    {
+        if (force)
+            await DropSharedClientAsync();
+        var client = await GetSharedClientAsync(httpClient, string.IsNullOrWhiteSpace(token) ? null : token, ct);
+
+        string? account = null;
+        try
+        {
+            var auth = await client.GetAuthStatusAsync(ct);
+            account = auth.IsAuthenticated
+                ? Loc.T("Account GitHub: {0} (accesso: {1})", string.IsNullOrWhiteSpace(auth.Login) ? "?" : auth.Login, string.IsNullOrWhiteSpace(auth.AuthType) ? "?" : auth.AuthType)
+                : Loc.T("Copilot non è collegato: {0}", string.IsNullOrWhiteSpace(auth.StatusMessage) ? Loc.T("accedi a GitHub (gh auth login)") : auth.StatusMessage);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            BackendLog.Warn("Stato di accesso Copilot non disponibile: " + ex.Message);
+        }
+
+        var models = await client.ListModelsAsync(ct);
+        return (models.Select(m => (m.Id, (string?)m.Name, (string?)m.Policy?.State, (double?)m.Billing?.Multiplier)).ToList(), account);
+    }
+
+    private static async Task<CopilotClient> GetSharedClientAsync(HttpClient httpClient, string? token, CancellationToken ct)
     {
         await ClientLock.WaitAsync(ct);
         try
         {
-            if (_sharedClient is not null && _sharedClientToken == _gitHubToken)
+            if (_sharedClient is not null && _sharedClientToken == token)
                 return _sharedClient;
 
             if (_sharedClient is not null)
                 await _sharedClient.DisposeAsync();
             _sharedClient = null;
 
-            var runtimePath = await CopilotRuntimeInstaller.EnsureInstalledAsync(_httpClient, ct);
+            var runtimePath = await CopilotRuntimeInstaller.EnsureInstalledAsync(httpClient, ct);
             var client = new CopilotClient(new CopilotClientOptions
             {
-                GitHubToken = _gitHubToken,
+                GitHubToken = token,
                 Connection = RuntimeConnection.ForStdio(runtimePath),
             });
             await client.StartAsync(ct);
             _sharedClient = client;
-            _sharedClientToken = _gitHubToken;
+            _sharedClientToken = token;
             return client;
         }
         finally

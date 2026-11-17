@@ -72,14 +72,26 @@
       "description": "Apri in Esplora file: seleziona il file o la cartella della riga (se non esiste piu', apre la cartella piu' vicina). Solo dentro la working copy.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "args"],
+      "required": [
+        "name",
+        "args"
+      ],
       "properties": {
-        "name": { "const": "revealInExplorer" },
+        "name": {
+          "const": "revealInExplorer"
+        },
         "args": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["key"],
-          "properties": { "key": { "type": "string", "description": "Chiave di riga." } }
+          "required": [
+            "key"
+          ],
+          "properties": {
+            "key": {
+              "type": "string",
+              "description": "Chiave di riga."
+            }
+          }
         }
       }
     },
@@ -2279,8 +2291,50 @@
       }
     },
     {
+      "title": "wizardOpenModels",
+      "description": "Apre la procedura direttamente sul passo Modello (provider dell'ultimo errore AI) con l'elenco riletto; Fine rigenera il messaggio.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "wizardOpenModels"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "wizardModelsRefresh",
+      "description": "Passo Modello: richiede di nuovo l'elenco dei modelli al provider (ignora la copia salvata).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "wizardModelsRefresh"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
       "title": "wizardFinish",
-      "description": "Salva provider e modello; se la procedura veniva da Genera con AI, genera.",
+      "description": "Salva provider e modello (qualsiasi id valido: dall'elenco o scritto in Altro...); se la procedura veniva da Genera con AI, genera.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -2394,14 +2448,28 @@
       "description": "SVN Branch/Tag: apre il dialogo (stato branchTag). kind = branch | tag (scelta iniziale).",
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "args"],
+      "required": [
+        "name",
+        "args"
+      ],
       "properties": {
-        "name": { "const": "branchTagOpen" },
+        "name": {
+          "const": "branchTagOpen"
+        },
         "args": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["kind"],
-          "properties": { "kind": { "enum": ["branch", "tag"] } }
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "enum": [
+                "branch",
+                "tag"
+              ]
+            }
+          }
         }
       }
     },
@@ -2410,10 +2478,20 @@
       "description": "SVN Branch/Tag: chiude il dialogo senza creare nulla.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "args"],
+      "required": [
+        "name",
+        "args"
+      ],
       "properties": {
-        "name": { "const": "branchTagCancel" },
-        "args": { "type": "object", "additionalProperties": false, "required": [], "properties": {} }
+        "name": {
+          "const": "branchTagCancel"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
       }
     },
     {
@@ -2421,20 +2499,51 @@
       "description": "SVN Branch/Tag: controlla il nome (errore in branchTag.error, il dialogo resta aperto), svn copy sul server, poi se switch e vero lo switch al nuovo ramo. source: head (HEAD del ramo corrente), rev (revisione in rev), wc (working copy, con le modifiche locali).",
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "args"],
+      "required": [
+        "name",
+        "args"
+      ],
       "properties": {
-        "name": { "const": "branchTagOk" },
+        "name": {
+          "const": "branchTagOk"
+        },
         "args": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["kind", "name", "message", "source", "rev", "switch"],
+          "required": [
+            "kind",
+            "name",
+            "message",
+            "source",
+            "rev",
+            "switch"
+          ],
           "properties": {
-            "kind": { "enum": ["branch", "tag"] },
-            "name": { "type": "string" },
-            "message": { "type": "string" },
-            "source": { "enum": ["head", "rev", "wc"] },
-            "rev": { "type": "string" },
-            "switch": { "type": "boolean" }
+            "kind": {
+              "enum": [
+                "branch",
+                "tag"
+              ]
+            },
+            "name": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "source": {
+              "enum": [
+                "head",
+                "rev",
+                "wc"
+              ]
+            },
+            "rev": {
+              "type": "string"
+            },
+            "switch": {
+              "type": "boolean"
+            }
           }
         }
       }

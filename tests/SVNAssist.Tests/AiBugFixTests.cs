@@ -277,15 +277,15 @@ public class AiBugFixTests : IDisposable
     // ── Bug 6: valori fuori lista ──
 
     [Fact]
-    public void ModelloOpenAiFuoriLista_SuGitHubModels_RicadeSulDefault()
-        => Assert.Equal(SettingDefinitions.DefaultAiModel,
-            AiServiceFactory.NormalizeOpenAiModel(SettingDefinitions.GitHubModelsEndpoint, "modello-sparito"));
+    public void ModelloOpenAiFuoriElenco_SuGitHubModels_SiUsaComunque()
+        => Assert.Equal("openai/modello-nuovo",
+            AiServiceFactory.NormalizeOpenAiModel(SettingDefinitions.GitHubModelsEndpoint, "modello-nuovo"));
 
     [Fact]
     public void ModelliConBarraEPunto_SonoNellaListaDeiValoriAmmessi()
     {
         Assert.Contains("openai/gpt-4.1", SettingDefinitions.KnownAiModels);
-        Assert.Contains("claude-sonnet-4.5", SettingDefinitions.KnownCopilotModels);
+        Assert.Equal(["default"], SettingDefinitions.KnownCopilotModels); // gli id Copilot "a caso" sono stati tolti: l'elenco viene dal provider
         Assert.Equal("openai/gpt-4.1", AiServiceFactory.NormalizeOpenAiModel(SettingDefinitions.GitHubModelsEndpoint, "openai/gpt-4.1"));
     }
 }

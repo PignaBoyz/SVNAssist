@@ -119,34 +119,31 @@ internal sealed class AiServiceFactory : IAiServiceFactory
         return string.IsNullOrWhiteSpace(apiKey) ? null : new AiService(SharedHttpClient, endpoint, model, apiKey);
     }
 
-    /// <summary>Un valore salvato fuori lista (vecchie versioni con testo libero, refusi) ricade sul default invece di rompere la chiamata.</summary>
+    /// <summary>
+    /// Modello Claude da usare: quello salvato (qualsiasi id valido, anche se non e' piu' nell'elenco del provider: l'errore vero lo da' il provider
+    /// e la UI propone di aggiornare l'elenco); vuoto o con caratteri non validi = il default dell'app.
+    /// </summary>
     internal static string ResolveClaudeModel(string? model)
-        => SettingDefinitions.KnownClaudeModels.Contains(model?.Trim() ?? string.Empty, StringComparer.OrdinalIgnoreCase)
-            ? model!.Trim()
-            : SettingDefinitions.DefaultClaudeModel;
+        => AiModelIds.IsPlausible(model) ? model!.Trim() : SettingDefinitions.DefaultClaudeModel;
 
-    /// <summary>"default" (o vuoto) significa modello predefinito di Copilot: al servizio si passa la stringa vuota.</summary>
+    /// <summary>"default" (o vuoto) significa modello predefinito di Copilot: al servizio si passa la stringa vuota; ogni altro id valido si usa com'e'.</summary>
     internal static string NormalizeCopilotModel(string? model)
         => string.IsNullOrWhiteSpace(model) || string.Equals(model.Trim(), SettingDefinitions.CopilotDefaultModel, StringComparison.OrdinalIgnoreCase)
-           || !SettingDefinitions.KnownCopilotModels.Contains(model.Trim(), StringComparer.OrdinalIgnoreCase)
+           || !AiModelIds.IsPlausible(model)
             ? string.Empty
             : model.Trim();
 
     /// <summary>
     /// GitHub Models vuole l'id con publisher (<c>openai/gpt-4o-mini</c>), gli altri endpoint OpenAI-compatibili
     /// (OpenAI, Azure, Ollama) il nome nudo (<c>gpt-4o-mini</c>). Converte in entrambi i versi, così
-    /// funzionano anche i valori salvati con le versioni precedenti.
+    /// funzionano anche i valori salvati con le versioni precedenti. Un id non presente nell'elenco si usa comunque.
     /// </summary>
     internal static string NormalizeOpenAiModel(string endpoint, string? model)
     {
-        var name = string.IsNullOrWhiteSpace(model) ? SettingDefinitions.DefaultAiModel : model.Trim();
+        var name = AiModelIds.IsPlausible(model) ? model!.Trim() : SettingDefinitions.DefaultAiModel;
         const string prefix = "openai/";
         if (IsGitHubModelsEndpoint(endpoint))
-        {
-            // Su GitHub Models la lista è chiusa: un id fuori lista (vecchio valore salvato) ricade sul default.
-            var full = name.Contains('/') ? name : prefix + name;
-            return SettingDefinitions.KnownAiModels.Contains(full, StringComparer.OrdinalIgnoreCase) ? full : SettingDefinitions.DefaultAiModel;
-        }
+            return name.Contains('/') ? name : prefix + name;
 
         return name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ? name[prefix.Length..] : name;
     }

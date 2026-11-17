@@ -73,7 +73,40 @@ internal sealed class CommitStore
     internal string AiStatus
     {
         get { lock (_lock) return _aiStatus; }
-        set { lock (_lock) { _aiStatus = value; _aiSeq++; } Changed?.Invoke(); }
+        set { lock (_lock) { _aiStatus = value; _aiAction = null; _aiSeq++; } Changed?.Invoke(); }
+    }
+
+    private StatusActionDto? _aiAction;
+    private string? _aiProviderHint;
+
+    /// <summary>Provider (<c>copilot</c>, <c>claude</c>...) dell'ultimo errore legato al modello: la procedura "Aggiorna elenco modelli" parte da li'. Null = non noto.</summary>
+    internal string? FailedProvider { get; private set; }
+
+    /// <summary>
+    /// Mostra l'errore vero del provider. Se la causa e' il modello scelto (ritirato, non abilitato, rinominato: succede con Copilot)
+    /// il messaggio lo dice chiaramente e compare il pulsante "Aggiorna elenco modelli" per sceglierne un altro.
+    /// </summary>
+    internal void SetAiError(string detail)
+    {
+        var kind = AiErrors.Classify(detail);
+        if (kind == AiErrorKind.Other)
+        {
+            AiStatus = Loc.T("Errore AI: {0}", detail);
+            return;
+        }
+
+        FailedProvider = AiErrors.ProviderOf(detail) ?? _aiProviderHint;
+        var msg = kind == AiErrorKind.ModelUnavailable
+            ? Loc.T("Errore AI: il modello scelto non è più disponibile presso il provider (ritirato, rinominato o non abilitato per il tuo account). Aggiorna l'elenco dei modelli e scegline un altro.\nDettaglio: {0}", detail)
+            : Loc.T("Errore AI: {0}\nPotrebbe dipendere dal modello scelto: aggiorna l'elenco dei modelli e provane un altro.", detail);
+        lock (_lock)
+        {
+            _aiStatus = msg;
+            _aiAction = new StatusActionDto(Loc.T("Aggiorna elenco modelli"), "wizardOpenModels");
+            _aiSeq++;
+        }
+
+        Changed?.Invoke();
     }
 
     private int _aiSeq;
@@ -113,7 +146,7 @@ internal sealed class CommitStore
     internal CommitDto GetSnapshot(DownloadDto? download, int count = 0, bool all = false)
     {
         lock (_lock)
-            return new CommitDto(_text, _aiStatus, LevelOf(_aiStatus, _busy), _aiSeq, _busy, _lang, _trace, download, count, all);
+            return new CommitDto(_text, _aiStatus, LevelOf(_aiStatus, _busy), _aiSeq, _busy, _lang, _trace, download, count, all, AiAction: _aiAction);
     }
 
     /// <summary>Cambia la lingua del messaggio AI (valori: auto, italiano, english).</summary>
@@ -214,7 +247,7 @@ internal sealed class CommitStore
         }
         catch (Exception ex)
         {
-            AiStatus = Loc.T("Errore AI: {0}", ex.Message);
+            SetAiError(ex.Message);
         }
         finally
         {
@@ -265,6 +298,7 @@ internal sealed class CommitStore
             return;
         }
 
+        _aiProviderHint = ProviderIdOf(ai);
         var chain = DescribeChain(ai);
         if (!await ConfirmDisclosureAsync(paths, chain, ct))
         {
@@ -353,6 +387,16 @@ internal sealed class CommitStore
     {
         FallbackAiService fallback => string.Join(" → ", fallback.ProviderNames),
         _ => DescribeProvider(service),
+    };
+
+    /// <summary>Id del provider (<c>copilot</c>, <c>claudecode</c>, <c>claude</c>, <c>openai</c>) di un servizio singolo; null per la catena di fallback.</summary>
+    internal static string? ProviderIdOf(IAiService service) => service switch
+    {
+        CopilotAiService => "copilot",
+        ClaudeCodeAiService => "claudecode",
+        AnthropicAiService => "claude",
+        AiService => "openai",
+        _ => null,
     };
 
     /// <summary>Nome del provider che ha risposto, se ricavabile a costo zero.</summary>

@@ -18,6 +18,9 @@ internal sealed class BackendServices
     public required PrerequisiteProbes Probes { get; init; }
     public required PrerequisiteActions PrerequisiteActions { get; init; }
 
+    /// <summary>Elenco modelli AI per provider (cache datata). Null = solo l'elenco predefinito dell'app, senza rete (test).</summary>
+    public IAiModelCatalog? ModelCatalog { get; init; }
+
     /// <summary>FileSystemWatcher sulla working copy (spento nei test).</summary>
     public bool EnableWatcher { get; init; }
 
@@ -33,6 +36,7 @@ internal sealed class BackendServices
             // Se svn.exe manca all'avvio, ReloadableSvnService lo ritrova appena viene installato.
             Svn = new ReloadableSvnService(credentials: new HostCredentialPrompt(host)),
             Ai = new AiServiceFactory(settings, tokenResolver, processRunner),
+            ModelCatalog = new AiModelCatalog(new AiModelSource(new System.Net.Http.HttpClient(), settings, tokenResolver), AiModelCatalog.DefaultCacheFile),
             AiSetupPrompt = new HostAiSetupPrompt(host, settings),
             Dialogs = new HostDialogs(host),
             Probes = PrerequisiteProbes.CreateDefault(processRunner, tokenResolver),
@@ -85,6 +89,7 @@ internal sealed class BackendServer : IBackend, IDisposable
     private readonly HostSettings? _hostSettings;
     private readonly ISvnAssistSettings _settings;
     private readonly PathCommands _pathCommands;
+    private readonly IAiModelCatalog _modelCatalog;
 
     /// <summary>Una vista collegata a uno store, con il suo contatore di revisione e l'ultimo snapshot inviato.</summary>
     private sealed class Channel
@@ -105,7 +110,9 @@ internal sealed class BackendServer : IBackend, IDisposable
         _hostSettings = services.Settings as HostSettings;
         _settings = services.Settings;
         var prereq = new PrereqStore(new PrerequisitesService(services.Settings, services.Probes), services.PrerequisiteActions);
-        Changes = new ChangesStore(services.Settings, services.Svn, services.Ai, services.AiSetupPrompt, services.Dialogs, host, prereq)
+        _modelCatalog = services.ModelCatalog ?? new AiModelCatalog();
+        Changes = new ChangesStore(services.Settings, services.Svn, services.Ai, services.AiSetupPrompt, services.Dialogs, host, prereq,
+            wizard: new WizardStore(prereq, services.Settings, _modelCatalog))
         {
             EnableWatcher = services.EnableWatcher,
             Recent = services.EnableWatcher ? new RecentMessages() : null, // come il watcher: spento nei test, che non devono scrivere in %LOCALAPPDATA%
@@ -306,6 +313,20 @@ internal sealed class BackendServer : IBackend, IDisposable
     {
         Changes.HeadCheck.SetActive(active);
         return Task.CompletedTask;
+    }
+
+    public async Task<string> ListAiModelsAsync(string provider, bool forceRefresh)
+    {
+        var list = await _modelCatalog.GetAsync(provider, forceRefresh, _lifetime.Token);
+        return JsonSerializer.Serialize(new
+        {
+            provider,
+            source = list.Source,
+            updated = list.UpdatedAt?.ToUniversalTime().ToString("o", System.Globalization.CultureInfo.InvariantCulture),
+            account = list.Account,
+            error = list.Error,
+            models = list.Models.Select(m => new { id = m.Id, label = m.Label, cost = m.Cost }),
+        });
     }
 
     public async Task<Dictionary<string, string>> GetSccStatesAsync()

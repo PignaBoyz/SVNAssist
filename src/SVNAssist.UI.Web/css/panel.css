@@ -249,7 +249,11 @@ html[data-view=diff] body,html[data-view=log] body,html[data-view=changes] body{
 .wiz-card.sel{border-color:var(--acc2);background:var(--acc-bg);box-shadow:inset 3px 0 0 var(--acc2)}
 .wiz-form{display:flex;flex-direction:column;gap:4px;margin:6px 0}
 .wiz-form label,.wiz-b label{font-weight:600}
-.wiz-b input[type=password],.wiz-b select{background:var(--bg1);border:1px solid var(--bd2);border-radius:4px;padding:5px 8px;width:100%;color:var(--fg)}
+.wiz-b input[type=password],.wiz-b input[type=text],.wiz-b select{background:var(--bg1);border:1px solid var(--bd2);border-radius:4px;padding:5px 8px;width:100%;color:var(--fg)}
+.wiz-note{border-radius:4px;padding:4px 8px;background:var(--warn-bg);color:var(--warn-fg)}
+.wiz-note.err{background:var(--chip-fail-bg);color:var(--chip-fail-fg)}
+.wiz-acc{padding:2px 0}
+.ai-act{margin:4px 0}
 .wiz-f{display:flex;align-items:center;gap:6px;padding:8px 12px;border-top:1px solid var(--bd);background:var(--bg3);flex-wrap:wrap}
 .app.modal-open{pointer-events:none}
 /* scelta della revisione (Update to revision) */
