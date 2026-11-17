@@ -10,6 +10,7 @@ namespace SVNAssist.Tests;
 /// Merge su repository file:// veri (svn installato): file coinvolti per revisione, anteprima per revisione e merge con modifiche pendenti
 /// (backup, annulla che le ripristina). Dove svn non c'e' i test falliscono come gli altri "SvnVero".
 /// </summary>
+[Collection("PatchBackup")]
 public class MergeRealTests
 {
     private static readonly CancellationToken Ct = CancellationToken.None;
@@ -39,6 +40,16 @@ public class MergeRealTests
             return o;
         }
 
+        public string RunTry(string args)
+        {
+            using var p = Process.Start(new ProcessStartInfo(SvnExe, args)
+            { WorkingDirectory = Wc, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true, Environment = { ["LC_ALL"] = "C" } })!;
+            var o = p.StandardOutput.ReadToEnd();
+            p.StandardError.ReadToEnd();
+            p.WaitForExit();
+            return p.ExitCode == 0 ? o : "(" + p.ExitCode + ")";
+        }
+
         public string Path_(string rel) => Path.Combine(Wc, rel.Replace('/', Path.DirectorySeparatorChar));
 
         public void Write(string rel, string text) => File.WriteAllText(Path_(rel), text);
@@ -58,8 +69,12 @@ public class MergeRealTests
             Write("a.txt", "line1\nline2\nline3\n");
             Write("b.txt", "bee\n");
             Write("c.txt", "cee\n");
+            Write("d.txt", "dee\n");
+            File.WriteAllBytes(Path_("crlf.txt"), "riga1\r\nriga2\r\n"u8.ToArray());
+            File.WriteAllBytes(Path_("latin1.txt"), [0x63, 0x61, 0x66, 0x66, 0xE8, 0x0A]);   // "caffè" in Windows-1252: non e' UTF-8
+            File.WriteAllBytes(Path_("bin.dat"), [0x00, 0x01, 0x02, 0xFF, 0x00]);
             Directory.CreateDirectory(Path_("sub"));
-            Run("add a.txt b.txt c.txt sub");
+            Run("add a.txt b.txt c.txt d.txt crlf.txt latin1.txt bin.dat sub");
             Run("commit -m base");                                                          // r2
             Run($"copy \"{Url}/trunk\" \"{Url}/branches/feature\" -m branch", Root);          // r3
             Bwc = Path.Combine(Root, "bwc");
@@ -159,6 +174,169 @@ public class MergeRealTests
         Assert.Equal(["D b.txt"], by[1].Files.Select(f => $"{f.A} {f.P}"));
         Assert.Equal("feat: modifica a", by[0].Msg);
         Assert.Empty(await e.Svn.GetLocalChangesAsync(e.Wc, Ct));   // l'anteprima non tocca la working copy
+    }
+
+    // ── Merge con modifiche pendenti (bug 7): avviso, backup, annulla che ripristina ──
+
+    /// <summary>Stato "versionati con modifiche" ordinato, byte di ogni file e proprieta' svn:ignore: tutto quello che l'utente potrebbe perdere.</summary>
+    private static string Fingerprint(Env e)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine(string.Join("\n", e.Run("status -q").Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.TrimEnd()).Order()));
+        foreach (var f in Directory.EnumerateFiles(e.Wc, "*", SearchOption.AllDirectories)
+                     .Where(f => !f.Contains(Path.DirectorySeparatorChar + ".svn" + Path.DirectorySeparatorChar) && !f.Contains(".svn-assist")).Order())
+            sb.AppendLine($"{Path.GetRelativePath(e.Wc, f).Replace('\\', '/')} {PreMergeSnapshot.Hash(f)}");
+        sb.AppendLine("ignore=" + e.RunTry("propget svn:ignore sub").Trim());
+        sb.AppendLine("myprop=" + e.RunTry("proplist sub").Contains("myprop"));
+        return sb.ToString();
+    }
+
+    /// <summary>Le modifiche pendenti piu' scomode: testo in comune col merge, CRLF, codifica non UTF-8, binario, file vuoto, cartella aggiunta, eliminazione, proprieta' su cartella.</summary>
+    private static void MakePending(Env e)
+    {
+        e.Write("a.txt", "line1\nline2\nline3 USER\n");                              // M, toccato anche da r4 (nessuna riga in comune: unione pulita)
+        File.WriteAllBytes(e.Path_("crlf.txt"), "riga1\r\nriga2 MIA\r\n"u8.ToArray());   // M, CRLF
+        File.WriteAllBytes(e.Path_("latin1.txt"), [0x63, 0x61, 0x66, 0x66, 0xE8, 0xE8, 0x0A]);   // M, Windows-1252
+        File.WriteAllBytes(e.Path_("bin.dat"), [0x00, 0x01, 0x02, 0xFF, 0x00, 0x7F]);       // M, binario
+        e.Write("u.txt", "nuovo mio\n");
+        File.WriteAllBytes(e.Path_("vuoto.txt"), []);
+        Directory.CreateDirectory(e.Path_("nuova"));
+        e.Write("nuova/x.txt", "x\n");
+        e.Run("add u.txt vuoto.txt nuova");                                               // A (file, vuoto, cartella con file)
+        e.Run("rm d.txt");                                                                // D
+        e.Run("propset svn:ignore \"*.tmp\" sub");                                        // M sulla cartella (proprieta')
+    }
+
+    [Fact]
+    public async Task SvnVero_MergeConModifichePendenti_AnnullaRipristinaOgniCosaEsattamente_ECancellaLaCopia()
+    {
+        using var e = new Env();
+        MakePending(e);
+        var before = Fingerprint(e);
+        await e.OpenMergeAsync();
+        Assert.Equal("", e.Merge.Blocked);
+        Assert.True(e.Merge.Dirty >= 8);
+
+        await e.LogCmd("mergeAll");
+
+        var ask = e.Dialogs.Messages.Single();
+        Assert.Contains("modifiche non committate", ask);
+        Assert.Contains("rischio di conflitti", ask);
+        Assert.Contains("a.txt", ask);   // il merge tocca a.txt, che l'utente ha gia' modificato
+        Assert.Contains("BRANCH", e.Read("a.txt"));
+        Assert.Contains("USER", e.Read("a.txt"));   // unione senza conflitti
+        var snapshotDir = Directory.GetDirectories(PatchBackup.BackupsFolder(e.Wc), "*-pre-merge").Single();
+        Assert.True(File.Exists(Path.Combine(snapshotDir, "changes.patch")));
+        Assert.True(File.Exists(Path.Combine(snapshotDir, "manifest.json")));
+        Assert.True(File.Exists(Path.Combine(snapshotDir, "files", "bin.dat")));   // i binari e le codifiche strane stanno nei byte originali
+        var changes = (ChangesState)e.Changes.GetSnapshot();
+        Assert.Contains("annulla il merge", changes.Merge!.Text);
+        Assert.Contains("pendenti", changes.Merge.Text);
+
+        await e.Cmd("mergeUndo");
+
+        Assert.Equal(before, Fingerprint(e));                       // stato, byte, proprieta': tutto come prima del merge
+        Assert.False(Directory.Exists(snapshotDir));                // ripristino verificato: la copia non serve piu'
+        Assert.Contains("ripristinate", ((ChangesState)e.Changes.GetSnapshot()).Status.Msg);
+        Assert.Null(((ChangesState)e.Changes.GetSnapshot()).Merge);
+        Assert.Empty(Directory.GetFiles(e.Wc).Where(f => Path.GetFileName(f).StartsWith("a.txt.", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task SvnVero_MergeConModifichePendenti_ConConflitto_AnnullaRiportaLeModificheDellUtente()
+    {
+        using var e = new Env();
+        e.Write("a.txt", "line1\nline2 MIA\nline3\n");   // stessa riga di r4: conflitto
+        e.Write("d.txt", "dee MIA\n");
+        var before = Fingerprint(e);
+        await e.OpenMergeAsync();
+
+        await e.LogCmd("mergeSelected");   // niente scelta: errore chiaro, nulla di fatto
+        await e.LogCmd("mergeToggle", new { rev = 4 });
+        await e.LogCmd("mergeSelected");
+
+        Assert.Equal(1, ((ChangesState)e.Changes.GetSnapshot()).Merge!.Conflicts);
+        Assert.NotEqual(before, Fingerprint(e));
+
+        await e.Cmd("mergeUndo");
+
+        Assert.Equal(before, Fingerprint(e));
+        Assert.Empty(Directory.GetFiles(e.Wc).Where(f => Path.GetFileName(f).StartsWith("a.txt.", StringComparison.Ordinal)));    // niente file di appoggio del conflitto
+        Assert.Contains("MIA", e.Read("a.txt"));
+    }
+
+    [Fact]
+    public async Task SvnVero_RipristinoNonVerificato_TieneLeCopieEDice_DoveSono_EIFileOriginaliSonoComunqueIntatti()
+    {
+        using var e = new Env();
+        MakePending(e);
+        var before = Fingerprint(e);
+        await e.OpenMergeAsync();
+        await e.LogCmd("mergeAll");
+        var snapshotDir = Directory.GetDirectories(PatchBackup.BackupsFolder(e.Wc), "*-pre-merge").Single();
+        File.Delete(Path.Combine(snapshotDir, "changes.patch"));   // la patch non c'e' piu': proprieta', cartelle ed eliminazioni non tornano dalla patch
+
+        await e.Cmd("mergeUndo");
+
+        var msg = ((ChangesState)e.Changes.GetSnapshot()).Status.Msg;
+        Assert.Contains("non è verificato", msg);
+        Assert.Contains(snapshotDir, msg);                           // l'utente sa dove sono le sue modifiche
+        Assert.True(Directory.Exists(snapshotDir));
+        Assert.True(File.Exists(Path.Combine(snapshotDir, "files", "latin1.txt")));
+        Assert.Equal(PreMergeSnapshot.Hash(Path.Combine(snapshotDir, "files", "latin1.txt")), PreMergeSnapshot.Hash(e.Path_("latin1.txt")));   // byte originali (non UTF-8) tornati
+        Assert.Equal(PreMergeSnapshot.Hash(Path.Combine(snapshotDir, "files", "bin.dat")), PreMergeSnapshot.Hash(e.Path_("bin.dat")));
+        Assert.Contains("MIA", e.Read("crlf.txt"));
+        _ = before;
+    }
+
+    [Fact]
+    public async Task SvnVero_CommitDopoUnMergeSuWorkingCopySporca_CancellaLaCopiaDiSicurezza()
+    {
+        using var e = new Env();
+        e.Write("d.txt", "dee MIA\n");
+        await e.OpenMergeAsync();
+        await e.LogCmd("mergeAll");
+        var snapshotDir = Directory.GetDirectories(PatchBackup.BackupsFolder(e.Wc), "*-pre-merge").Single();
+
+        e.Changes.CommitMessage.SetTextQuietly("merge e modifica mia");
+        await e.Cmd("commit");
+
+        Assert.Empty(e.Run("status -q").Trim());
+        Assert.False(Directory.Exists(snapshotDir));
+        Assert.Contains("dee MIA", e.Run("cat d.txt"));
+        Assert.Null(((ChangesState)e.Changes.GetSnapshot()).Merge);
+    }
+
+    [Fact]
+    public async Task SvnVero_ElementoSpostatoOCopiato_BloccaIlMerge_ConSpiegazione_NienteDaPerdere()
+    {
+        using var e = new Env();
+        e.Run("mv d.txt dd.txt");   // aggiunto con storia: revert e patch non la ricreano
+        await e.OpenMergeAsync();
+        Assert.Contains("aggiunti con storia", e.Merge.Blocked);
+
+        await e.LogCmd("mergeAll");
+
+        Assert.Empty(e.Dialogs.Messages);
+        Assert.True(File.Exists(e.Path_("dd.txt")));
+        Assert.False(File.Exists(e.Path_("d.txt")));
+        Assert.False(Directory.Exists(PatchBackup.BackupsFolder(e.Wc)) && Directory.GetDirectories(PatchBackup.BackupsFolder(e.Wc), "*-pre-merge").Length > 0);
+        Assert.Contains("moved", e.Run("status --xml"), StringComparison.OrdinalIgnoreCase);   // e il move e' ancora un move
+    }
+
+    [Fact]
+    public async Task SvnVero_MergeSenzaModifichePendenti_NonChiedeNulla_NienteCopiaPreMerge_AnnullaComePrima()
+    {
+        using var e = new Env();
+        await e.OpenMergeAsync();
+        Assert.Equal(0, e.Merge.Dirty);
+
+        await e.LogCmd("mergeAll");
+
+        Assert.Empty(e.Dialogs.Messages);
+        Assert.False(Directory.Exists(PatchBackup.BackupsFolder(e.Wc)) && Directory.GetDirectories(PatchBackup.BackupsFolder(e.Wc), "*-pre-merge").Length > 0);
+        await e.Cmd("mergeUndo");
+        Assert.Empty(e.Run("status -q").Trim());
     }
 
     [Fact]

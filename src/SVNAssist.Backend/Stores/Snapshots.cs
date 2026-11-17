@@ -154,7 +154,8 @@ internal sealed record MergeResultDto(string Mode, string Revs, MergeCountsDto C
 
 /// <summary>Il Log in modalita' merge: <c>Selected</c> = revisioni scelte per il cherry-pick; <c>Blocked</c> = perche' non si puo' fare il merge (working copy sporca), vuoto se si puo'.
 /// <c>NeedsUpdate</c> = l'errore suggerisce SVN Update (revisioni miste): la UI offre "SVN Update ora".
-/// <c>Pending</c> = merge eseguito e non ancora committato ne' annullato (le revisioni "da unire" non vanno mostrate come zero).</summary>
+/// <c>Pending</c> = merge eseguito e non ancora committato ne' annullato (le revisioni "da unire" non vanno mostrate come zero).
+/// <c>Dirty</c> = elementi con modifiche pendenti (M, A, D, R): non bloccano il merge, che chiede conferma e salva prima una copia di sicurezza.</summary>
 internal sealed record MergeDto(
     string Source,
     string Title,
@@ -167,7 +168,8 @@ internal sealed record MergeDto(
     MergeResultDto? Result,
     bool Pending = false,
     bool NeedsUpdate = false,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] MergeFilesDto? Files = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] MergeFilesDto? Files = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int Dirty = 0);
 
 /// <summary>Snapshot della vista <c>log</c> (log-state.schema.json).</summary>
 internal sealed record LogState(

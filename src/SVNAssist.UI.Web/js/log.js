@@ -134,6 +134,7 @@
         (m.blocked ? `<div class="mb warn" role="alert">${U.icon('warn')}<span>${esc(m.blocked)}</span><span class="fill"></span>` +
           U.btn('btn sm primary', t('SVN Revert di tutto…'), 'undo', 'mergeRevertAll', null, t('Annulla tutte le modifiche locali (conferma con l’elenco dei file; i non versionati non si toccano), poi il merge si può rifare'), m.busy ? 'disabled' : '') +
           U.btn('btn sm', t('Vai a Changes'), 'diff', 'mergeResolve', null, t('Apre Changes per committare o rivedere le modifiche locali')) + `</div>` : '') +
+        (m.dirty && !m.blocked && !m.pending ? `<div class="mb info" role="note">${U.icon('warn')}<span>${t('Hai {0} elementi con modifiche non committate: puoi unire lo stesso. Prima del merge ti chiedo conferma (con i file in comune, a rischio di conflitto) e salvo una copia di sicurezza; "Annulla merge" le ripristina.', m.dirty)}</span></div>` : '') +
         (m.error ? `<div class="rp-err" role="alert">${U.icon('x')}<span>${esc(m.error)}</span>${m.needsUpdate ? '<span class="fill"></span>' + U.btn('btn sm primary', t('SVN Update ora'), 'refresh', 'mergeUpdate', null, t('Aggiorna la working copy (svn update) e ricalcola le revisioni da unire'), m.busy ? 'disabled' : '') : ''}</div>` : '') +
         `<div class="mact">` +
         U.btn('btn', t('Anteprima'), 'refresh', 'mergePreview', null, n ? t('Simula il merge delle {0} revisioni scelte (svn merge --dry-run)', n) : t('Simula il merge di tutte le revisioni da unire (svn merge --dry-run)'), off) +

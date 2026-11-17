@@ -148,6 +148,7 @@ pre.cmd{background:var(--bg0);border:1px solid var(--bd);padding:6px 8px;font:12
 .ck .ic{width:10px;height:10px}
 .mact{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 2px}
 .mres{padding:8px 12px}
+.mb.info{border-color:var(--bd2);color:var(--fg2)}
 .mf,.mrv{padding:0 12px 6px}
 .mrv{padding:0 0 4px}
 .mrv .pth b{color:var(--fg)}

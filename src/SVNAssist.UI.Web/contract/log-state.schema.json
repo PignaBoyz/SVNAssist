@@ -240,7 +240,7 @@
         },
         "blocked": {
           "type": "string",
-          "description": "Perche non si puo unire (working copy con modifiche locali); vuoto se si puo. La UI affianca i pulsanti SVN Revert di tutto (mergeRevertAll) e Vai a Changes (mergeResolve)."
+          "description": "Perche non si puo unire (conflitti, file mancanti o elementi a meta nella working copy: dopo un merge non si ripristinano in modo affidabile); vuoto se si puo. Le modifiche pendenti (M, A, D, R) NON bloccano: vedi dirty. La UI affianca i pulsanti SVN Revert di tutto (mergeRevertAll) e Vai a Changes (mergeResolve)."
         },
         "selected": {
           "type": "array",
@@ -518,6 +518,11 @@
               "description": "Voci non elencate (limite dell'elenco)."
             }
           }
+        },
+        "dirty": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Elementi con modifiche pendenti (M, A, D, R); assente se zero. Non bloccano il merge: prima si chiede conferma (con i file in comune col merge, a rischio di conflitto) e si salva una copia di sicurezza in .svn-assist/backups che Annulla merge ripristina."
         }
       }
     },

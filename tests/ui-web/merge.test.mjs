@@ -132,12 +132,12 @@ test('mock: apri (senza il ramo corrente), scegli, anteprima, cherry-pick con co
   let m = last('log').merge;
   assert.equal(m.title, 'Merge da branches/feature-coupon'); assert.equal(m.eligible, 4);
   assert.deepEqual(last('log').entries.map(e => e.rev), [131, 129, 128, 126]);
-  assert.match(m.blocked, /modifiche locali/, 'la working copy della demo parte sporca: il merge e bloccato');
+  assert.match(m.blocked, /in conflitto, mancanti o a metà/, 'la working copy della demo parte con conflitti e file mancanti: il merge e bloccato');
 
   // avviso giallo: "SVN Revert di tutto..." con conferma (negata = niente), poi il merge si puo' fare
   await run('modal = async () => false', 't');
   await send('log', 'mergeRevertAll', {}); ok();
-  assert.match(last('log').merge.blocked, /modifiche locali/, 'conferma negata: la working copy resta sporca');
+  assert.match(last('log').merge.blocked, /in conflitto, mancanti o a metà/, 'conferma negata: la working copy resta sporca');
   await run('modal = async () => true', 't');   // dialoghi (conferma di revert e annullamento): senza DOM non esistono
   await send('log', 'mergeRevertAll', {}); ok();
   assert.equal(last('log').merge.blocked, '', 'dopo il revert di tutto il merge si puo rifare');
@@ -290,4 +290,43 @@ test('log normale: conteggio per azione e "Solo percorsi interessati" (compare s
   s.base = '/trunk/src'; h = U.logHTML.detail(s);
   assert.match(h, /id="lonly"/); assert.match(h, /Solo percorsi interessati/);
   assert.deepEqual(validate(contract('log-state.schema.json'), s), []);
+});
+
+test('mock: merge con modifiche pendenti: non blocca, chiede conferma con i file in comune, Annulla merge le ripristina', async () => {
+  const { run, bridge } = await loadDemo();
+  const B = bridge(), got = { changes: [], log: [] }, tick = () => new Promise(r => setImmediate(r));
+  const wins = { changes: { frameElement: { isConnected: true } }, log: { frameElement: { isConnected: true } } };
+  for (const v of ['changes', 'log']) { B.attach(wins[v], m => got[v].push(j(m))); }
+  let n = 0;
+  const send = async (view, name, a) => { B.postMessage({ v: 1, id: ++n, type: 'cmd', name, args: a }, wins[view]); for (let i = 0; i < 40; i++) await tick(); };
+  const last = v => got[v].filter(m => m.type === 'state').at(-1).state;
+  await run('autoDetect()', 't');
+  for (const v of ['changes', 'log']) B.postMessage({ v: 1, type: 'ready', view: v, id: null }, wins[v]);
+  await tick();
+  await send('changes', 'refresh', {});
+  await run('modal = async () => true', 't');
+  await send('changes', 'mergeOpen', {}); await send('changes', 'switchOk', { name: 'branches/feature-coupon' });
+  await send('log', 'mergeRevertAll', {});   // via conflitti e mancanti: restano solo le modifiche pendenti vere
+  await run("S.files.forEach(f => { if (f.st !== '?') { f.st = 'N'; f.text = f.base; } })", 't');
+  const mine = await run("(() => { const f = S.files.find(f => f.st === 'N' && f.text != null); f.st = 'M'; f.text = 'MIO TESTO'; return f.path; })()", 't');
+  await send('log', 'mergePreview', {});
+  assert.equal(last('log').merge.blocked, '', 'le modifiche pendenti non bloccano');
+  assert.equal(last('log').merge.dirty, 1);
+  assert.deepEqual(validate(contract('log-state.schema.json'), last('log')), []);
+  assert.match(U.logHTML.mergePanel(last('log')), /Hai 1 elementi con modifiche non committate/);
+
+  let asked = '';
+  await run('modal = async m => { globalThis.__asked = String(m.body); return false; }', 't');
+  await send('log', 'mergeAll', {});
+  asked = await run('globalThis.__asked', 't');
+  assert.match(asked, /1 elementi con modifiche non committate/); assert.match(asked, /copia di sicurezza/); assert.match(asked, /Unire comunque\?/);
+  assert.ok(!last('changes').merge, 'conferma negata: nessun merge');
+
+  await run('modal = async () => true', 't');
+  await send('log', 'mergeAll', {});
+  assert.ok(last('changes').merge, 'merge fatto sopra le modifiche pendenti');
+  await send('changes', 'mergeUndo', {});
+  assert.ok(!last('changes').merge);
+  assert.match(last('changes').status.msg, /le tue 1 modifiche pendenti sono state ripristinate/);
+  assert.equal(await run(`(() => { const f = S.files.find(f => f.path === ${JSON.stringify(mine)}); return f.st + ':' + f.text; })()`, 't'), 'M:MIO TESTO', 'il lavoro dell\'utente e\' tornato');
 });

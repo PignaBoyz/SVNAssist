@@ -123,7 +123,7 @@ internal sealed class FakeSvnService : ISvnService
         return 42;
     }
 
-    public Task AddAsync(IEnumerable<string> paths, CancellationToken ct) { Added.Add(paths.ToList()); return Task.CompletedTask; }
+    public Task AddAsync(IEnumerable<string> paths, CancellationToken ct, bool nonRecursive = false) { Added.Add(paths.ToList()); return Task.CompletedTask; }
     public Task DeleteAsync(IEnumerable<string> paths, CancellationToken ct, bool force = false) { Deleted.Add(paths.ToList()); DeleteForced.Add(force); return Task.CompletedTask; }
     public List<bool> RevertRecursive { get; } = [];
     public Exception? RevertError { get; set; }
@@ -341,6 +341,9 @@ internal sealed class FakeSvnService : ISvnService
     public IReadOnlyList<long> Eligible { get; set; } = [];
     public IReadOnlyList<SvnLogEntry> RangeLog { get; set; } = [];
     public string? MergeError { get; set; }
+    /// <summary>Errore solo per il dry-run (es. E155015: simula una revisione alla volta senza vedere le precedenti) o solo per il merge vero.</summary>
+    public string? DryRunError { get; set; }
+    public string? RealMergeError { get; set; }
     public MergeOutput MergeResult { get; set; } = new([], 0, 0);
     public List<(string Path, string Url, long[]? Revs, bool DryRun)> Merges { get; } = [];
     /// <summary>Stati che un merge vero lascia nella working copy.</summary>
@@ -365,6 +368,10 @@ internal sealed class FakeSvnService : ISvnService
     {
         if (MergeError is not null)
             throw new InvalidOperationException(MergeError);
+        if (dryRun && DryRunError is not null)
+            throw new InvalidOperationException(DryRunError);
+        if (!dryRun && RealMergeError is not null)
+            throw new InvalidOperationException(RealMergeError);
         Merges.Add((workingCopyPath, sourceUrl, revisions?.ToArray(), dryRun));
         if (!dryRun)
         {

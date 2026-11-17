@@ -145,7 +145,8 @@ public class SvnService : ISvnService
                 kind = SvnStatusKind.Conflicted;
 
             results.Add(new SvnFileStatus(path, kind, isTreeConflict, IsLocked: wcStatus?.Element("lock") is not null,
-                IsSwitched: wcStatus?.Attribute("switched")?.Value == "true", IsWcLocked: wcStatus?.Attribute("wc-locked")?.Value == "true"));
+                IsSwitched: wcStatus?.Attribute("switched")?.Value == "true", IsWcLocked: wcStatus?.Attribute("wc-locked")?.Value == "true",
+                IsCopied: wcStatus?.Attribute("copied")?.Value == "true" || wcStatus?.Attribute("moved-from") is not null || wcStatus?.Attribute("moved-to") is not null));
         }
 
         return results;
@@ -209,13 +210,13 @@ public class SvnService : ISvnService
     }
 
     /// <inheritdoc />
-    public async Task AddAsync(IEnumerable<string> paths, CancellationToken ct)
+    public async Task AddAsync(IEnumerable<string> paths, CancellationToken ct, bool nonRecursive = false)
     {
         var pathList = paths.ToList();
         if (pathList.Count == 0)
             return;
 
-        await RunSvnWithTargetsAsync(["add", "--force", "--parents"], pathList, workingDirectory: null, ct);
+        await RunSvnWithTargetsAsync(nonRecursive ? ["add", "--depth", "empty", "--parents"] : ["add", "--force", "--parents"], pathList, workingDirectory: null, ct);
     }
 
     /// <inheritdoc />

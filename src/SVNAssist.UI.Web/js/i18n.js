@@ -5,6 +5,7 @@
 (function (w) {
   const U = w.SVNUI = w.SVNUI || { views: {} };
   const EN = {
+    "Hai {0} elementi con modifiche non committate: puoi unire lo stesso. Prima del merge ti chiedo conferma (con i file in comune, a rischio di conflitto) e salvo una copia di sicurezza; \"Annulla merge\" le ripristina.": "You have {0} items with uncommitted changes: you can merge anyway. Before the merge I ask for confirmation (with the files in common, at risk of conflict) and save a backup copy; \"Undo merge\" restores them.",
     "Copiato: {0}": "Copied: {0}",
     "Copia numero revisione": "Copy revision number",
     "Copia messaggio": "Copy message",

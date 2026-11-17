@@ -7,6 +7,7 @@ using SVNAssist.Stores;
 namespace SVNAssist.Tests;
 
 /// <summary>SVN Merge (0.3.0 fase 2): parser dell'output testuale, argomenti, selettore, Log in modalita' merge, banner e annulla; in fondo prova con svn vero su un repository file://.</summary>
+[Collection("PatchBackup")]
 public class MergeTests
 {
     private static readonly CancellationToken Ct = CancellationToken.None;
@@ -468,23 +469,192 @@ public class MergeTests
     }
 
     [Fact]
-    public async Task Merge_WorkingCopySporca_Bloccata_ConSpiegazione_NienteMerge()
+    public async Task Merge_ConflittiOFileMancanti_Bloccano_ConSpiegazione_NienteMerge()
     {
         using var f = new Fixture();
-        f.Svn.Statuses.Add(new SvnFileStatus(@"C:\wc\x.cs", SvnStatusKind.Modified, IsTreeConflict: false));
+        f.Svn.Statuses.Add(new SvnFileStatus(@"C:\wc\x.cs", SvnStatusKind.Conflicted, IsTreeConflict: false));
+        f.Svn.Statuses.Add(new SvnFileStatus(@"C:\wc\m.cs", SvnStatusKind.Missing, IsTreeConflict: false));
         f.Svn.Statuses.Add(new SvnFileStatus(@"C:\wc\nuovo.txt", SvnStatusKind.Unversioned, IsTreeConflict: false));   // i non versionati non contano
         await f.OpenMergeAsync();
-        Assert.Contains("1 elementi con modifiche locali", f.Merge.Blocked);
+        Assert.Contains("2 elementi in conflitto, mancanti, a metà", f.Merge.Blocked);
 
         await f.LogCmd("mergeAll");
 
         Assert.Empty(f.Svn.Merges);
-        Assert.Contains("Commit oppure Revert", f.Merge.Blocked);
+        Assert.Contains("Risolvili", f.Merge.Blocked);
         Assert.Null(f.ChangesSnap.Merge);
 
         f.Svn.Statuses.Clear();   // ripulita: il blocco cade al tentativo successivo
         await f.LogCmd("mergeAll");
         Assert.Single(f.Svn.Merges);
+    }
+
+    [Fact]
+    public async Task Merge_ConModifichePendenti_NonBlocca_ChiedeConfermaConFileInComune_ENegataNonFaNiente()
+    {
+        using var f = new Fixture();
+        var wc = Path.Combine(Path.GetTempPath(), "SVNAssist_MgDirty_" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(wc);
+        try
+        {
+            f.Changes.WorkingCopyPath = wc;
+            File.WriteAllText(Path.Combine(wc, "a.txt"), "mio\n");
+            File.WriteAllText(Path.Combine(wc, "altro.txt"), "altro\n");
+            f.Svn.Statuses.Add(new SvnFileStatus("a.txt", SvnStatusKind.Modified, IsTreeConflict: false));
+            f.Svn.Statuses.Add(new SvnFileStatus("altro.txt", SvnStatusKind.Modified, IsTreeConflict: false));
+            f.Svn.MergeResult = MergeParser.ParseMerge("--- Merging r4 through r7 into '.':\nU    a.txt\nA    new.txt\n");
+            f.Svn.PatchText = "Index: a.txt\n";
+            await f.OpenMergeAsync();
+            Assert.Equal("", f.Merge.Blocked);
+            Assert.Equal(2, f.Merge.Dirty);   // l'interfaccia lo mostra
+            f.Dialogs.ConfirmResult = false;
+
+            await f.LogCmd("mergeAll");
+
+            var msg = f.Dialogs.Messages.Single();
+            Assert.Contains("2 elementi con modifiche non committate", msg);
+            Assert.Contains("copia di sicurezza", msg);
+            Assert.Contains("rischio di conflitti: a.txt", msg);   // a.txt e' toccato dal merge; altro.txt no
+            Assert.DoesNotContain("altro.txt", msg);
+            Assert.Equal(["- True"], Fixture.Calls(f));   // solo il dry-run per i file in comune: il merge vero non parte
+            Assert.False(Directory.Exists(PatchBackup.BackupsFolder(wc)));   // nessuna copia, nulla toccato
+            Assert.Contains("non sono state toccate", f.LogSnap.Msg);
+        }
+        finally
+        {
+            Directory.Delete(wc, true);
+        }
+    }
+
+    [Fact]
+    public async Task Merge_ConModifichePendenti_SenzaSpazioPerLaCopia_NonParteMai_NienteDomandaSenzaBackup()
+    {
+        using var f = new Fixture();
+        var wc = Path.Combine(Path.GetTempPath(), "SVNAssist_MgDirty_" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(wc);
+        var oldFree = PatchBackup.FreeSpace;
+        try
+        {
+            PatchBackup.FreeSpace = _ => 10;
+            f.Changes.WorkingCopyPath = wc;
+            File.WriteAllText(Path.Combine(wc, "a.txt"), "mio\n");
+            f.Svn.Statuses.Add(new SvnFileStatus("a.txt", SvnStatusKind.Modified, IsTreeConflict: false));
+            f.Svn.PatchText = "Index: a.txt\n";
+            await f.OpenMergeAsync();
+
+            await f.LogCmd("mergeAll");
+
+            Assert.Equal(["- True"], Fixture.Calls(f));   // solo il dry-run: il merge vero non e' partito
+            Assert.Contains("non c'è abbastanza spazio", f.Merge.Error, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("non è stato toccato nulla", f.Merge.Error);
+            Assert.Empty(f.Dialogs.Asked);   // mai "procedere senza backup?" con modifiche pendenti
+            Assert.Null(f.ChangesSnap.Merge);
+            Assert.False(Directory.Exists(Path.Combine(PatchBackup.BackupsFolder(wc), "x")));
+        }
+        finally
+        {
+            PatchBackup.FreeSpace = oldFree;
+            Directory.Delete(wc, true);
+        }
+    }
+
+    private const string E155015 = "svn: E155015: One or more conflicts were produced while merging r21:22 into '/wc' -- resolve all conflicts and rerun the merge to apply the remaining unmerged revisions";
+
+    /// <summary>Working copy vera su disco (serve la copia di sicurezza) con a.txt e altro.txt modificati.</summary>
+    private static string DirtyWc(Fixture f)
+    {
+        var wc = Path.Combine(Path.GetTempPath(), "SVNAssist_MgDirty_" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(wc);
+        f.Changes.WorkingCopyPath = wc;
+        File.WriteAllText(Path.Combine(wc, "a.txt"), "mio\n");
+        File.WriteAllText(Path.Combine(wc, "altro.txt"), "altro\n");
+        f.Svn.Statuses.Add(new SvnFileStatus("a.txt", SvnStatusKind.Modified, IsTreeConflict: false));
+        f.Svn.Statuses.Add(new SvnFileStatus("altro.txt", SvnStatusKind.Modified, IsTreeConflict: false));
+        f.Svn.PatchText = "Index: a.txt\n";
+        return wc;
+    }
+
+    [Fact]
+    public async Task ModifichePendenti_DryRunDeiFileInComuneFermatoDaE155015_NonEUnMergeFermato_NienteBanner_ConfermaDalLog()
+    {
+        using var f = new Fixture();
+        var wc = DirtyWc(f);
+        try
+        {
+            f.Svn.DryRunError = E155015;   // il dry-run (non il merge vero) si ferma su un conflitto
+            f.Dialogs.ConfirmResult = false;
+            await f.OpenMergeAsync();
+
+            await f.LogCmd("mergeAll");
+
+            Assert.Null(f.ChangesSnap.Merge);                                  // nessun "Annulla merge": non e' stato toccato nulla
+            Assert.Empty(f.Svn.Merges);
+            Assert.Equal("", f.Merge.Error);                                   // e nessun errore di merge fermato
+            var msg = f.Dialogs.Messages.Single();                             // la conferma c'e' lo stesso, con i file in comune presi dal log (r4 tocca a.txt)
+            Assert.Contains("rischio di conflitti: a.txt", msg);
+            Assert.False(Directory.Exists(PatchBackup.BackupsFolder(wc)));
+        }
+        finally
+        {
+            Directory.Delete(wc, true);
+        }
+    }
+
+    [Fact]
+    public async Task ModifichePendenti_MergeVeroFallitoDopoLaCopia_ResteAnnullaMerge_CheRipristina_NonSiTienePiuUnaCopiaDiUnaAltraWorkingCopy()
+    {
+        using var f = new Fixture();
+        var wc = DirtyWc(f);
+        var other = Path.Combine(Path.GetTempPath(), "SVNAssist_MgOther_" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(other);
+        try
+        {
+            f.Svn.RealMergeError = "svn: E170013: Unable to connect to a repository";
+            await f.OpenMergeAsync();
+
+            await f.LogCmd("mergeAll");
+
+            Assert.Contains("E170013", f.Merge.Error);
+            Assert.Contains("non è andato a buon fine", f.ChangesSnap.Merge!.Text);   // le modifiche pendenti non restano senza via di ritorno
+            Assert.Single(Directory.GetDirectories(PatchBackup.BackupsFolder(wc), "*-pre-merge"));
+
+            f.Changes.WorkingCopyPath = other;   // cambia la working copy (altra solution): la copia dell'altra non deve mai servire
+            Assert.Null(f.ChangesSnap.Merge);
+            await f.Cmd("mergeUndo");
+            Assert.Empty(f.Svn.PatchApplied);   // nessuna patch applicata a una working copy che non e' la sua
+            Assert.Single(Directory.GetDirectories(PatchBackup.BackupsFolder(wc), "*-pre-merge"));   // e la copia resta dov'e'
+        }
+        finally
+        {
+            Directory.Delete(wc, true);
+            Directory.Delete(other, true);
+        }
+    }
+
+    [Fact]
+    public async Task Anteprima_FermataDaE155015_MostraComunqueIFileDiOgniRevisione_ConSpiegazione()
+    {
+        using var f = new Fixture();
+        f.Svn.DryRunError = E155015;
+        await f.OpenMergeAsync();
+
+        await f.LogCmd("mergePreview");
+
+        Assert.Contains("Anteprima incompleta", f.Merge.Error);
+        Assert.Contains("r22", f.Merge.Error);
+        Assert.Equal([4L, 5, 7], f.Merge.Result!.ByRev!.Select(g => g.Rev));
+        Assert.Equal("preview", f.Merge.Result.Mode);
+        Assert.DoesNotContain("E155015", f.Merge.Error);   // niente testo di svn in inglese
+    }
+
+    [Fact]
+    public void Overlap_FileModificatiToccatiDalMerge_PercorsiNormalizzati()
+    {
+        var pending = new[] { new SvnFileStatus("src\\a.cs", SvnStatusKind.Modified), new SvnFileStatus("b.cs", SvnStatusKind.Added), new SvnFileStatus("z.cs", SvnStatusKind.Deleted) };
+        var dry = MergeParser.ParseMerge("--- Merging r4 into '.':\nU    src/a.cs\nU    SRC/NUOVO.cs\nA    b.cs\n");
+
+        Assert.Equal(["b.cs", "src/a.cs"], MergeStore.Overlap(pending, dry));
+        Assert.Empty(MergeStore.Overlap([], dry));
     }
 
     [Fact]
@@ -661,8 +831,8 @@ public class MergeTests
     public async Task MergeBloccato_SvnRevertDiTutto_ConfermaConElenco_NonTocca_INonVersionati_EPoiSiRiprova()
     {
         using var f = new Fixture();
-        f.Svn.Statuses.Add(new SvnFileStatus(@"C:\wc\a.txt", SvnStatusKind.Modified, IsTreeConflict: false));
-        f.Svn.Statuses.Add(new SvnFileStatus(@"C:\wc\sub\b.txt", SvnStatusKind.Added, IsTreeConflict: false));
+        f.Svn.Statuses.Add(new SvnFileStatus(@"C:\wc\a.txt", SvnStatusKind.Conflicted, IsTreeConflict: false));
+        f.Svn.Statuses.Add(new SvnFileStatus(@"C:\wc\sub\b.txt", SvnStatusKind.Missing, IsTreeConflict: false));
         f.Svn.Statuses.Add(new SvnFileStatus(@"C:\wc\u.txt", SvnStatusKind.Unversioned, IsTreeConflict: false));
         await f.OpenMergeAsync();
         Assert.Contains("2 elementi", f.Merge.Blocked);

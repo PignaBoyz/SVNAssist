@@ -48,7 +48,8 @@ public interface ISvnService
     /// </summary>
     /// <param name="paths">Percorsi completi da aggiungere.</param>
     /// <param name="ct">Token per annullare l'operazione.</param>
-    Task AddAsync(IEnumerable<string> paths, CancellationToken ct);
+    /// <param name="nonRecursive"><c>--depth empty</c>: solo l'elemento indicato (una cartella senza il suo contenuto non versionato), senza <c>--force</c>.</param>
+    Task AddAsync(IEnumerable<string> paths, CancellationToken ct, bool nonRecursive = false);
 
     /// <summary>
     /// Schedula la rimozione di file/cartelle versionati (<c>svn delete</c>).

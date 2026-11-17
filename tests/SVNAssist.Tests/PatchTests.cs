@@ -7,6 +7,7 @@ using SVNAssist.Stores;
 namespace SVNAssist.Tests;
 
 /// <summary>Patch (0.5.0): backup prima dei revert di massa, Create/Apply Patch, esclusione di .svn-assist, giro completo con svn vero.</summary>
+[Collection("PatchBackup")] // PatchBackup.FreeSpace e' statico: i test che lo simulano non girano in parallelo con quelli che fanno backup
 public class PatchTests : IDisposable
 {
     private static readonly CancellationToken Ct = CancellationToken.None;

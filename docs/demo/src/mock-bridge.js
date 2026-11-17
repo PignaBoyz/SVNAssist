@@ -64,7 +64,9 @@
     [/^Merge completato: (\d+) file in conflitto da risolvere\.$/, 'Merge completed: $1 conflicted files to resolve.'], [/^Merge annullato: (\d+) elementi ripristinati\.$/, 'Merge undone: $1 items restored.'],
     [/^Annullamento del merge in corso\.\.\.$/, 'Undoing the merge...'], [/^Merge (.+) da (\^\/.+): rivedi le modifiche e committa, oppure annulla il merge\. Messaggio del merge disponibile nei Recenti\.$/, 'Merge $1 from $2: review the changes and commit, or undo the merge. Merge message available in Recent.'], [/^Errore: La working copy è a revisioni miste: [\s\S]*$/, 'Error: The working copy has mixed revisions: run SVN Update and try again.\nsvn: E195020: Cannot merge into mixed-revision working copy'],
     [/^Merge (r[\d, r-]+?)( \(selezione di (\d+) revisioni\))? da (\^\/.+)$/, 'Merge $1$2 from $4'],
-    [/^La working copy ha (\d+) elementi con modifiche locali\. Per unire .*$/, 'The working copy has $1 items with local changes. Merging needs a clean working copy (so "Undo merge" does not touch other work): Commit or Revert first, then try again.'],
+    [/^La working copy ha (\d+) elementi in conflitto, mancanti o a metà: .*$/, 'The working copy has $1 items in conflict, missing or half-done: they cannot be restored reliably after a merge. Resolve them (Changes) or Revert, then try again.'],
+    [/^Merge non eseguito: le modifiche pendenti non sono state toccate\.$/, 'Merge not done: the pending changes were not touched.'], [/^Ripristino delle modifiche pendenti\.\.\.$/, 'Restoring the pending changes...'],
+    [/^Merge annullato: le tue (\d+) modifiche pendenti sono state ripristinate\.$/, 'Merge undone: your $1 pending changes have been restored.'],
     [/^(\d+) file cambiati tra r(\d+) e r(\d+)\.$/, '$1 files changed between r$2 and r$3.'], [/^(\d+) file modificati\.$/, '$1 files modified.'],
   ];
   const tr = s => {
@@ -158,7 +160,7 @@
   }
   function mergeSnap(m) {   // il Log in modalita merge (come MergeStore)
     const el = mgEligible(m.name);
-    return { source: m.name, title: tr('Merge da ' + m.name), loading: !!m.loading, busy: !!m.busy, error: tr(m.error || ''), blocked: tr(m.blocked || ''), selected: m.sel.slice().sort((a, b) => a - b), eligible: el.length, result: m.result || null, pending: !!(S.vm.mergeBanner && commitSet().files.length), needsUpdate: /E195020/.test(m.error || ''), ...(mgFilesSnap(m) ? { files: mgFilesSnap(m) } : {}) };
+    return { source: m.name, title: tr('Merge da ' + m.name), loading: !!m.loading, busy: !!m.busy, error: tr(m.error || ''), blocked: tr(m.blocked || ''), selected: m.sel.slice().sort((a, b) => a - b), eligible: el.length, result: m.result || null, pending: !!(S.vm.mergeBanner && commitSet().files.length), needsUpdate: /E195020/.test(m.error || ''), ...(mgDirty().length ? { dirty: mgDirty().length } : {}), ...(mgFilesSnap(m) ? { files: mgFilesSnap(m) } : {}) };
   }
   // "Includi revisioni unite": sotto la 2a revisione compaiono due revisioni di un ramo entrate per merge (una e' un merge inverso)
   function logRows(l) {

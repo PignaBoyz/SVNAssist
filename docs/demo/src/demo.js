@@ -1061,7 +1061,9 @@ const MG = {
   ],
   'branches/release-2.1': [{ rev: 125, author: 'mrossi', days: 8, msg: 'Release 2.1: corregge arrotondamento IVA', files: [['U', 'Core\\Services\\OrderService.cs']] }],
 };
-const mgBlocked = () => { const n = S.files.filter(f => ['M', 'A', 'D', 'R', '!', 'C'].includes(f.st)).length; return n ? `La working copy ha ${n} elementi con modifiche locali. Per unire serve una working copy pulita (così "Annulla merge" non tocca altro lavoro): fai prima Commit oppure Revert, poi riprova.` : ''; };
+// Le modifiche pendenti (M, A, D, R) non bloccano: il merge chiede conferma e salva prima una copia di sicurezza che "Annulla merge" ripristina. Bloccano conflitti e file mancanti.
+const mgBlocked = () => { const n = S.files.filter(f => ['!', 'C'].includes(f.st)).length; return n ? `La working copy ha ${n} elementi in conflitto, mancanti o a metà: dopo un merge non si possono ripristinare in modo affidabile. Risolvili (Changes) oppure fai Revert, poi riprova.` : ''; };
+const mgDirty = () => S.files.filter(f => ['M', 'A', 'D', 'R'].includes(f.st));
 const mgEligible = name => (MG[name] || []).filter(r => !(S.mgDone || []).some(d => d.name === name && d.revs.includes(r.rev)));
 const mgRevs = m => m.sel.length ? m.sel.slice().sort((a, b) => a - b) : mgEligible(m.name).map(r => r.rev).sort((a, b) => a - b);
 const mgLabel = (m, revs) => !m.sel.length ? (revs.length > 1 ? `r${revs[0]}-r${revs[revs.length - 1]}` : `r${revs[0]}`) : revs.length <= 6 ? revs.map(r => 'r' + r).join(', ') : `r${revs[0]}-r${revs[revs.length - 1]} (selezione di ${revs.length} revisioni)`;
@@ -1129,6 +1131,16 @@ async function mgRun(all) {
   try {
     m.blocked = mgBlocked(); if (m.blocked) { m.busy = false; return render(); }
     if (S.mixed) throw new Error(MIXED_ERR);
+    S.mgPre = null;
+    const dirty = mgDirty();
+    if (dirty.length) {   // avviso con i file in comune e copia di sicurezza prima di toccare qualcosa
+      const touched = new Set(); for (const r of MG[m.name] || []) if (all || m.sel.includes(r.rev)) for (const [, p] of r.files) touched.add(p);
+      const overlap = dirty.filter(f => touched.has(f.path)).map(f => fwd(f.path));
+      await svn('merge --dry-run --accept postpone ^/' + m.name, 500);
+      if (!await confirmBox(`La working copy ha ${dirty.length} elementi con modifiche non committate.\n\nIl merge verrà fatto sopra le tue modifiche. Prima ne salvo una copia di sicurezza (cartella .svn-assist\\backups della working copy): "Annulla merge" le ripristinerà com'erano. Se poi committi, finiscono nello stesso commit del merge (a meno che tu scelga solo alcuni file).` +
+        (overlap.length ? `\n\nATTENZIONE: il merge tocca ${overlap.length} file che hai già modificato, quindi c'è rischio di conflitti: ${overlap.slice(0, 8).join(', ')}` : '') + '\n\nUnire comunque?')) { m.msg = 'Merge non eseguito: le modifiche pendenti non sono state toccate.'; m.busy = false; return render(); }
+      S.mgPre = dirty.map(f => ({ path: f.path, st: f.st, text: f.text }));
+    }
     const pick = all ? [] : m.sel.slice(), revs = all ? mgEligible(m.name).map(r => r.rev).sort((a, b) => a - b) : pick.sort((a, b) => a - b);
     const probe = { name: m.name, sel: pick }, label = mgLabel(probe, revs);
     await svn(`merge --accept postpone ${all ? '' : '-c ' + revs.join(',') + ' '}^/${m.name}`, 300);
@@ -1157,12 +1169,15 @@ async function mgRun(all) {
 async function mgUndo() {
   const t = S.files.filter(f => IS_REV.includes(f.st));
   if (!t.length || !S.vm.mergeBanner) { S.vm.mergeBanner = null; setStatus('Nessun elemento idoneo per SVN Revert.'); return render(); }
-  if (!await confirmBox(`Annullare il merge? Tutte le modifiche locali della working copy (${t.length} elementi) tornano allo stato di BASE.\n\n${listForConfirm(t)}\n\nL'operazione non è annullabile.`)) return;
+  const pre = S.mgPre;
+  if (!await confirmBox(pre ? `Annullare il merge? Le modifiche del merge vengono tolte e le tue ${pre.length} modifiche pendenti di prima del merge vengono ripristinate (copia di sicurezza in .svn-assist\\backups).\n\nElementi con modifiche locali ora: ${t.length}\n\n${listForConfirm(t)}`
+    : `Annullare il merge? Tutte le modifiche locali della working copy (${t.length} elementi) tornano allo stato di BASE.\n\n${listForConfirm(t)}\n\nL'operazione non è annullabile.`)) return;
   setStatus('Annullamento del merge in corso...'); render();
   await svn('revert --depth infinity .', 600); t.forEach(f => svnRevert(f.path));
+  if (pre) { setStatus('Ripristino delle modifiche pendenti...'); render(); await svn('patch .svn-assist/backups/pre-merge/changes.patch', 400); for (const p of pre) { const f = fileBy(p.path); if (f) { f.st = p.st; f.text = p.text; } } S.mgPre = null; }
   S.vm.mergeBanner = null; S.mgDone = (S.mgDone || []).slice(0, -1);
   const m = S.lvm.merge; if (m) { m.result = null; m.sel = []; m.blocked = mgBlocked(); }
-  await vmRefresh(`Merge annullato: ${t.length} elementi ripristinati.`, false);
+  await vmRefresh(pre ? `Merge annullato: le tue ${pre.length} modifiche pendenti sono state ripristinate.` : `Merge annullato: ${t.length} elementi ripristinati.`, false);
 }
 async function vmCleanup() {   // un solo punto d'ingresso: la finestra delle opzioni
   if (!S.vm.wcPath.trim()) { setStatus('Nessuna working copy configurata.'); return render(); }
