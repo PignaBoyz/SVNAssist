@@ -10,12 +10,12 @@ Installazione: come la 0.2.0.
 
 ### Novità
 
-- **Selezione multipla in Changes.** Ctrl+clic aggiunge o toglie un elemento, Maiusc+clic seleziona un intervallo (anche tra sezioni). Da tastiera: Maiusc+frecce, Ctrl+Spazio, Ctrl+A. Il tasto destro mostra le azioni valide per tutta la selezione, con il conteggio. Spazio e Canc valgono per tutti gli elementi selezionati.
+- **Selezione multipla in Changes.** Ctrl+click aggiunge o toglie un elemento, Maiusc+click seleziona un intervallo (anche tra sezioni). Da tastiera: Maiusc+frecce, Ctrl+Spazio, Ctrl+A. Il tasto destro mostra le azioni valide per tutta la selezione, con il conteggio. Spazio e Canc valgono per tutti gli elementi selezionati.
 - **Canc sulle cartelle.** Una cartella versionata viene eliminata con svn delete (resta da committare); una non versionata va nel cestino. La conferma elenca gli elementi.
 - **AI: Più corto e Più dettagliato.** Il menu del messaggio di commit ha queste due voci oltre a Genera.
 - **Show Log: Stop on copy/rename.** L'opzione è spenta di default: il Log mostra la storia completa oltre le copie e le rinomine.
 - **Show Log: Include merged revisions.** Le revisioni entrate per merge sono annidate sotto il merge; un merge inverso è segnalato.
-- **Show Log: diff dei file di una revisione.** Un clic su un file di una revisione apre il diff di quella revisione, anche per le revisioni unite. Le opzioni si cambiano mentre il Log è aperto e il Log si ricarica.
+- **Show Log: diff dei file di una revisione.** Un click su un file di una revisione apre il diff di quella revisione, anche per le revisioni unite. Le opzioni si cambiano mentre il Log è aperto e il Log si ricarica.
 - **Icone di stato SVN in Solution Explorer.** Normale, modificato, aggiunto, non versionato, conflitto, eliminato. Sono attive di default e si disattivano da Options. SVNAssist si registra come provider di source control solo per le soluzioni dentro una working copy SVN.
 - **Menu di Solution Explorer.**
   - **Show Log** per file, progetto e cartella.
@@ -104,7 +104,7 @@ Installazione: come la 0.2.0. Se è installata la 0.2.0, viene aggiornata. Clien
 ### Modifiche
 
 - Il Log si apre sempre nell'area documenti, accanto ai diff.
-- Il doppio clic su un file aggiunto o non versionato apre il file intero.
+- Il doppio click su un file aggiunto o non versionato apre il file intero.
 - I messaggi di esito scompaiono dopo qualche secondo; gli errori restano.
 - Il sottomenu SVN di Esplora soluzioni è stato rimosso, perché le azioni sono disponibili in SVN Changes.
 
@@ -128,7 +128,7 @@ Contenuti: pannello SVN Changes, Log come documento, diff di Visual Studio, Upda
 ### Novità
 
 - **Pannello SVN Changes in stile Git.** Mostra i file in un albero, con le sezioni Staged, Modifiche e Non versionati. Il pannello ha un filtro e si usa da tastiera (frecce, Spazio, Invio; Canc elimina con conferma). Il pulsante di commit è "Commit All" se Staged è vuoto, altrimenti "Commit Staged (n)", dove n è il numero di file in Staged. Ogni azione mostra un messaggio di stato.
-- **Log come documento.** Show Log si apre come documento nell'area editor di Visual Studio, con una tabella delle revisioni. Filtri per autore, testo, percorso e date. Per ogni revisione sono elencati i file cambiati. Ctrl+clic su due revisioni le confronta. Il comando è disponibile anche per file e cartelle da Esplora soluzioni.
+- **Log come documento.** Show Log si apre come documento nell'area editor di Visual Studio, con una tabella delle revisioni. Filtri per autore, testo, percorso e date. Per ogni revisione sono elencati i file cambiati. Ctrl+click su due revisioni le confronta. Il comando è disponibile anche per file e cartelle da Esplora soluzioni.
 - **Diff di Visual Studio.** Le differenze tra working copy, revisioni e cartelle si aprono nel visualizzatore di Visual Studio. Per il diff non è richiesto TortoiseSVN.
 - **Update a revisione, Cleanup, Lock / Unlock.**
   - "SVN Update to revision": si sceglie la revisione da un elenco.
@@ -158,7 +158,7 @@ Contenuti: pannello SVN Changes, Log come documento, diff di Visual Studio, Upda
   - Segue le regole di commit definite nelle istruzioni del progetto per GitHub Copilot e in quelle personali per Copilot.
 - **Seleziona tutto.** Prima selezionava anche i file non versionati delle cartelle di build (bin, obj). Ora seleziona solo la sezione Modifiche.
 - **Working Copy Path.** Il percorso impostato in Working Copy Path ha la precedenza sul rilevamento automatico, anche nel Log.
-- **Operazione già in corso.** Prima un secondo clic non faceva nulla. Ora mostra "Operazione in corso…".
+- **Operazione già in corso.** Prima un secondo click non faceva nulla. Ora mostra "Operazione in corso…".
 - **Menu del tasto destro.** Le voci si aggiornano quando cambia lo stato di un file.
 
 ### Requisiti e installazione
@@ -173,7 +173,7 @@ Contenuti: pannello SVN Changes, Log come documento, diff di Visual Studio, Upda
 Installazione:
 
 1. Chiudere Visual Studio.
-2. Aprire con doppio clic il pacchetto .vsix di SVNAssist.
+2. Aprire con doppio click il pacchetto .vsix di SVNAssist.
 3. Riavviare Visual Studio.
 
 La demo interattiva è in un archivio separato.
@@ -186,6 +186,7 @@ La 0.1.0 è deprecata e sostituita dalla 0.2.0: disinstallarla e installare la 0
 
 Il testo tecnico di ogni versione è nei file seguenti.
 
+- 0.5.0: docs/release-notes/v0.5.0.md
 - 0.4.0: docs/release-notes/v0.4.0.md (include la 0.3.2: docs/release-notes/v0.3.2.md)
 - 0.3.1: docs/release-notes/v0.3.1.md
 - 0.3.0: docs/release-notes/v0.3.0.md
