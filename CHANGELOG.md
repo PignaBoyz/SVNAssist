@@ -37,6 +37,7 @@ Installazione: come la 0.2.0. Provata su Visual Studio 18 (2026). Visual Studio 
 - **Modelli AI dal provider.** La scelta del modello mostra l'elenco restituito dal provider, senza voci "consigliato".
   - **Aggiorna elenco** rilegge l'elenco; altrimenti viene riletto dopo 24 ore.
   - **Altro...** permette di scrivere il nome di un modello non in elenco.
+  - L'elenco viene sempre dal provider collegato: SVNAssist non ha elenchi di modelli propri. Se il provider non è collegato o non risponde, al posto della tendina compare "Non collegato" con l'invito a collegarlo. Con Claude Code (abbonamento) l'elenco richiede una API key Anthropic. In Tools > Options il modello è un campo di testo.
   - Con GitHub Copilot sono indicati il costo stimato per commit (moltiplicatore premium), il modello predefinito, il modello usato e l'account collegato.
   - Se il modello non risponde, l'errore riporta il motivo del provider e propone un'azione.
   - Non provato con i provider reali (da verificare).

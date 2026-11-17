@@ -61,26 +61,8 @@ namespace SVNAssist.Host
             ("claudecode", Loc.K("Claude Code (abbonamento Claude)")), ("claude", Loc.K("Claude API (API key Anthropic)")), ("openai", Loc.K("OpenAI-compatibile / GitHub Models"))) { }
     }
 
-    // Modelli AI: la tendina e' solo un suggerimento e il campo accetta qualsiasi id (l'elenco vero e aggiornato, con costi, e' nella procedura
-    // guidata "Cambia provider AI..."). Gli id fissi qui sono quelli del default dell'app, non una scelta consigliata.
-    internal sealed class ClaudeModelConverter : ChoiceConverter
-    {
-        public ClaudeModelConverter() : base(("claude-sonnet-5-5", "claude-sonnet-5-5"), ("claude-haiku-5-5", "claude-haiku-5-5"), ("claude-opus-5-5", "claude-opus-5-5")) { }
-        protected override bool Exclusive { get { return false; } }
-    }
-
-    internal sealed class CopilotModelConverter : ChoiceConverter
-    {
-        public CopilotModelConverter() : base(("default", "default")) { }
-        protected override bool Exclusive { get { return false; } }
-    }
-
-    internal sealed class AiModelConverter : ChoiceConverter
-    {
-        public AiModelConverter() : base(("openai/gpt-4o-mini", "openai/gpt-4o-mini"), ("openai/gpt-4o", "openai/gpt-4o"),
-            ("openai/gpt-4.1-mini", "openai/gpt-4.1-mini"), ("openai/gpt-4.1", "openai/gpt-4.1")) { }
-        protected override bool Exclusive { get { return false; } }
-    }
+    // Modelli AI: campo di testo libero, nessuna tendina con id scritti nell'app. L'elenco vero dei modelli, solo del provider collegato,
+    // e' nella procedura guidata "Cambia provider AI...".
 
     internal sealed class LanguageConverter : ChoiceConverter
     {
@@ -115,15 +97,15 @@ namespace SVNAssist.Host
         [LDescription("Automatico prova Copilot, Claude Code, Claude API e OpenAI-compatibile in quest'ordine.")]
         public string AiProvider { get; set; } = "auto";
 
-        [LCategory("Commit message AI"), LDisplayName("Modello Claude (solo Claude Code e Claude API)"), DefaultValue("claude-sonnet-5-5"), TypeConverter(typeof(ClaudeModelConverter))]
-        [LDescription("Scrivi o scegli un id modello. L'elenco aggiornato dei modelli disponibili e' nella procedura guidata (Extensions > SVNAssist > Cambia provider AI).")]
+        [LCategory("Commit message AI"), LDisplayName("Modello Claude (solo Claude Code e Claude API)"), DefaultValue("claude-sonnet-5-5")]
+        [LDescription("Scrivi un id modello. L'elenco aggiornato dei modelli disponibili e' nella procedura guidata (Extensions > SVNAssist > Cambia provider AI).")]
         public string ClaudeModel { get; set; } = "claude-sonnet-5-5";
 
         [LCategory("Commit message AI"), LDisplayName("API key Anthropic (solo Claude API)"), PasswordPropertyText(true)]
         [LDescription("Vuota = variabile d'ambiente ANTHROPIC_API_KEY. Salvata cifrata (DPAPI, solo per il tuo utente Windows) nelle impostazioni di Visual Studio.")]
         public string AnthropicApiKey { get; set; } = "";
 
-        [LCategory("Commit message AI"), LDisplayName("Modello Copilot (solo Copilot)"), DefaultValue("default"), TypeConverter(typeof(CopilotModelConverter))]
+        [LCategory("Commit message AI"), LDisplayName("Modello Copilot (solo Copilot)"), DefaultValue("default")]
         [LDescription("Serve un abbonamento Copilot e 'gh auth login'. 'default' = il modello che sceglie Copilot. L'elenco dei modelli del tuo account (con il costo) e' nella procedura guidata (Cambia provider AI).")]
         public string CopilotModel { get; set; } = "default";
 
@@ -135,8 +117,8 @@ namespace SVNAssist.Host
         [LDescription("Salvata cifrata (DPAPI, solo per il tuo utente Windows) nelle impostazioni di Visual Studio.")]
         public string AiApiKey { get; set; } = "";
 
-        [LCategory("Commit message AI"), LDisplayName("Modello (solo OpenAI-compatibile / GitHub Models)"), DefaultValue("openai/gpt-4o-mini"), TypeConverter(typeof(AiModelConverter))]
-        [LDescription("Scrivi o scegli un id modello. L'elenco aggiornato dei modelli disponibili e' nella procedura guidata (Cambia provider AI).")]
+        [LCategory("Commit message AI"), LDisplayName("Modello (solo OpenAI-compatibile / GitHub Models)"), DefaultValue("openai/gpt-4o-mini")]
+        [LDescription("Scrivi un id modello. L'elenco aggiornato dei modelli disponibili e' nella procedura guidata (Cambia provider AI).")]
         public string AiModel { get; set; } = "openai/gpt-4o-mini";
 
         [LCategory("Commit message AI"), LDisplayName("Lingua dei commit message"), DefaultValue("auto"), TypeConverter(typeof(LanguageConverter))]

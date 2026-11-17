@@ -186,10 +186,10 @@ public class AiModelCatalogTests : IDisposable
         var src = new FakeSource { Fail = new InvalidOperationException("serve il login") };
         var list = await new AiModelCatalog(src).GetAsync("copilot", false, Ct);
 
-        Assert.Equal("fallback", list.Source);
+        Assert.Equal("unlinked", list.Source);
         Assert.Equal("serve il login", list.Error);
         Assert.Null(list.UpdatedAt);
-        Assert.Equal(["default"], list.Models.Select(m => m.Id)); // Copilot: nessun id inventato
+        Assert.Empty(list.Models);   // nessun id inventato
     }
 
     [Fact]
@@ -198,17 +198,17 @@ public class AiModelCatalogTests : IDisposable
         var src = new FakeSource { Result = new AiModelsFetched([]) };
         var list = await new AiModelCatalog(src).GetAsync("claude", false, Ct);
         Assert.NotNull(list.Error);
-        Assert.Equal("fallback", list.Source);
+        Assert.Equal("unlinked", list.Source);
     }
 
     [Fact]
-    public async Task ProviderCheNonSiPuoElencare_UsaLElencoPredefinitoSenzaErrore()
+    public async Task ProviderCheNonSiPuoElencare_NessunElencoSenzaErrore()
     {
         var src = new FakeSource { Result = null };
         var list = await new AiModelCatalog(src).GetAsync("claudecode", false, Ct);
-        Assert.Equal("fallback", list.Source);
+        Assert.Equal("unlinked", list.Source);
         Assert.Null(list.Error);
-        Assert.Equal(SettingDefinitions.KnownClaudeModels, list.Models.Select(m => m.Id));
+        Assert.Empty(list.Models);
     }
 
     [Fact]
@@ -417,8 +417,8 @@ public class AiModelCatalogTests : IDisposable
         var s = w.GetSnapshot();
         Assert.True(s.ModelsError);
         Assert.Contains("HTTP 403", s.ModelsNote);
-        Assert.Equal(["default"], s.Models.Select(m => m.Value));
-        Assert.Equal("fallback", s.ModelsSource);
+        Assert.Empty(s.Models);
+        Assert.Equal("unlinked", s.ModelsSource);
         Assert.Equal(string.Empty, s.ModelsUpdated);
 
         // Con "Altro..." si salva qualsiasi id valido: non si resta bloccati
@@ -454,13 +454,12 @@ public class AiModelCatalogTests : IDisposable
         var (w, _, _) = CreateWizard(new FakeSource { Result = null });
         await ToStep4(w, "claudecode");
         var s = w.GetSnapshot();
-        Assert.Equal("fallback", s.ModelsSource);
+        Assert.Equal("unlinked", s.ModelsSource);
         Assert.False(s.ModelsError);
         Assert.Contains("API key Anthropic", s.ModelsNote);
     }
 
     [Theory]
-    [InlineData("")]
     [InlineData("due parole")]
     [InlineData("x;rm")]
     public async Task Wizard_Fine_RifiutaIdNonValido(string model)

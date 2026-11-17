@@ -50,10 +50,11 @@
       const saved = w.modelSaved && (w.models.find(m => m.value === w.modelSaved) || { label: w.modelSaved });
       const src = w.modelsLoading ? `<span class="spin"></span> ${U.esc(t('Chiedo l\'elenco al provider…'))}`
         : w.modelsUpdated ? U.esc(t('Elenco aggiornato il {0}', U.fmtDate(w.modelsUpdated))) + (w.modelsSource === 'cache' ? ' ' + U.esc(t('(copia salvata)')) : '')
-          : U.esc(t('Elenco predefinito dell\'app: non è stato chiesto al provider.'));
+          : U.esc(t('Elenco non ancora chiesto al provider.'));
       return `<p class="muted">${t("Scegli il modello tra quelli che il provider mette a disposizione. Se non scegli, resta quello in uso.")}</p>` +
         (w.modelsAccount ? `<div class="small wiz-acc"><b>${t('Collegato come')}</b> ${U.esc(w.modelsAccount)}</div>` : '') +
         `<label for="wiz-model">${t('Modello')}</label><select id="wiz-model"${w.modelsLoading ? ' aria-busy="true"' : ''}>` +
+        (w.models.length || w.modelsLoading ? '' : `<option value="" disabled${o.on ? '' : ' selected'}>${t('Non collegato')}</option>`) +
         w.models.map(m => `<option value="${U.esc(m.value)}"${!o.on && m.value === w.model ? ' selected' : ''}>${U.esc(lab(m))}</option>`).join('') +
         `<option value="__other__"${o.on ? ' selected' : ''}>${t('Altro…')}</option></select>` +
         `<input id="wiz-model-other" type="text" spellcheck="false" autocomplete="off" placeholder="${U.esc(t('Scrivi l\'id del modello'))}" value="${U.esc(o.text)}"${o.on ? '' : ' hidden'}>` +

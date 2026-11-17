@@ -282,10 +282,8 @@ public class AiBugFixTests : IDisposable
             AiServiceFactory.NormalizeOpenAiModel(SettingDefinitions.GitHubModelsEndpoint, "modello-nuovo"));
 
     [Fact]
-    public void ModelliConBarraEPunto_SonoNellaListaDeiValoriAmmessi()
+    public void ModelliConBarraEPunto_SonoAmmessi()
     {
-        Assert.Contains("openai/gpt-4.1", SettingDefinitions.KnownAiModels);
-        Assert.Equal(["default"], SettingDefinitions.KnownCopilotModels); // gli id Copilot "a caso" sono stati tolti: l'elenco viene dal provider
         Assert.Equal("openai/gpt-4.1", AiServiceFactory.NormalizeOpenAiModel(SettingDefinitions.GitHubModelsEndpoint, "openai/gpt-4.1"));
     }
 }

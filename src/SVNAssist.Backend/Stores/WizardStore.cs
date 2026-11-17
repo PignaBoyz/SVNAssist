@@ -55,10 +55,6 @@ internal sealed class WizardStore
     /// <summary>Qualcosa e' cambiato (per rimandare lo snapshot).</summary>
     public event Action? Changed;
 
-    /// <summary>Elenco minimo dell'app (usato finche' il provider non ha risposto o se non risponde): vedi <see cref="AiModelCatalog.FallbackModels"/>.</summary>
-    internal static IReadOnlyList<WizardModelDto> ModelsFor(string provider)
-        => AiModelCatalog.FallbackModels(provider).Select(m => new WizardModelDto(m.Id, m.Label, m.Cost)).ToList();
-
     /// <summary>Chiave dell'impostazione che contiene il modello del provider.</summary>
     internal static string ModelSettingKey(string provider) => provider switch
     {
@@ -188,8 +184,6 @@ internal sealed class WizardStore
             if (step == 4)
             {
                 ResetModelsLocked();
-                _models = ModelsFor(_provider);
-                _model = _models.Count > 0 ? _models[0].Value : string.Empty;
             }
         }
 
@@ -233,8 +227,6 @@ internal sealed class WizardStore
             _provider = id;
             _items = [];
             ResetModelsLocked();
-            _models = ModelsFor(id);
-            _model = _models.Count > 0 ? _models[0].Value : string.Empty;
         }
 
         _prereq.Feedback = string.Empty;
@@ -275,7 +267,7 @@ internal sealed class WizardStore
 
             var models = list.Models.Select(m => new WizardModelDto(m.Id, m.Label, m.Cost)).ToList();
             // "default" di Copilot (= lo sceglie Copilot) non e' mai "sparito": e' sempre valido anche se l'elenco non lo riporta.
-            var missing = saved.Length > 0 && !(provider == "copilot" && saved == SettingDefinitions.CopilotDefaultModel)
+            var missing = list.Models.Count > 0 && saved.Length > 0 && !(provider == "copilot" && saved == SettingDefinitions.CopilotDefaultModel)
                 && !models.Any(m => string.Equals(m.Value, saved, StringComparison.OrdinalIgnoreCase));
             // Valore salvato non piu' in elenco: resta in uso finche' non si sceglie altro, ma lo si segnala (e lo si tiene selezionabile).
             if (missing)
@@ -285,9 +277,11 @@ internal sealed class WizardStore
             if (list.Error is not null)
                 notes.Add(list.Source == "cache"
                     ? Loc.T("Elenco non aggiornato (mostro l'ultimo salvato): {0}", list.Error)
-                    : Loc.T("Elenco non aggiornato (mostro quello predefinito dell'app): {0}", list.Error));
-            else if (list.Source == "fallback" && provider == "claudecode")
-                notes.Add(Loc.T("Con Claude Code l'elenco completo dei modelli richiede una API key Anthropic: questo è l'elenco predefinito. Usa \"Altro…\" per un altro modello."));
+                    : Loc.T("Provider non collegato o non raggiungibile: collegalo e premi Aggiorna elenco. {0}", list.Error));
+            else if (list.Source == "unlinked" && provider == "claudecode")
+                notes.Add(Loc.T("Con Claude Code (abbonamento) il provider non permette di elencare i modelli: per vederli collega la API key Anthropic (provider Claude API). Usa \"Altro…\" per scrivere un id."));
+            else if (list.Source == "unlinked")
+                notes.Add(Loc.T("Provider non collegato: collegalo per vedere l'elenco dei modelli."));
             if (missing)
                 notes.Add(Loc.T("Il modello salvato \"{0}\" non è più nell'elenco del provider: resta in uso finché non ne scegli un altro (potrebbe dare errore).", saved));
 
@@ -321,7 +315,7 @@ internal sealed class WizardStore
                 if (gen == _modelsGen)
                 {
                     _modelsError = true;
-                    _modelsNote = Loc.T("Elenco non aggiornato (mostro quello predefinito dell'app): {0}", ex.Message);
+                    _modelsNote = Loc.T("Provider non collegato o non raggiungibile: collegalo e premi Aggiorna elenco. {0}", ex.Message);
                 }
             }
         }
@@ -509,6 +503,8 @@ internal sealed class WizardStore
 
         // Qualsiasi id valido (dall'elenco del provider o scritto in "Altro..."): l'elenco non e' una lista chiusa, cosi' non si resta mai bloccati.
         model = (model ?? string.Empty).Trim();
+        if (model.Length == 0)
+            model = await SavedModelAsync(provider, ct);   // provider non collegato (nessun elenco): resta il modello in uso
         if (!AiModelIds.IsPlausible(model))
             throw new ArgumentException(Loc.T("Modello non valido: {0}", model));
 

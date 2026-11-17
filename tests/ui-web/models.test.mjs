@@ -45,7 +45,7 @@ test('passo 4: errore del provider e valore salvato fuori elenco visibili; fuori
   const h = U.wizardHTML(M4({ provider: 'claude', modelsError: true, modelsNote: 'Elenco non aggiornato: HTTP 403\nIl modello salvato "x" non è più nell\'elenco', modelsUpdated: '', modelsSource: 'fallback',
     models: [{ value: 'a', label: 'Modello A', cost: '' }] }));
   assert.match(h, /class="small wiz-note err" role="alert"/); assert.match(h, /HTTP 403<br>/);
-  assert.match(h, /Elenco predefinito dell(&#39;|')app/);
+  assert.match(h, /Elenco non ancora chiesto al provider/);
   assert.match(h, /<option value="a">Modello A<\/option>/);
 });
 
@@ -80,4 +80,13 @@ test('mock: wizardOpenModels apre il passo Modello, Aggiorna elenco cambia l\'el
   await send('wizardFinish', { model: 'modello-aziendale-5.6' }); okSchema();
   assert.equal(last().wizard.open, false);
   assert.equal(JSON.parse(JSON.stringify(run('S.settings.copilotmodel', 't'))), 'modello-aziendale-5.6');
+});
+
+test('passo 4: provider non collegato (nessun elenco) -> segnaposto "Non collegato" disabilitato e "Altro…" disponibile', () => {
+  U.wizOther = { on: false, text: '' };
+  const h = U.wizardHTML(M4({ provider: 'copilot', models: [], modelsLoading: false, modelsSource: 'unlinked', modelsNote: 'Provider non collegato: collegalo per vedere l\'elenco dei modelli.' }));
+  assert.match(h, /<option value="" disabled selected>Non collegato<\/option>/);
+  assert.match(h, /<option value="__other__"/);
+  const loading = U.wizardHTML(M4({ provider: 'copilot', models: [], modelsLoading: true }));
+  assert.doesNotMatch(loading, /Non collegato<\/option>/);
 });

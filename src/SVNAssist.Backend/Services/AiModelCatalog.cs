@@ -15,9 +15,9 @@ internal sealed record AiModelsFetched(IReadOnlyList<AiModelInfo> Models, string
 
 /// <summary>
 /// Elenco dei modelli di un provider. <c>Source</c>: <c>live</c> (appena chiesto al provider), <c>cache</c> (copia salvata, con la sua data)
-/// o <c>fallback</c> (elenco predefinito dell'app: il provider non ha risposto o non permette di elencare).
+/// o <c>unlinked</c> (nessun elenco: provider non collegato, che non risponde o che non permette di elencare; l'app non ha elenchi propri).
 /// <c>Account</c> e' l'account con cui il provider ha risposto (null se non noto).
-/// <c>Error</c> e' il motivo per cui l'elenco aggiornato non c'e' (null se tutto ok o se l'elenco predefinito e' normale per quel provider).
+/// <c>Error</c> e' il motivo per cui l'elenco aggiornato non c'e' (null se tutto ok o se il provider non permette di elencare).
 /// </summary>
 internal sealed record AiModelList(IReadOnlyList<AiModelInfo> Models, DateTimeOffset? UpdatedAt, string Source, string? Error, string? Account = null);
 
@@ -35,7 +35,7 @@ internal interface IAiModelSource
     /// <summary>Parte della chiave di cache oltre al provider (per OpenAI-compatibile: l'endpoint). Mai la chiave API.</summary>
     Task<string> IdentityAsync(string provider, CancellationToken ct);
 
-    /// <summary>Elenco dal provider; <c>null</c> = questo provider non permette di elencare (si usa l'elenco predefinito). Lancia se la richiesta fallisce.</summary>
+    /// <summary>Elenco dal provider; <c>null</c> = questo provider non permette di elencare (nessun elenco: l'utente collega il provider). Lancia se la richiesta fallisce.</summary>
     Task<AiModelsFetched?> ListAsync(string provider, bool force, CancellationToken ct);
 }
 
@@ -49,7 +49,7 @@ internal static class AiModelIds
 
 /// <summary>
 /// Cache datata (24 ore, forzabile) dell'elenco modelli: un provider che ritira un modello (es. Copilot) non lascia l'utente bloccato su
-/// un elenco fisso. Un errore non entra mai in cache: si rimanda l'ultima copia buona (con la sua data) o l'elenco predefinito.
+/// un elenco fisso. Un errore non entra mai in cache: si rimanda l'ultima copia buona (con la sua data) o nessun elenco. L'app non ha elenchi di modelli propri.
 /// </summary>
 internal sealed class AiModelCatalog : IAiModelCatalog
 {
@@ -63,7 +63,7 @@ internal sealed class AiModelCatalog : IAiModelCatalog
     private readonly SemaphoreSlim _gate = new(1, 1);
     private Dictionary<string, Entry>? _entries;
 
-    /// <param name="source">Come elencare; null = solo elenco predefinito (test e usi senza rete).</param>
+    /// <param name="source">Come elencare; null = nessun elenco (test e usi senza rete).</param>
     /// <param name="cacheFile">File JSON della cache su disco; null = solo in memoria (i test non devono scrivere in %LOCALAPPDATA%).</param>
     public AiModelCatalog(IAiModelSource? source = null, string? cacheFile = null, Func<DateTimeOffset>? now = null)
     {
@@ -80,9 +80,8 @@ internal sealed class AiModelCatalog : IAiModelCatalog
     public async Task<AiModelList> GetAsync(string provider, bool forceRefresh, CancellationToken ct, TimeSpan? maxAge = null)
     {
         provider = (provider ?? string.Empty).Trim().ToLowerInvariant();
-        var fallback = FallbackModels(provider);
-        if (_source is null || fallback.Count == 0)
-            return new AiModelList(fallback, null, "fallback", null);
+        if (_source is null)
+            return new AiModelList([], null, "unlinked", null);
 
         await _gate.WaitAsync(ct);
         try
@@ -101,7 +100,7 @@ internal sealed class AiModelCatalog : IAiModelCatalog
             {
                 var live = await _source.ListAsync(provider, forceRefresh, ct);
                 if (live is null)
-                    return new AiModelList(fallback, null, "fallback", null);
+                    return new AiModelList([], null, "unlinked", null);
                 if (live.Models.Count == 0)
                     throw new InvalidOperationException(Loc.T("Il provider ha risposto con un elenco di modelli vuoto."));
 
@@ -115,7 +114,7 @@ internal sealed class AiModelCatalog : IAiModelCatalog
                 BackendLog.Warn($"Elenco modelli {provider} non disponibile: {ex.Message}");
                 return entry is not null
                     ? new AiModelList(entry.Models, entry.UpdatedAt, "cache", ex.Message, entry.Account)
-                    : new AiModelList(fallback, null, "fallback", ex.Message);
+                    : new AiModelList([], null, "unlinked", ex.Message);
             }
         }
         finally
@@ -196,19 +195,6 @@ internal sealed class AiModelCatalog : IAiModelCatalog
                 yield return (e.Name, new Entry(updated, models, Str(e.Value, "account")));
         }
     }
-
-    /// <summary>
-    /// Elenco minimo dell'app, solo quando il provider non risponde o non permette di elencare: NON e' la lista dei modelli che esistono
-    /// (quella viene sempre dal provider), per questo la UI offre anche "Altro...". Nessun modello e' "consigliato": sceglie l'utente.
-    /// Copilot ha solo il predefinito (lo sceglie Copilot per l'account): gli id che avevamo ipotizzato non erano verificati.
-    /// </summary>
-    internal static IReadOnlyList<AiModelInfo> FallbackModels(string provider) => provider switch
-    {
-        "copilot" => [new(SettingDefinitions.CopilotDefaultModel, Loc.T("Predefinito di Copilot (lo sceglie Copilot per il tuo account)"))],
-        "claudecode" or "claude" => [new("claude-sonnet-5-5", "Claude Sonnet 5.5"), new("claude-haiku-5-5", "Claude Haiku 5.5"), new("claude-opus-5-5", "Claude Opus 5.5")],
-        "openai" => [new("openai/gpt-4o-mini", "GPT-4o mini"), new("openai/gpt-4o", "GPT-4o"), new("openai/gpt-4.1-mini", "GPT-4.1 mini"), new("openai/gpt-4.1", "GPT-4.1")],
-        _ => [],
-    };
 
     // ── Parser delle risposte dei provider (puri, provati con JSON di esempio) ──
 

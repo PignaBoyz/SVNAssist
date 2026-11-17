@@ -18,11 +18,8 @@ internal static class SettingDefinitions
     /// <summary>Modello Claude di default: Sonnet, il compromesso migliore costo/qualita' per i commit message.</summary>
     internal const string DefaultClaudeModel = "claude-sonnet-5-5";
 
-    // Elenchi minimi dell'app (suggerimenti di Options e fallback quando il provider non risponde). I modelli veri vengono dal provider
-    // (AiModelCatalog) e un valore salvato fuori da questi elenchi e' valido: l'impostazione e' testo libero. Per Copilot c'e' solo "default".
-    internal static readonly string[] KnownClaudeModels = ["claude-sonnet-5-5", "claude-haiku-5-5", "claude-opus-5-5"];
-    internal static readonly string[] KnownCopilotModels = ["default"];
-    internal static readonly string[] KnownAiModels = ["openai/gpt-4o-mini", "openai/gpt-4o", "openai/gpt-4.1-mini", "openai/gpt-4.1"];
+    // Nessun elenco di modelli nell'app: i modelli disponibili si chiedono al provider collegato (AiModelCatalog) e l'impostazione e' testo libero.
+    // Qui restano solo i valori predefiniti con cui l'AI funziona al primo uso.
 
     /// <summary>Valore "modello predefinito di Copilot" (l'enum non ammette valori vuoti).</summary>
     internal const string CopilotDefaultModel = "default";

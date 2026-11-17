@@ -37,6 +37,7 @@ Installation: same as 0.2.0. Tested on Visual Studio 18 (2026). Visual Studio 20
 - **AI models from the provider.** The model selection shows the list returned by the provider, without "recommended" entries.
   - **Refresh list** rereads the list; otherwise it is reread after 24 hours.
   - **Other…** lets you type the name of a model that is not in the list.
+  - The list always comes from the connected provider: SVNAssist has no model lists of its own. If the provider is not connected or does not answer, the list shows "Not connected" with a prompt to connect it. With Claude Code (subscription) the list needs an Anthropic API key. In Tools > Options the model is a text field.
   - With GitHub Copilot the estimated cost per commit (premium multiplier), the default model, the model used and the connected account are shown.
   - If the model does not respond, the error reports the reason given by the provider and suggests an action.
   - Not tested with the real providers (to be verified).

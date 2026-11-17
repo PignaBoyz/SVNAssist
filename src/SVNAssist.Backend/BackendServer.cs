@@ -18,7 +18,7 @@ internal sealed class BackendServices
     public required PrerequisiteProbes Probes { get; init; }
     public required PrerequisiteActions PrerequisiteActions { get; init; }
 
-    /// <summary>Elenco modelli AI per provider (cache datata). Null = solo l'elenco predefinito dell'app, senza rete (test).</summary>
+    /// <summary>Elenco modelli AI per provider (cache datata). Null = nessun elenco, senza rete (test).</summary>
     public IAiModelCatalog? ModelCatalog { get; init; }
 
     /// <summary>FileSystemWatcher sulla working copy (spento nei test).</summary>

@@ -196,8 +196,7 @@ public class WizardStoreTests
 
         var s = wizard.GetSnapshot();
         Assert.Equal(4, s.Step);
-        Assert.Equal(recommended, s.Model);
-        Assert.Equal(recommended, s.Models[0].Value);
+        Assert.Empty(s.Models);   // nessun elenco: l'app non ha id propri, il provider non e' collegato a un elenco
 
         Assert.True(await wizard.FinishAsync(recommended, Ct));
         Assert.Equal(provider, settings.Saved[SettingDefinitions.AiProvider]);
@@ -300,12 +299,14 @@ public class WizardStoreTests
     }
 
     [Fact]
-    public void ModelliDellaProcedura_CoincidonoConQuelliAmmessiDalleImpostazioni()
+    public async Task SenzaElenco_ProviderNonCollegato_NessunModelloInventato()
     {
-        Assert.Equal(SettingDefinitions.KnownClaudeModels, WizardStore.ModelsFor("claude").Select(m => m.Value));
-        Assert.Equal(SettingDefinitions.KnownCopilotModels, WizardStore.ModelsFor("copilot").Select(m => m.Value));
-        Assert.DoesNotContain("consigliato", string.Join(" ", WizardStore.ModelsFor("claude").Select(m => m.Label)));
-        Assert.Equal(SettingDefinitions.KnownAiModels, WizardStore.ModelsFor("openai").Select(m => m.Value));
+        foreach (var p in new[] { "claude", "claudecode", "copilot", "openai" })
+        {
+            var list = await new AiModelCatalog(null).GetAsync(p, false, CancellationToken.None);
+            Assert.Empty(list.Models);
+            Assert.Equal("unlinked", list.Source);
+        }
     }
 
     [Fact]

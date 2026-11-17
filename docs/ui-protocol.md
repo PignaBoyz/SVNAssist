@@ -220,10 +220,10 @@ prereq      {open, summary, ai, feedback, items[{id, group, title, ok, detail, i
 loading     bool
 wizard      {open, mode: ai|prereq, step 1-4, fromGenerate, provider, busy, feedback, providers[{id,title,cost}], items[prereq item],
              auth: ""|github|claudecode|key|openai, authOk, authDetail, endpoint, models[{value,label,cost?}], model, canNext,
-             modelsLoading?, modelsUpdated?, modelsNote?, modelsError?, modelsAccount?, modelsSource?: ""|live|cache|fallback, modelSaved?}
+             modelsLoading?, modelsUpdated?, modelsNote?, modelsError?, modelsAccount?, modelsSource?: ""|live|cache|unlinked, modelSaved?}
              // passo 4: models viene dal provider (Copilot: SDK `ListModelsAsync`, con `cost` = moltiplicatore di richieste premium dichiarato, vuoto se non lo dice; Claude API: GET /v1/models;
              // GitHub Models: GET models.github.ai/catalog/models; OpenAI-compatibile: GET {base}/models). Cache di 24 ore (1 ora alla riapertura del passo), forzabile.
-             // modelsUpdated = ISO UTC dell'ultimo aggiornamento ('' = elenco predefinito dell'app); modelsAccount = account con cui il provider ha risposto (login GitHub di Copilot);
+             // modelsUpdated = ISO UTC dell'ultimo aggiornamento ('' = nessun elenco: provider non collegato); modelsAccount = account con cui il provider ha risposto (login GitHub di Copilot);
              // modelSaved = modello oggi in uso (un valore non piu' in elenco resta in `models` con etichetta "non piu' nell'elenco" e in `modelsNote`). La voce "Altro..." e' solo UI (testo libero -> wizardFinish.model).
 revPicker?  {open, target, loading, error, canMore, items[{rev, author, date (ISO), msg (prima riga)}]}   // modale "Update to revision"
 switchPicker? {open, mode: switch|merge, loading, error, items[{name, kind: trunk|branch|tag, current, rev, author, date}], recent[name]}   // modale "SVN Switch" / sorgente di "SVN Merge" (senza il ramo corrente); name relativo alla base (trunk, branches/x, tags/1.0); rev/author/date = ultima modifica da svn list --xml; recent = ultimi usati per repository

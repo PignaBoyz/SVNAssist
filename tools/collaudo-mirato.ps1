@@ -12,9 +12,10 @@
       .\tools\collaudo-mirato.ps1 -Parte C        # C: Log e Merge (file per revisione, anteprima, modifiche pendenti)
       .\tools\collaudo-mirato.ps1 -Parte D        # D: Merge interrotto e Continua merge
     Opzioni: -Mini (simulazione piccola, solo per provare lo script: la D non ha le centinaia di revisioni del passo 31),
-             -SoloSim (A senza reinstallare il VSIX), -NoApri (prepara tutto ma non apre VS).
+             -SoloSim (A senza reinstallare il VSIX), -NoApri (prepara tutto ma non apre VS),
+             -SoloVsix (installa il VSIX gia' compilato in SvnHost e basta: non tocca simulazione, log e stato; da usare con VS chiuso).
 #>
-param([ValidateSet('A', 'B', 'C', 'D')][string]$Parte = 'A', [switch]$SoloSim, [switch]$Mini, [switch]$Collega, [switch]$Build, [switch]$NoApri)
+param([ValidateSet('A', 'B', 'C', 'D')][string]$Parte = 'A', [switch]$SoloSim, [switch]$Mini, [switch]$Collega, [switch]$Build, [switch]$NoApri, [switch]$SoloVsix)
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot
 $ide = 'C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE'
@@ -44,8 +45,6 @@ if ($Collega) {
     return
 }
 
-if (Get-Process devenv -ErrorAction SilentlyContinue) { throw 'Chiudi Visual Studio e rilancia lo script.' }
-
 if ($Build) {
     Write-Host '[..] Backend (publish) e VSIX (Rebuild: il build incrementale puo'' lasciare il manifest vecchio)...'
     & dotnet publish (Join-Path $repoRoot 'src\SVNAssist.Backend') -c Release -o (Join-Path $repoRoot 'src\SVNAssist.Backend\bin\publish') --nologo -v q | Out-Null
@@ -58,18 +57,23 @@ $newest = Get-ChildItem (Join-Path $repoRoot 'src') -Recurse -File -Include *.cs
     Where-Object { $_.FullName -notmatch '\\(bin|obj)\\' } | Sort-Object LastWriteTime | Select-Object -Last 1
 if ($newest.LastWriteTime -gt (Get-Item $vsix).LastWriteTime) { Write-Warning "Il VSIX e' piu' vecchio di $($newest.Name): lancia con -Build." }
 
+if (Get-Process devenv -ErrorAction SilentlyContinue) { throw 'Chiudi Visual Studio e rilancia lo script (con -Build il VSIX e gia compilato).' }
+
+function Install-Vsix {
+    Write-Host '[..] Installazione VSIX in SvnHost...'
+    # stessa versione gia' installata = errore 1001 anche con /force: prima si disinstalla (codice ignorato se assente)
+    Start-Process "$ideVSIXInstaller.exe" -ArgumentList '/rootSuffix:SvnHost', '/quiet', '/u:SVNAssist' -Wait
+    $p = Start-Process "$ideVSIXInstaller.exe" -ArgumentList '/rootSuffix:SvnHost', '/quiet', '/force', "`"$((Resolve-Path $vsix).Path)`"" -Wait -PassThru
+    if ($p.ExitCode) { throw "VSIXInstaller: codice $($p.ExitCode)" }
+    Start-Process "$idedevenv.exe" -ArgumentList '/rootsuffix', 'SvnHost', '/updateconfiguration' -Wait
+}
+if ($SoloVsix) { Install-Vsix; Write-Host '[ok] VSIX installato in SvnHost. Simulazione e dati non toccati.'; return }
+
 # stato dei dati di SVNAssist: nessun merge/switch "interrotto" lasciato da prove precedenti
 foreach ($f in 'pending-merge.json', 'pending-switch.json') { Remove-Item (Join-Path $data $f) -ErrorAction SilentlyContinue }
 
 if ($Parte -eq 'A') {
-    if (!$SoloSim) {
-        Write-Host '[..] Installazione VSIX in SvnHost...'
-        # stessa versione gia' installata = errore 1001 anche con /force: prima si disinstalla (codice ignorato se assente)
-        Start-Process "$ide\VSIXInstaller.exe" -ArgumentList '/rootSuffix:SvnHost', '/quiet', '/u:SVNAssist' -Wait
-        $p = Start-Process "$ide\VSIXInstaller.exe" -ArgumentList '/rootSuffix:SvnHost', '/quiet', '/force', "`"$((Resolve-Path $vsix).Path)`"" -Wait -PassThru
-        if ($p.ExitCode) { throw "VSIXInstaller: codice $($p.ExitCode)" }
-        Start-Process "$ide\devenv.exe" -ArgumentList '/rootsuffix', 'SvnHost', '/updateconfiguration' -Wait
-    }
+    if (!$SoloSim) { Install-Vsix }
     # log vecchi da parte: il backend-*.log del collaudo (Parte C) contiene solo questa sessione
     $logs = Join-Path $data 'logs'
     if (Test-Path $logs) {

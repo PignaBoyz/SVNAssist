@@ -74,6 +74,19 @@ Chiudi VS, poi `.\tools\collaudo-mirato.ps1 -Parte B`. Il repository riparte pul
 | 32 | Con un merge interrotto, fai SVN Update (o Switch) e riapri Changes. | Banner senza Continua merge: spiega che la working copy e' cambiata; restano **Annulla merge** e **Scarta stato**. | |
 | 33 | Merge da una cartella (Solution Explorer > cartella `src/Shop/Core` > SVN Merge... > feature-sconti) con conflitto a meta'. | Stesso banner; Continua e Annulla agiscono solo su quella cartella. | |
 
+## Parte E — Modelli AI (nessun elenco scritto nell'app)
+
+Extensions > SVNAssist > Cambia provider AI. Senza chiudere VS, in qualsiasi momento.
+
+| # | Passo | Atteso | Esito |
+|---|-------|--------|-------|
+| 34 | Passi fino a **Modello** con un provider NON collegato (es. Claude API senza chiave, o Copilot senza login). | La tendina mostra solo **Non collegato** (disabilitato) e **Altro…**; avviso "Provider non collegato…" o l'errore del provider. Nessun id inventato dall'app. | |
+| 35 | **Copilot** collegato: passo Modello. | Elenco dal provider: Predefinito di Copilot, modelli con costo (× richieste premium), account collegato. **Aggiorna elenco** lo rilegge. | |
+| 36 | **Claude API** con una chiave valida: passo Modello. | Tutti i modelli dell'account (da Anthropic). | |
+| 37 | **Claude Code** (abbonamento, senza chiave): passo Modello. | Nessun elenco; avviso che serve una API key Anthropic; **Altro…** permette di scrivere un id. **Fine** senza scegliere nulla lascia il modello in uso. | |
+| 38 | **OpenAI-compatibile / GitHub Models** con login GitHub: passo Modello. | Catalogo di GitHub Models (solo modelli di testo). | |
+| 39 | Tools > Options > SVNAssist > Commit message AI. | I tre campi modello sono **testo libero** (nessuna tendina con id fissi). | |
+
 ## Non provabile qui
 - Avviso "spazio insufficiente per il backup" (serve un disco quasi pieno); col merge su modifiche pendenti il merge non parte affatto (provato nei test con spazio simulato).
 - VS 2022 (nessuna macchina disponibile).
