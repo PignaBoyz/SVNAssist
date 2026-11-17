@@ -173,3 +173,15 @@ test('demo: doppio clic su un file non versionato lo apre intero (nessuna scheda
   assert.match(d.last().status.msg, /^File aperto: /);
   assert.deepEqual(j(d.run('S.ui.diffs', 't')), [], 'nessuna scheda di diff');
 });
+
+test('Recenti: la voce scelta va SUBITO nel campo (il campo ha il focus e il render non lo riscrive)', () => {
+  const s = fx(); s.commit.recent = ['uno', 'due\n\ndettaglio'];
+  const ta = { value: 'bozza vecchia' }, sent = [];
+  H.recentChoose(1, s, ta, (name, args) => sent.push([name, args]));
+  assert.equal(ta.value, 'due\n\ndettaglio', 'testo nel campo senza aspettare lo snapshot');
+  assert.equal(JSON.stringify(sent), '[["useRecentMessage",{"i":1}]]');
+  H.msgSync(ta, 'due\n\ndettaglio', ta); assert.equal(ta.value, 'due\n\ndettaglio');
+  const t2 = { value: 'x' }; H.recentChoose(9, s, t2, () => { }); assert.equal(t2.value, 'x', 'indice fuori elenco: campo intatto');
+  // msgSync: col focus non si riscrive (come prima), senza focus si allinea allo stato
+  const t3 = { value: 'scrivo' }; H.msgSync(t3, 'altro', t3); assert.equal(t3.value, 'scrivo'); H.msgSync(t3, 'altro', {}); assert.equal(t3.value, 'altro');
+});

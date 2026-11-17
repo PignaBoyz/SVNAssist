@@ -204,7 +204,16 @@
     rcOpen = false; box.hidden = true; box.innerHTML = '';
     if (back && box.__prev && box.__prev.isConnected) box.__prev.focus();
   }
-  function rcChoose(i) { rcClose(false); U.bridge.send('useRecentMessage', { i }); const ta = document.getElementById('msg'); if (ta) ta.focus(); }
+  // Il campo del messaggio non si riscrive mentre l'utente ci scrive (ha il focus), salvo `force`.
+  function msgSync(ta, text, active, force) { if (ta.value !== text && (force || active !== ta)) ta.value = text; }
+  // Sceglie un recente: il testo va nel campo SUBITO. Il campo prende il focus e il render non lo tocca piu' (msgSync),
+  // quindi non si puo' aspettare lo snapshot del backend; e il setCommitText ancora in attesa non deve rimettere il vecchio testo.
+  function recentChoose(i, s, ta, send) {
+    const text = ((s.commit && s.commit.recent) || [])[i];
+    if (text != null && ta) { clearTimeout(timer); ta.value = text; }
+    send('useRecentMessage', { i });
+  }
+  function rcChoose(i) { rcClose(false); const ta = document.getElementById('msg'); recentChoose(i, st, ta, U.bridge.send); if (ta) ta.focus(); }
   function rcKeys(e) {
     if (!rcOpen) return;
     const box = document.getElementById('rec'), rows = box.querySelectorAll('.rc-row');
@@ -281,7 +290,7 @@
     U.setHTML(root.querySelector('#mrg'), mergeBanner(st));
     U.setHTML(root.querySelector('#cfl'), conflictsHTML(st));
     const ta = root.querySelector('#msg');
-    if (ta.value !== st.commit.text && document.activeElement !== ta) ta.value = st.commit.text;
+    msgSync(ta, st.commit.text, document.activeElement);
     const list = root.querySelector('#list'), had = list.contains(document.activeElement), cur = list.__cursor, top = list.scrollTop;
     const keys = []; st.sections.forEach(s => { keys.push('section:' + s.id); s.rows.forEach(r => keys.push(r.key)); });
     const remap = U.syncSel(list, keys), cursor = keys.includes(remap(cur)) ? remap(cur) : keys[0];   // la selezione sopravvive allo snapshot
@@ -535,7 +544,7 @@
     else if (!e.shiftKey && (a === last || !box.contains(a))) { e.preventDefault(); first.focus(); }
   }
 
-  U.changesHTML = { sectionMenu, multiMenu, header, commitBar, foot, revHTML, switchHTML, mergeBanner, conflictsHTML, shelvedHTML, revIndicator, statusKind, OK_TTL, recentHTML, trackStatus, listHTML };   // parti pure, provate senza DOM (tests/ui-web)
+  U.changesHTML = { sectionMenu, multiMenu, header, commitBar, foot, revHTML, switchHTML, mergeBanner, conflictsHTML, shelvedHTML, revIndicator, statusKind, OK_TTL, recentHTML, recentChoose, msgSync, trackStatus, listHTML };   // parti pure, provate senza DOM (tests/ui-web)
 
   U.views.changes = {
     mount(root) {
