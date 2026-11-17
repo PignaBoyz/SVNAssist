@@ -14,3 +14,11 @@ Fonte: appunti dell'utente, immagine `bugs.png` in questa cartella.
 ## Letture adottate (da confermare nel collaudo)
 - 4: "SVN Merge..." da una cartella di Solution Explorer lavora solo su quel sottoalbero.
 - 5: "usa entrambe" = mia+loro e loro+mia nella risoluzione dei conflitti.
+
+## Aggiunte dell'utente (2026-11-17, dopo le foto del collaudo aziendale)
+9. Tasto destro (menu contestuale) sulle righe selezionate, in Changes e nel Log.
+10. Pulsante chiaro "Segna come risolto" sul file aperto in conflitto.
+11. Avanzamento del merge doppio (finestra Changes + scheda Log): deve esserci una sola vista completa.
+12. Nel Log: vedere quali file sono entrati in ogni revisione (come svn log -v / "solo percorsi interessati"); nell'anteprima del merge, per ogni revisione cosa modifica.
+13. Merge interrotto da un conflitto (E155015): applicare le revisioni una alla volta con avanzamento "revisione N di TOT (rNNNNN)"; quando si ferma dirlo chiaramente: cosa è stato applicato, cosa manca e cosa fare (risolvi i conflitti, poi "Continua merge"); NON va rifatto un merge completo, solo le revisioni rimaste; stato salvato su disco (come pending-switch.json), banner con Continua/Annulla, backup patch per annullare.
+14. Modelli AI: tutti quelli disponibili dal provider, niente "consigliato", costo stimato per commit con Copilot, stato del collegamento Copilot.
