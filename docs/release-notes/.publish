@@ -1,7 +1,5 @@
 # Elenco dei tag le cui Release vanno aggiornate col testo IT/EN, uno per riga: v0.2.0 ...
 # Righe vuote e righe che iniziano con # sono ignorate. Mai v0.1.0.
 # Una modifica a questo file attiva il workflow "Release notes".
-v0.2.0
 v0.3.0
-v0.3.1
 v0.4.0
