@@ -737,6 +737,10 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             case "conflictOp":
                 await RunExclusiveAsync(() => ConflictOpAsync(Args.OneOf(args, "op", "edit", "mine", "theirs", "bothMT", "bothTM", "resolved"), Args.Str(args, "key"), ct));
                 break;
+            case "conflictOpPath":
+                // Dal documento aperto in VS (InfoBar dell'host): il percorso completo del file in conflitto al posto della chiave di riga.
+                await RunExclusiveAsync(() => ConflictOpByPathAsync(Args.OneOf(args, "op", "edit", "mine", "theirs", "bothMT", "bothTM", "resolved"), Args.Str(args, "path"), ct));
+                break;
             case "resolveTreeConflicts":
                 await RunExclusiveAsync(() => ResolveTreeConflictsAsync(ct));
                 break;
@@ -2600,10 +2604,30 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
         catch (IOException) { return false; }
     }
 
-    private async Task ConflictOpAsync(string op, string key, CancellationToken ct)
+    private Task ConflictOpAsync(string op, string key, CancellationToken ct) => ConflictOpCoreAsync(op, ResolveKey(key).SingleFile, ct);
+
+    /// <summary>Come <see cref="ConflictOpAsync"/> ma da percorso completo (documento aperto in VS). Se la lista non e' aggiornata la rilegge una volta.</summary>
+    private async Task ConflictOpByPathAsync(string op, string path, CancellationToken ct)
     {
-        var target = ResolveKey(key);
-        if (target.SingleFile is not { Status: SvnStatusKind.Conflicted } entry)
+        ChangeEntry? Find()
+        {
+            lock (_stateLock)
+                return _entries.FirstOrDefault(e => e.Status == SvnStatusKind.Conflicted && string.Equals(e.FullPath, path, StringComparison.OrdinalIgnoreCase));
+        }
+
+        var entry = Find();
+        if (entry is null)
+        {
+            await RefreshAsync(ct, reloadBranch: false);
+            entry = Find();
+        }
+
+        await ConflictOpCoreAsync(op, entry, ct);
+    }
+
+    private async Task ConflictOpCoreAsync(string op, ChangeEntry? file, CancellationToken ct)
+    {
+        if (file is not { Status: SvnStatusKind.Conflicted } entry)
         {
             SetStatus(Loc.T("Seleziona un file in conflitto da risolvere."));
             return;

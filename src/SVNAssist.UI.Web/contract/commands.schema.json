@@ -521,6 +521,44 @@
       }
     },
     {
+      "title": "conflictOpPath",
+      "description": "Come conflictOp ma da percorso completo del file in conflitto (la InfoBar dell'host sul documento aperto in Visual Studio: Segna come risolto, Usa la mia/loro/entrambe, Apri editor di merge).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "conflictOpPath"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "path"
+          ],
+          "properties": {
+            "op": {
+              "enum": [
+                "edit",
+                "mine",
+                "theirs",
+                "bothMT",
+                "bothTM",
+                "resolved"
+              ]
+            },
+            "path": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
       "title": "resolveTreeConflicts",
       "description": "Sezione Conflitti: \"Segna tutti come risolti\" per i conflitti ad albero. Conferma con l'elenco, poi svn resolve --accept working su ognuno; un errore su uno non ferma gli altri e viene riportato nel messaggio di stato.",
       "type": "object",

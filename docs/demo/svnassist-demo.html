@@ -587,6 +587,7 @@ Il file .patch viene cancellato e non si recupera.`)) return;
     mergeUpdate: () => mgUpdate(),
     mergeResolve: () => { S.ui.statusOpen = true; S.ui.view = 'dock'; S.ui.seOpen = false; S.ui.menu = null; render(); },
     conflictOp: a => conflictOp(a.op, a.key),
+    conflictOpPath: a => { const f = S.files.find(x => x.st === 'C' && fwd(x.path) === fwd(a.path)); return f ? conflictOp(a.op, 'changes:' + f.path) : null; },   // InfoBar dell'host: nella demo non c'e', per completezza del contratto
     resolveTreeConflicts: () => resolveTreeConflicts(),
     resolveAllConflicts: a => resolveAllConflicts(a.op),
     mergeDismiss: () => { S.vm.mergeBanner = null; render(); },

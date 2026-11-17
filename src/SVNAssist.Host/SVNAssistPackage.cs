@@ -39,6 +39,7 @@ namespace SVNAssist.Host
         internal HostService Host { get; private set; }
         internal SvnSccService Scc { get; private set; }
         private SvnAssistOptions _options;
+        private ConflictInfoBars _conflictBars; // InfoBar sui documenti in conflitto
 
         /// <summary>Impostazioni (Tools > Options). Solo thread UI.</summary>
         internal SvnAssistOptions Options => _options ?? (_options = (SvnAssistOptions)GetDialogPage(typeof(SvnAssistOptions)));
@@ -69,6 +70,8 @@ namespace SVNAssist.Host
             }
             SvnAssistOptions.Changed += ApplyShortcuts;
             ApplyShortcuts();
+            try { _conflictBars = new ConflictInfoBars(this); _conflictBars.Start(); }
+            catch (Exception ex) { Log.Write("infobar conflitti non attive: " + ex.Message); }
             // Verifica end-to-end: apre la finestra Changes a package caricato (spento di default).
             if (Environment.GetEnvironmentVariable("SVNASSIST_AUTO_OPEN") == "1")
                 JoinableTaskFactory.RunAsync(async () => { await Task.Delay(5000); await ShowViewAsync("changes"); }).FileAndForget("SVNAssist/autoopen");
