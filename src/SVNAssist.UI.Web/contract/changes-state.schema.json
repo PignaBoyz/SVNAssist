@@ -810,7 +810,7 @@
         "text",
         "conflicts"
       ],
-      "description": "Banner dopo un merge non ancora committato: azioni Annulla merge (mergeUndo) e Nascondi (mergeDismiss). Assente se non c'e.",
+      "description": "Banner dopo un merge non ancora committato: azioni Annulla merge (mergeUndo) e Nascondi (mergeDismiss). Con pending (merge fermo a meta) il banner e Merge interrotto con Continua merge / Annulla merge / Scarta stato e non si nasconde. Assente se non c'e.",
       "properties": {
         "text": {
           "type": "string"
@@ -819,6 +819,126 @@
           "type": "integer",
           "minimum": 0,
           "description": "Elementi rimasti in conflitto."
+        },
+        "pending": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "source",
+            "kind",
+            "total",
+            "applied",
+            "remaining",
+            "appliedText",
+            "remainingText",
+            "steps",
+            "alternative",
+            "conflictRev",
+            "unresolved",
+            "canContinue",
+            "whyNot",
+            "incompatible",
+            "warning",
+            "appliedRevs",
+            "remainingRevs",
+            "hasBackup",
+            "busy"
+          ],
+          "description": "Merge di piu revisioni fermo o interrotto (conflitto, Annulla dell'utente, errore, VS chiuso). Stato su disco per working copy (pending-merge.json): sopravvive alla chiusura di VS. I testi sono gia localizzati dal backend. Azioni: Continua merge (mergeContinue, disabilitato con whyNot finche restano conflitti), Annulla merge (mergeUndo), Scarta stato (mergeDiscard, solo se incompatible).",
+          "properties": {
+            "source": {
+              "type": "string",
+              "description": "Sorgente (branches/x, con /sottopercorso per il merge di una cartella)."
+            },
+            "kind": {
+              "enum": [
+                "stopped",
+                "interrupted"
+              ],
+              "description": "stopped = fermo dopo la revisione in conflitto; interrupted = fermato dall'utente, da un errore o da VS chiuso."
+            },
+            "total": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Revisioni dell'intero merge."
+            },
+            "applied": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "remaining": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "appliedText": {
+              "type": "string",
+              "description": "Es. Applicate 3 di 7: r14040, r14041, r14042; ferma alla r14042 per conflitto in 2 file."
+            },
+            "remainingText": {
+              "type": "string",
+              "description": "Es. Rimaste 4: r14043…r14046."
+            },
+            "steps": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Passi numerati: risolvi i conflitti, segna come risolti (solo con conflitti), premi Continua merge."
+            },
+            "alternative": {
+              "type": "string",
+              "description": "Alternativa: Annulla merge."
+            },
+            "conflictRev": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "Revisione dopo cui si e fermato per conflitto; null se non nota (conflitto dentro un gruppo applicato in un colpo)."
+            },
+            "unresolved": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "File ancora in conflitto sotto la cartella del merge."
+            },
+            "canContinue": {
+              "type": "boolean",
+              "description": "Continua merge abilitato."
+            },
+            "whyNot": {
+              "type": "string",
+              "description": "Perche Continua merge e disabilitato (conflitti aperti, working copy cambiata); vuoto se abilitato."
+            },
+            "incompatible": {
+              "type": "boolean",
+              "description": "Working copy cambiata (switch, update, revert): restano solo Annulla merge e Scarta stato."
+            },
+            "warning": {
+              "type": "string",
+              "description": "Passaggio terminato a forza: puo essere applicato a meta; vuoto altrimenti."
+            },
+            "appliedRevs": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              },
+              "description": "Revisioni applicate in questo merge."
+            },
+            "remainingRevs": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              },
+              "description": "Revisioni rimaste da applicare."
+            },
+            "hasBackup": {
+              "type": "boolean",
+              "description": "C'e una copia di sicurezza delle modifiche pendenti di prima del merge (Annulla merge le ripristina)."
+            },
+            "busy": {
+              "type": "boolean"
+            }
+          }
         }
       }
     },
@@ -948,6 +1068,39 @@
               "cmd": {
                 "type": "string"
               }
+            }
+          }
+        },
+        "step": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "label",
+            "first",
+            "last",
+            "done",
+            "total"
+          ],
+          "description": "Avanzamento per revisione di un merge: Applico rN (k di TOT); first/last = posizioni (da 1) nell'intero merge, done = revisioni gia applicate, total = revisioni del merge. Un gruppo applicato in un colpo ha label r1-r2 e first < last.",
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "first": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "last": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "done": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "total": {
+              "type": "integer",
+              "minimum": 0
             }
           }
         }

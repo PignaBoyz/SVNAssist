@@ -143,7 +143,8 @@
         trace: (v.trace || []).map(t => ({ name: t.name, state: t.state, detail: t.detail || '' })), download: v.dl ? { pct: v.dl.pct, label: v.dl.label } : null,
         count: commitSet().files.length, all: commitSet().all, recent: (S.recentMsgs || []).slice() },
       view: v.view, theme: { mode: theme.mode, kind: kindOf() }, sections, status: { msg: tr(msg), err: !!v.err || /^Errore/.test(msg), seq: v.statusSeq || 0, ...(/E155004/.test(msg) ? { action: { label: tr('Esegui Cleanup'), cmd: 'cleanup' } } : {}) }, prereq: prereq(), loading: !!v.loading, wizard: wizardSnap(), revPicker: rpSnap(), switchPicker: swSnap(),
-      ...(v.mergeBanner && commitSet().files.length ? { merge: { text: tr(v.mergeBanner.text), conflicts: S.files.filter(f => f.st === 'C').length } } : {}),
+      ...(S.pendMerge ? { merge: { text: pendText().applied, conflicts: S.files.filter(f => f.st === 'C').length, pending: pendSnap() } } : {}),
+      ...(!S.pendMerge && v.mergeBanner && commitSet().files.length ? { merge: { text: tr(v.mergeBanner.text), conflicts: S.files.filter(f => f.st === 'C').length } } : {}),
       ...progSnap(),
       ...(v.warn ? (() => { const c = dirtyCounts(); return { switchWarn: { target: v.warn.name, counts: c, total: c.modified + c.added + c.deleted + c.conflicted + c.unversioned } }; })() : {}),
       ...(v.cwarn ? { commitWarn: v.cwarn } : {}),
@@ -158,9 +159,20 @@
     const has = (h, n) => !n || String(h).toLowerCase().includes(String(n).toLowerCase()), day = e.date.toISOString().slice(0, 10);
     return has(e.author, f.author) && has(e.msg, f.text) && (!f.path || e.paths.some(p => has(p.p, f.path.replace(/\\/g, '/')))) && (!f.from || day >= f.from) && (!f.to || day <= f.to);
   }
+  // Merge fermo a meta': stesso contenuto di PendingMergeDto (backend)
+  function pendSnap() {
+    const p = S.pendMerge, { rem, nc, rest, applied } = pendText();
+    const steps = [L('Risolvi i conflitti nei file elencati qui sotto (Usa la mia / Usa la loro / Usa entrambe / editor di merge).', 'Resolve the conflicts in the files listed below (Use mine / Use theirs / Use both / merge editor).'),
+      L('Segna ogni file come risolto.', 'Mark each file as resolved.'),
+      L(`Premi "Continua merge": vengono applicate solo le ${rem.length} revisioni rimaste (${rest}); non serve rifare la selezione né un merge completo.`, `Press "Continue merge": only the ${rem.length} remaining revisions (${rest}) are applied; there is no need to redo the selection or a full merge.`)];
+    return { source: p.name, kind: 'stopped', total: p.revs.length, applied: p.applied.length, remaining: rem.length, appliedText: applied, remainingText: L(`Rimaste ${rem.length}: ${rest}.`, `Remaining ${rem.length}: ${rest}.`),
+      steps, alternative: L('Alternativa: "Annulla merge" riporta la working copy com\'era prima del merge.', 'Alternative: "Undo merge" brings the working copy back to how it was before the merge.'),
+      conflictRev: p.conflictRev, unresolved: nc, canContinue: !nc, whyNot: nc ? L(`Restano ${nc} file in conflitto: risolvili e segnali come risolti per poter continuare.`, `${nc} files are still in conflict: resolve them and mark them as resolved to be able to continue.`) : '',
+      incompatible: false, warning: '', appliedRevs: p.applied.slice(), remainingRevs: rem, hasBackup: !!S.mgPre, busy: false };
+  }
   function mergeSnap(m) {   // il Log in modalita merge (come MergeStore)
     const el = mgEligible(m.name);
-    return { source: m.name, title: tr('Merge da ' + m.name), loading: !!m.loading, busy: !!m.busy, error: tr(m.error || ''), blocked: tr(m.blocked || ''), selected: m.sel.slice().sort((a, b) => a - b), eligible: el.length, result: m.result || null, pending: !!(S.vm.mergeBanner && commitSet().files.length), needsUpdate: /E195020/.test(m.error || ''), ...(mgDirty().length ? { dirty: mgDirty().length } : {}), ...(mgFilesSnap(m) ? { files: mgFilesSnap(m) } : {}) };
+    return { source: m.name, title: tr('Merge da ' + m.name), loading: !!m.loading, busy: !!m.busy, error: tr(m.error || ''), blocked: tr(m.blocked || ''), selected: m.sel.slice().sort((a, b) => a - b), eligible: el.length, result: m.result || null, pending: !S.pendMerge && !!(S.vm.mergeBanner && commitSet().files.length), needsUpdate: /E195020/.test(m.error || ''), ...(mgDirty().length ? { dirty: mgDirty().length } : {}), ...(mgFilesSnap(m) ? { files: mgFilesSnap(m) } : {}), ...(S.pendMerge ? { interrupted: pendSnap(), appliedInfo: S.pendMerge.applied.map(r => { const e = (MG[S.pendMerge.name] || []).find(x => x.rev === r); return { rev: r, author: e ? e.author : '', msg: e ? String(e.msg).split('\n')[0] : '' }; }) } : {}) };
   }
   // "Includi revisioni unite": sotto la 2a revisione compaiono due revisioni di un ramo entrate per merge (una e' un merge inverso)
   function logRows(l) {
@@ -278,6 +290,8 @@ Il file .patch viene cancellato e non si recupera.`)) return;
     switchRefresh: () => vmSwitchOpen(true, S.vm.sw && S.vm.sw.mode),
     mergeOpen: () => vmSwitchOpen(false, 'merge'),
     mergeUndo: () => mgUndo(),
+    mergeContinue: () => mgContinue(),
+    mergeDiscard: () => mgDiscard(),
     mergeRevertAll: () => mgRevertAll(),
     mergeUpdate: () => mgUpdate(),
     mergeResolve: () => { S.ui.statusOpen = true; S.ui.view = 'dock'; S.ui.seOpen = false; S.ui.menu = null; render(); },
@@ -285,7 +299,7 @@ Il file .patch viene cancellato e non si recupera.`)) return;
     conflictOpPath: a => { const f = S.files.find(x => x.st === 'C' && fwd(x.path) === fwd(a.path)); return f ? conflictOp(a.op, 'changes:' + f.path) : null; },   // InfoBar dell'host: nella demo non c'e', per completezza del contratto
     resolveTreeConflicts: () => resolveTreeConflicts(),
     resolveAllConflicts: a => resolveAllConflicts(a.op, a.keys),
-    mergeDismiss: () => { S.vm.mergeBanner = null; render(); },
+    mergeDismiss: () => { if (!S.pendMerge) S.vm.mergeBanner = null; render(); },
     mergeToggle: a => { const m = S.lvm.merge; if (m && !m.busy && mgEligible(m.name).some(r => r.rev === +a.rev)) { m.sel = m.sel.includes(+a.rev) ? m.sel.filter(x => x !== +a.rev) : m.sel.concat(+a.rev); m.result = null; m.focus = null; render(); } },
     mergeClear: () => { const m = S.lvm.merge; if (m) { m.sel = []; m.result = null; m.focus = null; render(); } },
     mergeFocus: a => { const m = S.lvm.merge; if (m && (+a.rev === 0 || mgEligible(m.name).some(r => r.rev === +a.rev))) { m.focus = +a.rev || null; render(); } },
