@@ -1,0 +1,68 @@
+name: Release notes
+
+# Aggiorna il testo (solo il testo) di Release gia pubblicate.
+# Si attiva modificando docs/release-notes/.publish oppure a mano con l'input "tags".
+on:
+  push:
+    paths: ['docs/release-notes/.publish']
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: 'Tag da aggiornare, separati da spazio o virgola (es. v0.2.0 v0.3.0)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  notes:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      INPUT_TAGS: ${{ github.event.inputs.tags }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Aggiorna il testo delle Release
+        shell: bash
+        run: |
+          set -euo pipefail
+          tags=""
+          if [ -n "${INPUT_TAGS// /}" ]; then
+            tags=$(echo "$INPUT_TAGS" | tr ',' ' ' | tr -s ' ' '\n')
+          elif [ -f docs/release-notes/.publish ]; then
+            tags=$(sed -e 's/\r$//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' docs/release-notes/.publish | grep -v '^#' | grep -v '^$' || true)
+          fi
+          {
+            echo "## Aggiornamento note delle Release"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -z "$tags" ]; then
+            echo "Nessun tag da aggiornare." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          failed=0
+          for tag in $tags; do
+            if [ "$tag" = "v0.1.0" ]; then
+              echo "- $tag: ignorato (mai aggiornare v0.1.0)" >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+            if ! gh release view "$tag" >/dev/null 2>&1; then
+              echo "- $tag: Release non trovata, saltata (non viene creata)" >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+            if ! node tools/build-release-body.mjs "$tag" "${{ github.sha }}" --out body.md; then
+              echo "- $tag: errore nella costruzione del testo (manca docs/release-notes/$tag.user.md?)" >> "$GITHUB_STEP_SUMMARY"
+              failed=1
+              continue
+            fi
+            gh release edit "$tag" --notes-file body.md
+            url=$(gh release view "$tag" --json url --jq .url)
+            echo "- $tag: aggiornata, $url" >> "$GITHUB_STEP_SUMMARY"
+          done
+          exit $failed
