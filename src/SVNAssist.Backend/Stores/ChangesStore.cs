@@ -684,6 +684,11 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                         await _host.OpenFileAsync(file.FullPath);
                     break;
                 }
+            case "progressGoto":
+                // Striscia "in corso nella scheda Log" di Changes: porta in primo piano il documento Log dell'operazione.
+                if (Progress.GetSnapshot() is { Origin: "log" } p)
+                    await _host.ShowLogWindowAsync(p.Title);
+                break;
             case "revealInExplorer":
                 RevealInExplorer(args.GetProperty("key").GetString() ?? string.Empty);
                 break;

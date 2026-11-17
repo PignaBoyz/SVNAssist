@@ -360,3 +360,7 @@ progress.obar::-webkit-progress-value{background:var(--acc2);border-radius:3px;t
 .shl-r{display:flex;align-items:center;gap:10px;padding:6px 12px;border-top:1px solid var(--bd);min-width:0}
 .shl-r:hover,.shl-r:focus-visible{background:var(--bg2)}
 .shl-n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+
+.ops-strip{position:fixed;left:8px;right:8px;bottom:8px;z-index:120;display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--bg3);box-shadow:0 2px 8px rgba(0,0,0,.25)}
+.ops-strip.err{border-color:var(--bad,#c0392b)}
+.ops-strip-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

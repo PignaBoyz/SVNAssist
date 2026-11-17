@@ -1100,6 +1100,27 @@
       }
     },
     {
+      "title": "progressGoto",
+      "description": "Striscia di avanzamento in Changes (operazione avviata dal Log): porta in primo piano il documento Log.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "progressGoto"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
       "title": "progressClose",
       "description": "Chiude la finestra di avanzamento a fine operazione; conflicts=true porta in primo piano Changes (sezione Conflitti). Vale in Changes e in Log.",
       "type": "object",

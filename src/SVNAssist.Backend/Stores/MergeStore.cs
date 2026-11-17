@@ -235,7 +235,7 @@ internal sealed class MergeStore
                 try
                 {
                     Say(Loc.T("Merge da {0} in corso...", source.Name));
-                    var ot = _changes.Progress.Begin("merge", Loc.T("Merge da {0}", source.Name), Loc.T("Merge in corso..."), ct);
+                    var ot = _changes.Progress.Begin("merge", Loc.T("Merge da {0}", source.Name), Loc.T("Merge in corso..."), ct, origin: "log");
                     output = await SvnProgress.RunAsync(_changes.Progress.Line, () => _svn.MergeAsync(wc, source.Url, revs, dryRun: false, ot));
                     var summary = ToResult("merge", label, output);
                     lock (_lock)

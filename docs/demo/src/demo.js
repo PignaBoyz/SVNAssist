@@ -1031,7 +1031,7 @@ async function btOk(a) {
 // Avanzamento modale (switch, merge, update, cleanup): righe di svn in streaming, barra indeterminata + contatore, resta aperta con il riepilogo.
 const progKind = l => { const m = /^([ ADUCGER][ UCGM][ B][ C])\s+\S/.exec(l); return m ? (m[1].includes('C') ? 'C' : /^[ADGR]/.test(m[1]) ? m[1][0] : 'U') : /^Reverted /.test(l) ? 'R' : 'i'; };
 async function progRun(op, title, phase, lines) {
-  S.prog = { op, title, phase, running: true, ok: false, processed: 0, conflicts: 0, omitted: 0, lines: [], summary: '', conflictPaths: [], cancellable: op !== 'cleanup', cancelling: false, cancelled: false }; render();
+  S.prog = { op, title, phase, origin: op === 'merge' ? 'log' : 'changes', running: true, ok: false, processed: 0, conflicts: 0, omitted: 0, lines: [], summary: '', conflictPaths: [], cancellable: op !== 'cleanup', cancelling: false, cancelled: false }; render();
   for (const l of lines) {
     await sleep(60);
     const p = S.prog, k = progKind(l);

@@ -22,9 +22,10 @@
     const done = !p.running, det = !done && p.total > 0; // totale stimato da svn diff --summarize: barra vera (<progress>, niente style inline per la CSP)
     const bar = det ? `<progress class="obar det" max="${p.total}" value="${Math.min(p.processed, p.total)}" aria-label="${esc(p.title)}"></progress>`
       : `<div class="obar${done ? (p.ok ? ' ok' : ' err') : ''}" role="progressbar" aria-label="${esc(p.title)}"${done ? ' aria-valuenow="100" aria-valuemin="0" aria-valuemax="100"' : ''}><i></i></div>`;
-    const counts = `<span class="muted">${det ? t('{0} di circa {1} elementi', p.processed, p.total) : t('{0} elementi elaborati', p.processed)}</span>` + (p.conflicts ? ` <span class="chip fail">${U.icon('warn')}${t('{0} in conflitto', p.conflicts)}</span>` : '');
+    const idle = !done && !det && !p.processed;   // svn non ha ancora scritto nulla (legge la storia dal server): niente "0 elementi", testo onesto
+    const counts = idle ? '' : `<span class="muted">${det ? t('{0} di circa {1} elementi', p.processed, p.total) : t('{0} elementi elaborati', p.processed)}</span>` + (p.conflicts ? ` <span class="chip fail">${U.icon('warn')}${t('{0} in conflitto', p.conflicts)}</span>` : '');
     const lines = p.lines.length ? `<ul class="olines" id="ops-lines" tabindex="0" aria-label="${esc(t('Righe di notifica di svn'))}">${p.omitted ? `<li class="ol i"><span class="st"></span><span class="pt muted">${esc(t('… altre righe precedenti non mostrate'))}</span></li>` : ''}${p.lines.map(O.lineHTML).join('')}</ul>`
-      : `<div class="olines empty muted">${esc(done ? t('Nessun output da svn') : t('In attesa delle prime righe da svn…'))}</div>`;
+      : `<div class="olines empty muted">${esc(done ? t('Nessun output da svn') : t('svn sta preparando l\'operazione (legge la storia dal server) e non ha ancora scritto nulla: le righe compaiono man mano. La barra in movimento indica che è al lavoro.'))}</div>`;
     const summary = done ? `<div class="${p.cancelled ? 'rp-err warnb' : p.ok ? (p.conflicts || p.warnings ? 'rp-err warnb' : 'osum ok') : 'rp-err'}" role="alert">${U.icon(p.ok && !p.conflicts && !p.warnings ? 'check' : p.ok || p.cancelled ? 'warn' : 'x')}<span>${esc(p.summary)}</span></div>` : '';
     return `<div class="wiz-scrim"><div class="wiz ops" role="dialog" aria-modal="true" aria-labelledby="ops-t"><div class="wiz-h"><h3 id="ops-t" tabindex="-1">${esc(p.title)}</h3></div>` +
       `<div class="wiz-b"><div class="ophase">${done ? '' : '<span class="spin" aria-hidden="true"></span>'}<b>${esc(done ? (p.cancelled ? t('Operazione annullata') : p.ok ? t('Completato') : t('Operazione non riuscita')) : p.phase)}</b><span class="fill"></span>${counts}</div>${bar}${lines}${summary}</div>` +
@@ -33,6 +34,14 @@
       (done ? (p.actions || []).map(a => U.btn('btn', a.label, null, a.cmd, a.cmd === 'progressClose' ? { conflicts: false } : null)).join('') : '') +
       (done && p.conflicts ? U.btn('btn', t('Apri i conflitti'), 'diff', 'progressClose', { conflicts: true }, t('Chiude e porta in primo piano Changes, sezione Conflitti')) : '') +
       (done && !(p.actions || []).some(a => a.cmd === 'progressClose') ? U.btn('btn primary', t('Chiudi'), null, 'progressClose', { conflicts: false }, t('Chiude la finestra')) : '') + `</div></div></div>`;
+  };
+
+  // Operazione avviata dall'altra vista: solo una striscia sottile non bloccante col rimando (la finestra completa sta dove e' partita).
+  O.stripHTML = (p, view) => {
+    const where = view === 'log' ? t('Changes') : t('Log'), done = !p.running;
+    const txt = done ? p.summary || t('Completato') : t('{0}: in corso nella scheda {1}…', p.title, where);
+    return `<div class="ops-strip${done && !p.ok ? ' err' : ''}" role="status">${done ? U.icon(p.ok ? 'check' : 'warn') : '<span class="spin" aria-hidden="true"></span>'}<span class="ops-strip-t" title="${esc(txt)}">${esc(txt)}</span>` +
+      U.btn('btn sm', t('Vai alla scheda {0}', where), null, view === 'log' ? 'mergeResolve' : 'progressGoto', null, t('Porta in primo piano la scheda dove si vede l\'avanzamento completo')) + `</div>`;
   };
 
   O.warnHTML = s => {
@@ -112,7 +121,12 @@
     `<button type="button" class="btn primary" data-sh-ok title="${esc(t('Salva la patch nello shelve'))}">${U.icon('check')}<span>Shelve</span></button></div></div></div>`;
 
   // Un solo contenitore (#ops) per vista; inert/modal-open sull'app li imposta la vista.
-  O.render = (box, st) => {
+  O.render = (box, st, view = 'changes') => {
+    if (st.progress && st.progress.origin && st.progress.origin !== view && !sh) {   // avviata dall'altra vista: striscia, niente blocco
+      const was0 = !!box.__open; U.setHTML(box, O.stripHTML(st.progress, view)); box.__open = false; box.__kind = 'strip'; box.__st = st;
+      if (was0 && box.__prev && box.__prev.isConnected) box.__prev.focus();
+      return false;
+    }
     const open = !!(st.progress || st.switchWarn || st.cleanup || st.commitWarn || st.branchTag || sh), was = !!box.__open, a = document.activeElement;
     const kind = st.progress ? 'p' : st.switchWarn ? 'w' : st.cleanup ? 'c' : st.commitWarn ? 'k' : st.branchTag ? 'b' : sh ? 's' : '';
     if (open && (!was || box.__kind !== kind)) { if (kind === 'c') O.resetCleanup(); if (kind === 'b') O.btReset(st.branchTag); if (!was) box.__prev = a; }

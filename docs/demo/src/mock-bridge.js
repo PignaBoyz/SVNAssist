@@ -308,6 +308,8 @@ Il file .patch viene cancellato e non si recupera.`)) return;
     switchWarnCancel: () => vmWarn('cancel'),
     switchBack: () => { setStatus('Nessuno switch da annullare.'); render(); },   // la demo non simula switch interrotti
     progressClose: a => vmProgressClose(a),
+    progressGoto: () => { S.ui.view = 'log'; render(); },   // nella demo: porta alla scheda Log
+
     opCancel: () => vmOpCancel(),
     progressRevertMerge: () => { S.prog = null; setStatus('Revert delle modifiche del merge: nessuna modifica parziale da annullare (la demo non applica il merge a metà).'); render(); },
     commit: () => vmCommit(),

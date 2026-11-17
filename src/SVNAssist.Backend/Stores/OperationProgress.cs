@@ -13,6 +13,7 @@ internal sealed record ProgressActionDto(string Label, string Cmd);
 /// Finestra di avanzamento modale (Switch, Merge, Update, Cleanup). <c>Total</c> manca: svn non lo dice, la UI mostra una barra
 /// indeterminata e il contatore <c>Processed</c>. Resta aperta a fine operazione (<c>Running</c> falso) con il riepilogo.
 /// </summary>
+/// <param name="Origin">Vista che ha avviato l'operazione (<c>changes</c> | <c>log</c>): solo li' la finestra completa (barra, righe, Annulla); nell'altra una striscia non bloccante.</param>
 /// <param name="Op"><c>switch</c> | <c>merge</c> | <c>update</c> | <c>cleanup</c>.</param>
 /// <param name="Cancellable">Mostra "Annulla": solo switch, merge e update, e solo mentre gira (il cleanup interrotto peggiora la working copy).</param>
 /// <param name="Cancelling">Annullamento richiesto, svn in chiusura: il pulsante si disabilita.</param>
@@ -24,7 +25,8 @@ internal sealed record ProgressDto(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? ConflictPaths = null,
     bool Cancellable = false, bool Cancelling = false, bool Cancelled = false,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ProgressActionDto>? Actions = null, bool Warnings = false,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? Total = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? Total = null,
+    string Origin = "changes");
 
 /// <summary>Stato condiviso della finestra di avanzamento: lo scrive l'operazione (anche da thread di svn), lo legge lo snapshot di Changes e di Log.</summary>
 internal sealed partial class OperationProgress
@@ -41,17 +43,19 @@ internal sealed partial class OperationProgress
     private CancellationTokenSource? _cts;
     private int _processed, _conflictCount, _omitted;
     private int? _total;
+    private string _origin = "changes";
 
     public event Action? Changed;
 
     internal bool IsOpen { get { lock (_lock) return _open; } }
 
     /// <summary>Apre la finestra. Restituisce il token da passare a svn: si annulla con <see cref="Cancel"/> oltre che con <paramref name="ct"/>.</summary>
-    internal CancellationToken Begin(string op, string title, string phase, CancellationToken ct = default)
+    internal CancellationToken Begin(string op, string title, string phase, CancellationToken ct = default, string origin = "changes")
     {
         CancellationToken token;
         lock (_lock)
         {
+            _origin = origin;
             (_open, _running, _ok, _op, _title, _phase, _summary) = (true, true, false, op, title, phase, string.Empty);
             (_processed, _conflictCount, _omitted, _total) = (0, 0, 0, null);
             (_cancelling, _cancelled, _actions, _warnings) = (false, false, null, false);
@@ -157,7 +161,7 @@ internal sealed partial class OperationProgress
         lock (_lock)
             return !_open ? null
                 : new ProgressDto(_op, _title, _phase, _running, _ok, _processed, _conflictCount, _omitted, _lines.ToList(), _summary, _conflicts.Count > 0 ? _conflicts.ToList() : null,
-                    _running && IsCancellableOp(_op), _cancelling, _cancelled, _actions, _warnings, _total);
+                    _running && IsCancellableOp(_op), _cancelling, _cancelled, _actions, _warnings, _total, _origin);
     }
 
     /// <summary>

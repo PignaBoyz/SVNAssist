@@ -454,6 +454,13 @@
           "type": "boolean",
           "description": "Finita bene ma con avvisi (es. Cleanup: file in uso saltati): riepilogo in giallo."
         },
+        "origin": {
+          "enum": [
+            "changes",
+            "log"
+          ],
+          "description": "Vista che ha avviato l'operazione: li la finestra completa; nell'altra una striscia sottile non bloccante col rimando."
+        },
         "cancelling": {
           "type": "boolean",
           "description": "Annullamento richiesto: Annulla disabilitato (\"Annullamento...\")."
