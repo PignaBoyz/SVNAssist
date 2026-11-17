@@ -250,6 +250,112 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
     // Merge eseguito e non ancora committato: banner con "Annulla merge".
     private string? _mergeBanner;
 
+    // Merge di UNA cartella (bug 4): cartella della working copy e suo sottopercorso relativo (con "/"); null = merge dell'intera working copy.
+    // Resta fino al prossimo "SVN Merge...": "Annulla merge" e "Revert di tutto" del merge agiscono solo li' sotto.
+    private string? _mergeScope, _mergeSub;
+
+    /// <summary>"SVN Merge..." da una cartella: <paramref name="path"/> vuoto o uguale alla radice = tutta la working copy. Falso se la cartella e' fuori dalla working copy.</summary>
+    private bool SetMergeScope(string path)
+    {
+        _mergeScope = _mergeSub = null;
+        if (string.IsNullOrWhiteSpace(path))
+            return true;
+        var root = Path.GetFullPath(WorkingCopyPath).TrimEnd('\\', '/');
+        var full = Path.GetFullPath(File.Exists(path) ? Path.GetDirectoryName(path)! : path).TrimEnd('\\', '/');
+        if (string.Equals(full, root, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (!IsUnder(full, root))
+            return false;
+        _mergeScope = full;
+        _mergeSub = Path.GetRelativePath(root, full).Replace('\\', '/');
+        return true;
+    }
+
+    /// <summary>Cartella dal comando: <c>path</c> (Solution Explorer) oppure <c>key</c> di una riga cartella di Changes.</summary>
+    private string MergeFolderArg(JsonElement args)
+    {
+        static string Opt(JsonElement a, string n)
+            => a.ValueKind == JsonValueKind.Object && a.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? string.Empty : string.Empty;
+        var path = Opt(args, "path");
+        if (path.Length > 0)
+            return path;
+        var key = Opt(args, "key");
+        if (key.Length == 0)
+            return string.Empty;
+        var rel = ResolveKey(key).Path;
+        return rel.Length == 0 ? string.Empty : Path.Combine(WorkingCopyPath, rel.Replace('/', Path.DirectorySeparatorChar));
+    }
+
+    private bool InMergeScope(string fullPath)
+        => _mergeScope is null || string.Equals(fullPath, _mergeScope, StringComparison.OrdinalIgnoreCase) || IsUnder(fullPath, _mergeScope);
+
+    /// <summary>Messaggio italiano per il motivo per cui svn non puo' unire la cartella (codice o testo dell'errore di svn).</summary>
+    internal static string ExplainSubtreeMergeError(string svnMessage, string sub, string source)
+    {
+        var m = svnMessage ?? string.Empty;
+        if (m.Contains("E170000", StringComparison.Ordinal) || m.Contains("E160013", StringComparison.Ordinal)
+            || m.Contains("doesn't exist", StringComparison.OrdinalIgnoreCase) || m.Contains("non-existent", StringComparison.OrdinalIgnoreCase)
+            || m.Contains("path not found", StringComparison.OrdinalIgnoreCase) || m.Contains("not found in revision", StringComparison.OrdinalIgnoreCase))
+            return Loc.T("La cartella \"{0}\" non esiste in {1}: manca lo stesso sottopercorso nel ramo scelto.", sub, source);
+        if (m.Contains("E195012", StringComparison.Ordinal) || m.Contains("E195016", StringComparison.Ordinal) || m.Contains("ancestrally", StringComparison.OrdinalIgnoreCase) || m.Contains("common ancestor", StringComparison.OrdinalIgnoreCase)
+            || m.Contains("unrelated", StringComparison.OrdinalIgnoreCase) || m.Contains("Unable to find repository location", StringComparison.OrdinalIgnoreCase))
+            return Loc.T("La cartella \"{0}\" non ha storia in comune con quella di {1} (nessun antenato comune): svn non può unirle.", sub, source);
+        return Loc.T("svn risponde: {0}", FirstLine(m));
+    }
+
+    /// <summary>
+    /// Controllo di compatibilita' prima del merge di una cartella (la cartella equivalente di un altro ramo): modifiche locali sotto la cartella,
+    /// sottopercorso presente nel ramo, storia in comune (<c>svn mergeinfo --show-revs eligible</c>) e anteprima (<c>--dry-run</c>).
+    /// Mostra il verdetto (Compatibile / Non possibile + motivo); ritorna la sorgente da unire (URL del sottopercorso) solo se compatibile e confermata.
+    /// </summary>
+    private async Task<SwitchPickerStore.Target?> CheckSubtreeMergeAsync(SwitchPickerStore.Target source, string sub, CancellationToken ct)
+    {
+        var folder = _mergeScope!;
+        var url = source.Url.TrimEnd('/') + "/" + string.Join("/", sub.Split('/', StringSplitOptions.RemoveEmptyEntries).Select(Uri.EscapeDataString));
+        var named = source with { Name = source.Name + "/" + sub, Url = url, Path = source.Path + "/" + sub };
+        SetStatus(Loc.T("Controllo se la cartella \"{0}\" si può unire da {1}...", sub, source.Name));
+        string? reason = null;
+        var eligible = 0;
+        MergeOutput? preview = null;
+        try
+        {
+            var local = (await _svnService.GetStatusAsync(folder, ct)).Count(x => x.Status is SvnStatusKind.Modified or SvnStatusKind.Added or SvnStatusKind.Deleted
+                or SvnStatusKind.Replaced or SvnStatusKind.Missing or SvnStatusKind.Conflicted or SvnStatusKind.Obstructed or SvnStatusKind.Incomplete);
+            if (local > 0)
+                reason = Loc.T("La cartella \"{0}\" ha {1} elementi con modifiche locali: per unire serve che sia pulita (così \"Annulla merge\" non tocca altro lavoro). Fai prima Commit oppure Revert.", sub, local);
+            else
+            {
+                eligible = (await _svnService.GetEligibleRevisionsAsync(folder, url, ct)).Count;
+                preview = await _svnService.MergeAsync(folder, url, null, dryRun: true, ct);
+            }
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            reason = ExplainSubtreeMergeError(ex.Message, sub, source.Name);
+        }
+
+        if (ct.IsCancellationRequested)
+            return null;
+        if (reason is not null)
+        {
+            await _dialogs.AskAsync(Loc.T("Merge della cartella \"{0}\" da {1}: NON POSSIBILE.\n\n{2}", sub, source.Name, reason), Loc.T("Chiudi"), Loc.T("Annulla"), ct);
+            SetStatus(Loc.T("Merge della cartella \"{0}\" non possibile: {1}", sub, reason));
+            return null;
+        }
+
+        if (eligible == 0)
+        {
+            await _dialogs.AskAsync(Loc.T("Merge della cartella \"{0}\" da {1}: COMPATIBILE, ma non c'è nulla da unire (la cartella è già allineata).", sub, source.Name), Loc.T("Chiudi"), Loc.T("Annulla"), ct);
+            SetStatus(Loc.T("Nessuna revisione da unire per la cartella \"{0}\".", sub));
+            return null;
+        }
+
+        var o = preview!;
+        var ok = await _dialogs.AskAsync(Loc.T("Merge della cartella \"{0}\" da {1}: COMPATIBILE.\n\n{2} revisioni da unire. Anteprima: {3} elementi toccati, {4} conflitti.\n\nIl merge riguarda solo questa cartella e svn registra le informazioni di merge (svn:mergeinfo) sulla cartella e non sulla radice del ramo. Continuare e scegliere le revisioni?",
+            sub, source.Name, eligible, o.Items.Count, o.Conflicts), Loc.T("Continua"), Loc.T("Annulla"), ct);
+        return ok ? named : null;
+    }
+
     /// <summary>
     /// Dopo un merge: banner con "Annulla merge" e messaggio di commit (stile TortoiseSVN) in cima ai Recenti del repository.
     /// Il campo del messaggio non si tocca: il messaggio resta nei Recenti anche dopo un revert e lo si inserisce da li' se serve.
@@ -601,6 +707,8 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             case "mergeOpen":
                 if (string.IsNullOrWhiteSpace(WorkingCopyPath))
                     SetStatus(Loc.T("Nessuna working copy configurata."));
+                else if (!SetMergeScope(MergeFolderArg(args)))
+                    SetStatus(Loc.T("La cartella scelta non è dentro la working copy: il merge di una cartella parte da una cartella della working copy."));
                 else
                     await Switch.OpenAsync(WorkingCopyPath, ct, mode: "merge");
                 break;
@@ -1822,8 +1930,16 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             // Sorgente scelta: il resto (revisioni, anteprima, merge) sta nel Log in modalita' merge.
             Switch.RememberUsed(target.Name);
             Switch.Close();
+            var mergeSource = target;
+            if (_mergeScope is not null && _mergeSub is not null)
+            {
+                if (await CheckSubtreeMergeAsync(target, _mergeSub, ct) is not { } sub)
+                    return;
+                mergeSource = sub;
+            }
+
             if (StartMerge is not null)
-                await StartMerge(WorkingCopyPath, target, ct);
+                await StartMerge(_mergeScope ?? WorkingCopyPath, mergeSource, ct);
             return;
         }
 
@@ -2038,10 +2154,10 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
     /// </summary>
     private async Task UndoMergeCoreAsync(CancellationToken ct)
     {
-        var wc = WorkingCopyPath;
+        var wc = _mergeScope ?? WorkingCopyPath; // merge di una cartella: si annulla solo quella
         List<ChangeEntry> entries;
         lock (_stateLock)
-            entries = _entries.Where(e => StatusPresentation.IsRevertable(e.Status)).ToList();
+            entries = _entries.Where(e => StatusPresentation.IsRevertable(e.Status) && InMergeScope(e.FullPath)).ToList();
         if (string.IsNullOrWhiteSpace(wc) || entries.Count == 0)
         {
             ClearMergeBanner();
@@ -2049,8 +2165,10 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             return;
         }
 
-        if (!await _dialogs.ConfirmAsync(Loc.T("Annullare il merge? Tutte le modifiche locali della working copy ({0} elementi) tornano allo stato di BASE.\n\n{1}\n\nL'operazione non è annullabile.",
-                entries.Count, ListForConfirmation(entries)), ct))
+        if (!await _dialogs.ConfirmAsync((_mergeSub is null ? Loc.T("Annullare il merge? Tutte le modifiche locali della working copy ({0} elementi) tornano allo stato di BASE.\n\n{1}\n\nL'operazione non è annullabile.",
+                entries.Count, ListForConfirmation(entries))
+                : Loc.T("Annullare il merge della cartella \"{2}\"? Le modifiche locali sotto questa cartella ({0} elementi) tornano allo stato di BASE; il resto della working copy non è toccato.\n\n{1}\n\nL'operazione non è annullabile.",
+                    entries.Count, ListForConfirmation(entries), _mergeSub)), ct))
             return;
 
         var (proceed, backup, note) = await BackupBeforeAsync("undo-merge", [wc], ct);
@@ -2080,7 +2198,7 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
         {
             List<ChangeEntry> all;
             lock (_stateLock)
-                all = _entries.Where(e => SectionOf(e) != ChangeSection.Unversioned).ToList();
+                all = _entries.Where(e => SectionOf(e) != ChangeSection.Unversioned && InMergeScope(e.FullPath)).ToList();
             return RevertCoreAsync(new KeyTarget(ChangeSection.Changes, true, string.Empty, all), ct, everything: true);
         });
     }

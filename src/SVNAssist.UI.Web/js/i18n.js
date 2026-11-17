@@ -431,6 +431,8 @@
     "Usa entrambe per tutti (loro poi mia)": "Use both for all (theirs then mine)",
     "In tutti i conflitti di testo tiene entrambi i lati, prima il tuo poi quello del server, con conferma; i file senza marcatori ben formati restano com'è; ad albero e proprietà esclusi": "In every text conflict keeps both sides, yours first then the server's, with confirmation; files without well-formed markers are left as they are; tree and property conflicts excluded",
     "In tutti i conflitti di testo tiene entrambi i lati, prima quello del server poi il tuo, con conferma; i file senza marcatori ben formati restano com'è; ad albero e proprietà esclusi": "In every text conflict keeps both sides, the server's first then yours, with confirmation; files without well-formed markers are left as they are; tree and property conflicts excluded",
+    "SVN Merge… (solo questa cartella)": "SVN Merge… (this folder only)",
+    "Unisce solo questa cartella dalla cartella equivalente di un altro branch, dopo un controllo di compatibilità. svn registra il mergeinfo sulla cartella, non sulla radice del ramo": "Merges only this folder from the equivalent folder of another branch, after a compatibility check. svn records the mergeinfo on the folder, not on the branch root",
     "Usa la mia per tutti": "Use mine for all",
     "Usa la loro per tutti": "Use theirs for all",
     "Tiene la tua versione in tutti i conflitti di testo, con conferma (resolve --accept mine-full); ad albero e proprietà esclusi": "Keeps your version in all text conflicts, with confirmation (resolve --accept mine-full); tree and property conflicts excluded",

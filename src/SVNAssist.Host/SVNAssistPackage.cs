@@ -211,6 +211,20 @@ namespace SVNAssist.Host
             };
             mcs.AddCommand(seDiff);
 
+            // Solution Explorer > SVN Merge...: solo su una cartella dentro una working copy; il merge riguarda solo quella cartella (path = cartella).
+            var seMerge = new OleMenuCommand((s, e) => Run(async () =>
+            {
+                await JoinableTaskFactory.SwitchToMainThreadAsync();
+                if (SelectedPath() is string p && System.IO.Directory.Exists(p))
+                    await Host.SendCommandAsync("changes", "mergeOpen", new JObject { ["path"] = p });
+            }), new CommandID(Ids.CmdSet, Ids.CmdSeMerge));
+            seMerge.BeforeQueryStatus += (s, e) =>
+            {
+                var p = SelectedPath();
+                ((OleMenuCommand)s).Visible = p != null && System.IO.Directory.Exists(p) && InWorkingCopy(p);
+            };
+            mcs.AddCommand(seMerge);
+
             // Sottomenu Lingua: tre voci a scelta esclusiva, la spunta segue l'impostazione.
             void AddLang(int id, string value)
             {

@@ -606,7 +606,7 @@
     },
     {
       "title": "mergeOpen",
-      "description": "SVN Merge: apre il selettore della sorgente (trunk, branch o tag, escluso il ramo corrente). Con OK il Log si apre in modalita merge sul sorgente scelto (switchOk).",
+      "description": "SVN Merge: apre il selettore della sorgente (trunk, branch o tag, escluso il ramo corrente). Con `path` (cartella assoluta, da Solution Explorer) o `key` (riga cartella di Changes) il merge riguarda solo quella cartella: prima un controllo di compatibilita (Compatibile / Non possibile + motivo). Con OK il Log si apre in modalita merge sul sorgente scelto (switchOk).",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -621,7 +621,14 @@
           "type": "object",
           "additionalProperties": false,
           "required": [],
-          "properties": {}
+          "properties": {
+            "key": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            }
+          }
         }
       }
     },

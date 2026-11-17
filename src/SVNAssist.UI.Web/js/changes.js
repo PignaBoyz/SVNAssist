@@ -268,6 +268,7 @@
       { sep: true }, A('add', t('SVN Add (aggiungi al controllo di versione)'), c.add), A('ignore', t('Aggiungi alla ignore list'), c.ignore),
       A('revert', isF ? t('SVN Revert (annulla le modifiche)…') : t('SVN Revert della cartella (annulla le modifiche)…'), c.revert), isF ? A('resolve', t('Risolvi conflitto…'), c.resolve) : null,
       isF && (c.lock || c.unlock) ? { sep: true } : null, isF && c.lock ? A('lock', 'SVN Lock…', true) : null, isF && c.unlock ? A('unlock', 'SVN Unlock', true) : null,
+      isF ? null : { label: t('SVN Merge… (solo questa cartella)'), cmd: 'mergeOpen', args: { key }, disabled: !mergeOk(), hint: t('Unisce solo questa cartella dalla cartella equivalente di un altro branch, dopo un controllo di compatibilità. svn registra il mergeinfo sulla cartella, non sulla radice del ramo') },
       { label: t('Create Patch…'), cmd: 'createPatch', args: { key }, hint: t('Salva le modifiche selezionate in un file .patch (svn diff)') },
       { label: t('Shelve…'), run: () => U.ops.shelveShow([key]), hint: t('Mette da parte le modifiche in una patch dentro la working copy e le annulla (Unshelve le riprende)') },
       { label: t('Apri in Esplora file'), cmd: 'revealInExplorer', args: { key } },

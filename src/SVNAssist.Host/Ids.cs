@@ -20,6 +20,6 @@ namespace SVNAssist.Host
         public const int CmdUpdateRev = 0x0105, CmdCleanup = 0x0106, CmdSwitch = 0x0107, CmdMerge = 0x0108;
         public const int CmdBranchTag = 0x0152;
         public const int CmdCreatePatch = 0x0150, CmdApplyPatch = 0x0151;
-        public const int CmdLangAuto = 0x011B, CmdLangIt = 0x011C, CmdLangEn = 0x011D, CmdRevertSel = 0x011E, CmdNextChange = 0x011F, CmdPrevChange = 0x0120, CmdSeLog = 0x0113, CmdSeAdd = 0x0121, CmdSeDiff = 0x0122;
+        public const int CmdLangAuto = 0x011B, CmdLangIt = 0x011C, CmdLangEn = 0x011D, CmdRevertSel = 0x011E, CmdNextChange = 0x011F, CmdPrevChange = 0x0120, CmdSeLog = 0x0113, CmdSeAdd = 0x0121, CmdSeDiff = 0x0122, CmdSeMerge = 0x0160;
     }
 }
