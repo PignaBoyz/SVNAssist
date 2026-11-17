@@ -490,7 +490,7 @@
     },
     {
       "title": "resolveAllConflicts",
-      "description": "Sezione Conflitti: \"Usa la mia per tutti\" (op mine, resolve --accept mine-full) o \"Usa la loro per tutti\" (op theirs, theirs-full) su tutti i conflitti di TESTO, dopo conferma con l'elenco dei file. I conflitti ad albero e di proprieta' non sono toccati; un errore su uno non ferma gli altri.",
+      "description": "Sezione Conflitti (o selezione multipla di righe in conflitto, con keys): \"Usa la mia per tutti\" (op mine, resolve --accept mine-full) o \"Usa la loro per tutti\" (op theirs, theirs-full) su tutti i conflitti di TESTO, dopo conferma con l'elenco dei file. I conflitti ad albero e di proprieta' non sono toccati; un errore su uno non ferma gli altri.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -513,8 +513,16 @@
                 "mine",
                 "theirs",
                 "bothMT",
-                "bothTM"
+                "bothTM",
+                "resolved"
               ]
+            },
+            "keys": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string"
+              }
             }
           }
         }
@@ -552,6 +560,33 @@
               ]
             },
             "path": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "openFile",
+      "description": "Menu contestuale di una riga file di Changes: apre il file nell'editor di Visual Studio.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "openFile"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "key"
+          ],
+          "properties": {
+            "key": {
               "type": "string"
             }
           }

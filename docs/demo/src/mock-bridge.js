@@ -282,7 +282,7 @@ Il file .patch viene cancellato e non si recupera.`)) return;
     conflictOp: a => conflictOp(a.op, a.key),
     conflictOpPath: a => { const f = S.files.find(x => x.st === 'C' && fwd(x.path) === fwd(a.path)); return f ? conflictOp(a.op, 'changes:' + f.path) : null; },   // InfoBar dell'host: nella demo non c'e', per completezza del contratto
     resolveTreeConflicts: () => resolveTreeConflicts(),
-    resolveAllConflicts: a => resolveAllConflicts(a.op),
+    resolveAllConflicts: a => resolveAllConflicts(a.op, a.keys),
     mergeDismiss: () => { S.vm.mergeBanner = null; render(); },
     mergeToggle: a => { const m = S.lvm.merge; if (m && !m.busy && mgEligible(m.name).some(r => r.rev === +a.rev)) { m.sel = m.sel.includes(+a.rev) ? m.sel.filter(x => x !== +a.rev) : m.sel.concat(+a.rev); m.result = null; render(); } },
     mergeClear: () => { const m = S.lvm.merge; if (m) { m.sel = []; m.result = null; render(); } },
@@ -327,6 +327,7 @@ Il file .patch viene cancellato e non si recupera.`)) return;
     expandAll: () => { S.vm.collapsed = {}; render(); },
     collapseAll: () => { allFolderCks().forEach(k => { S.vm.collapsed[k] = true; }); render(); },
     setView: a => { S.vm.view = a.view === 'list' ? 'list' : 'tree'; render(); },
+    openFile: a => showDiff(a.key, false),   // nella demo: il file si apre nel visualizzatore (come Mostra differenze)
     showDiff: a => showDiff(a.key, false),
     showFolderDiff: a => showDiff(a.key, true),
     rowOp: a => rowOp(a.op, a.keys || a.key),

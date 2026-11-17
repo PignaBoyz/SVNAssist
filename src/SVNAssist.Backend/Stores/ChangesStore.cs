@@ -677,6 +677,13 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             case "shelveDelete":
                 await RunExclusiveAsync(() => DeleteShelveAsync(Args.Str(args, "id"), ct));
                 break;
+            case "openFile":
+                {
+                    var file = ResolveKey(Args.Str(args, "key")).Entries.FirstOrDefault(e => !e.IsDirectory);
+                    if (file is not null)
+                        await _host.OpenFileAsync(file.FullPath);
+                    break;
+                }
             case "revealInExplorer":
                 RevealInExplorer(args.GetProperty("key").GetString() ?? string.Empty);
                 break;
@@ -745,7 +752,8 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                 await RunExclusiveAsync(() => ResolveTreeConflictsAsync(ct));
                 break;
             case "resolveAllConflicts":
-                await RunExclusiveAsync(() => ResolveAllTextConflictsAsync(Args.OneOf(args, "op", "mine", "theirs", "bothMT", "bothTM"), ct));
+                await RunExclusiveAsync(() => ResolveAllTextConflictsAsync(Args.OneOf(args, "op", "mine", "theirs", "bothMT", "bothTM", "resolved"),
+                    args.ValueKind == JsonValueKind.Object && args.TryGetProperty("keys", out _) ? Args.Keys(args) : null, ct));
                 break;
             case "showLog":
                 if (string.IsNullOrWhiteSpace(WorkingCopyPath))
@@ -2738,11 +2746,13 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
     }
 
     /// <summary>"Usa la mia/loro per tutti": solo i conflitti di testo (mai ad albero ne' di proprieta'), con conferma che elenca i file.</summary>
-    private async Task ResolveAllTextConflictsAsync(string op, CancellationToken ct)
+    private async Task ResolveAllTextConflictsAsync(string op, IReadOnlyList<string>? keys, CancellationToken ct)
     {
+        // keys = selezione multipla di righe (menu contestuale): solo quei file; altrimenti tutti i conflitti di testo.
+        var only = keys is null ? null : keys.SelectMany(k => ResolveKey(k).Entries).Select(e => e.FullPath).ToHashSet(StringComparer.OrdinalIgnoreCase);
         List<ChangeEntry> texts;
         lock (_stateLock)
-            texts = _entries.Where(e => e.Status == SvnStatusKind.Conflicted && !e.IsTreeConflict
+            texts = _entries.Where(e => e.Status == SvnStatusKind.Conflicted && !e.IsTreeConflict && (only is null || only.Contains(e.FullPath))
                 && !(_conflictInfo.TryGetValue(e.FullPath, out var i) && i.Type == "property")).ToList();
         if (texts.Count == 0)
         {
@@ -2753,6 +2763,24 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
         if (op is "bothMT" or "bothTM")
         {
             await ResolveAllBothAsync(texts, op == "bothMT", ct);
+            return;
+        }
+
+        if (op == "resolved")
+        {
+            if (!await _dialogs.ConfirmAsync(Loc.T("Segnare come risolti {0} conflitti di testo (resolve --accept working)? Un file con ancora i marcatori di conflitto viene rifiutato.\n\n{1}", texts.Count, ListForConfirmation(texts)), ct))
+                return;
+            SetStatus(Loc.T("Risoluzione conflitti in corso..."));
+            var bad = new List<string>();
+            foreach (var entry in texts)
+            {
+                try { await _svnService.ResolveAsync(entry.FullPath, SvnConflictChoice.Working, ct); }
+                catch (Exception ex) when (!ct.IsCancellationRequested) { bad.Add($"{entry.RelativePath}: {FirstLine(ex.Message)}"); }
+            }
+
+            await RefreshAsync(ct, reloadBranch: false, bad.Count == 0
+                ? Loc.T("Conflitti di testo risolti: {0}.", texts.Count)
+                : Loc.T("Errore resolve: {0} conflitti risolti, {1} falliti. {2}", texts.Count - bad.Count, bad.Count, string.Join(" | ", bad)));
             return;
         }
 

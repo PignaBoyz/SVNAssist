@@ -311,6 +311,7 @@ namespace SVNAssist
             ["Usa entrambe (mia poi loro)"] = "Use both (mine then theirs)",
             ["Usa entrambe (loro poi mia)"] = "Use both (theirs then mine)",
             ["Apri editor di merge"] = "Open merge editor",
+            ["Segnare come risolti {0} conflitti di testo (resolve --accept working)? Un file con ancora i marcatori di conflitto viene rifiutato.\n\n{1}"] = "Mark {0} text conflicts as resolved (resolve --accept working)? A file that still has conflict markers is rejected.\n\n{1}",
             ["Tenere la TUA versione in {0} conflitti di testo? Le modifiche arrivate dal server su questi file vengono scartate. I conflitti ad albero e di proprietà non sono toccati.\n\n{1}"] = "Keep YOUR version in {0} text conflicts? Changes that came from the server on these files are discarded. Tree and property conflicts are not touched.\n\n{1}",
             ["Prendere la versione LORO (del server) in {0} conflitti di testo? Le TUE modifiche locali su questi file vengono scartate. I conflitti ad albero e di proprietà non sono toccati.\n\n{1}"] = "Take THEIR (server) version in {0} text conflicts? Your LOCAL changes on these files are discarded. Tree and property conflicts are not touched.\n\n{1}",
             ["Risoluzione conflitti in corso..."] = "Resolving conflicts...",

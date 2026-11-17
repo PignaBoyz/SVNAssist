@@ -101,7 +101,7 @@
       const A = (cls, label, icon, op, tip) => U.btn('btn' + cls, label, icon, 'conflictOp', { op, key: f.key }, tip, off);
       const tree = f.kind === 'tree', text = f.kind === 'text';
       const kind = tree ? t('Conflitto ad albero') : f.kind === 'property' ? t('Conflitto sulle proprietà') : t('Conflitto di testo');
-      return `<li class="cf"><div class="cf-t">${U.icon('warn')}<b class="cf-n" title="${esc(f.path)}">${esc(f.name)}</b><span class="chip">${esc(kind)}</span>${f.path !== f.name ? `<span class="muted small cf-p" title="${esc(f.path)}">${esc(f.path)}</span>` : ''}</div>` +
+      return `<li class="cf" tabindex="0" data-cfkey="${esc(f.key)}"><div class="cf-t">${U.icon('warn')}<b class="cf-n" title="${esc(f.path)}">${esc(f.name)}</b><span class="chip">${esc(kind)}</span>${f.path !== f.name ? `<span class="muted small cf-p" title="${esc(f.path)}">${esc(f.path)}</span>` : ''}</div>` +
         (tree ? `<p class="muted">${t('Rinomina o cancellazione in conflitto: non ci sono versioni da scegliere. Sistema la struttura a mano, poi segna il conflitto come risolto.')}</p>` : '') +
         `<div class="cf-a">` +
         (text ? A(' primary', t('Apri editor di merge'), 'diff', 'edit', t('Apre un editor a 3 vie (base, mia, loro) con il risultato; salva, poi segna come risolto')) : '') +
@@ -231,6 +231,38 @@
     return [{ label: t('Migliora il messaggio scritto'), cmd: 'improveAi', hint: t('Riscrive la bozza nel campo sopra') }, { label: t('Più corto'), cmd: 'improveAi', args: { style: 'shorter' }, hint: t('Riassume il messaggio nel campo sopra') }, { label: t('Più dettagliato'), cmd: 'improveAi', args: { style: 'detailed' }, hint: t('Aggiunge dettagli al messaggio nel campo sopra, dal diff') }, { label: t('Cambia provider AI…'), cmd: 'wizardOpen', hint: t('Procedura guidata: provider, accesso, modello') }, { sep: true }, { header: true, label: t('Lingua del messaggio') },
       ...LANGS().map(([l, t]) => ({ label: t, cmd: 'setLanguage', args: { lang: l }, checked: st.commit.lang === l }))];
   }
+  // Copia percorso: percorso completo (working copy + percorso relativo della chiave), con la separazione di cartelle della working copy.
+  function fullPathOf(key) {
+    const rel = String(key).slice(String(key).indexOf(':') + 1), wc = String((st && st.workingCopy && st.workingCopy.path) || '');
+    if (!wc) return rel;
+    const sep = wc.includes('\\') ? '\\' : '/';
+    return wc.replace(/[\\/]+$/, '') + sep + rel.replace(/\//g, sep);
+  }
+  function copyText(text) {
+    try { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text).catch(() => copyFallback(text)); return; } } catch (e) { /* ripiego sotto */ }
+    copyFallback(text);
+  }
+  function copyFallback(text) {
+    const a = document.createElement('textarea'); a.value = text; a.setAttribute('readonly', ''); a.style.cssText = 'position:fixed;opacity:0;left:-1000px';
+    document.body.appendChild(a); a.select(); try { document.execCommand('copy'); } catch (e) { /* niente da fare */ } a.remove();
+  }
+  const conflictKind = (key, s0 = st) => { const p = String(key).slice(String(key).indexOf(':') + 1), c = (s0.conflicts || []).find(f => f.path === p || f.key === key); return c ? c.kind : null; };
+  // voci per un file in conflitto: azioni del pannello Conflitti (stesse conferme del backend) + apri/Esplora/copia percorso
+  function conflictMenu(key, kind) {
+    const tree = kind === 'tree', text = kind === 'text', O = (op, label, hint) => ({ label, cmd: 'conflictOp', args: { op, key }, hint });
+    return [
+      text ? O('edit', t('Apri editor di merge'), t('Apre un editor a 3 vie (base, mia, loro) con il risultato; salva, poi segna come risolto')) : null,
+      tree ? null : O('mine', t('Usa la mia'), t('Tiene la tua versione dell\'intero file e scarta le modifiche del server (resolve --accept mine-full)')),
+      tree ? null : O('theirs', t('Usa la loro'), t('Prende la versione del server dell\'intero file e scarta le tue modifiche (resolve --accept theirs-full)')),
+      text ? O('bothMT', t('Usa entrambe (mia poi loro)'), t('Tiene entrambi i lati di ogni blocco in conflitto, prima il tuo poi quello del server, e segna come risolto (resolve --accept working). Il resto del file resta invariato: controllalo prima di committare')) : null,
+      text ? O('bothTM', t('Usa entrambe (loro poi mia)'), t('Tiene entrambi i lati di ogni blocco in conflitto, prima quello del server poi il tuo, e segna come risolto (resolve --accept working). Il resto del file resta invariato: controllalo prima di committare')) : null,
+      O('resolved', t('Segna come risolto'), tree ? t('Conferma di aver sistemato la struttura (resolve)') : t('Dopo aver sistemato il file a mano: segna il conflitto come risolto (resolve --accept working)')),
+      { sep: true },
+      tree ? null : { label: t('Apri file'), cmd: 'openFile', args: { key } },
+      tree ? null : { label: t('Mostra differenze'), cmd: 'showDiff', args: { key } },
+      { label: t('Apri in Esplora file'), cmd: 'revealInExplorer', args: { key } },
+      { label: t('Copia percorso'), run: () => copyText(fullPathOf(key)) }].filter(Boolean);
+  }
   // menu della riga di sezione (Changes / Staged / Non versionati): SVN Revert di tutto dove ci sono modifiche annullabili
   function sectionMenu(sec, key, s) {
     return [{ label: sec === 'staged' ? t('Rimuovi tutto dai file da committare') : t('Aggiungi tutto ai file da committare'), cmd: sec === 'staged' ? 'unstage' : 'stage', args: { key } }, { sep: true },
@@ -251,7 +283,13 @@
       I(t('SVN Revert ({0})…', n), 'rowOp', { op: 'revert', keys }, all('revert'), t('Alcuni elementi non hanno modifiche da annullare')),
       I(t('Create Patch…'), 'createPatch', { keys }, true, t('Salva le modifiche selezionate in un file .patch (svn diff)')),
       { label: t('Shelve…'), run: () => U.ops.shelveShow(keys), hint: t('Mette da parte le modifiche in una patch dentro la working copy e le annulla (Unshelve le riprende)') },
-      { sep: true }, I(t('Elimina ({0})…', n), 'rowOp', { op: 'deleteFile', keys }, all('deleteFile'), t('Alcuni elementi non si possono eliminare'), t('Canc'))];
+      ...(rows.some(r => r.status === 'C') ? (() => {
+        const allText = keys.every(k => conflictKind(k, s0) === 'text'), why = t('Valgono solo se tutti gli elementi sono conflitti di testo');
+        const C = (op, label) => I(label, 'resolveAllConflicts', { op, keys }, allText, why);
+        return [{ sep: true }, C('mine', t('Usa la mia ({0})', n)), C('theirs', t('Usa la loro ({0})', n)), C('bothMT', t('Usa entrambe, mia poi loro ({0})', n)), C('bothTM', t('Usa entrambe, loro poi mia ({0})', n)), C('resolved', t('Segna come risolto ({0})', n))];
+      })() : []),
+      { sep: true }, { label: t('Copia percorsi ({0})', n), run: () => copyText(keys.map(fullPathOf).join('\n')) },
+      I(t('Elimina ({0})…', n), 'rowOp', { op: 'deleteFile', keys }, all('deleteFile'), t('Alcuni elementi non si possono eliminare'), t('Canc'))];
   }
   function rowMenu(row, x, y) {
     const key = row.dataset.key, kind = row.dataset.kind, sec = row.dataset.sec;
@@ -262,6 +300,7 @@
     if (kind === 'section') return U.menu.open(x, y, sectionMenu(sec, key, s), row);
     if (!r) return;
     const c = r.can, isF = kind === 'file';
+    if (isF && r.status === 'C') return U.menu.open(x, y, conflictMenu(key, conflictKind(key) || 'text'), row);
     U.menu.open(x, y, [
       { label: isF ? (r.status === 'A' || r.status === '?' ? t('Apri file') : t('Mostra differenze')) : t('Mostra differenze della cartella'), cmd: isF ? 'showDiff' : 'showFolderDiff', args: { key }, disabled: !c.diff, kbd: isF ? t('Invio') : '' },
       c.unstage || sec === 'staged' ? { label: t('Rimuovi dai file da committare'), cmd: 'unstage', args: { key }, disabled: !c.unstage, kbd: t('Spazio') } : { label: t('Aggiungi ai file da committare'), cmd: 'stage', args: { key }, disabled: !c.stage, kbd: t('Spazio'), hint: c.stage ? '' : t('Risolvi prima il conflitto') },
@@ -272,6 +311,7 @@
       { label: t('Create Patch…'), cmd: 'createPatch', args: { key }, hint: t('Salva le modifiche selezionate in un file .patch (svn diff)') },
       { label: t('Shelve…'), run: () => U.ops.shelveShow([key]), hint: t('Mette da parte le modifiche in una patch dentro la working copy e le annulla (Unshelve le riprende)') },
       { label: t('Apri in Esplora file'), cmd: 'revealInExplorer', args: { key } },
+      { label: t('Copia percorso'), run: () => copyText(fullPathOf(key)) },
       { sep: true }, A('deleteFile', isF ? t('Elimina file…') : t('Elimina cartella…'), c.deleteFile, t('Canc')), isF ? null : { sep: true }, isF ? null : { label: t('Espandi tutto'), cmd: 'expandAll' }, isF ? null : { label: t('Comprimi tutto'), cmd: 'collapseAll' },
     ].filter(Boolean), row);
   }
@@ -549,7 +589,7 @@
     else if (!e.shiftKey && (a === last || !box.contains(a))) { e.preventDefault(); first.focus(); }
   }
 
-  U.changesHTML = { sectionMenu, multiMenu, header, commitBar, foot, revHTML, switchHTML, mergeBanner, conflictsHTML, shelvedHTML, revIndicator, statusKind, OK_TTL, recentHTML, recentChoose, msgSync, trackStatus, listHTML };   // parti pure, provate senza DOM (tests/ui-web)
+  U.changesHTML = { conflictMenu, fullPathOf, sectionMenu, multiMenu, header, commitBar, foot, revHTML, switchHTML, mergeBanner, conflictsHTML, shelvedHTML, revIndicator, statusKind, OK_TTL, recentHTML, recentChoose, msgSync, trackStatus, listHTML };   // parti pure, provate senza DOM (tests/ui-web)
 
   U.views.changes = {
     mount(root) {
@@ -581,6 +621,12 @@
         render(); const b = root.querySelector('[' + k + ']'); if (b) b.focus();   // il riquadro e' stato ridisegnato: il focus resta sul pulsante
       });
       root.addEventListener('click', e => { if (e.target.closest('[data-shl-toggle]')) { shlOpen = !shlOpen; render(); const b = root.querySelector('[data-shl-toggle]'); if (b) b.focus(); } });
+      const cflMenu = (li, x, y) => U.menu.open(x, y, conflictMenu(li.dataset.cfkey, (st.conflicts || []).find(f => f.key === li.dataset.cfkey)?.kind || 'text'), li);
+      root.addEventListener('contextmenu', e => { const li = e.target.closest('li.cf[data-cfkey]'); if (li) { e.preventDefault(); cflMenu(li, e.clientX, e.clientY); } });
+      root.addEventListener('keydown', e => {   // tasto Menu / Maiusc+F10 sul blocco di un conflitto
+        const li = e.target.closest && e.target.closest('li.cf[data-cfkey]'); if (!li || e.target !== li || !(e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey))) return;
+        e.preventDefault(); const b = li.getBoundingClientRect(); cflMenu(li, b.left + 24, b.bottom);
+      });
       root.addEventListener('contextmenu', e => { const r = e.target.closest('.shl-r'); if (r) { e.preventDefault(); U.menu.open(e.clientX, e.clientY, shelveMenu(r.dataset.shelve), r); } });
       root.addEventListener('mouseover', e => { const row = e.target.closest('#rec .rc-row'); if (row && rcOpen && +row.dataset.n !== rcSel) rcSetSel(+row.dataset.n); });
       root.addEventListener('input', e => { if (e.target.id === 'rc-q') { rcQ = e.target.value; rcSel = 0; rcRefresh(); rcSetSel(0); } });
