@@ -78,11 +78,11 @@ Installation: same as 0.2.0.
 ### New
 
 - **Multiple selection in Changes.** Ctrl+click adds or removes an item, Shift+click selects a range (also across sections). From the keyboard: Shift+arrows, Ctrl+Space, Ctrl+A. Right-click shows the actions valid for the whole selection, with the count. Space and Delete apply to all selected items.
-- **Delete on folders.** A versioned folder is deleted with svn delete (to be committed); an unversioned one goes to the Recycle Bin. The confirmation lists the items.
+- **Delete on folders.** A versioned folder is deleted with svn delete (still to be committed); an unversioned one goes to the Recycle Bin. The confirmation lists the items.
 - **AI: Shorter and More detailed.** The commit message menu has these two entries in addition to Generate.
 - **Show Log: Stop on copy/rename.** The option is off by default: the Log shows the full history beyond copies and renames.
 - **Show Log: Include merged revisions.** Revisions brought in by a merge are nested under the merge; a reverse merge is marked.
-- **Show Log: diff of a revision's files.** A click on a file of a revision opens the diff of that revision, also for merged revisions. The options can be changed while the Log is open, and the Log reloads.
+- **Show Log: diff of the files of a revision.** A click on a file of a revision opens the diff of that revision, also for merged revisions. The options can be changed while the Log is open and the Log reloads.
 - **SVN status icons in Solution Explorer.** Normal, modified, added, unversioned, conflict, deleted. They are on by default and can be turned off in Options. SVNAssist registers as a source control provider only for solutions inside an SVN working copy.
 - **Solution Explorer menu.**
   - **Show Log** for files, folders and projects.
@@ -101,7 +101,7 @@ Installation: same as 0.2.0.
 
 ### Changes
 
-- **.vs folder.** It stays among the unversioned items, so it can be ignored, but it does not make the working copy modified. Commit All does not add it.
+- **.vs folder.** It stays among the unversioned items, so it can be ignored, but it does not make the working copy modified. Commit All and the Switch warning do not consider it.
 - **Commit All with new files.** If there are unversioned files, it asks "Add them to the commit?" with the choices: Yes, add and commit; No, versioned files only; Cancel. The question also appears when there are only new files. Commit Staged does not change.
 - **Show Log.** The list starts from HEAD, as in TortoiseSVN.
 - **Switch errors.** Multi-line errors are shown in full and can be copied.
@@ -110,7 +110,7 @@ Installation: same as 0.2.0.
 
 - **Show Log after a commit.** Before: the commit just made did not appear without an update. Now: it appears immediately.
 - **"Incomplete switch".** Before: the entry remained even when the working copy was consistent. Now: it is removed automatically if the URL is the starting or destination one and there are no switched or incomplete folders and no locks.
-- **Switch interrupted by E155009** (included in 0.3.2). Before: svn stopped halfway when a folder was held open (by Visual Studio, the designer or an antivirus); the error appeared on a truncated line, the header showed the old branch, the selector marked the new one as "(current)" and refused to repeat the switch. Now:
+- **Switch interrupted by E155009** (included in 0.3.2). Before: svn stopped halfway when a folder was held open (by Visual Studio, by the designer or by an antivirus); the error appeared on a truncated line, the header showed the old branch, the selector marked the new one as "(current)" and refused to repeat the switch. Now:
   - SVNAssist runs cleanup, waits 2 seconds and repeats the switch once.
   - If the switch remains halfway, the error says so and advises not to use Revert. The **Complete switch** button runs cleanup and the same switch.
   - The header shows "branch (incomplete switch)" and the selector shows the destination as "(incomplete switch)". The state remains after Visual Studio is closed.
@@ -126,13 +126,13 @@ Installation: same as 0.2.0.
 
 ### Changes
 
-- **Host log.** The log is written to the SVNAssist log folder, one file per day. Several Visual Studio instances can write to it together. The old log file is no longer used.
+- **Host log.** The log is written to the SVNAssist log folder, one file per day. Several Visual Studio instances can write to it at the same time. The old log file is no longer used.
 - **Diagnostics for the Cancel button in the diff.** The log records the roles of the view, whether the viewer was found, the number of differences and the number of buttons created.
 
 ### Fixes
 
 - **Ctrl+Z after Cancel lines.** Before: Ctrl+Z did not undo the operation if the file was open. Now: if the file is open (editor or diff), the change is applied to the buffer as a single undoable operation and then saved. If the file is not open, it is written to disk as before.
-- **Check for new revisions.** Before: it also started with Visual Studio in the background. Now: it does not start in the background; when the window returns to the foreground it checks immediately whether the last check is older than the interval.
+- **Checking for new revisions.** Before: it also ran with Visual Studio in the background. Now: it does not run in the background; when the window returns to the foreground it checks immediately whether the last check is older than the interval.
 
 Known limitations:
 

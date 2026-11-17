@@ -1,12 +1,13 @@
 # Collaudo mirato 0.5.0
 
-Solo le funzioni nuove. Prima: VS chiuso, PowerShell nella cartella del repo.
+Solo le funzioni nuove. Prima: VS chiuso, PowerShell nella cartella del repo. Ogni parte si lancia con `tools\collaudo-mirato.ps1`; B, C e D ricaricano il repository di partenza, quindi i merge di una parte non cambiano l'esito della successiva. Le Options (provider AI, lingua, intervalli) restano nell'istanza SvnHost e non vanno riconfigurate.
 
 ```powershell
-.\tools\collaudo-mirato.ps1 -Mini
+.\tools\collaudo-mirato.ps1 -Build     # solo se il codice è cambiato: backend + VSIX da zero
+.\tools\collaudo-mirato.ps1            # parte A
 ```
 
-Installa il VSIX in SvnHost, crea la simulazione piccola (`%TEMP%\svnsim`), mette un lock di **mrossi** su `Catalog.cs` e apre `wc\Shop.sln`.
+La A installa il VSIX in SvnHost, crea la simulazione (`%TEMP%\svnsim`, con la copia di partenza del repository), mette un lock di **mrossi** su `Catalog.cs`, sposta i vecchi log in `logs\prima-collaudo-*` e apre `wc\Shop.sln`.
 
 Segna ogni passo: ✅ ok / ❌ + cosa hai visto.
 
@@ -32,17 +33,17 @@ Segna ogni passo: ✅ ok / ❌ + cosa hai visto.
 
 ## Parte B — wc-merge
 
-Chiudi VS, poi `.\tools\collaudo-mirato.ps1 -Parte B`.
+Chiudi VS, poi `.\tools\collaudo-mirato.ps1 -Parte B`. Il repository riparte pulito: la `wc` della parte A non si usa più.
 
 | # | Passo | Atteso | Esito |
 |---|-------|--------|-------|
-| 12 | SVN Merge... > feature-coupon > Merge tutto. | Conflitti di testo. Sezione Conflitti con "Tutti i conflitti di testo (N)" se N ≥ 2. | |
+| 12 | SVN Merge... > **feature-sconti** > Merge tutto (la 3a revisione va in conflitto su Order.cs e Invoice.cs). | Il merge si ferma alla 3a; sezione Conflitti con "Tutti i conflitti di testo (2)". feature-coupon ha un solo conflitto di testo e 2 tree conflict: non mostra "per tutti". | |
 | 13 | **Usa la loro per tutti**. | Conferma con elenco dei file; poi tutti risolti. | |
 | 14 | Banner merge > **Annulla merge**. | Backup creato prima (o domanda se manca spazio), revert, poi **Ripristina modifiche** disponibile. | |
 
 ## Parte C — Log e Merge (feedback 0.4.0: bug 1, 6, 7 e richieste collegate)
 
-Repository della Parte B (feature-coupon da unire in trunk). Dopo il collaudo allega `%LOCALAPPDATA%\SVNAssist\logs\backend-aaaammgg.log` (righe `merge load/files/preview/run: ... ms`): servono per capire quale fase e' lenta.
+`-Parte C` (repository ricaricato: feature-coupon ancora da unire in trunk). Dopo il collaudo allega `%LOCALAPPDATA%\SVNAssist\logs\backend-aaaammgg.log` (righe `merge load/files/preview/run: ... ms`): servono per capire quale fase e' lenta.
 
 | # | Passo | Atteso | Esito |
 |---|-------|--------|-------|
@@ -54,24 +55,24 @@ Repository della Parte B (feature-coupon da unire in trunk). Dopo il collaudo al
 | 20 | Modifica `Catalog.cs` (non committare), SVN Merge... > Merge tutto. | Nessun blocco: avviso "N elementi con modifiche non committate", con i file in comune ("rischio di conflitti"). Annulla = nulla cambia. Conferma = merge fatto, banner con "le tue N modifiche pendenti sono nella working copy". | |
 | 21 | Banner > **Annulla merge**. | Conferma che parla delle tue modifiche pendenti; poi `Catalog.cs` e ogni altra tua modifica (anche file aggiunti/eliminati, proprieta') identici a prima: "le tue N modifiche pendenti sono state ripristinate". Cartella `.svn-assist\backups\...-pre-merge` sparita. | |
 | 22 | Come 20, poi **Commit** del merge. | Commit ok (le tue modifiche pendenti sono incluse) e la cartella `...-pre-merge` sparisce. | |
-| 23 | Merge di due revisioni NON adiacenti dove la prima va in conflitto. | Il merge si ferma: Changes mostra la sezione **Conflitti**, un solo messaggio in italiano (revisione in conflitto, "le successive non sono state applicate", cosa fare), banner Annulla merge. Le revisioni non applicate restano in elenco. | |
+| 23 | Merge di due revisioni NON adiacenti dove la prima va in conflitto: in **feature-sconti** la 3a e la 4a (lo script ne stampa i numeri). | Il merge si ferma: Changes mostra la sezione **Conflitti**, un solo messaggio in italiano (revisione in conflitto, "le successive non sono state applicate", cosa fare), banner Annulla merge. Le revisioni non applicate restano in elenco. | |
 
 ## Parte D — Merge interrotto: Continua merge (bug 13)
 
-Repository della Parte B: feature-coupon ha 4 revisioni da unire e la terza va in conflitto. Per una prova su molte revisioni usa un ramo con centinaia di revisioni (qui sotto, passo 31).
+`-Parte D` (repository ricaricato). **feature-sconti** ha 4 revisioni da unire e la terza va in conflitto su 2 file. Per il passo 31 c'è **feature-storico** (300 revisioni pulite); per il passo 33 la cartella `src/Shop/Core`.
 
 | # | Passo | Atteso | Esito |
 |---|-------|--------|-------|
-| 24 | SVN Merge... > feature-coupon > **Merge tutto**. | Finestra con "Applico rN (k di 4)" e barra a revisioni; si ferma alla revisione in conflitto. | |
+| 24 | SVN Merge... > feature-sconti > **Merge tutto**. | Finestra con "Applico rN (k di 4)" e barra a revisioni; si ferma alla revisione in conflitto. | |
 | 25 | Leggi il banner in Changes. | **Merge interrotto**: "Applicate 3 di 4: r..., r..., r...; ferma alla r... per conflitto in N file.", "Rimaste 1: r....", 3 passi numerati e l'alternativa Annulla merge. Nessun errore in inglese ripetuto. | |
 | 26 | Guarda **Continua merge**. | Disabilitato, con il motivo ("Restano N file in conflitto...") sia sotto il pulsante sia nel suggerimento. Premendo il comando non parte nulla. | |
 | 27 | Nel Log merge: le 3 applicate e la rimasta. | Blocco **Merge interrotto** identico a Changes; "Applicate in questo merge (3)" con la dicitura "applicata in questo merge"; nella tabella solo la rimasta, evidenziata; Merge tutto / Merge selezionate disabilitati. | |
 | 28 | Chiudi Visual Studio (anche da Gestione attivita'), riaprilo sulla stessa solution. | Il banner **Merge interrotto** ricompare con gli stessi numeri (stato salvato in `%LOCALAPPDATA%\SVNAssist\pending-merge.json`). | |
 | 29 | Risolvi il conflitto (Usa la loro), poi **Continua merge**. | Abilitato appena non restano conflitti. Parte con "Applico r... (4 di 4)" e applica SOLO la rimasta; al termine banner "da committare" e, nei Recenti, il messaggio con TUTTE le 4 revisioni. | |
 | 30 | Ripeti 24-25, poi **Annulla merge**. | Conferma; la working copy torna com'era (con modifiche pendenti ripristinate se c'erano); il banner e lo stato spariscono; le 4 revisioni tornano da unire. | |
-| 31 | Ramo con centinaia di revisioni: Merge tutto; durante l'avanzamento premi **Annulla**. | Il pulsante diventa "Annullamento…": si ferma alla fine del passaggio in corso, il banner dice "Applicate N di TOT", **Continua merge** riprende dalle rimaste (numerazione sull'intero merge). | |
+| 31 | Ramo **feature-storico** (300 revisioni): Merge tutto; durante l'avanzamento premi **Annulla**. | Il pulsante diventa "Annullamento…": si ferma alla fine del passaggio in corso, il banner dice "Applicate N di TOT", **Continua merge** riprende dalle rimaste (numerazione sull'intero merge). | |
 | 32 | Con un merge interrotto, fai SVN Update (o Switch) e riapri Changes. | Banner senza Continua merge: spiega che la working copy e' cambiata; restano **Annulla merge** e **Scarta stato**. | |
-| 33 | Merge da una cartella (Solution Explorer > SVN Merge...) con conflitto a meta'. | Stesso banner; Continua e Annulla agiscono solo su quella cartella. | |
+| 33 | Merge da una cartella (Solution Explorer > cartella `src/Shop/Core` > SVN Merge... > feature-sconti) con conflitto a meta'. | Stesso banner; Continua e Annulla agiscono solo su quella cartella. | |
 
 ## Non provabile qui
 - Avviso "spazio insufficiente per il backup" (serve un disco quasi pieno); col merge su modifiche pendenti il merge non parte affatto (provato nei test con spazio simulato).

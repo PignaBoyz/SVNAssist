@@ -37,7 +37,7 @@ namespace SVNAssist.Host
         internal void Start()
         {
             ThreadHelper.ThrowIfNotOnUIThread();
-            _rdt = _pkg.GetService(typeof(SVsRunningDocumentTable)) as IVsRunningDocumentTable;
+            _rdt = Package.GetGlobalService(typeof(SVsRunningDocumentTable)) as IVsRunningDocumentTable;
             _rdt?.AdviseRunningDocTableEvents(this, out _cookie);
         }
 
@@ -79,7 +79,7 @@ namespace SVNAssist.Host
         private void Add(uint docCookie, IVsWindowFrame frame, string path)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
-            if (!(_pkg.GetService(typeof(SVsInfoBarUIFactory)) is IVsInfoBarUIFactory factory)) return;
+            if (!(Package.GetGlobalService(typeof(SVsInfoBarUIFactory)) is IVsInfoBarUIFactory factory)) return;
             if (frame.GetProperty((int)__VSFPROPID7.VSFPROPID_InfoBarHost, out var h) != VSConstants.S_OK || !(h is IVsInfoBarHost host)) return;
 
             var model = new InfoBarModel(

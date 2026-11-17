@@ -864,7 +864,7 @@ public class MergeTests
         Assert.DoesNotContain(@"C:\wc\u.txt", reverted);
         Assert.Equal("", f.Merge.Blocked);   // avviso ricalcolato: il merge si puo' rifare
         await f.LogCmd("mergeAll");
-        Assert.Single(f.Svn.Merges);
+        Assert.Single(f.Svn.Merges, m => !m.DryRun);
     }
 
     [Fact]

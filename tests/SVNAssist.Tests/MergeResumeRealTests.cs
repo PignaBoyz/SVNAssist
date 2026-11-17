@@ -195,7 +195,7 @@ public class MergeResumeRealTests
             await Cmd("switchOk", new { name = "branches/feat" });
         }
 
-        public string Eligible() => Run($"mergeinfo --show-revs eligible \"{Url}/branches/feat\"").Replace("\n", " ").Trim();
+        public string Eligible() => Run($"mergeinfo --show-revs eligible \"{Url}/branches/feat\"").Replace("\r", "").Replace("\n", " ").Trim();
 
         public string Tree()
         {

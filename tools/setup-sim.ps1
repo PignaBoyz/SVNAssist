@@ -78,10 +78,41 @@ $gen = Join-Path $Root '_gen'; for ($i = 1; $i -le $(if ($Mini) { 20 } else { 20
 Svn import -q --username dev3 $gen "$repo/branches/feature-grande/src/Generated" -m 'Generated: 2000 file'
 Remove-Item -Recurse -Force $gen
 
+# ---- 0.5.0: feature-sconti (4 revisioni, la 3a in conflitto di testo su 2 file: "per tutti" e Continua merge); revisioni NON adiacenti ----
+Svn copy -q --username mrossi "$repo/trunk" "$repo/branches/feature-sconti" -m 'Branch per gli sconti'
+$sw = Join-Path $Root '_sconti'; Svn checkout -q "$repo/branches/feature-sconti" $sw
+As 'mrossi';   W "$sw\src\Shop\Core\Discount.cs" @('namespace Shop.Core;', '', 'public static class Discount { public static decimal Apply(decimal t) => t; }'); Svn add -q "$sw\src\Shop\Core\Discount.cs"; Ci 'Sconti: classe Discount' $sw
+Svn mkdir -q --username dev3 "$repo/branches/feature-grande/note1" -m 'Note (commit di un altro ramo, rende le revisioni non adiacenti)'
+As 'lbianchi'; W "$sw\src\Shop\Core\Pricing.cs" @('namespace Shop.Core;', '', 'public static class Pricing { public const decimal Vat = 0.22m; }'); Svn add -q "$sw\src\Shop\Core\Pricing.cs"; Ci 'Sconti: aliquota IVA' $sw
+Svn mkdir -q --username dev3 "$repo/branches/feature-grande/note2" -m 'Note (altro ramo)'
+As 'gverdi'
+Edit "$sw\src\Shop\Core\Order.cs" { param($l) $i = $l.FindIndex({ param($x) $x -like '*decimal Total*' }); $l[$i] = '    public decimal Total { get; set; } // lordo, prima dello sconto' }
+Edit "$sw\src\Shop\Core\Invoice.cs" { param($l) $l[2] = 'public class Invoice { public decimal Net; }' }
+Ci 'Sconti: Total lordo e imponibile della fattura (andra'' in conflitto su due file)' $sw
+Svn mkdir -q --username dev3 "$repo/branches/feature-grande/note3" -m 'Note (altro ramo)'
+As 'mrossi';   W "$sw\src\Shop\Core\Rounding.cs" @('namespace Shop.Core;', '', 'public static class Rounding { public static decimal Cents(decimal v) => Math.Round(v, 2); }'); Svn add -q "$sw\src\Shop\Core\Rounding.cs"; Ci 'Sconti: arrotondamento' $sw
+Remove-Item -Recurse -Force $sw
+
+# ---- 0.5.0: feature-storico, molte revisioni pulite (Annulla durante un merge lungo, intervalli da 50) ----
+Svn copy -q --username dev1 "$repo/trunk" "$repo/branches/feature-storico" -m 'Branch con molte revisioni'
+$hw2 = Join-Path $Root '_storico'; Svn checkout -q "$repo/branches/feature-storico" $hw2
+New-Item -ItemType Directory -Force "$hw2\src\Storico" | Out-Null; Svn add -q "$hw2\src\Storico"; Svn commit -q --username dev1 -m 'Storico: cartella' $hw2
+for ($i = 1; $i -le $(if ($Mini) { 30 } else { 300 }); $i++) {
+    $p = "$hw2\src\Storico\Voce$($i.ToString('000')).cs"; W $p @("namespace Shop.Storico;", "public static class Voce$i { public const int N = $i; }"); Svn add -q $p
+    Svn commit -q --username ('dev' + ($i % 4)) -m "Storico: voce $i" $hw2
+}
+Remove-Item -Recurse -Force $hw2
+
 # ---- trunk prosegue: conflitti con il branch ----
 Svn update -q $wc
 As 'gverdi'; Edit "$wc\README.txt" { param($l) $l[1] = 'Versione: 1.0.1' }; Ci 'README: versione 1.0.1' $wc
 As 'lbianchi'; Edit "$wc\docs\old-setup.md" { param($l) $l.Add('Aggiunta nota.') }; Edit "$wc\docs\old-faq.md" { param($l) $l.Add('Nuova FAQ.') }; Ci 'Docs: nota sul setup' $wc
+# 0.5.0: il trunk modifica le righe che la 3a revisione di feature-sconti cambia (2 conflitti di testo)
+Svn update -q $wc
+As 'lbianchi'
+Edit "$wc\src\Shop\Core\Order.cs" { param($l) $i = $l.FindIndex({ param($x) $x -like '*decimal Total*' }); $l[$i] = '    public decimal Total { get; init; }' }
+Edit "$wc\src\Shop\Core\Invoice.cs" { param($l) $l[2] = 'public class Invoice { public int Number; }' }
+Ci 'Order e Customer: Total immutabile, numero della fattura' $wc
 # 0.4.0: un merge gia' nella storia del trunk, per 'Include merged revisions' nel Log
 Svn update -q $wc; Svn merge -q "$repo/branches/hotfix-login" $wc; As 'gverdi'; Ci 'Merge di hotfix-login nel trunk' $wc; Svn update -q $wc
 
@@ -99,6 +130,11 @@ Remove-Item -Recurse -Force $cw
 
 # ---- wc-merge: pulita, alla HEAD ----
 $wm = Join-Path $Root 'wc-merge'; Svn checkout -q "$repo/trunk" $wm
+
+# copia di partenza del repository: collaudo-mirato.ps1 la ricarica prima di ogni parte, cosi' ogni parte riparte da trunk pulito
+$dump = Join-Path $Root 'baseline.dump'
+cmd /c "svnadmin dump -q ""$repoDir"" > ""$dump"""
+if ($LASTEXITCODE) { throw 'svnadmin dump fallito' }
 
 # ---- wc: lavoro in corso ----
 Edit "$wc\src\Shop\Core\Catalog.cs" { param($l)
