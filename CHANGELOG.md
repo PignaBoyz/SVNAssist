@@ -235,7 +235,7 @@ Contenuti: pannello SVN Changes, Log come documento, diff di Visual Studio, Upda
 - Un client SVN sul PC che fornisca il comando svn da riga di comando: SlikSVN, TortoiseSVN con gli strumenti da riga di comando, o altro.
 - Runtime .NET 10. Se manca, SVNAssist propone di installarlo, oppure apre la pagina da cui scaricarlo (.NET Runtime 10.x, Windows x64).
 - GitHub Models con il token di GitHub CLI: con errore 401 o 403, creare un token con il permesso `models:read`.
-- Sostituisce la 0.1.0: disinstallare la 0.1.0 prima di installare questa versione.
+- Sostituisce la 0.1.0.
 
 Installazione:
 
