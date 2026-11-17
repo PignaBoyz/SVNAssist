@@ -476,6 +476,8 @@
                 "edit",
                 "mine",
                 "theirs",
+                "bothMT",
+                "bothTM",
                 "resolved"
               ]
             },
@@ -509,7 +511,9 @@
             "op": {
               "enum": [
                 "mine",
-                "theirs"
+                "theirs",
+                "bothMT",
+                "bothTM"
               ]
             }
           }

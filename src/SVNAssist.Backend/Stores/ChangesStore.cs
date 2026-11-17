@@ -627,13 +627,13 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                 await RunExclusiveAsync(() => SwitchBackCoreAsync(ct));
                 break;
             case "conflictOp":
-                await RunExclusiveAsync(() => ConflictOpAsync(Args.OneOf(args, "op", "edit", "mine", "theirs", "resolved"), Args.Str(args, "key"), ct));
+                await RunExclusiveAsync(() => ConflictOpAsync(Args.OneOf(args, "op", "edit", "mine", "theirs", "bothMT", "bothTM", "resolved"), Args.Str(args, "key"), ct));
                 break;
             case "resolveTreeConflicts":
                 await RunExclusiveAsync(() => ResolveTreeConflictsAsync(ct));
                 break;
             case "resolveAllConflicts":
-                await RunExclusiveAsync(() => ResolveAllTextConflictsAsync(Args.OneOf(args, "op", "mine", "theirs"), ct));
+                await RunExclusiveAsync(() => ResolveAllTextConflictsAsync(Args.OneOf(args, "op", "mine", "theirs", "bothMT", "bothTM"), ct));
                 break;
             case "showLog":
                 if (string.IsNullOrWhiteSpace(WorkingCopyPath))
@@ -2510,6 +2510,10 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                 if (await _dialogs.ConfirmAsync(Loc.T("Prendere la versione LORO (del server) di \"{0}\"? Le TUE modifiche locali su questo file vengono scartate.", entry.RelativePath), ct))
                     await ApplyResolveAsync(entry, SvnConflictChoice.TheirsFull, ct);
                 break;
+            case "bothMT":
+            case "bothTM":
+                await UseBothAsync(entry, op == "bothMT", ct);
+                break;
             default:
                 if (entry.IsTreeConflict ? !await ConfirmTreeConflictAsync(entry, ct)
                     : SameAsBase(entry) && !await _dialogs.ConfirmAsync(Loc.T("\"{0}\" è identico alla versione di partenza: non contiene né le tue modifiche né quelle in arrivo (succede togliendo la spunta nell'editor di merge di VS). Segnare comunque come risolto?", entry.RelativePath), ct))
@@ -2517,6 +2521,38 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                 await ApplyResolveAsync(entry, SvnConflictChoice.Working, ct);
                 break;
         }
+    }
+
+    private bool IsPropertyConflict(ChangeEntry e)
+    {
+        lock (_stateLock)
+            return _conflictInfo.TryGetValue(e.FullPath, out var i) && i.Type == "property";
+    }
+
+    /// <summary>
+    /// "Usa entrambe" (bug 5): nel file con i marcatori tiene i due lati di ogni blocco, nell'ordine scelto, poi <c>resolve --accept working</c>.
+    /// Solo conflitti di testo; con conferma. Se i marcatori non ci sono o sono sbilanciati il file non viene toccato.
+    /// </summary>
+    private async Task UseBothAsync(ChangeEntry entry, bool mineFirst, CancellationToken ct)
+    {
+        if (entry.IsTreeConflict || IsPropertyConflict(entry))
+        {
+            SetStatus(Loc.T("\"Usa entrambe\" vale solo per i conflitti di testo."));
+            return;
+        }
+
+        if (!await _dialogs.ConfirmAsync(mineFirst
+                ? Loc.T("Tenere entrambe le versioni di \"{0}\", prima la TUA poi la LORO, per ogni blocco in conflitto? Il file viene riscritto senza marcatori; controllalo prima di committare.", entry.RelativePath)
+                : Loc.T("Tenere entrambe le versioni di \"{0}\", prima la LORO poi la TUA, per ogni blocco in conflitto? Il file viene riscritto senza marcatori; controllalo prima di committare.", entry.RelativePath), ct))
+            return;
+
+        if (!ConflictMarkers.TryTakeBoth(entry.FullPath, mineFirst, out _))
+        {
+            SetStatus(Loc.T("Impossibile unire le due versioni di \"{0}\": non ci sono marcatori di conflitto ben formati (<<<<<<<, =======, >>>>>>>) oppure il file non è di testo. Usa l'editor di merge.", entry.RelativePath));
+            return;
+        }
+
+        await ApplyResolveAsync(entry, SvnConflictChoice.Working, ct);
     }
 
     /// <summary>
@@ -2572,6 +2608,12 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             return;
         }
 
+        if (op is "bothMT" or "bothTM")
+        {
+            await ResolveAllBothAsync(texts, op == "bothMT", ct);
+            return;
+        }
+
         var mine = op == "mine";
         if (!await _dialogs.ConfirmAsync(mine
                 ? Loc.T("Tenere la TUA versione in {0} conflitti di testo? Le modifiche arrivate dal server su questi file vengono scartate. I conflitti ad albero e di proprietà non sono toccati.\n\n{1}", texts.Count, ListForConfirmation(texts))
@@ -2583,6 +2625,33 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
         foreach (var entry in texts)
         {
             try { await _svnService.ResolveAsync(entry.FullPath, mine ? SvnConflictChoice.MineFull : SvnConflictChoice.TheirsFull, ct); }
+            catch (Exception ex) when (!ct.IsCancellationRequested) { failed.Add($"{entry.RelativePath}: {FirstLine(ex.Message)}"); }
+        }
+
+        var done = texts.Count - failed.Count;
+        await RefreshAsync(ct, reloadBranch: false, failed.Count == 0
+            ? Loc.T("Conflitti di testo risolti: {0}.", done)
+            : Loc.T("Errore resolve: {0} conflitti risolti, {1} falliti. {2}", done, failed.Count, string.Join(" | ", failed)));
+    }
+
+    private async Task ResolveAllBothAsync(List<ChangeEntry> texts, bool mineFirst, CancellationToken ct)
+    {
+        if (!await _dialogs.ConfirmAsync(mineFirst
+                ? Loc.T("Tenere entrambe le versioni (prima la TUA poi la LORO) in {0} conflitti di testo? I file vengono riscritti senza marcatori; i file senza marcatori ben formati restano com'è. I conflitti ad albero e di proprietà non sono toccati.\n\n{1}", texts.Count, ListForConfirmation(texts))
+                : Loc.T("Tenere entrambe le versioni (prima la LORO poi la TUA) in {0} conflitti di testo? I file vengono riscritti senza marcatori; i file senza marcatori ben formati restano com'è. I conflitti ad albero e di proprietà non sono toccati.\n\n{1}", texts.Count, ListForConfirmation(texts)), ct))
+            return;
+
+        SetStatus(Loc.T("Risoluzione conflitti in corso..."));
+        var failed = new List<string>();
+        foreach (var entry in texts)
+        {
+            try
+            {
+                if (!ConflictMarkers.TryTakeBoth(entry.FullPath, mineFirst, out _))
+                    failed.Add($"{entry.RelativePath}: {Loc.T("marcatori di conflitto assenti o non validi")}");
+                else
+                    await _svnService.ResolveAsync(entry.FullPath, SvnConflictChoice.Working, ct);
+            }
             catch (Exception ex) when (!ct.IsCancellationRequested) { failed.Add($"{entry.RelativePath}: {FirstLine(ex.Message)}"); }
         }
 

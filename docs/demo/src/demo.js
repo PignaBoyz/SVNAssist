@@ -930,7 +930,12 @@ async function conflictOp(op, key) {
       const text = op === 'mine' ? `Tenere la TUA versione di "${f.path}"? Le modifiche arrivate dal server su questo file vengono scartate.` : `Prendere la versione LORO (del server) di "${f.path}"? Le TUE modifiche locali su questo file vengono scartate.`;
       if (!await confirmBox(text)) return;
     }
-    const mode = { mine: 'mine-full', theirs: 'theirs-full', resolved: 'working' }[op];
+    if (op === 'bothMT' || op === 'bothTM') {
+      if (f.tree || f.prop) { setStatus('"Usa entrambe" vale solo per i conflitti di testo.'); return render(); }
+      if (!await confirmBox(`Tenere entrambe le versioni di "${f.path}", prima la ${op === 'bothMT' ? 'TUA poi la LORO' : 'LORO poi la TUA'}, per ogni blocco in conflitto? Il file viene riscritto senza marcatori; controllalo prima di committare.`)) return;
+      f.text = f.merged || T.checkoutMerged; S.ui.buf[f.path] = undefined;   // nella demo il risultato e' quello di esempio
+    }
+    const mode = { mine: 'mine-full', theirs: 'theirs-full', resolved: 'working', bothMT: 'working', bothTM: 'working' }[op];
     setStatus('Risoluzione conflitto in corso...'); render();
     await svn(`resolve --accept ${mode} "${fwd(f.path)}"`, 400); svnResolve(f.path, mode);
     await vmRefresh(`Conflitto risolto: ${f.path}`);
@@ -950,6 +955,12 @@ async function resolveAllConflicts(op) {
   const texts = S.files.filter(f => f.st === 'C' && !f.tree && !f.prop);
   if (!texts.length) { setStatus('Nessun conflitto di testo da risolvere.'); return render(); }
   const list = texts.map(f => '• ' + fwd(f.path) + ' (Conflitto)').join('\n');
+  if (op === 'bothMT' || op === 'bothTM') {
+    if (!await confirmBox(`Tenere entrambe le versioni (prima la ${op === 'bothMT' ? 'TUA poi la LORO' : 'LORO poi la TUA'}) in ${texts.length} conflitti di testo? I file vengono riscritti senza marcatori; i file senza marcatori ben formati restano com'è. I conflitti ad albero e di proprietà non sono toccati.\n\n${list}`)) return;
+    setStatus('Risoluzione conflitti in corso...'); render();
+    for (const f of texts) { f.text = f.merged || T.checkoutMerged; S.ui.buf[f.path] = undefined; await svn(`resolve --accept working "${fwd(f.path)}"`, 300); svnResolve(f.path, 'working'); }
+    return vmRefresh(`Conflitti di testo risolti: ${texts.length}.`);
+  }
   if (!await confirmBox(op === 'mine' ? `Tenere la TUA versione in ${texts.length} conflitti di testo? Le modifiche arrivate dal server su questi file vengono scartate. I conflitti ad albero e di proprietà non sono toccati.\n\n${list}` : `Prendere la versione LORO (del server) in ${texts.length} conflitti di testo? Le TUE modifiche locali su questi file vengono scartate. I conflitti ad albero e di proprietà non sono toccati.\n\n${list}`)) return;
   setStatus('Risoluzione conflitti in corso...'); render();
   const mode = op === 'mine' ? 'mine-full' : 'theirs-full';

@@ -107,6 +107,8 @@
         (text ? A(' primary', t('Apri editor di merge'), 'diff', 'edit', t('Apre un editor a 3 vie (base, mia, loro) con il risultato; salva, poi segna come risolto')) : '') +
         (tree ? '' : A('', t('Usa la mia'), null, 'mine', t('Tiene la tua versione dell\'intero file e scarta le modifiche del server (resolve --accept mine-full)')) +
           A('', t('Usa la loro'), null, 'theirs', t('Prende la versione del server dell\'intero file e scarta le tue modifiche (resolve --accept theirs-full)'))) +
+        (text ? A('', t('Usa entrambe (mia poi loro)'), null, 'bothMT', t('Tiene entrambi i lati di ogni blocco in conflitto, prima il tuo poi quello del server, e segna come risolto (resolve --accept working). Il resto del file resta invariato: controllalo prima di committare')) +
+          A('', t('Usa entrambe (loro poi mia)'), null, 'bothTM', t('Tiene entrambi i lati di ogni blocco in conflitto, prima quello del server poi il tuo, e segna come risolto (resolve --accept working). Il resto del file resta invariato: controllalo prima di committare')) : '') +
         A('', t('Segna come risolto'), 'check', 'resolved', tree ? t('Conferma di aver sistemato la struttura (resolve)') : t('Dopo aver sistemato il file a mano: segna il conflitto come risolto (resolve --accept working)')) + `</div>` +
         (f.files && f.files.length ? `<p class="cf-f muted small">${t('File di appoggio di svn (spariscono dopo il resolve):')} ${f.files.map(x => `<code>${esc(x)}</code>`).join(' ')}</p>` : '') + `</li>`;
     };
@@ -120,7 +122,9 @@
     const texts = c.filter(f => f.kind === 'text').length;
     const bulk = texts < 2 ? '' : `<li class="cf cf-g"><div class="cf-t">${U.icon('warn')}<b>${t('Tutti i conflitti di testo ({0})', texts)}</b></div><div class="cf-a">` +
       U.btn('btn', t('Usa la mia per tutti'), null, 'resolveAllConflicts', { op: 'mine' }, t('Tiene la tua versione in tutti i conflitti di testo, con conferma (resolve --accept mine-full); ad albero e proprietà esclusi'), off) +
-      U.btn('btn', t('Usa la loro per tutti'), null, 'resolveAllConflicts', { op: 'theirs' }, t('Prende la versione del server in tutti i conflitti di testo, con conferma (resolve --accept theirs-full); ad albero e proprietà esclusi'), off) + `</div></li>`;
+      U.btn('btn', t('Usa la loro per tutti'), null, 'resolveAllConflicts', { op: 'theirs' }, t('Prende la versione del server in tutti i conflitti di testo, con conferma (resolve --accept theirs-full); ad albero e proprietà esclusi'), off) +
+      U.btn('btn', t('Usa entrambe per tutti (mia poi loro)'), null, 'resolveAllConflicts', { op: 'bothMT' }, t('In tutti i conflitti di testo tiene entrambi i lati, prima il tuo poi quello del server, con conferma; i file senza marcatori ben formati restano com\'è; ad albero e proprietà esclusi'), off) +
+      U.btn('btn', t('Usa entrambe per tutti (loro poi mia)'), null, 'resolveAllConflicts', { op: 'bothTM' }, t('In tutti i conflitti di testo tiene entrambi i lati, prima quello del server poi il tuo, con conferma; i file senza marcatori ben formati restano com\'è; ad albero e proprietà esclusi'), off) + `</div></li>`;
     return `<section class="cfl" aria-label="${esc(t('Conflitti'))}"><div class="cfl-h"><button type="button" class="ib" data-cfl-toggle aria-expanded="${!!u.open}" title="${esc(u.open ? t('Comprimi il riquadro dei conflitti') : t('Espandi il riquadro dei conflitti'))}" aria-label="${esc(u.open ? t('Comprimi il riquadro dei conflitti') : t('Espandi il riquadro dei conflitti'))}">${U.icon(u.open ? 'chev-d' : 'chev-r')}</button>${U.icon('warn')}<b>${t('Conflitti')}</b><span class="pill">${c.length}</span><span class="muted cfl-n">${t('Svn non committa file in conflitto: risolvili qui.')}</span></div>` +
       (u.open ? `<ul class="cfl-l">${bulk}${others.map(one).join('')}${group}</ul>` : '') + `</section>`;
   }
