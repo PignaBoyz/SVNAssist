@@ -6,6 +6,9 @@ namespace SVNAssist.Stores;
 /// <summary>Una riga di notifica di svn: <c>K</c> = U/A/D/G/R (azione), C (conflitto), i (informazione, non si conta).</summary>
 internal sealed record ProgressLineDto(string K, string T);
 
+/// <summary>Avanzamento per revisione di un merge: <c>Label</c> ("r14041" o "r14041-r14060"), <c>First</c>/<c>Last</c> = posizioni (1-based) nell'intero merge, <c>Done</c> = revisioni gia' applicate, <c>Total</c> = revisioni del merge.</summary>
+internal sealed record MergeStepDto(string Label, int First, int Last, int Done, int Total);
+
 /// <summary>Pulsante d'azione della finestra di avanzamento dopo un annullamento: <c>Cmd</c> e' un comando UI (es. <c>switchResume</c>).</summary>
 internal sealed record ProgressActionDto(string Label, string Cmd);
 
@@ -26,7 +29,8 @@ internal sealed record ProgressDto(
     bool Cancellable = false, bool Cancelling = false, bool Cancelled = false,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ProgressActionDto>? Actions = null, bool Warnings = false,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? Total = null,
-    string Origin = "changes");
+    string Origin = "changes",
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] MergeStepDto? Step = null);
 
 /// <summary>Stato condiviso della finestra di avanzamento: lo scrive l'operazione (anche da thread di svn), lo legge lo snapshot di Changes e di Log.</summary>
 internal sealed partial class OperationProgress
@@ -44,18 +48,22 @@ internal sealed partial class OperationProgress
     private int _processed, _conflictCount, _omitted;
     private int? _total;
     private string _origin = "changes";
+    private MergeStepDto? _step;
+    private bool _soft;
 
     public event Action? Changed;
 
     internal bool IsOpen { get { lock (_lock) return _open; } }
 
     /// <summary>Apre la finestra. Restituisce il token da passare a svn: si annulla con <see cref="Cancel"/> oltre che con <paramref name="ct"/>.</summary>
-    internal CancellationToken Begin(string op, string title, string phase, CancellationToken ct = default, string origin = "changes")
+    /// <param name="softCancel">"Annulla" non termina svn: chiede di fermarsi al termine del passaggio in corso (<see cref="SoftCancelRequested"/>); se il passaggio non finisce entro <see cref="SoftCancelGrace"/> si termina a forza.</param>
+    internal CancellationToken Begin(string op, string title, string phase, CancellationToken ct = default, string origin = "changes", bool softCancel = false)
     {
         CancellationToken token;
         lock (_lock)
         {
             _origin = origin;
+            (_step, _soft, _softRequested) = (null, softCancel, false);
             (_open, _running, _ok, _op, _title, _phase, _summary) = (true, true, false, op, title, phase, string.Empty);
             (_processed, _conflictCount, _omitted, _total) = (0, 0, 0, null);
             (_cancelling, _cancelled, _actions, _warnings) = (false, false, null, false);
@@ -75,16 +83,56 @@ internal sealed partial class OperationProgress
     /// <summary>"Annulla": ferma svn (il runner termina il processo con l'albero). Ignorato se non cancellabile o gia' richiesto.</summary>
     internal bool Cancel()
     {
+        CancellationTokenSource? hardLater = null;
         lock (_lock)
         {
             if (!_running || _cancelling || !IsCancellableOp(_op) || _cts is null)
                 return false;
             _cancelling = true;
-            _cts.Cancel();
+            if (_soft)
+            {
+                _softRequested = true;
+                hardLater = _cts;
+            }
+            else
+                _cts.Cancel();
         }
 
         Changed?.Invoke();
+        if (hardLater is not null)
+        {
+            // Il passaggio in corso di solito finisce in pochi secondi; se si pianta (rete) si termina a forza.
+            var begin = _cts;
+            _ = Task.Delay(SoftCancelGrace).ContinueWith(_ =>
+            {
+                lock (_lock)
+                {
+                    if (!_running || !ReferenceEquals(_cts, begin))
+                        return;
+                }
+
+                try { begin?.Cancel(); }
+                catch (ObjectDisposedException) { /* l'operazione e' finita */ }
+            }, TaskScheduler.Default);
+        }
+
         return true;
+    }
+
+    private bool _softRequested;
+
+    /// <summary>Attesa massima del passaggio in corso dopo "Annulla" di un merge, poi svn viene terminato a forza.</summary>
+    internal static TimeSpan SoftCancelGrace { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>"Annulla" premuto su un'operazione che si ferma da sola al termine del passaggio.</summary>
+    internal bool SoftCancelRequested { get { lock (_lock) return _softRequested; } }
+
+    /// <summary>Passaggio del merge in corso (per "Applico r14041 (3 di 7)" e la barra a revisioni).</summary>
+    internal void SetStep(MergeStepDto? step)
+    {
+        lock (_lock)
+            _step = step;
+        NotifyLine(); // coalescente: con file:// i passaggi sono molti al secondo
     }
 
     /// <summary>Totale stimato degli elementi (<c>svn diff --summarize</c>): la barra diventa determinata. <c>null</c>/0 = resta indeterminata.</summary>
@@ -169,6 +217,7 @@ internal sealed partial class OperationProgress
         {
             (_running, _ok, _summary, _phase, _conflictCount) = (false, ok, summary, string.Empty, conflicts ?? _conflictCount);
             (_cancelling, _cancelled, _actions, _warnings) = (false, cancelled, actions, warnings);
+            (_step, _softRequested) = (null, false);
         }
 
         Changed?.Invoke();
@@ -192,7 +241,7 @@ internal sealed partial class OperationProgress
         lock (_lock)
             return !_open ? null
                 : new ProgressDto(_op, _title, _phase, _running, _ok, _processed, _conflictCount, _omitted, _lines.ToList(), _summary, _conflicts.Count > 0 ? _conflicts.ToList() : null,
-                    _running && IsCancellableOp(_op), _cancelling, _cancelled, _actions, _warnings, _total, _origin);
+                    _running && IsCancellableOp(_op), _cancelling, _cancelled, _actions, _warnings, _total, _origin, _step);
     }
 
     /// <summary>

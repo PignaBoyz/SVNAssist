@@ -383,6 +383,42 @@ internal sealed class FakeSvnService : ISvnService
 
         return Task.FromResult(MergeResult);
     }
+
+    private IReadOnlyList<long>? _eligibleSnap;
+
+    /// <summary>Intervalli passati a MergeRangesAsync (uno per chiamata, con il flag dry-run).</summary>
+    public List<(IReadOnlyList<(long First, long Last)> Ranges, bool DryRun)> RangeMerges { get; } = [];
+
+    /// <summary>Se impostato, il merge vero di un intervallo che contiene questa revisione fallisce con questo errore (dopo aver registrato la chiamata).</summary>
+    public (long Rev, string Error)? FailOnRev { get; set; }
+
+    /// <summary>Esito del dry-run di un intervallo (null = <see cref="MergeResult"/>).</summary>
+    public Func<(long First, long Last), MergeOutput>? DryRunResult { get; set; }
+
+    public Task<MergeOutput> MergeRangesAsync(string workingCopyPath, string sourceUrl, IReadOnlyList<(long First, long Last)> ranges, bool dryRun, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        RangeMerges.Add((ranges.ToList(), dryRun));
+        // Le revisioni dell'intervallo: quelle da unire (all'inizio del primo merge) comprese tra gli estremi (altrimenti tutti i numeri).
+        var snap = _eligibleSnap ??= Eligible;
+        var revs = ranges.SelectMany(r => snap.Count > 0 ? snap.Where(e => e >= r.First && e <= r.Last) : Enumerable.Range((int)r.First, (int)(r.Last - r.First + 1)).Select(x => (long)x)).ToArray();
+        if (MergeError is not null)
+            throw new InvalidOperationException(MergeError);
+        if (dryRun && DryRunError is not null)
+            throw new InvalidOperationException(DryRunError);
+        if (!dryRun && RealMergeError is not null)
+            throw new InvalidOperationException(RealMergeError);
+        Merges.Add((workingCopyPath, sourceUrl, revs, dryRun));
+        if (!dryRun)
+        {
+            if (FailOnRev is { } f && ranges.Any(r => f.Rev >= r.First && f.Rev <= r.Last))
+                throw new InvalidOperationException(f.Error);
+            Statuses.AddRange(OnMerge);
+            Eligible = EligibleAfterMerge ?? Eligible;
+        }
+
+        return Task.FromResult(dryRun && DryRunResult is not null ? DryRunResult(ranges[0]) : MergeResult);
+    }
 }
 
 /// <summary>Dialoghi finti: risposta preimpostata e registro dei messaggi mostrati.</summary>

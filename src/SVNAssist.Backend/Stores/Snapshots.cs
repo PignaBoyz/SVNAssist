@@ -108,8 +108,24 @@ internal sealed record SwitchPickerDto(bool Open, string Mode, bool Loading, str
 /// <param name="Files">File di appoggio di svn (nomi), da <c>svn info --xml</c>: spariscono dopo il resolve.</param>
 internal sealed record ConflictDto(string Key, string Path, string Name, string Kind, IReadOnlyList<string> Files);
 
-/// <summary>Banner dopo un merge non ancora committato (con "Annulla merge").</summary>
-internal sealed record MergeBannerDto(string Text, int Conflicts);
+/// <summary>
+/// Merge di piu' revisioni fermo a meta' (conflitto, "Annulla" dell'utente, errore, VS chiuso): cosa e' stato applicato, cosa manca e cosa fare.
+/// I testi sono gia' localizzati dal backend; <c>Steps</c> sono i passi numerati, <c>Alternative</c> l'alternativa (Annulla merge).
+/// <c>CanContinue</c> falso = "Continua merge" disabilitato con <c>WhyNot</c> (conflitti ancora aperti); <c>Incompatible</c> = working copy cambiata (switch, update, revert):
+/// restano solo Annulla merge e Scarta. <c>Warning</c> = il passaggio in corso e' stato terminato a forza e puo' essere applicato a meta'.
+/// </summary>
+internal sealed record PendingMergeDto(
+    string Source, string Kind, int Total, int Applied, int Remaining,
+    string AppliedText, string RemainingText, IReadOnlyList<string> Steps, string Alternative,
+    long? ConflictRev, int Unresolved, bool CanContinue, string WhyNot, bool Incompatible, string Warning,
+    IReadOnlyList<long> AppliedRevs, IReadOnlyList<long> RemainingRevs, bool HasBackup, bool Busy);
+
+/// <summary>Revisione applicata nel merge interrotto (per il Log: "applicata in questo merge").</summary>
+internal sealed record MergeAppliedDto(long Rev, string Author, string Msg);
+
+/// <summary>Banner dopo un merge non ancora committato (con "Annulla merge"); <c>Pending</c> = merge fermo a meta' (con "Continua merge").</summary>
+internal sealed record MergeBannerDto(string Text, int Conflicts,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] PendingMergeDto? Pending = null);
 
 /// <summary>Snapshot della vista <c>changes</c> (changes-state.schema.json).</summary>
 internal sealed record ChangesState(
@@ -179,7 +195,9 @@ internal sealed record MergeDto(
     bool Pending = false,
     bool NeedsUpdate = false,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] MergeFilesDto? Files = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int Dirty = 0);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int Dirty = 0,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] PendingMergeDto? Interrupted = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<MergeAppliedDto>? AppliedInfo = null);
 
 /// <summary>Snapshot della vista <c>log</c> (log-state.schema.json).</summary>
 internal sealed record LogState(

@@ -486,7 +486,7 @@ public class MergeTests
 
         f.Svn.Statuses.Clear();   // ripulita: il blocco cade al tentativo successivo
         await f.LogCmd("mergeAll");
-        Assert.Single(f.Svn.Merges);
+        Assert.Single(f.Svn.Merges, m => !m.DryRun);
     }
 
     [Fact]
@@ -687,7 +687,8 @@ public class MergeTests
 
         await f.LogCmd("mergeAll");
 
-        Assert.Equal(["- False"], Fixture.Calls(f));
+        Assert.Equal(["4,5,7 True", "4,5,7 False"], Fixture.Calls(f));   // dry-run di controllo e poi il merge: tutte le revisioni adiacenti nell'elenco in un solo intervallo (4-7)
+        Assert.Equal([(4L, 7L)], f.Svn.RangeMerges.Select(r => r.Ranges.Single()).Distinct());
         var c = f.ChangesSnap;
         Assert.Equal("", c.Commit.Text);   // il campo del messaggio non si tocca
         Assert.Equal(["Unite le revisioni 4-5,7 da branches/feature-x:\n........\nr4 | mrossi | feat: modifica a\n........\nr5 | lbianchi | feat: aggiunge new\ndettaglio\n........\nr7 | gverdi | feat: elimina b"], c.Commit.Recent);   // in cima ai Recenti
@@ -716,7 +717,7 @@ public class MergeTests
         f.Svn.EligibleAfterMerge = [5];
         await f.LogCmd("mergeSelected");
 
-        Assert.Equal(["4,7 False"], Fixture.Calls(f));
+        Assert.Equal(["4 False", "7 False"], Fixture.Calls(f));   // la 5 (da unire ma non scelta) sta in mezzo: due passaggi, mai un intervallo che la comprenda
         Assert.Equal("", f.ChangesSnap.Commit.Text);
         Assert.Equal("Unite le revisioni 4,7 da branches/feature-x:\n........\nr4 | mrossi | feat: modifica a\n........\nr7 | gverdi | feat: elimina b", f.ChangesSnap.Commit.Recent![0]);
         Assert.Equal([5L], f.LogSnap.Entries.Select(e => e.Rev));
@@ -734,8 +735,17 @@ public class MergeTests
 
         await f.LogCmd("mergeAll");
 
-        Assert.Equal(1, f.ChangesSnap.Merge!.Conflicts);
-        Assert.Contains("1 file in conflitto", f.ChangesSnap.Status.Msg);
+        // Si e' fermato alla r4 (in conflitto): applicata, le altre due restano da unire e il banner dice cosa fare.
+        var banner = f.ChangesSnap.Merge!;
+        Assert.Equal(1, banner.Conflicts);
+        Assert.NotNull(banner.Pending);
+        Assert.Equal((1, 3, 2), (banner.Pending!.Applied, banner.Pending.Total, banner.Pending.Remaining));
+        Assert.Equal(4L, banner.Pending.ConflictRev);
+        Assert.Contains("ferma alla r4 per conflitto", banner.Pending.AppliedText);
+        Assert.Contains("Rimaste 2", banner.Pending.RemainingText);
+        Assert.False(banner.Pending.CanContinue);   // il conflitto e' ancora li'
+        Assert.Contains("1 file in conflitto", banner.Pending.WhyNot);
+        Assert.Contains("Continua merge", f.ChangesSnap.Status.Msg);
         Assert.Contains(f.ChangesSnap.Sections.SelectMany(s => s.Rows), r => r.Status == "C");
     }
 

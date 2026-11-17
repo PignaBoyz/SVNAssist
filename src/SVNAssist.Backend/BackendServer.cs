@@ -120,6 +120,9 @@ internal sealed class BackendServer : IBackend, IDisposable
         Changes.CommitMessage.OpenAiWizard = ct => Changes.Wizard.OpenAsync(fromGenerate: true, ct);
         Log = new LogStore(services.Svn, services.Settings, host, Changes.TempRoot, Changes);
         Changes.StartMerge = Log.StartMergeAsync;
+        Changes.ContinueMerge = (origin, ct) => Log.Merge?.ResumeAsync(origin, ct) ?? Task.CompletedTask;
+        if (services.EnableWatcher)
+            Changes.PendingMerges = new PendingMerge(PendingMerge.DefaultFile); // come il watcher: spento nei test, che non devono scrivere in %LOCALAPPDATA%
         Changes.MergeUndone = ct => Log.Merge?.RefreshAsync(ct) ?? Task.CompletedTask;
         _pathCommands = new PathCommands(services.Svn, host, () => Changes.RefreshAsync(_lifetime.Token), Changes.TempRoot,
             (targets, ct) => Changes.OpenRevisionPickerAsync(targets, ct));

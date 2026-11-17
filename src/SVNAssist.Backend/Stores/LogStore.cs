@@ -202,6 +202,18 @@ internal sealed class LogStore : ViewStore
                 if (Merge is not null)
                     await Merge.RevertAllAsync(ct);
                 break;
+            case "mergeContinue":
+                if (Merge is not null)
+                    await Merge.ResumeAsync("log", ct);
+                break;
+            case "mergeUndo":
+                if (_changes is not null)
+                    await _changes.UndoMergeAsync(ct);
+                break;
+            case "mergeDiscard":
+                if (_changes is not null)
+                    await _changes.DiscardPendingMergeAsync(ct);
+                break;
             case "mergeUpdate":
                 if (Merge is not null)
                     await Merge.UpdateAsync(ct);

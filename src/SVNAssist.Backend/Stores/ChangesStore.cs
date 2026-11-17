@@ -48,6 +48,13 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
     private readonly PendingSwitch _pendingSwitch;
     private int _started;
 
+    /// <summary>Merge di piu' revisioni fermo o interrotto, per working copy (su disco: sopravvive alla chiusura di VS). Nei test (senza file dei recenti) solo in memoria.</summary>
+    internal PendingMerge PendingMerges { get; set; }
+
+    // Working copy per cui il merge interrotto e' gia' stato riletto da disco (una volta per apertura), e motivo per cui non si puo' piu' continuare.
+    private readonly HashSet<string> _pendingMergeRestored = new(StringComparer.OrdinalIgnoreCase);
+    private string? _pendingIncompatible;
+
     private List<ChangeEntry> _entries = [];
 
     /// <summary>Lo stato dei file e' stato riletto da svn (per i glifi di Solution Explorer).</summary>
@@ -128,6 +135,7 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
         Progress.Changed += NotifyChanged;
         // Accanto agli ultimi usati (nei test: un file temporaneo per test).
         _pendingSwitch = new PendingSwitch(recentTargetsFile is null ? null : recentTargetsFile + ".pending-switch.json");
+        PendingMerges = new PendingMerge(recentTargetsFile is null ? null : recentTargetsFile + ".pending-merge.json");
         Switch.PendingUrl = wc => _pendingSwitch.Get(wc)?.Url;
         _debouncer = new RefreshDebouncer(RefreshQuietPeriod, AutoRefreshAsync);
         HeadCheck = new HeadWatcher(FetchHeadAsync, () => OperationRunning, settingsService.GetHeadCheckMinutesAsync, NotifyChanged);
@@ -374,6 +382,52 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
         NotifyChanged();
     }
 
+    /// <summary>"Continua merge": applica le revisioni rimaste del merge interrotto (lo imposta il backend: il merge sta in <see cref="MergeStore"/>). Argomento = vista che lo chiede (<c>changes</c> | <c>log</c>).</summary>
+    internal Func<string, CancellationToken, Task>? ContinueMerge { get; set; }
+
+    /// <summary>Merge interrotto della working copy corrente (null = nessuno).</summary>
+    internal PendingMerge.Entry? CurrentPendingMerge => string.IsNullOrWhiteSpace(WorkingCopyPath) ? null : PendingMerges.Get(WorkingCopyPath);
+
+    /// <summary>Sottopercorso (con <c>/</c>) della cartella del merge in corso, null = intera working copy.</summary>
+    internal string? MergeSubPath => _mergeSub;
+
+    /// <summary>Copia di sicurezza delle modifiche pendenti di prima del merge (se c'era).</summary>
+    internal PreMergeSnapshot? PreMerge { get { lock (_stateLock) return _preMerge; } }
+
+    internal void SetStatusMessage(string message) => SetStatus(message);
+
+    internal void SetPendingMergeIncompatible(string? why)
+    {
+        lock (_stateLock)
+            _pendingIncompatible = why;
+        NotifyChanged();
+    }
+
+    /// <summary>File ancora in conflitto sotto la cartella del merge (dopo l'ultimo stato letto).</summary>
+    internal int UnresolvedConflicts
+    {
+        get
+        {
+            lock (_stateLock)
+                return _entries.Count(e => e.Status == SvnStatusKind.Conflicted && InMergeScope(e.FullPath));
+        }
+    }
+
+    /// <summary><c>svn cleanup</c> normale senza alzare errori: <c>null</c> = fatto, altrimenti la prima riga dell'errore.</summary>
+    internal async Task<string?> CleanupQuietlyAsync(string wc, CancellationToken ct)
+    {
+        try
+        {
+            await Streaming(async () => { await _svnService.CleanupAsync(wc, CleanupOptions.Default, ct); return true; });
+            return null;
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            BackendLog.Warn("Cleanup non riuscito: " + ex.Message);
+            return ex.Message.Split('\n')[0];
+        }
+    }
+
     /// <summary>Elementi in conflitto nell'ultimo stato letto (per la finestra di avanzamento di un merge fermato).</summary>
     internal int ConflictedCount
     {
@@ -403,7 +457,12 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
         {
             _mergeBanner = null;
             _preMerge = null; // il banner non c'e' piu': niente da annullare. I file della copia restano su disco (li toglie Prune)
+            _pendingIncompatible = null;
         }
+
+        // Commit, annullamento, revert di tutto: il merge e' concluso, non c'e' piu' nulla da continuare.
+        if (!string.IsNullOrWhiteSpace(WorkingCopyPath))
+            PendingMerges.Clear(WorkingCopyPath);
     }
 
     /// <summary>Merge eseguito e non ancora committato ne' annullato (c'e' ancora qualcosa da committare): il Log in modalita' merge lo mostra al posto di "0 da unire".</summary>
@@ -466,6 +525,8 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                 {
                     _mergeBanner = null; // il merge riguardava un'altra working copy
                     _preMerge = null;    // e la sua copia di sicurezza non va mai usata su questa (i file restano su disco)
+                    _pendingIncompatible = null;
+                    _mergeScope = _mergeSub = null;
                 }
                 _workingCopyPath = value;
             }
@@ -519,7 +580,7 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                 RevPicker.GetSnapshot(),
                 Switch.GetSnapshot(),
                 // Il banner sparisce da solo se non resta nessuna modifica (annullata a mano, committata altrove).
-                _mergeBanner is not null && commit.Entries.Count > 0 ? new MergeBannerDto(_mergeBanner, conflicts.Count) : null,
+                BuildMergeBanner(commit.Entries.Count, conflicts.Count),
                 conflicts,
                 Progress.GetSnapshot(),
                 _warnTarget is { } w ? BuildSwitchWarn(w) : null,
@@ -528,6 +589,60 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                 BranchTag.GetSnapshot(Total(CountDirty(_entries.Where(e => !IsVsFolder(e)).Select(e => e.Status))) > 0),
                 _shelves.Count == 0 ? null : _shelves.Select(s => new ShelveDto(s.Id, s.Name, s.Date.ToString("yyyy-MM-ddTHH:mm:ss"), s.Files)).ToList());
         }
+    }
+
+    private MergeBannerDto? BuildMergeBanner(int commitEntries, int conflicts)
+    {
+        if (BuildPendingMerge() is { } pending)
+            return new MergeBannerDto(pending.AppliedText, conflicts, pending);
+        return _mergeBanner is not null && commitEntries > 0 ? new MergeBannerDto(_mergeBanner, conflicts) : null;
+    }
+
+    /// <summary>Descrizione del merge interrotto per banner e Log: cosa e' stato applicato, cosa manca, cosa fare. <c>null</c> se non c'e' (o se il merge sta girando: c'e' la finestra di avanzamento).</summary>
+    internal PendingMergeDto? BuildPendingMerge()
+    {
+        var e = CurrentPendingMerge;
+        if (e is null)
+            return null;
+        var running = OperationRunning;
+        if (running && e.State == PendingMerge.Running)
+            return null;
+        var applied = e.Applied.Order().ToList();
+        var remaining = e.Remaining;
+        var unresolved = UnresolvedConflicts;
+        string incompatible;
+        lock (_stateLock)
+            incompatible = _pendingIncompatible ?? string.Empty;
+        var list = MergeStore.RevListText(applied);
+        string head;
+        if (e.ConflictRev is { } cr)
+            head = e.ConflictFiles > 0
+                ? Loc.T("Applicate {0} di {1}: {2}; ferma alla r{3} per conflitto in {4} file.", applied.Count, e.Revs.Count, list, cr, e.ConflictFiles)
+                : Loc.T("Applicate {0} di {1}: {2}; ferma alla r{3} per conflitto.", applied.Count, e.Revs.Count, list, cr);
+        else if (e.ConflictFrom is { } cf && e.ConflictTo is { } ct2)
+            head = Loc.T("Applicate {0} di {1}: {2}; conflitto in un file del gruppo r{3}-r{4} (applicato in un colpo: non so quale revisione del gruppo lo causa).", applied.Count, e.Revs.Count, list, cf, ct2);
+        else
+            head = Loc.T("Applicate {0} di {1}: {2}; il merge si è interrotto prima della fine.", applied.Count, e.Revs.Count, list);
+        var rest = remaining.Count <= 4 ? string.Join(", ", remaining.Select(r => $"r{r}")) : $"r{remaining[0]}…r{remaining[^1]}";
+        var steps = new List<string>();
+        if (unresolved > 0 || e.ConflictRev is not null || e.ConflictFrom is not null)
+        {
+            steps.Add(Loc.T("Risolvi i conflitti nei file elencati qui sotto (Usa la mia / Usa la loro / Usa entrambe / editor di merge)."));
+            steps.Add(Loc.T("Segna ogni file come risolto."));
+        }
+
+        steps.Add(Loc.T("Premi \"Continua merge\": vengono applicate solo le {0} revisioni rimaste ({1}); non serve rifare la selezione né un merge completo.", remaining.Count, rest));
+        var why = incompatible.Length > 0 ? Loc.T("Il merge non si può più continuare: {0}.", incompatible)
+            : unresolved > 0 ? Loc.T("Restano {0} file in conflitto: risolvili e segnali come risolti per poter continuare.", unresolved)
+            : string.Empty;
+        var warning = e.InFlightFrom is { } f && e.InFlightTo is { } t
+            ? Loc.T("Il merge è stato terminato mentre applicava r{0}-r{1}: quel gruppo può essere applicato solo in parte. Continuando, i file aggiunti da quel gruppo possono comparire come conflitto ad albero (\"local file add, incoming file add\"): scegli \"Usa la mia\" e segna come risolto.", f, t)
+            : string.Empty;
+        return new PendingMergeDto(e.Name, e.State == PendingMerge.Stopped ? "stopped" : "interrupted", e.Revs.Count, applied.Count, remaining.Count,
+            head, Loc.T("Rimaste {0}: {1}.", remaining.Count, rest), steps,
+            Loc.T("Alternativa: \"Annulla merge\" riporta la working copy com'era prima del merge{0}.", string.IsNullOrEmpty(e.Backup) ? string.Empty : Loc.T(" (le tue modifiche pendenti vengono ripristinate dalla copia di sicurezza)")),
+            e.ConflictRev, unresolved, why.Length == 0 && remaining.Count > 0 && !running, why, incompatible.Length > 0, warning,
+            applied, remaining, !string.IsNullOrEmpty(e.Backup), running);
     }
 
     private CommitWarnDto BuildCommitWarn()
@@ -746,6 +861,8 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             case "mergeOpen":
                 if (string.IsNullOrWhiteSpace(WorkingCopyPath))
                     SetStatus(Loc.T("Nessuna working copy configurata."));
+                else if (CurrentPendingMerge is not null)
+                    SetStatus(Loc.T("C'è un merge interrotto: continualo (\"Continua merge\"), annullalo o scartalo prima di iniziarne un altro."));
                 else if (!SetMergeScope(MergeFolderArg(args)))
                     SetStatus(Loc.T("La cartella scelta non è dentro la working copy: il merge di una cartella parte da una cartella della working copy."));
                 else
@@ -755,8 +872,19 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                 await RunExclusiveAsync(() => UndoMergeCoreAsync(ct));
                 break;
             case "mergeDismiss":
-                ClearMergeBanner();
-                NotifyChanged();
+                if (CurrentPendingMerge is null) // un merge fermo a meta' non si nasconde: si continua, si annulla o si scarta
+                {
+                    ClearMergeBanner();
+                    NotifyChanged();
+                }
+
+                break;
+            case "mergeContinue":
+                if (ContinueMerge is not null)
+                    await ContinueMerge("changes", ct);
+                break;
+            case "mergeDiscard":
+                await DiscardPendingMergeAsync(ct);
                 break;
             case "switchRefresh":
                 await Switch.RefreshAsync(ct);
@@ -1332,6 +1460,8 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                 UpdateStagedAfterRefresh();
             }
 
+            await RestorePendingMergeAsync(path, ct);
+
             // Voce di switch interrotto ormai stantia (tornati indietro a mano, switch riuscito altrove): la WC e' coerente, la voce si toglie.
             if (branch is { } cur && _pendingSwitch.Get(path) is { } stale
                 && (SameUrl(cur.Url, stale.FromUrl) || SameUrl(cur.Url, stale.Url))
@@ -1368,6 +1498,64 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                 _loading = false;
             _refreshGate.Release();
             NotifyChanged();
+        }
+    }
+
+    /// <summary>
+    /// Alla prima lettura di una working copy: se un merge di piu' revisioni era rimasto a meta' (VS chiuso o in crash, "Annulla", errore) lo stato su disco rimette
+    /// banner e Continua/Annulla. Un passaggio rimasto a meta' (stato "in corso") ha prima un <c>svn cleanup</c>; se la working copy e' stata cambiata (switch, update)
+    /// non si propone di continuare alla cieca: restano Annulla e Scarta. Mai mentre un'operazione sta girando (lo stato "in corso" e' del merge vivo).
+    /// </summary>
+    private async Task RestorePendingMergeAsync(string path, CancellationToken ct)
+    {
+        if (OperationRunning)
+            return;
+        lock (_stateLock)
+            if (!_pendingMergeRestored.Add(path))
+                return;
+        var e = PendingMerges.Get(path);
+        if (e is null)
+            return;
+        BackendLog.Info($"merge interrotto da riprendere: {e.Name}, applicate {e.Applied.Count} di {e.Revs.Count}, stato {e.State}");
+        lock (_stateLock)
+        {
+            if (e.Sub is not null && _mergeScope is null)
+            {
+                _mergeScope = Path.GetFullPath(e.Wc).TrimEnd('\\', '/');
+                _mergeSub = e.Sub;
+            }
+
+            if (_preMerge is null && !string.IsNullOrEmpty(e.Backup))
+            {
+                var snap = PreMergeSnapshot.Load(e.Backup);
+                if (snap is not null && string.Equals(Path.GetFullPath(snap.Wc).TrimEnd('\\', '/'), Path.GetFullPath(e.Wc).TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase))
+                    _preMerge = snap;
+            }
+        }
+
+        if (e.State == PendingMerge.Running)
+        {
+            // Il processo si e' chiuso durante un passaggio: la working copy puo' avere il lock di svn.
+            var failed = await CleanupQuietlyAsync(e.Wc, ct);
+            e = e with { State = PendingMerge.Interrupted, Reason = failed is null ? null : Loc.T("Il cleanup automatico non è riuscito: {0}", failed) };
+            PendingMerges.Set(path, e);
+        }
+
+        try
+        {
+            var info = await _svnService.GetInfoAsync(e.Wc, ct);
+            string? why = null;
+            if (e.WcUrl is not null && !SameUrl(info.Url, e.WcUrl))
+                why = Loc.T("la working copy è su un altro ramo ({0}) rispetto a quando è iniziato il merge ({1})", Uri.UnescapeDataString(info.Url), Uri.UnescapeDataString(e.WcUrl));
+            else if (e.WcRev is { } rev0 && info.Revision != rev0)
+                why = Loc.T("la working copy è stata aggiornata (da r{0} a r{1})", rev0, info.Revision);
+            if (why is not null)
+                lock (_stateLock)
+                    _pendingIncompatible = why;
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            BackendLog.Warn("Merge interrotto: svn info non letto: " + ex.Message.Split('\n')[0]);
         }
     }
 
@@ -1411,6 +1599,9 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
         // Uno switch rimasto a meta' (anche da una sessione precedente di VS) conta piu' del riepilogo.
         if (_pendingSwitch.Get(WorkingCopyPath) is { } pending)
             return Loc.T("Errore: lo switch a {0} non è completo. Non fare Revert: premi \"Completa switch\" (cleanup + switch).", pending.Name);
+
+        if (CurrentPendingMerge is { } merge && !OperationRunning)
+            return Loc.T("Merge interrotto: applicate {0} di {1} revisioni, rimaste {2}. Continua o annulla il merge dal banner qui sopra.", merge.Applied.Count, merge.Revs.Count, merge.Remaining.Count);
 
         if (entries.Count == 0)
             return Loc.T("Nessuna modifica.");
@@ -2280,6 +2471,27 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
         {
             SetStatus(Loc.T("Errore revert: {0}", ex.Message) + BackupKept(backup));
         }
+    }
+
+    /// <summary>"Annulla merge" (con conferma ed eventuale ripristino delle modifiche pendenti), dal Log o da Changes.</summary>
+    internal Task UndoMergeAsync(CancellationToken ct) => RunExclusiveAsync(() => UndoMergeCoreAsync(ct));
+
+    /// <summary>"Scarta": toglie lo stato del merge interrotto (le modifiche gia' applicate restano nella working copy). Con conferma: poi "Continua merge" non c'e' piu'.</summary>
+    internal async Task DiscardPendingMergeAsync(CancellationToken ct)
+    {
+        if (CurrentPendingMerge is not { } e)
+            return;
+        var ok = await _dialogs.ConfirmAsync(Loc.T("Scartare lo stato del merge interrotto da {0}? Le {1} revisioni già applicate restano nella working copy (si possono committare o annullare con un revert), ma \"Continua merge\" non sarà più disponibile: per unire le {2} rimaste dovrai rifare un merge.",
+            e.Name, e.Applied.Count, e.Remaining.Count), ct);
+        if (!ok)
+            return;
+        PendingMerges.Clear(WorkingCopyPath);
+        lock (_stateLock)
+            _pendingIncompatible = null;
+        SetStatus(Loc.T("Stato del merge interrotto scartato."));
+        if (MergeUndone is not null)
+            await MergeUndone(ct); // il Log in modalita' merge rilegge le revisioni da unire
+        NotifyChanged();
     }
 
     /// <summary>"SVN Revert di tutto" (avviso del Log in modalita' merge): annulla ogni modifica locale (i non versionati no), con conferma e elenco.</summary>

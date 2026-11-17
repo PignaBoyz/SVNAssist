@@ -61,6 +61,8 @@ internal sealed class MergeStore
         }
     }
 
+    private const int MaxAppliedInfo = 100;
+
     internal string Title(SwitchPickerStore.Target source) => Loc.T("Merge da {0}", source.Name);
 
     /// <summary>"Risolvi i conflitti": porta in primo piano Changes, dove c'e' la sezione Conflitti.</summary>
@@ -69,9 +71,16 @@ internal sealed class MergeStore
     internal MergeDto? GetSnapshot()
     {
         var pending = _changes.MergePending; // prima del lock: prende il lock di ChangesStore
+        var interrupted = _changes.BuildPendingMerge();
         lock (_lock)
-            return !_active || _source is null ? null
-                : new MergeDto(_source.Name, Title(_source), _loading, _busy, _error, _blocked, _selected.Order().ToList(), _entries.Count, _result, pending, SvnErrors.SuggestsUpdate(_error), _filesDto, _pending.Count);
+        {
+            if (!_active || _source is null)
+                return null;
+            // Merge interrotto: quali revisioni sono gia' state applicate (autore e messaggio dalla cache; se mancano arrivano a breve da svn log).
+            var applied = interrupted is null ? null
+                : interrupted.AppliedRevs.Take(MaxAppliedInfo).Select(r => _logCache.TryGetValue(r, out var d) ? new MergeAppliedDto(r, d.Author, (d.Msg ?? string.Empty).Split('\n')[0]) : new MergeAppliedDto(r, string.Empty, string.Empty)).ToList();
+            return new MergeDto(_source.Name, Title(_source), _loading, _busy, _error, _blocked, _selected.Order().ToList(), _entries.Count, _result, pending, SvnErrors.SuggestsUpdate(_error), _filesDto, _pending.Count, interrupted, applied);
+        }
     }
 
     internal void Close()
@@ -132,6 +141,7 @@ internal sealed class MergeStore
 
             await all;
             BackendLog.Info($"merge load: {Format(times)}, totale {sw.ElapsedMilliseconds} ms, {Entries.Count} revisioni da unire");
+            _ = LoadAppliedInfoAsync(ct); // merge interrotto: autore e messaggio delle revisioni gia' applicate
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
@@ -144,6 +154,23 @@ internal sealed class MergeStore
             lock (_lock)
                 _loading = false;
             Changed?.Invoke();
+        }
+    }
+
+    /// <summary>Merge interrotto: legge autore e messaggio delle revisioni gia' applicate (non sono piu' nell'elenco da unire) per mostrarle "applicate in questo merge".</summary>
+    private async Task LoadAppliedInfoAsync(CancellationToken ct)
+    {
+        try
+        {
+            if (_changes.CurrentPendingMerge is not { } e || _source is null)
+                return;
+            var source = new SwitchPickerStore.Target(e.Name, string.Empty, e.Url, false, e.Path);
+            await EnsureLogAsync(e.Applied.Take(MaxAppliedInfo).ToList(), source, ct);
+            Changed?.Invoke();
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            BackendLog.Warn("merge: log delle revisioni applicate non letto: " + ex.Message.Split('\n')[0]);
         }
     }
 
@@ -377,14 +404,14 @@ internal sealed class MergeStore
     /// Mette in cache i file toccati dalle revisioni indicate: <c>svn log -v</c> a gruppi di revisioni adiacenti nell'elenco (nessuna revisione in mezzo
     /// da scartare, una richiesta per gruppo, in parallelo) e non una chiamata per revisione.
     /// </summary>
-    private async Task EnsurePathsAsync(IReadOnlyList<long> revs, CancellationToken ct)
+    private Task EnsurePathsAsync(IReadOnlyList<long> revs, CancellationToken ct) => EnsurePathsAsync(revs, _source!, ct);
+
+    private async Task EnsurePathsAsync(IReadOnlyList<long> revs, SwitchPickerStore.Target source, CancellationToken ct)
     {
         List<long> missing;
         Dictionary<long, int> index;
-        SwitchPickerStore.Target source;
         lock (_lock)
         {
-            source = _source!;
             missing = revs.Where(r => !_paths.ContainsKey(r)).Distinct().ToList();
             index = [];
             for (var i = 0; i < _entries.Count; i++)
@@ -395,15 +422,20 @@ internal sealed class MergeStore
             return;
         var sw = Stopwatch.StartNew();
         var runs = new List<(long Min, long Max)>();
-        int? prev = null;
-        foreach (var r in missing.OrderBy(r => index.GetValueOrDefault(r, int.MaxValue)))
+        if (missing.Any(r => !index.ContainsKey(r)))
+            runs = GroupRevisions(missing.Order()); // senza l'elenco da unire (merge ripreso da Changes): per vicinanza di numero
+        else
         {
-            var i = index.GetValueOrDefault(r, int.MaxValue);
-            if (prev is { } p && i == p + 1)
-                runs[^1] = (Math.Min(runs[^1].Min, r), Math.Max(runs[^1].Max, r));
-            else
-                runs.Add((r, r));
-            prev = i;
+            int? prev = null;
+            foreach (var r in missing.OrderBy(r => index[r]))
+            {
+                var i = index[r];
+                if (prev is { } p && i == p + 1)
+                    runs[^1] = (Math.Min(runs[^1].Min, r), Math.Max(runs[^1].Max, r));
+                else
+                    runs.Add((r, r));
+                prev = i;
+            }
         }
 
         using var gate = new SemaphoreSlim(LogParallelism);
@@ -536,7 +568,7 @@ internal sealed class MergeStore
         }
     }
 
-    /// <summary>Merge vero: tutto quello che e' da unire (<paramref name="all"/>) oppure il cherry-pick delle revisioni scelte.</summary>
+    /// <summary>Merge vero: tutto quello che e' da unire (<paramref name="all"/>) oppure il cherry-pick delle revisioni scelte. Una revisione alla volta (a gruppi dove sicuro, vedi <see cref="MergeRunner"/>), con stato su disco.</summary>
     internal async Task RunAsync(bool all, CancellationToken ct)
     {
         lock (_lock)
@@ -551,139 +583,92 @@ internal sealed class MergeStore
             }
         }
 
+        if (_changes.CurrentPendingMerge is not null)
+        {
+            lock (_lock)
+                _error = Loc.T("C'è un merge interrotto: continualo (\"Continua merge\") oppure annullalo prima di iniziarne un altro.");
+            Changed?.Invoke();
+            return;
+        }
+
         if (!TryBusy(out var source, out var wc, out var picked, forMerge: true))
             return;
         try
         {
-            var revs = all ? null : picked;
+            long[] revs;
+            lock (_lock)
+                revs = all || picked is null ? _entries.Select(e => e.Rev).Order().ToArray() : picked;
+            if (revs.Length == 0)
+            {
+                Say(Loc.T("Nessuna revisione da unire: {0} è già allineato.", source.Name));
+                return;
+            }
+
             var total = Stopwatch.StartNew();
             var times = new ConcurrentDictionary<string, long>();
-            // Il merge richiede una working copy pulita: lo si ricontrolla sempre, e' cambiata dall'ultima volta.
+            // Il merge richiede una working copy senza elementi che svn non ripristina: lo si ricontrolla sempre, e' cambiata dall'ultima volta.
             if (await Timed(times, "status", () => CheckBlockedAsync(ct)))
                 return;
 
-            var label = revs is null ? AllLabel() : RevsLabel(revs);
-            MergeOutput? output = null;
             PreMergeSnapshot? snapshot = null;
-            Task? reload = null;
-            var stopped = false;
             await _changes.RunExclusiveAsync(async () =>
             {
-                try
+                // Modifiche pendenti: avviso con i file in comune (dry-run) e copia di sicurezza PRIMA di toccare qualcosa; senza copia il merge non parte.
+                List<SvnFileStatus> dirty;
+                lock (_lock)
+                    dirty = _pending.ToList();
+                if (dirty.Count > 0)
                 {
-                    // Modifiche pendenti: avviso con i file in comune (dry-run) e copia di sicurezza PRIMA di toccare qualcosa; senza copia il merge non parte.
-                    List<SvnFileStatus> dirty;
-                    lock (_lock)
-                        dirty = _pending.ToList();
-                    if (dirty.Count > 0)
+                    // I file in comune: dal dry-run. Un E155015 qui NON e' un merge fermato (non e' stato toccato nulla: il dry-run applica una revisione alla volta
+                    // senza vedere le precedenti): i file in comune si ricavano allora dal log. Mai verso i gestori del merge vero.
+                    List<string> overlap;
+                    var known = true;
+                    try
                     {
-                        // I file in comune: dal dry-run. Un E155015 qui NON e' un merge fermato (non e' stato toccato nulla: il dry-run applica una revisione alla volta
-                        // senza vedere le precedenti): i file in comune si ricavano allora dal log. Mai verso i gestori del merge vero.
-                        List<string> overlap;
-                        var known = true;
-                        try
+                        var dry = await Timed(times, "dry-run", () => _svn.MergeAsync(wc, source.Url, all ? null : revs, dryRun: true, ct));
+                        overlap = Overlap(dirty, dry);
+                    }
+                    catch (Exception ex) when (!ct.IsCancellationRequested && SvnErrors.IsMergeStoppedByConflict(ex.Message))
+                    {
+                        BackendLog.Info("merge: il dry-run dei file in comune si e' fermato su un conflitto, si usa il log: " + ex.Message.Split('\n')[0]);
+                        try { overlap = await OverlapFromLogAsync(dirty, all ? null : revs, ct); }
+                        catch (Exception ex2) when (!ct.IsCancellationRequested)
                         {
-                            var dry = await Timed(times, "dry-run", () => _svn.MergeAsync(wc, source.Url, revs, dryRun: true, ct));
-                            overlap = Overlap(dirty, dry);
+                            BackendLog.Warn("merge: file in comune non prevedibili: " + ex2.Message);
+                            (overlap, known) = ([], false);
                         }
-                        catch (Exception ex) when (!ct.IsCancellationRequested && SvnErrors.IsMergeStoppedByConflict(ex.Message))
-                        {
-                            BackendLog.Info("merge: il dry-run dei file in comune si e' fermato su un conflitto, si usa il log: " + ex.Message.Split('\n')[0]);
-                            try { overlap = await OverlapFromLogAsync(dirty, revs, ct); }
-                            catch (Exception ex2) when (!ct.IsCancellationRequested)
-                            {
-                                BackendLog.Warn("merge: file in comune non prevedibili: " + ex2.Message);
-                                (overlap, known) = ([], false);
-                            }
-                        }
-
-                        if (!await _changes.ConfirmAsync(PendingMergeText(dirty.Count, overlap, known), ct))
-                        {
-                            Say(Loc.T("Merge non eseguito: le modifiche pendenti non sono state toccate."));
-                            return;
-                        }
-
-                        try { snapshot = await Timed(times, "backup", () => PreMergeSnapshot.CaptureAsync(_svn, wc, dirty, null, ct)); }
-                        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                        {
-                            BackendLog.Warn("Backup delle modifiche pendenti prima del merge: " + ex.Message);
-                            lock (_lock)
-                                _error = ex is PatchBackup.NoSpaceException ns
-                                    ? Loc.T("Non c'è abbastanza spazio per la copia di sicurezza delle modifiche pendenti (servono {0}, liberi {1}): il merge non è partito e non è stato toccato nulla.",
-                                        PatchBackup.FormatBytes(ns.Needed), PatchBackup.FormatBytes(ns.Free))
-                                    : Loc.T("Copia di sicurezza delle modifiche pendenti non riuscita ({0}): il merge non è partito e non è stato toccato nulla.", ex.Message);
-                            Changed?.Invoke();
-                            return;
-                        }
-
                     }
 
-                    // Sempre, anche senza modifiche pendenti (null): una copia di una working copy precedente non deve mai servire a questo annullamento.
-                    _changes.SetPreMerge(snapshot);
-                    Say(Loc.T("Merge da {0} in corso...", source.Name));
-                    var ot = _changes.Progress.Begin("merge", Loc.T("Merge da {0}", source.Name), Loc.T("Merge in corso..."), ct, origin: "log");
-                    output = await Timed(times, "svn merge", () => SvnProgress.RunAsync(_changes.Progress.Line, () => _svn.MergeAsync(wc, source.Url, revs, dryRun: false, ot)));
-                    // Le revisioni ancora da unire si rileggono (mergeinfo) mentre Changes rilegge lo stato: due letture indipendenti.
-                    IReadOnlyList<LogEntryDto> shown;
-                    lock (_lock)
-                        shown = _entries; // prima della rilettura: il messaggio di commit descrive le revisioni appena unite
-                    reload = ReloadEligibleAsync(ct, times);
-                    var summary = ToResult("merge", label, output);
-                    lock (_lock)
-                        _result = summary;
-                    await TimedRun(times, "refresh", () => _changes.RefreshAsync(ct, reloadBranch: false, output.Conflicts > 0
-                        ? Loc.T("Merge completato: {0} file in conflitto da risolvere.", output.Conflicts)
-                        : Loc.T("Merge completato: rivedi le modifiche e committa.")));
-                    // Dopo il refresh: il repository (chiave dei Recenti) e' noto.
-                    _changes.AfterMerge(MergeCommitMessage(revs is null ? shown.Select(e => e.Rev).ToList() : revs, shown, source.Path),
-                        Loc.T("Merge {0} da {1}: rivedi le modifiche e committa, oppure annulla il merge. Messaggio del merge disponibile nei Recenti.", label, "^/" + source.Path)
-                        + (snapshot is null ? string.Empty : " " + Loc.T("Le tue {0} modifiche pendenti sono nella working copy insieme al merge (finiscono nello stesso commit se non scegli i file): \"Annulla merge\" le ripristina.", snapshot.Entries.Count)));
-                    _changes.Progress.Done(true, output.Conflicts > 0
-                        ? Loc.T("Merge completato con {0} conflitti: vanno risolti prima di committare.", output.Conflicts)
-                        : Loc.T("Merge completato: rivedi le modifiche e committa."), output.Conflicts);
+                    if (!await _changes.ConfirmAsync(PendingMergeText(dirty.Count, overlap, known), ct))
+                    {
+                        Say(Loc.T("Merge non eseguito: le modifiche pendenti non sono state toccate."));
+                        return;
+                    }
+
+                    try { snapshot = await Timed(times, "backup", () => PreMergeSnapshot.CaptureAsync(_svn, wc, dirty, null, ct)); }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        BackendLog.Warn("Backup delle modifiche pendenti prima del merge: " + ex.Message);
+                        lock (_lock)
+                            _error = ex is PatchBackup.NoSpaceException ns
+                                ? Loc.T("Non c'è abbastanza spazio per la copia di sicurezza delle modifiche pendenti (servono {0}, liberi {1}): il merge non è partito e non è stato toccato nulla.",
+                                    PatchBackup.FormatBytes(ns.Needed), PatchBackup.FormatBytes(ns.Free))
+                                : Loc.T("Copia di sicurezza delle modifiche pendenti non riuscita ({0}): il merge non è partito e non è stato toccato nulla.", ex.Message);
+                        Changed?.Invoke();
+                        return;
+                    }
                 }
-                catch (OperationCanceledException) when (!ct.IsCancellationRequested && _changes.Progress.IsCancelling)
-                {
-                    await _changes.FinishMergeCancelledAsync(wc, ct);
-                }
-                catch (Exception ex) when (!ct.IsCancellationRequested && SvnErrors.IsMergeStoppedByConflict(ex.Message))
-                {
-                    stopped = true;
-                    await MergeStoppedAsync(ex, source, ct);
-                }
-                catch (Exception ex) when (!ct.IsCancellationRequested)
-                {
-                    BackendLog.Warn("merge fallito: " + ex.Message);
-                    Fail(ex);
-                    _changes.Progress.Done(false, Loc.T("Errore: {0}", ex.Message));
-                    await _changes.RefreshAsync(ct, reloadBranch: false); // un merge fallito a meta' puo' aver toccato dei file
-                    if (snapshot is not null)
-                        // Le modifiche pendenti sono mescolate a quelle di un merge a meta': si lascia "Annulla merge", che le ripristina dalla copia di sicurezza.
-                        _changes.AfterMerge(string.Empty, Loc.T("Il merge non è andato a buon fine e può aver modificato dei file. Per tornare com'eri prima annulla il merge: le tue {0} modifiche pendenti vengono ripristinate dalla copia di sicurezza.", snapshot.Entries.Count));
-                    else
-                        _changes.SetPreMerge(null);
-                }
+
+                // Sempre, anche senza modifiche pendenti (null): una copia di una working copy precedente non deve mai servire a questo annullamento.
+                _changes.SetPreMerge(snapshot);
+                var info = await TryInfoAsync(wc, ct);
+                var state = new PendingMerge.Entry(source.Name, source.Url, source.Path, wc, _changes.MergeSubPath, info?.Url, info?.Revision,
+                    revs.ToList(), [], PendingMerge.Running, DateTime.Now, DateTime.Now, Backup: snapshot?.Dir);
+                _changes.PendingMerges.Set(_changes.WorkingCopyPath, state);
+                await ExecuteAsync(source, state, snapshot, resumed: false, origin: "log", times, ct);
             });
 
-            if (stopped)
-            {
-                await ReloadEligibleAsync(ct); // le revisioni gia' applicate non sono piu' da unire, quelle dopo il conflitto si
-                BackendLog.Info($"merge fermato da un conflitto: {Format(times)}, totale {total.ElapsedMilliseconds} ms");
-            }
-
-            if (output is not null)
-            {
-                if (reload is not null)
-                    await reload;
-                lock (_lock)
-                    _selected.Clear();
-                RequestFiles();
-                BackendLog.Info($"merge run: {Format(times)}, totale {total.ElapsedMilliseconds} ms, {output.Items.Count} file, {output.Conflicts} conflitti");
-                Say(output.Conflicts > 0
-                    ? Loc.T("Merge eseguito, da committare. Conflitti da risolvere in Changes: {0}.", output.Conflicts)
-                    : Loc.T("Merge eseguito, da committare."));
-                // I conflitti li apre il pulsante della finestra di avanzamento (niente salto di finestra mentre e' aperta).
-            }
+            BackendLog.Info($"merge run: {Format(times)}, totale {total.ElapsedMilliseconds} ms");
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
@@ -693,6 +678,425 @@ internal sealed class MergeStore
         {
             Idle();
         }
+    }
+
+    private async Task<SvnInfo?> TryInfoAsync(string wc, CancellationToken ct)
+    {
+        try { return await _svn.GetInfoAsync(wc, ct); }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            BackendLog.Warn("merge: svn info non letto: " + ex.Message.Split('\n')[0]);
+            return null;
+        }
+    }
+
+    // ── Continua merge ───────────────────────────────────────────────
+
+    /// <summary>
+    /// "Continua merge": applica solo le revisioni rimaste di un merge fermo o interrotto (conflitto, "Annulla" dell'utente, errore di rete, VS chiuso), senza rifare la scelta.
+    /// Funziona anche con il Log non in modalita' merge (da Changes, dopo un riavvio): lo stato e' quello salvato su disco.
+    /// </summary>
+    internal async Task ResumeAsync(string origin, CancellationToken ct)
+    {
+        if (_changes.CurrentPendingMerge is not { } entry)
+        {
+            Report(Loc.T("Nessun merge da continuare."), err: false);
+            return;
+        }
+
+        bool active;
+        lock (_lock)
+        {
+            if (_busy)
+                return;
+            active = _active;
+            if (active)
+            {
+                _busy = true;
+                _error = string.Empty;
+            }
+        }
+
+        if (active)
+            Changed?.Invoke();
+        try
+        {
+            await _changes.RunExclusiveAsync(async () =>
+            {
+                var times = new ConcurrentDictionary<string, long>();
+                var source = new SwitchPickerStore.Target(entry.Name, string.Empty, entry.Url, false, entry.Path);
+                var check = await CheckResumableAsync(entry, source, ct);
+                if (check.Problem is { } problem)
+                {
+                    Report(problem, err: true);
+                    _changes.SetStatusMessage(problem);
+                    return;
+                }
+
+                var state = check.State!;
+                if (state.Remaining.Count == 0)
+                {
+                    // Ormai tutto unito (mergeinfo): non c'e' altro da fare che committare.
+                    _changes.PendingMerges.Clear(_changes.WorkingCopyPath);
+                    await _changes.RefreshAsync(ct, reloadBranch: false, Loc.T("Merge completato: rivedi le modifiche e committa."));
+                    var logs = await EnsureLogAsync(state.Revs, source, ct);
+                    _changes.AfterMerge(MergeCommitMessage(state.Revs, logs, source.Path), Loc.T("Merge {0} da {1}: rivedi le modifiche e committa, oppure annulla il merge. Messaggio del merge disponibile nei Recenti.", RevsLabel(state.Revs), "^/" + source.Path));
+                    return;
+                }
+
+                _changes.PendingMerges.Set(_changes.WorkingCopyPath, state);
+                await ExecuteAsync(source, state, _changes.PreMerge, resumed: true, origin, times, ct);
+            });
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            Fail(ex);
+        }
+        finally
+        {
+            if (active)
+                Idle();
+        }
+    }
+
+    /// <summary>Controlli prima di riprendere: conflitti ancora aperti, passaggio rimasto a meta' (cleanup), working copy cambiata (switch, update, revert) e revisioni davvero rimaste (mergeinfo).</summary>
+    private async Task<(PendingMerge.Entry? State, string? Problem)> CheckResumableAsync(PendingMerge.Entry entry, SwitchPickerStore.Target source, CancellationToken ct)
+    {
+        var wc = entry.Wc;
+        await _changes.RefreshAsync(ct, reloadBranch: true);
+        if (entry.State == PendingMerge.Running || entry.InFlightFrom is not null)
+        {
+            var failed = await _changes.CleanupQuietlyAsync(wc, ct);
+            if (failed is not null)
+                return (null, Loc.T("Il cleanup della working copy non è riuscito ({0}): sistemalo (SVN Cleanup) e riprova.", failed));
+        }
+
+        var info = await TryInfoAsync(wc, ct);
+        if (info is not null && entry.WcUrl is not null && !SameUrl(info.Url, entry.WcUrl))
+            return (null, IncompatibleText(Loc.T("la working copy è su un altro ramo ({0}) rispetto a quando è iniziato il merge ({1})", info.Url, entry.WcUrl)));
+        if (info is not null && entry.WcRev is { } rev0 && info.Revision != rev0)
+            return (null, IncompatibleText(Loc.T("la working copy è stata aggiornata (da r{0} a r{1})", rev0, info.Revision)));
+        var open = _changes.UnresolvedConflicts;
+        if (open > 0)
+            return (null, Loc.T("Restano {0} file in conflitto: risolvili e segnali come risolti, poi premi \"Continua merge\".", open));
+        IReadOnlyList<long> eligible;
+        try { eligible = await _svn.GetEligibleRevisionsAsync(wc, source.Url, ct); }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            return (null, Loc.T("Non riesco a leggere le revisioni ancora da unire ({0}): controlla la connessione e riprova.", ex.Message.Split('\n')[0]));
+        }
+
+        var back = entry.Applied.Except(entry.Unrecorded ?? []).Where(eligible.Contains).ToList();
+        if (back.Count > 0)
+            return (null, IncompatibleText(Loc.T("le revisioni {0} risultano di nuovo da unire (modifiche annullate fuori dal merge)", RevListText(back))));
+        var remaining = entry.Revs.Where(eligible.Contains).Order().ToList();
+        var applied = entry.Revs.Where(r => !remaining.Contains(r)).Order().ToList();
+        return (entry with { Applied = applied, State = PendingMerge.Interrupted, InFlightFrom = null, InFlightTo = null }, null);
+    }
+
+    private string IncompatibleText(string why)
+    {
+        _changes.SetPendingMergeIncompatible(why);
+        return Loc.T("Il merge interrotto non si può più continuare: {0}. Puoi solo annullarlo (\"Annulla merge\") o scartare lo stato (\"Scarta\").", why);
+    }
+
+    private static bool SameUrl(string? a, string? b)
+        => a is not null && b is not null && string.Equals(Uri.UnescapeDataString(a).TrimEnd('/'), Uri.UnescapeDataString(b).TrimEnd('/'), StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Elenco di revisioni per un messaggio: tutte fino a 6, poi la prima e l'ultima con il numero.</summary>
+    internal static string RevListText(IReadOnlyList<long> revs)
+    {
+        var s = revs.Order().ToList();
+        return s.Count <= 6 ? string.Join(", ", s.Select(r => $"r{r}"))
+            : Loc.T("{0}, {1} … {2} ({3} revisioni)", $"r{s[0]}", $"r{s[1]}", $"r{s[^1]}", s.Count);
+    }
+
+    // ── Esecuzione (merge nuovo o ripreso) ───────────────────────────
+
+    /// <summary>Applica le revisioni rimaste di <paramref name="state"/> e chiude nel modo giusto: concluso, fermo per conflitto, fermato dall'utente, interrotto da un errore.</summary>
+    private async Task ExecuteAsync(SwitchPickerStore.Target source, PendingMerge.Entry state, PreMergeSnapshot? snapshot, bool resumed, string origin,
+        ConcurrentDictionary<string, long> times, CancellationToken ct)
+    {
+        var root = _changes.WorkingCopyPath;
+        var wc = state.Wc;
+        var revs = state.Revs.Order().ToList();
+        var position = revs.Select((r, i) => (r, i)).ToDictionary(x => x.r, x => x.i + 1);
+        var label = RevsLabel(revs);
+        var cur = state;
+        void Persist() => _changes.PendingMerges.Set(root, cur);
+        void ShowStep(long first, long last, int done)
+            => _changes.Progress.SetStep(new MergeStepDto(first == last ? $"r{first}" : $"r{first}-r{last}", position.GetValueOrDefault(first), position.GetValueOrDefault(last), done, revs.Count));
+
+        Say(Loc.T("Merge da {0} in corso...", source.Name));
+        var ot = _changes.Progress.Begin("merge", Loc.T("Merge da {0}", source.Name), resumed ? Loc.T("Continuo il merge...") : Loc.T("Merge in corso..."), ct, origin: origin, softCancel: true);
+        var checking = false;
+        var runner = new MergeRunner(_svn, wc, source.Url, (rs, c) => TouchedAsync(rs, source, c))
+        {
+            Phase = text => { checking = true; _changes.Progress.SetPhase(text); },
+            StopRequested = () => _changes.Progress.SoftCancelRequested,
+        };
+        runner.StepStarting = step =>
+        {
+            if (checking)
+            {
+                checking = false;
+                _changes.Progress.SetPhase(resumed ? Loc.T("Continuo il merge...") : Loc.T("Merge in corso..."));
+            }
+
+            cur = cur with { State = PendingMerge.Running, InFlightFrom = step.First, InFlightTo = step.Last };
+            Persist();
+            ShowStep(step.First, step.Last, position.GetValueOrDefault(step.First) - 1);
+        };
+        runner.StepDone = applied =>
+        {
+            cur = cur with { Applied = cur.Applied.Union(applied).Order().ToList(), InFlightFrom = null, InFlightTo = null };
+            Persist();
+            ShowStep(applied[0], applied[^1], cur.Applied.Count);
+        };
+        // Passate per revisione dentro un solo processo (-c 5,6,7): le intestazioni "--- Merging r6 into" dicono a che revisione si e' arrivati.
+        void Sink(string raw)
+        {
+            _changes.Progress.Line(raw);
+            if (MergeHeader.TryParse(raw, out var first, out var last) && position.ContainsKey(first) && position.ContainsKey(last))
+                ShowStep(first, last, position[first] - 1);
+        }
+
+        MergeRunResult result;
+        try
+        {
+            var eligible = Active ? Entries.Select(e => e.Rev).ToList() : (await _svn.GetEligibleRevisionsAsync(wc, source.Url, ot)).ToList();
+            var remaining = cur.Remaining;
+            result = await Timed(times, "svn merge", () => SvnProgress.RunAsync(Sink, () => runner.RunAsync(remaining, eligible, ot)));
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested && _changes.Progress.IsCancelling)
+        {
+            // Terminato a forza (il passaggio non finiva): il passaggio in corso puo' essere a meta'.
+            cur = cur with { InFlightFrom = runner.InFlight?.First ?? cur.InFlightFrom, InFlightTo = runner.InFlight?.Last ?? cur.InFlightTo };
+            await InterruptAsync(source, cur, snapshot, revs, cleanup: true, hard: true, reason: null, ct);
+            return;
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            BackendLog.Warn("merge fallito: " + ex.Message);
+            await FailedAsync(source, cur, snapshot, resumed, ex, ct);
+            return;
+        }
+
+        if (result.Error is { } error)
+        {
+            BackendLog.Warn("merge fallito: " + error.Message);
+            await FailedAsync(source, cur, snapshot, resumed, error, ct);
+            return;
+        }
+
+        if (result.StoppedByUser)
+        {
+            await InterruptAsync(source, cur, snapshot, revs, cleanup: false, hard: false, reason: null, ct);
+            return;
+        }
+
+        var summary = ToResult("merge", label, result.Output);
+        lock (_lock)
+            _result = summary;
+        if (result.Stopped)
+        {
+            await StoppedAsync(source, cur, snapshot, revs, result, ct);
+            return;
+        }
+
+        // Concluso: tutte le revisioni applicate. Lo stato su disco non serve piu' (resta la copia di sicurezza fino al commit o all'annullamento).
+        _changes.PendingMerges.Clear(root);
+        var logs = await EnsureLogAsync(revs, source, ct);
+        Task? reload = Active ? ReloadEligibleAsync(ct, times) : null;
+        var conflictsNow = result.Conflicts;
+        await TimedRun(times, "refresh", () => _changes.RefreshAsync(ct, reloadBranch: false, conflictsNow > 0
+            ? Loc.T("Merge completato: {0} file in conflitto da risolvere.", conflictsNow)
+            : Loc.T("Merge completato: rivedi le modifiche e committa.")));
+        // Dopo il refresh: il repository (chiave dei Recenti) e' noto.
+        _changes.AfterMerge(MergeCommitMessage(revs, logs, source.Path),
+            Loc.T("Merge {0} da {1}: rivedi le modifiche e committa, oppure annulla il merge. Messaggio del merge disponibile nei Recenti.", label, "^/" + source.Path)
+            + (snapshot is null ? string.Empty : " " + Loc.T("Le tue {0} modifiche pendenti sono nella working copy insieme al merge (finiscono nello stesso commit se non scegli i file): \"Annulla merge\" le ripristina.", snapshot.Entries.Count)));
+        _changes.Progress.Done(true, conflictsNow > 0
+            ? Loc.T("Merge completato con {0} conflitti: vanno risolti prima di committare.", conflictsNow)
+            : Loc.T("Merge completato: rivedi le modifiche e committa."), conflictsNow);
+        if (reload is not null)
+            await reload;
+        lock (_lock)
+            _selected.Clear();
+        RequestFiles();
+        BackendLog.Info($"merge: {Format(times)}, {result.Items.Count} file, {result.Conflicts} conflitti");
+        Say(conflictsNow > 0
+            ? Loc.T("Merge eseguito, da committare. Conflitti da risolvere in Changes: {0}.", conflictsNow)
+            : Loc.T("Merge eseguito, da committare."));
+        // I conflitti li apre il pulsante della finestra di avanzamento (niente salto di finestra mentre e' aperta).
+    }
+
+    /// <summary>Stato da salvare dopo uno stop: applicate = quelle che il runner sa piu' quelle che mergeinfo non da' piu' da unire (un processo terminato a forza puo' aver registrato qualcosa).</summary>
+    private async Task<PendingMerge.Entry> FreezeAsync(SwitchPickerStore.Target source, PendingMerge.Entry cur, string state, string? reason, CancellationToken ct)
+    {
+        IReadOnlyList<long>? eligible = null;
+        try { eligible = await _svn.GetEligibleRevisionsAsync(cur.Wc, source.Url, ct); }
+        catch (Exception ex) when (!ct.IsCancellationRequested) { BackendLog.Warn("merge: mergeinfo non letto allo stop: " + ex.Message.Split('\n')[0]); }
+        var applied = cur.Applied.ToList();
+        if (eligible is not null)
+            applied.AddRange(cur.Revs.Where(r => !eligible.Contains(r)));
+        applied = applied.Distinct().Order().ToList();
+        var unrecorded = eligible is null ? [] : applied.Where(eligible.Contains).ToList();
+        return cur with { Applied = applied, State = state, Reason = reason, Unrecorded = unrecorded };
+    }
+
+    /// <summary>Fermo dopo la revisione in conflitto: le successive non sono state applicate. Stato salvato, banner in Changes con Continua/Annulla.</summary>
+    private async Task StoppedAsync(SwitchPickerStore.Target source, PendingMerge.Entry cur, PreMergeSnapshot? snapshot, IReadOnlyList<long> revs, MergeRunResult result, CancellationToken ct)
+    {
+        var root = _changes.WorkingCopyPath;
+        BackendLog.Info($"merge fermato da un conflitto alla r{result.ConflictRev}");
+        cur = await FreezeAsync(source, cur, PendingMerge.Stopped, null, ct);
+        cur = cur with
+        {
+            ConflictRev = result.ConflictRev,
+            ConflictFrom = result.ConflictRange?.First,
+            ConflictTo = result.ConflictRange?.Last,
+        };
+        if (cur.Remaining.Count == 0)
+        {
+            // La revisione in conflitto era l'ultima: il merge e' completo, restano solo i conflitti da risolvere (come un merge normale).
+            _changes.PendingMerges.Clear(root);
+            var logs = await EnsureLogAsync(revs, source, ct);
+            await _changes.RefreshAsync(ct, reloadBranch: false, Loc.T("Merge completato: {0} file in conflitto da risolvere.", result.Conflicts));
+            _changes.AfterMerge(MergeCommitMessage(revs, logs, source.Path),
+                Loc.T("Merge {0} da {1}: rivedi le modifiche e committa, oppure annulla il merge. Messaggio del merge disponibile nei Recenti.", RevsLabel(revs), "^/" + source.Path));
+            _changes.Progress.Done(true, Loc.T("Merge completato con {0} conflitti: vanno risolti prima di committare.", result.Conflicts), result.Conflicts);
+            await AfterStopAsync(ct);
+            Say(Loc.T("Merge eseguito, da committare. Conflitti da risolvere in Changes: {0}.", result.Conflicts));
+            return;
+        }
+
+        _changes.PendingMerges.Set(root, cur);
+        await _changes.RefreshAsync(ct, reloadBranch: false, Loc.T("Merge fermato da un conflitto: risolvi i conflitti qui sotto, poi \"Continua merge\"."));
+        cur = cur with { ConflictFiles = _changes.UnresolvedConflicts };
+        _changes.PendingMerges.Set(root, cur);
+        var done = cur.Applied.Count;
+        _changes.Progress.Done(false, result.ConflictRev is { } r
+            ? Loc.T("Merge fermo alla r{0} per conflitto: applicate {1} di {2}, rimaste {3}. Cosa fare è scritto in Changes.", r, done, revs.Count, cur.Remaining.Count)
+            : Loc.T("Merge fermo per conflitto nel gruppo r{0}-r{1}: applicate {2} di {3}, rimaste {4}. Cosa fare è scritto in Changes.", result.ConflictRange?.First ?? 0, result.ConflictRange?.Last ?? 0, done, revs.Count, cur.Remaining.Count), _changes.UnresolvedConflicts);
+        await AfterStopAsync(ct);
+    }
+
+    private async Task AfterStopAsync(CancellationToken ct)
+    {
+        if (Active)
+            await ReloadEligibleAsync(ct); // le applicate non sono piu' da unire, le rimaste si
+        lock (_lock)
+            _selected.Clear();
+        RequestFiles();
+        Changed?.Invoke();
+    }
+
+    /// <summary>Fermato dall'utente ("Annulla" nella finestra di avanzamento) o terminato a forza: nulla di applicato = niente da continuare; altrimenti stato "interrotto".</summary>
+    private async Task InterruptAsync(SwitchPickerStore.Target source, PendingMerge.Entry cur, PreMergeSnapshot? snapshot, IReadOnlyList<long> revs, bool cleanup, bool hard, string? reason, CancellationToken ct)
+    {
+        var root = _changes.WorkingCopyPath;
+        string? cleanupFailed = null;
+        if (cleanup)
+        {
+            _changes.Progress.SetPhase(Loc.T("Cleanup in corso..."));
+            cleanupFailed = await _changes.CleanupQuietlyAsync(cur.Wc, ct);
+        }
+
+        cur = await FreezeAsync(source, cur, PendingMerge.Interrupted, reason, ct);
+        if (!hard)
+            cur = cur with { InFlightFrom = null, InFlightTo = null };
+        if (cur.Applied.Count == 0 && cur.InFlightFrom is null)
+        {
+            // Nessuna revisione applicata: non c'e' un merge a meta'.
+            _changes.PendingMerges.Clear(root);
+            snapshot?.Delete();
+            _changes.SetPreMerge(null);
+            await _changes.RefreshAsync(ct, reloadBranch: false, Loc.T("Merge annullato prima di applicare revisioni: la working copy non è stata toccata."));
+            _changes.Progress.Done(false, Loc.T("Merge annullato prima di applicare revisioni: la working copy non è stata toccata."), cancelled: true);
+            await AfterStopAsync(ct);
+            return;
+        }
+
+        _changes.PendingMerges.Set(root, cur);
+        await _changes.RefreshAsync(ct, reloadBranch: false, Loc.T("Merge interrotto: applicate {0} di {1} revisioni. Usa \"Continua merge\" per applicare le rimaste.", cur.Applied.Count, revs.Count));
+        var why = hard ? Loc.T("Merge terminato a forza dopo {0} di {1} revisioni applicate.", cur.Applied.Count, revs.Count)
+            : Loc.T("Merge fermato su tua richiesta dopo {0} di {1} revisioni applicate: nulla è rimasto a metà.", cur.Applied.Count, revs.Count);
+        _changes.Progress.Done(false, why + " " + Loc.T("Rimaste {0}.", cur.Remaining.Count) + (cleanupFailed is null ? string.Empty : " " + Loc.T("Il cleanup automatico non è riuscito: {0}", cleanupFailed)), cancelled: true,
+            actions: [new(Loc.T("Continua merge"), "mergeContinue"), new(Loc.T("Annulla merge"), "progressRevertMerge"), new(Loc.T("Lascia così"), "progressClose")]);
+        await AfterStopAsync(ct);
+    }
+
+    /// <summary>Errore di svn (rete, permessi...) durante il merge. Prima di aver applicato qualcosa e' un errore e basta (come sempre); dopo, il merge diventa "interrotto" e si puo' continuare.</summary>
+    private async Task FailedAsync(SwitchPickerStore.Target source, PendingMerge.Entry cur, PreMergeSnapshot? snapshot, bool resumed, Exception ex, CancellationToken ct)
+    {
+        var root = _changes.WorkingCopyPath;
+        Fail(ex);
+        var inFlight = cur.InFlightFrom is not null;
+        var frozen = await FreezeAsync(source, cur, PendingMerge.Interrupted, ex.Message.Split('\n')[0], ct);
+        if (frozen.Applied.Count == 0 && !resumed)
+        {
+            _changes.PendingMerges.Clear(root);
+            _changes.Progress.Done(false, Loc.T("Errore: {0}", ex.Message));
+            await _changes.RefreshAsync(ct, reloadBranch: false); // un merge fallito a meta' puo' aver toccato dei file
+            if (snapshot is not null)
+                // Le modifiche pendenti sono mescolate a quelle di un merge a meta': si lascia "Annulla merge", che le ripristina dalla copia di sicurezza.
+                _changes.AfterMerge(string.Empty, Loc.T("Il merge non è andato a buon fine e può aver modificato dei file. Per tornare com'eri prima annulla il merge: le tue {0} modifiche pendenti vengono ripristinate dalla copia di sicurezza.", snapshot.Entries.Count));
+            else
+                _changes.SetPreMerge(null);
+            return;
+        }
+
+        if (inFlight)
+        {
+            var failed = await _changes.CleanupQuietlyAsync(cur.Wc, ct);
+            if (failed is not null)
+                BackendLog.Warn("merge: cleanup dopo l'errore non riuscito: " + failed);
+        }
+
+        _changes.PendingMerges.Set(root, frozen);
+        await _changes.RefreshAsync(ct, reloadBranch: false);
+        _changes.Progress.Done(false, Loc.T("Errore: {0}", ex.Message) + " " + Loc.T("Merge interrotto dopo {0} di {1} revisioni applicate: puoi continuarlo.", frozen.Applied.Count, frozen.Revs.Count));
+        await AfterStopAsync(ct);
+    }
+
+    /// <summary>File toccati da ogni revisione, relativi alla cartella del merge, per trovare chi tocca i file in conflitto previsti dal dry-run.</summary>
+    private async Task<IReadOnlyDictionary<long, IReadOnlySet<string>>> TouchedAsync(IReadOnlyList<long> revs, SwitchPickerStore.Target source, CancellationToken ct)
+    {
+        await EnsurePathsAsync(revs, source, ct);
+        var map = new Dictionary<long, IReadOnlySet<string>>();
+        lock (_lock)
+            foreach (var r in revs)
+                map[r] = (_paths.GetValueOrDefault(r) ?? []).Select(p => MergeFiles.Relative(p.Path, source.Path)).Where(p => p is not null).Select(p => p!).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return map;
+    }
+
+    /// <summary>Autore, data e messaggio delle revisioni indicate (per il messaggio di commit): dalla cache, il resto da <c>svn log</c> a gruppi.</summary>
+    private async Task<IReadOnlyList<LogEntryDto>> EnsureLogAsync(IReadOnlyList<long> revs, SwitchPickerStore.Target source, CancellationToken ct)
+    {
+        List<long> missing;
+        lock (_lock)
+            missing = revs.Where(r => !_logCache.ContainsKey(r)).Order().ToList();
+        if (missing.Count > 0)
+        {
+            try
+            {
+                var batches = await Task.WhenAll(GroupRevisions(missing).Select(g => _svn.GetLogRangeAsync(source.Url, g.Min, g.Max, ct, withPaths: false)));
+                lock (_lock)
+                {
+                    var wanted = missing.ToHashSet();
+                    foreach (var e in batches.SelectMany(b => b).Where(e => wanted.Contains(e.Revision)))
+                        _logCache[e.Revision] = LogStore.ToDto(e);
+                }
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                BackendLog.Warn("merge: log delle revisioni non letto: " + ex.Message.Split('\n')[0]);
+            }
+        }
+
+        lock (_lock)
+            return revs.Select(r => _logCache.TryGetValue(r, out var d) ? d : new LogEntryDto(r, string.Empty, string.Empty, string.Empty, [])).ToList();
     }
 
     /// <summary>Elenco per revisione (dalla piu' vecchia, l'ordine in cui il merge le applica) con i conflitti previsti dal dry-run.</summary>
@@ -710,30 +1114,6 @@ internal sealed class MergeStore
                 return new MergeRevFilesDto(r, e?.Author ?? string.Empty, (e?.Msg ?? string.Empty).Split('\n')[0], items, more, files.Count(f => f.C));
             }).ToList();
         }
-    }
-
-    /// <summary>
-    /// <c>svn merge</c> si e' fermato alla prima revisione in conflitto (E155015): quelle prima sono applicate, quella ha i conflitti, le successive no.
-    /// Non e' un errore da mostrare in inglese e tre volte: Changes si aggiorna con la sezione Conflitti, "Annulla merge" resta disponibile
-    /// e la spiegazione (in italiano, con cosa fare) compare una volta sola, nel pannello.
-    /// </summary>
-    private async Task MergeStoppedAsync(Exception ex, SwitchPickerStore.Target source, CancellationToken ct)
-    {
-        BackendLog.Warn("merge fermato da un conflitto: " + ex.Message);
-        var rev = SvnErrors.ConflictingRevision(ex.Message);
-        var why = rev is { } r
-            ? Loc.T("Il merge si è fermato alla revisione r{0}, che è andata in conflitto: le revisioni successive non sono state applicate.", r)
-            : Loc.T("Il merge si è fermato alla prima revisione in conflitto: le revisioni successive non sono state applicate.");
-        var todo = Loc.T("Risolvi i conflitti in Changes, poi rifai il merge delle revisioni rimaste (restano in elenco), oppure annulla il merge.");
-        lock (_lock)
-        {
-            _error = why + "\n" + todo;
-            _result = null;
-        }
-
-        await _changes.RefreshAsync(ct, reloadBranch: false, Loc.T("Merge fermato da un conflitto: risolvi i conflitti qui sotto."));
-        _changes.AfterMerge(string.Empty, Loc.T("Merge da {0} fermato da un conflitto: risolvi i conflitti, poi committa oppure annulla il merge.", "^/" + source.Path));
-        _changes.Progress.Done(false, why, _changes.ConflictedCount);
     }
 
     /// <summary>File con modifiche pendenti che il merge tocca (dal dry-run): a rischio di conflitto. Percorsi relativi con <c>/</c>.</summary>
