@@ -91,8 +91,8 @@ export const scenes = [
     },
   },
   {
-    id: 'switch-annullato', file: '07-switch-annullato.png', kind: 'ui', langs: ['it'],
-    desc: 'Switch annullato: avviso sulla working copy a meta\' e scelte Cleanup... / Chiudi (solo italiano: la demo non traduce questo riepilogo)',
+    id: 'switch-annullato', file: '07-switch-annullato.png', kind: 'ui',
+    desc: 'Switch annullato: avviso sulla working copy a meta\' e scelte Cleanup... / Chiudi (in inglese i due testi che la demo del tag non traduce sono presi da LocEn.cs del tag)',
     async run(ctx) {
       const { ui, page, shot } = ctx;
       await ui.openChanges();
@@ -104,6 +104,18 @@ export const scenes = [
       for (let i = 0; i < 20 && !b; i++) { b = await ui.frame().locator('[data-cmd=opCancel]').boundingBox().catch(() => null); if (!b) await page.waitForTimeout(50); }
       await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
       await page.waitForTimeout(3000);
+      if (ctx.lang === 'en') {
+        // la demo del tag lascia in italiano questi due testi: si usano le stesse stringhe di src/Shared/LocEn.cs del tag v0.4.0
+        await ui.frame().locator('[role=dialog]').first().evaluate((el) => {
+          const warn = /^Switch annullato dopo (\d+) elementi .* opzioni\.$/s;
+          const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+          for (let n = w.nextNode(); n; n = w.nextNode()) {
+            const t = n.nodeValue.trim();
+            if (t === 'Cleanup in corso...') n.nodeValue = 'Cleanup in progress...';
+            else if (warn.test(t)) n.nodeValue = t.replace(warn, 'Switch to branches/release-2.1 cancelled after $1 items already applied. The working copy may be left halfway or dirty: a normal cleanup was run. Choose how to continue, or open Cleanup with options.');
+          }
+        });
+      }
       return shot(await boxOf(ui.frame().locator('[role=dialog]').first()));
     },
   },
