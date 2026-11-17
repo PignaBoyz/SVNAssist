@@ -161,19 +161,24 @@ public class AiServiceFactoryTests
 
     [Theory]
     [InlineData("claude-haiku-5-5", "claude-haiku-5-5")]
-    [InlineData("claude-opus-4", "claude-sonnet-5-5")]
+    [InlineData("claude-opus-4", "claude-opus-4")] // fuori elenco ma valido: si usa, l'errore vero lo da' il provider
     [InlineData("", "claude-sonnet-5-5")]
-    public void ResolveClaudeModel_FuoriListaRicadeSulDefault(string saved, string expected)
+    [InlineData("modello con spazi", "claude-sonnet-5-5")]
+    public void ResolveClaudeModel_VuotoOInvalidoRicadeSulDefault_AltrimentiUsaIlSalvato(string saved, string expected)
         => Assert.Equal(expected, AiServiceFactory.ResolveClaudeModel(saved));
 
     [Fact]
-    public void NormalizeCopilotModel_FuoriLista_DiventaDefault()
-        => Assert.Equal(string.Empty, AiServiceFactory.NormalizeCopilotModel("modello-vecchio"));
+    public void NormalizeCopilotModel_IdFuoriElencoSiUsaComunque()
+        => Assert.Equal("modello-vecchio", AiServiceFactory.NormalizeCopilotModel("modello-vecchio"));
+
+    [Fact]
+    public void NormalizeCopilotModel_IdNonValido_DiventaDefault()
+        => Assert.Equal(string.Empty, AiServiceFactory.NormalizeCopilotModel("due parole"));
 
     [Theory]
     [InlineData(GitHubModels, "gpt-4o-mini", "openai/gpt-4o-mini")]
     [InlineData(GitHubModels, "openai/gpt-4o", "openai/gpt-4o")]
-    [InlineData(GitHubModels, "microsoft/Phi-3-medium-128k-instruct", "openai/gpt-4o-mini")]
+    [InlineData(GitHubModels, "microsoft/Phi-3-medium-128k-instruct", "microsoft/Phi-3-medium-128k-instruct")]
     [InlineData("https://api.openai.com/v1/chat/completions", "openai/gpt-4o-mini", "gpt-4o-mini")]
     [InlineData("http://localhost:11434/v1/chat/completions", "llama3", "llama3")]
     [InlineData(GitHubModels, "", "openai/gpt-4o-mini")]

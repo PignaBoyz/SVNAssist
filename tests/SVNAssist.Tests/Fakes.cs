@@ -17,9 +17,11 @@ internal sealed class StubSettings : ISvnAssistSettings
     public string UiLanguage { get; set; } = "it";
 
     public Task<string> GetAiProviderAsync(CancellationToken ct) => Task.FromResult(Provider);
-    public Task<string> GetClaudeModelAsync(CancellationToken ct) => Task.FromResult("claude");
+    public string ClaudeModelSaved { get; set; } = "claude";
+    public Task<string> GetClaudeModelAsync(CancellationToken ct) => Task.FromResult(ClaudeModelSaved);
     public Task<string> GetAnthropicApiKeyAsync(CancellationToken ct) => Task.FromResult(AnthropicKey);
-    public Task<string> GetCopilotModelAsync(CancellationToken ct) => Task.FromResult(string.Empty);
+    public string CopilotModelSaved { get; set; } = string.Empty;
+    public Task<string> GetCopilotModelAsync(CancellationToken ct) => Task.FromResult(CopilotModelSaved);
     public Task<string> GetAiEndpointAsync(CancellationToken ct) => Task.FromResult(Endpoint);
     public Task<string> GetAiApiKeyAsync(CancellationToken ct) => Task.FromResult(ApiKey);
     public Task<string> GetAiModelAsync(CancellationToken ct) => Task.FromResult("model");

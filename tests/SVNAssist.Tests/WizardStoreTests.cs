@@ -206,7 +206,7 @@ public class WizardStoreTests
     }
 
     [Fact]
-    public async Task Fine_ModelloSconosciuto_Rifiutato_EDaMenuNonGenera()
+    public async Task Fine_IdNonValido_Rifiutato_IdFuoriElencoAccettato_EDaMenuNonGenera()
     {
         var (wizard, settings, _, _) = Create(new Env { Gh = true, GhLogin = true, Runtime = true });
         await wizard.OpenAsync(fromGenerate: false, Ct);
@@ -214,7 +214,7 @@ public class WizardStoreTests
         for (var i = 0; i < 3; i++)
             await wizard.NextAsync(Ct);
 
-        await Assert.ThrowsAsync<ArgumentException>(() => wizard.FinishAsync("modello-inventato", Ct));
+        await Assert.ThrowsAsync<ArgumentException>(() => wizard.FinishAsync("modello con spazi", Ct));
         Assert.Empty(settings.Saved);
         Assert.False(await wizard.FinishAsync("gpt-4.1", Ct));
     }
@@ -304,6 +304,7 @@ public class WizardStoreTests
     {
         Assert.Equal(SettingDefinitions.KnownClaudeModels, WizardStore.ModelsFor("claude").Select(m => m.Value));
         Assert.Equal(SettingDefinitions.KnownCopilotModels, WizardStore.ModelsFor("copilot").Select(m => m.Value));
+        Assert.DoesNotContain("consigliato", string.Join(" ", WizardStore.ModelsFor("claude").Select(m => m.Label)));
         Assert.Equal(SettingDefinitions.KnownAiModels, WizardStore.ModelsFor("openai").Select(m => m.Value));
     }
 

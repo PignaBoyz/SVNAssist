@@ -22,17 +22,13 @@ internal sealed class WizardStore
         new("openai", Loc.T("GitHub Models / OpenAI-compatibile"), AiProviderGuide.Requirements("openai")),
     ];
 
-    // Etichette come nelle tendine di Tools > Options (OptionsPage.cs): tenere allineate; il primo e' il consigliato.
-    private static WizardModelDto[] ClaudeModels =>
-        [new("claude-sonnet-5-5", Loc.T("Sonnet (consigliato, equilibrato)")), new("claude-haiku-5-5", Loc.T("Haiku (il più economico e veloce)")), new("claude-opus-5-5", Loc.T("Opus (il più potente, costoso)"))];
-    private static WizardModelDto[] CopilotModels =>
-        [new("default", Loc.T("Predefinito di Copilot (consigliato)")), new("gpt-4.1", "GPT-4.1"), new("gpt-5-mini", "GPT-5 mini"), new("claude-sonnet-4.5", "Claude Sonnet 4.5")];
-    private static WizardModelDto[] OpenAiModels =>
-        [new("openai/gpt-4o-mini", Loc.T("GPT-4o mini (consigliato, gratuito su GitHub Models)")), new("openai/gpt-4o", "GPT-4o"), new("openai/gpt-4.1-mini", "GPT-4.1 mini"), new("openai/gpt-4.1", "GPT-4.1")];
-
     private readonly PrereqStore _prereq;
     private readonly ISvnAssistSettings _settings;
+    private readonly IAiModelCatalog _catalog;
     private readonly object _lock = new();
+
+    /// <summary>Quanto e' vecchia al massimo la copia dell'elenco modelli quando si apre il passo "Modello" (24 ore solo in background: qui conta avere l'elenco fresco).</summary>
+    internal static readonly TimeSpan WizardModelsMaxAge = TimeSpan.FromHours(1);
 
     internal const string ModeAi = "ai", ModePrereq = "prereq", AiRowId = "ai";
 
@@ -40,12 +36,18 @@ internal sealed class WizardStore
     private string _mode = ModeAi;
     private int _step = 1;
     private string _provider = string.Empty, _authDetail = string.Empty, _endpoint = string.Empty, _model = string.Empty;
+    // Passo "Modello": elenco dal provider (AiModelCatalog), con data, account e note. _modelsGen scarta le risposte di una richiesta superata.
+    private IReadOnlyList<WizardModelDto> _models = [];
+    private bool _modelsLoading, _modelsError;
+    private string _modelsUpdated = string.Empty, _modelsNote = string.Empty, _modelsAccount = string.Empty, _modelsSource = string.Empty, _modelSaved = string.Empty;
+    private int _modelsGen;
     private IReadOnlyList<PrereqItemDto> _items = [];
 
-    public WizardStore(PrereqStore prereq, ISvnAssistSettings settings)
+    public WizardStore(PrereqStore prereq, ISvnAssistSettings settings, IAiModelCatalog? catalog = null)
     {
         _prereq = prereq;
         _settings = settings;
+        _catalog = catalog ?? new AiModelCatalog();
         // Il feedback delle azioni (es. "Si è aperto un terminale...") sta in PrereqStore: rimanda lo snapshot anche per quello.
         _prereq.Changed += () => { if (_open) Changed?.Invoke(); };
     }
@@ -53,13 +55,9 @@ internal sealed class WizardStore
     /// <summary>Qualcosa e' cambiato (per rimandare lo snapshot).</summary>
     public event Action? Changed;
 
-    internal static IReadOnlyList<WizardModelDto> ModelsFor(string provider) => provider switch
-    {
-        "copilot" => CopilotModels,
-        "claudecode" or "claude" => ClaudeModels,
-        "openai" => OpenAiModels,
-        _ => [],
-    };
+    /// <summary>Elenco minimo dell'app (usato finche' il provider non ha risposto o se non risponde): vedi <see cref="AiModelCatalog.FallbackModels"/>.</summary>
+    internal static IReadOnlyList<WizardModelDto> ModelsFor(string provider)
+        => AiModelCatalog.FallbackModels(provider).Select(m => new WizardModelDto(m.Id, m.Label, m.Cost)).ToList();
 
     /// <summary>Chiave dell'impostazione che contiene il modello del provider.</summary>
     internal static string ModelSettingKey(string provider) => provider switch
@@ -100,7 +98,9 @@ internal sealed class WizardStore
             };
             return new WizardDto(_open, _mode, _step, _fromGenerate, _provider, _busy, feedback, Providers,
                 _step == 2 || _mode == ModePrereq ? _items : [], auth, _authOk, _authDetail, _endpoint,
-                _step == 4 ? ModelsFor(_provider) : [], _model, CanNextLocked());
+                _step == 4 ? _models : [], _model, CanNextLocked(),
+                _step == 4 && _modelsLoading, _step == 4 ? _modelsUpdated : string.Empty, _step == 4 ? _modelsNote : string.Empty, _step == 4 && _modelsError,
+                _step == 4 ? _modelsAccount : string.Empty, _step == 4 ? _modelsSource : string.Empty, _step == 4 ? _modelSaved : string.Empty);
         }
     }
 
@@ -117,6 +117,7 @@ internal sealed class WizardStore
             _provider = ProviderIds.Contains(configured) ? configured : string.Empty;
             _items = [];
             _model = string.Empty;
+            ResetModelsLocked();
         }
 
         _prereq.Feedback = string.Empty;
@@ -133,6 +134,7 @@ internal sealed class WizardStore
             _step = 1;
             _fromGenerate = false;
             _items = [];
+            ResetModelsLocked();
         }
 
         _prereq.Feedback = string.Empty;
@@ -184,12 +186,173 @@ internal sealed class WizardStore
                 return;
             step = ++_step;
             if (step == 4)
-                _model = ModelsFor(_provider)[0].Value;
+            {
+                ResetModelsLocked();
+                _models = ModelsFor(_provider);
+                _model = _models.Count > 0 ? _models[0].Value : string.Empty;
+            }
         }
 
         Changed?.Invoke();
         if (step < 4)
             await RefreshAsync(ct);
+        else
+            await LoadModelsAsync(force: false, ct);
+    }
+
+    private void ResetModelsLocked()
+    {
+        _modelsGen++;
+        _models = [];
+        _modelsLoading = _modelsError = false;
+        _modelsUpdated = _modelsNote = _modelsAccount = _modelsSource = _modelSaved = string.Empty;
+    }
+
+    /// <summary>
+    /// Apre la procedura direttamente sul passo "Modello" (da "Aggiorna elenco modelli" dopo un errore del provider) con l'elenco riletto dal provider.
+    /// <paramref name="provider"/> e' quello che ha fallito; se manca si usa quello configurato. Se non c'e' nessuno, parte dal passo 1.
+    /// Con "Fine" la procedura rigenera il messaggio.
+    /// </summary>
+    internal async Task OpenModelsAsync(string? provider, CancellationToken ct)
+    {
+        var id = AiProviderGuide.Normalize(provider ?? string.Empty);
+        if (!ProviderIds.Contains(id))
+            id = AiProviderGuide.Normalize(await _settings.GetAiProviderAsync(ct));
+        if (!ProviderIds.Contains(id))
+        {
+            await OpenAsync(fromGenerate: true, ct);
+            return;
+        }
+
+        lock (_lock)
+        {
+            _open = true;
+            _mode = ModeAi;
+            _step = 4;
+            _fromGenerate = true;
+            _provider = id;
+            _items = [];
+            ResetModelsLocked();
+            _models = ModelsFor(id);
+            _model = _models.Count > 0 ? _models[0].Value : string.Empty;
+        }
+
+        _prereq.Feedback = string.Empty;
+        Changed?.Invoke();
+        await LoadModelsAsync(force: true, ct);
+        await RefreshAsync(ct); // per "Indietro": stato di prerequisiti e accesso
+    }
+
+    /// <summary>Pulsante "Aggiorna elenco": chiede di nuovo i modelli al provider, ignorando la copia salvata.</summary>
+    internal async Task RefreshModelsAsync(CancellationToken ct)
+    {
+        lock (_lock)
+        {
+            if (!_open || _step != 4 || _mode != ModeAi)
+                return;
+        }
+
+        await LoadModelsAsync(force: true, ct);
+    }
+
+    /// <summary>Passo "Modello": prende l'elenco dal catalogo (provider), tiene la scelta corrente se esiste ancora e segnala il valore salvato non piu' in elenco.</summary>
+    private async Task LoadModelsAsync(bool force, CancellationToken ct)
+    {
+        string provider;
+        int gen;
+        lock (_lock)
+        {
+            provider = _provider;
+            gen = ++_modelsGen;
+            _modelsLoading = true;
+        }
+
+        Changed?.Invoke();
+        try
+        {
+            var list = await _catalog.GetAsync(provider, force, ct, WizardModelsMaxAge);
+            var saved = await SavedModelAsync(provider, ct);
+
+            var models = list.Models.Select(m => new WizardModelDto(m.Id, m.Label, m.Cost)).ToList();
+            // "default" di Copilot (= lo sceglie Copilot) non e' mai "sparito": e' sempre valido anche se l'elenco non lo riporta.
+            var missing = saved.Length > 0 && !(provider == "copilot" && saved == SettingDefinitions.CopilotDefaultModel)
+                && !models.Any(m => string.Equals(m.Value, saved, StringComparison.OrdinalIgnoreCase));
+            // Valore salvato non piu' in elenco: resta in uso finche' non si sceglie altro, ma lo si segnala (e lo si tiene selezionabile).
+            if (missing)
+                models.Add(new WizardModelDto(saved, Loc.T("{0} (non più nell'elenco del provider)", saved)));
+
+            var notes = new List<string>();
+            if (list.Error is not null)
+                notes.Add(list.Source == "cache"
+                    ? Loc.T("Elenco non aggiornato (mostro l'ultimo salvato): {0}", list.Error)
+                    : Loc.T("Elenco non aggiornato (mostro quello predefinito dell'app): {0}", list.Error));
+            else if (list.Source == "fallback" && provider == "claudecode")
+                notes.Add(Loc.T("Con Claude Code l'elenco completo dei modelli richiede una API key Anthropic: questo è l'elenco predefinito. Usa \"Altro…\" per un altro modello."));
+            if (missing)
+                notes.Add(Loc.T("Il modello salvato \"{0}\" non è più nell'elenco del provider: resta in uso finché non ne scegli un altro (potrebbe dare errore).", saved));
+
+            lock (_lock)
+            {
+                if (gen != _modelsGen || _provider != provider)
+                    return; // superata da una richiesta piu' recente o dal cambio provider
+                var keep = _model;
+                _models = models;
+                _modelsSource = list.Source;
+                _modelsUpdated = list.UpdatedAt?.ToUniversalTime().ToString("o", System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
+                _modelsAccount = list.Account ?? string.Empty;
+                _modelsError = list.Error is not null;
+                _modelsNote = string.Join("\n", notes);
+                _modelSaved = saved;
+                // Scelta: quella gia' fatta se esiste ancora; altrimenti il valore salvato se e' nell'elenco vero; altrimenti il primo.
+                var listed = list.Models;
+                _model = keep.Length > 0 && listed.Any(m => m.Id == keep) ? keep
+                    : listed.FirstOrDefault(m => string.Equals(m.Id, saved, StringComparison.OrdinalIgnoreCase))?.Id
+                      ?? (listed.Count > 0 ? listed[0].Id : saved);
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            lock (_lock)
+            {
+                if (gen == _modelsGen)
+                {
+                    _modelsError = true;
+                    _modelsNote = Loc.T("Elenco non aggiornato (mostro quello predefinito dell'app): {0}", ex.Message);
+                }
+            }
+        }
+        finally
+        {
+            lock (_lock)
+            {
+                if (gen == _modelsGen)
+                    _modelsLoading = false;
+            }
+
+            Changed?.Invoke();
+        }
+    }
+
+    /// <summary>Modello oggi salvato per il provider, normalizzato come lo usa il servizio AI (Copilot vuoto = "default"). Vuoto = nessuno.</summary>
+    private async Task<string> SavedModelAsync(string provider, CancellationToken ct)
+    {
+        switch (provider)
+        {
+            case "copilot":
+                var c = await _settings.GetCopilotModelAsync(ct);
+                return string.IsNullOrWhiteSpace(c) ? SettingDefinitions.CopilotDefaultModel : c.Trim();
+            case "openai":
+                return AiServiceFactory.NormalizeOpenAiModel(await _settings.GetAiEndpointAsync(ct), await _settings.GetAiModelAsync(ct));
+            case "claude":
+            case "claudecode":
+                return AiServiceFactory.ResolveClaudeModel(await _settings.GetClaudeModelAsync(ct));
+            default:
+                return string.Empty;
+        }
     }
 
     /// <summary>Rilegge prerequisiti e accesso del provider scelto (senza toccare le impostazioni salvate).</summary>
@@ -344,7 +507,9 @@ internal sealed class WizardStore
             from = _fromGenerate;
         }
 
-        if (!ModelsFor(provider).Any(m => m.Value == model))
+        // Qualsiasi id valido (dall'elenco del provider o scritto in "Altro..."): l'elenco non e' una lista chiusa, cosi' non si resta mai bloccati.
+        model = (model ?? string.Empty).Trim();
+        if (!AiModelIds.IsPlausible(model))
             throw new ArgumentException(Loc.T("Modello non valido: {0}", model));
 
         await _settings.SetSettingAsync(SettingDefinitions.AiProvider, provider, ct);

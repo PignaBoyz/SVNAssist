@@ -337,7 +337,7 @@ Il file .patch viene cancellato e non si recupera.`)) return;
     prereqToggle: () => ACT.prereqToggle(),
     prereqRecheck: () => prqRecheck(),
     prereqRun: a => prqRun(a.id + '|' + (a.primary ? 1 : 2)),
-    ...Object.fromEntries(['wizardOpen', 'wizardOpenPrereq', 'wizardCancel', 'wizardPick', 'wizardBack', 'wizardNext', 'wizardRecheck', 'wizardRun', 'wizardLogin', 'wizardSetAuth', 'wizardFinish', 'openOptions'].map(n => [n, a => WIZ[n](a)])),   // WIZ e' definito in demo.js (caricato dopo)
+    ...Object.fromEntries(['wizardOpen', 'wizardOpenPrereq', 'wizardCancel', 'wizardPick', 'wizardBack', 'wizardNext', 'wizardRecheck', 'wizardOpenModels', 'wizardModelsRefresh', 'wizardRun', 'wizardLogin', 'wizardSetAuth', 'wizardFinish', 'openOptions'].map(n => [n, a => WIZ[n](a)])),   // WIZ e' definito in demo.js (caricato dopo)
     logLoad: a => { S.lvm.merge = null; S.lvm.path = String(a.path || ''); return lvmLoad(50); },
     logMore: () => lvmMore(),
     logSelect: a => { S.lvm.files = null; return lvmSelect(+a.rev); },

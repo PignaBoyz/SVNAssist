@@ -36,6 +36,7 @@
     // Ogni messaggio ha colore e icona per gravita' (aviso/errore/esito); data-seq cambia a ogni messaggio, cosi' anche uno ripetuto si ridisegna e lampeggia.
     const lv = c.aiLevel || 'info', ic = lv === 'busy' ? '<span class="spin"></span>' : lv === 'ok' ? U.icon('check') : lv === 'warn' ? U.icon('warn') : lv === 'err' ? U.icon('x') : '';
     let h = c.aiStatus ? `<div class="ai-s lv-${lv}" role="${lv === 'warn' || lv === 'err' ? 'alert' : 'status'}" data-seq="${+c.aiSeq || 0}">${ic}<span>${esc(c.aiStatus).replace(/\n/g, '<br>')}</span></div>` : '';
+    if (c.aiStatus && c.aiAction) h += `<div class="ai-act">${U.btn('btn sm', c.aiAction.label, 'refresh', c.aiAction.cmd, null, t('Chiede al provider i modelli disponibili ora e ti lascia sceglierne un altro'))}</div>`;
     if (c.download) h += `<div class="dl"><b>${t('GitHub Copilot: primo utilizzo')}</b> <span class="muted">${t('(runtime ~100 MB, una sola volta)')}</span><progress max="100" value="${+c.download.pct || 0}"></progress>${esc(c.download.label)}</div>`;
     if (c.trace && c.trace.length) h += `<div class="trace">` + c.trace.map((x, i) => {
       const lab = x.state === 'ok' ? t('{0}: OK', x.name) : x.state === 'fail' ? t('{0}: errore', x.name) : x.state === 'skip' ? t('{0}: saltato', x.name) : x.state === 'run' ? `<span class="spin"></span>${esc(x.name)}…` : esc(x.name);
@@ -365,8 +366,9 @@
     box.querySelectorAll('input,select').forEach(e => { keep[e.id] = e.value; });
     const sameStep = box.__step === (wz && wz.step) && box.__mode === (wz && wz.mode);
     if (open && !was) box.__prev = document.activeElement;
+    if (!open || !was || !sameStep) U.wizOther = { on: false, text: '' };   // "Altro..." vale solo dentro il passo in cui e' stato scelto
     const changed = U.setHTML(box, U.wizardHTML(wz));
-    if (changed) box.querySelectorAll('input,select').forEach(e => { if (keep[e.id] != null && sameStep) e.value = keep[e.id]; });
+    if (changed) box.querySelectorAll('input,select').forEach(e => { if (keep[e.id] != null && sameStep && (e.tagName !== 'SELECT' || [...e.options].some(x => x.value === keep[e.id]))) e.value = keep[e.id]; });
     if (open || !anyModal) { app.classList.toggle('modal-open', anyModal); app.inert = anyModal; }
     if (open && (!was || !sameStep || !box.contains(document.activeElement))) { const t = box.querySelector(!was || !sameStep ? '#wiz-t' : '.wiz [data-cmd]:not(:disabled),.wiz input,.wiz select'); if (t) t.focus(); }
     if (!open && was && box.__prev && box.__prev.isConnected) box.__prev.focus();
@@ -589,7 +591,7 @@
     else if (!e.shiftKey && (a === last || !box.contains(a))) { e.preventDefault(); first.focus(); }
   }
 
-  U.changesHTML = { conflictMenu, fullPathOf, sectionMenu, multiMenu, header, commitBar, foot, revHTML, switchHTML, mergeBanner, conflictsHTML, shelvedHTML, revIndicator, statusKind, OK_TTL, recentHTML, recentChoose, msgSync, trackStatus, listHTML };   // parti pure, provate senza DOM (tests/ui-web)
+  U.changesHTML = { aiStat, conflictMenu, fullPathOf, sectionMenu, multiMenu, header, commitBar, foot, revHTML, switchHTML, mergeBanner, conflictsHTML, shelvedHTML, revIndicator, statusKind, OK_TTL, recentHTML, recentChoose, msgSync, trackStatus, listHTML };   // parti pure, provate senza DOM (tests/ui-web)
 
   U.views.changes = {
     mount(root) {
@@ -657,8 +659,15 @@
       w.addEventListener('focus', () => { if (wizNeedsPolling(st && st.wizard)) U.bridge.send('wizardRecheck'); });   // di ritorno dal terminale/browser
       root.addEventListener('click', e => {
         const b = e.target.closest('[data-wiz="finish"]'); if (!b || b.disabled) return;
-        const sel = root.querySelector('#wiz-model'); U.bridge.send('wizardFinish', { model: sel ? sel.value : '' });
+        const sel = root.querySelector('#wiz-model'), oth = root.querySelector('#wiz-model-other');
+        U.bridge.send('wizardFinish', { model: sel && sel.value === '__other__' ? (oth ? oth.value.trim() : '') : (sel ? sel.value : '') });
       });
+      root.addEventListener('change', e => {   // "Altro...": compare il campo di testo; la scelta resta alla UI finche' non si cambia passo
+        if (e.target.id !== 'wiz-model') return;
+        const oth = root.querySelector('#wiz-model-other'), o = U.wizOther || (U.wizOther = { on: false, text: '' });
+        o.on = e.target.value === '__other__'; if (oth) { oth.hidden = !o.on; if (o.on) oth.focus(); }
+      });
+      root.addEventListener('input', e => { if (e.target.id === 'wiz-model-other') (U.wizOther || (U.wizOther = { on: false, text: '' })).text = e.target.value; });
       root.addEventListener('submit', e => {
         if (e.target.id !== 'wiz-form') return;
         e.preventDefault(); const ep = e.target.querySelector('#wiz-ep'), k = e.target.querySelector('#wiz-key');

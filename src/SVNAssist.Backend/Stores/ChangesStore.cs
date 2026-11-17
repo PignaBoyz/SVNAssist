@@ -943,6 +943,12 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             case "wizardNext":
                 await Wizard.NextAsync(ct);
                 break;
+            case "wizardOpenModels":
+                await Wizard.OpenModelsAsync(CommitMessage.FailedProvider, ct);
+                break;
+            case "wizardModelsRefresh":
+                await Wizard.RefreshModelsAsync(ct);
+                break;
             case "wizardRecheck":
                 await Wizard.RefreshAsync(ct);
                 break;

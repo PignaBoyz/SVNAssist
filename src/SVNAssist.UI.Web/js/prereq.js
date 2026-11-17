@@ -18,7 +18,8 @@
   };
 
   /* Procedura guidata (AI a 4 passi, o prerequisiti mancanti). wizardHTML(w) e' puro: stato e controlli stanno nel backend.
-     w: {open, mode:'ai'|'prereq', step, provider, busy, feedback, providers[], items[], auth, authOk, authDetail, endpoint, models[], model, fromGenerate, canNext} */
+     w: {open, mode:'ai'|'prereq', step, provider, busy, feedback, providers[], items[], auth, authOk, authDetail, endpoint, models[{value,label,cost}], model, fromGenerate, canNext,
+     modelsLoading, modelsUpdated, modelsNote, modelsError, modelsAccount, modelsSource, modelSaved} */
   const STEPS = () => [t('Provider'), t('Prerequisiti'), t('Accesso'), t('Modello')];
   const row = (ok, title, detail, extra) => `<div class="pi ${ok ? 'ok' : 'ko'}"><span class="pm">${U.icon(ok ? 'check' : 'x')}<span class="sr">${ok ? t('A posto') : t('Da sistemare')}</span></span><div class="pt"><b>${U.esc(title)}</b><div class="muted small">${U.esc(detail || '')}</div>${extra || ''}</div></div>`;
   const items = (list, w) => list.map(it => row(it.ok, it.title, it.detail,
@@ -42,9 +43,26 @@
         `<form id="wiz-form" class="wiz-form">${ep}${key}<div class="pb"><button type="submit" class="btn sm" title="${U.esc(t('Salva (cifrata) nelle impostazioni di Visual Studio'))}"><span>${t('Salva')}</span></button>` +
         (k === 'openai' ? U.btn('btn sm', t('Accedi a GitHub'), null, 'wizardLogin', null, t('Apre il terminale per il login GitHub (gratis con GitHub Models)')) : '') + `</div></form><div class="muted small">${t('La chiave è salvata cifrata (DPAPI) nelle impostazioni di Visual Studio e non viene mai mostrata.')}</div>` + live(w);
     },
-    4: w => `<p class="muted">${t('Scegli il modello: quello consigliato va bene per quasi tutti.')}</p><label for="wiz-model">${t('Modello')}</label><select id="wiz-model">` +
-      w.models.map(m => `<option value="${U.esc(m.value)}"${m.value === w.model ? ' selected' : ''}>${U.esc(m.label)}</option>`).join('') + `</select>` +
-      `<div class="muted small">${w.fromGenerate ? t('Con Fine salvo le impostazioni e genero subito il messaggio.') : t('Con Fine salvo provider e modello (le stesse impostazioni di Tools > Options).')}</div>`,
+    4: w => {
+      const o = U.wizOther || (U.wizOther = { on: false, text: '' });   // "Altro..." scelto in questa sessione: lo tiene la UI (il backend riceve solo l'id scritto)
+      const copilot = w.provider === 'copilot';
+      const lab = m => m.label + (copilot && m.value !== 'default' ? ' · ' + (m.cost || t('costo non disponibile')) : m.cost ? ' · ' + m.cost : '');
+      const saved = w.modelSaved && (w.models.find(m => m.value === w.modelSaved) || { label: w.modelSaved });
+      const src = w.modelsLoading ? `<span class="spin"></span> ${U.esc(t('Chiedo l\'elenco al provider…'))}`
+        : w.modelsUpdated ? U.esc(t('Elenco aggiornato il {0}', U.fmtDate(w.modelsUpdated))) + (w.modelsSource === 'cache' ? ' ' + U.esc(t('(copia salvata)')) : '')
+          : U.esc(t('Elenco predefinito dell\'app: non è stato chiesto al provider.'));
+      return `<p class="muted">${t("Scegli il modello tra quelli che il provider mette a disposizione. Se non scegli, resta quello in uso.")}</p>` +
+        (w.modelsAccount ? `<div class="small wiz-acc"><b>${t('Collegato come')}</b> ${U.esc(w.modelsAccount)}</div>` : '') +
+        `<label for="wiz-model">${t('Modello')}</label><select id="wiz-model"${w.modelsLoading ? ' aria-busy="true"' : ''}>` +
+        w.models.map(m => `<option value="${U.esc(m.value)}"${!o.on && m.value === w.model ? ' selected' : ''}>${U.esc(lab(m))}</option>`).join('') +
+        `<option value="__other__"${o.on ? ' selected' : ''}>${t('Altro…')}</option></select>` +
+        `<input id="wiz-model-other" type="text" spellcheck="false" autocomplete="off" placeholder="${U.esc(t('Scrivi l\'id del modello'))}" value="${U.esc(o.text)}"${o.on ? '' : ' hidden'}>` +
+        `<div class="pb">${U.btn('btn sm', t('Aggiorna elenco'), 'refresh', 'wizardModelsRefresh', null, t('Chiede di nuovo i modelli al provider (anche se la copia salvata è recente)'), w.modelsLoading ? 'disabled' : '')}<span class="muted small" role="status" aria-live="polite">${src}</span></div>` +
+        (w.modelsNote ? `<div class="small wiz-note${w.modelsError ? ' err' : ''}" role="${w.modelsError ? 'alert' : 'status'}">${U.esc(w.modelsNote).replace(/\n/g, '<br>')}</div>` : '') +
+        (saved ? `<div class="small"><b>${t('In uso adesso')}</b> ${U.esc(saved.label)}</div>` : '') +
+        (copilot ? `<div class="muted small">${t('Il costo è il moltiplicatore di richieste premium dichiarato da Copilot per ogni richiesta: un commit ne usa una (di più se il diff è grande).')}</div>` : '') +
+        `<div class="muted small">${w.fromGenerate ? t('Con Fine salvo le impostazioni e genero subito il messaggio.') : t('Con Fine salvo provider e modello (le stesse impostazioni di Tools > Options).')}</div>`;
+    },
   };
   const prqBody = w => `<p class="muted">${w.items.some(i => !i.ok) ? t('Per usare SVNAssist manca qualcosa. Sistemalo con i pulsanti qui sotto, oppure con {0} se preferisci farlo a mano.', '<b>' + t('Faccio io') + '</b>') : t('Per usare SVNAssist è tutto a posto.')}</p>` + items(w.items, w) + recheck(w) + live(w);
   U.wizardHTML = w => {

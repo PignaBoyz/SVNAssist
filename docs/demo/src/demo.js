@@ -1558,15 +1558,18 @@ const WIZ_PROV = [
   { id: 'claude', title: 'Claude API (API key, a consumo)', cost: 'Claude API: serve una API key Anthropic; l\'uso è a pagamento a consumo (Haiku costa meno di Sonnet, Sonnet meno di Opus).' },
   { id: 'openai', title: 'GitHub Models / OpenAI-compatibile', cost: 'OpenAI-compatibile: con GitHub Models (default) basta il login GitHub (gh auth login) o un token, gratis entro i limiti; con altri endpoint serve la loro API key (a pagamento, tranne Ollama in locale).' },
 ];
+// Elenchi FINTI della demo (id e costi inventati: nell'app vengono dal provider; nessun modello e' "consigliato", sceglie l'utente).
 const WIZ_MODELS = {
-  claude: [['claude-sonnet-5-5', 'Sonnet (consigliato, equilibrato)'], ['claude-haiku-5-5', 'Haiku (il più economico e veloce)'], ['claude-opus-5-5', 'Opus (il più potente, costoso)']],
-  copilot: [['default', 'Predefinito di Copilot (consigliato)'], ['gpt-4.1', 'GPT-4.1'], ['gpt-5-mini', 'GPT-5 mini'], ['claude-sonnet-4.5', 'Claude Sonnet 4.5']],
-  openai: [['openai/gpt-4o-mini', 'GPT-4o mini (consigliato, gratuito su GitHub Models)'], ['openai/gpt-4o', 'GPT-4o'], ['openai/gpt-4.1-mini', 'GPT-4.1 mini'], ['openai/gpt-4.1', 'GPT-4.1']],
+  claude: [['claude-sonnet-5-5', 'Claude Sonnet 5.5', ''], ['claude-haiku-5-5', 'Claude Haiku 5.5', ''], ['claude-opus-5-5', 'Claude Opus 5.5', '']],
+  copilot: [['default', 'Predefinito di Copilot (lo sceglie Copilot per il tuo account)', ''], ['demo-modello-a', 'Modello demo A', '1× richieste premium per richiesta'],
+    ['demo-modello-b', 'Modello demo B', '0× richieste premium per richiesta'], ['demo-modello-c', 'Modello demo C (costo non dichiarato)', '']],
+  openai: [['openai/gpt-4o-mini', 'GPT-4o mini', ''], ['openai/gpt-4o', 'GPT-4o', ''], ['openai/gpt-4.1-mini', 'GPT-4.1 mini', ''], ['openai/gpt-4.1', 'GPT-4.1', '']],
 };
 WIZ_MODELS.claudecode = WIZ_MODELS.claude;
 const WIZ_MODEL_KEY = { copilot: 'copilotmodel', claude: 'claudemodel', claudecode: 'claudemodel', openai: 'aimodel' };
 const WIZ_INSTALL = { copilot: ['gh-cli', 'copilot-runtime'], claudecode: ['claude-code'], claude: [], openai: [] };
-const freshWiz = () => ({ open: false, mode: 'ai', step: 1, from: false, provider: '', busy: false, model: '' });
+const freshWiz = () => ({ open: false, mode: 'ai', step: 1, from: false, provider: '', busy: false, model: '', upd: '', refreshes: 0 });
+const wizModels = W => { const l = WIZ_MODELS[W.provider] || []; return W.provider === 'copilot' && W.refreshes % 2 === 1 ? l.filter(m => m[0] !== 'demo-modello-c') : l; };   // ogni 2 aggiornamenti un modello "sparisce", come con Copilot
 const wizItem = i => ({ id: i.id, group: i.g, title: i.title, ok: !!i.ok, detail: i.detail, instructions: i.ok ? '' : (i.instr || ''), primary: i.ok ? '' : (i.p1 || ''), secondary: i.ok ? '' : (i.p2 || '') });
 function wizCompute() {
   const W = S.wiz, P = prqCompute(), byId = id => P.items.find(i => i.id === id), e = S.env;
@@ -1587,7 +1590,9 @@ function wizardSnap() {
   const W = S.wiz, c = W.open ? wizCompute() : { items: [], auth: '', authOk: false, authDetail: '', canNext: false };
   return { open: W.open, mode: W.mode, step: W.step, fromGenerate: W.from, provider: W.provider, busy: W.busy, feedback: W.open ? (S.prq.feedback || '') : '',
     providers: WIZ_PROV.map(p => ({ ...p })), items: c.items, auth: c.auth, authOk: c.authOk, authDetail: c.authDetail, endpoint: S.settings.aiendpoint,
-    models: W.step === 4 && W.mode === 'ai' ? (WIZ_MODELS[W.provider] || []).map(([value, label]) => ({ value, label })) : [], model: W.model, canNext: !!c.canNext };
+    models: W.step === 4 && W.mode === 'ai' ? wizModels(W).map(([value, label, cost]) => ({ value, label, cost })) : [], model: W.model, canNext: !!c.canNext,
+    modelsLoading: false, modelsUpdated: W.step === 4 ? W.upd : '', modelsNote: '', modelsError: false, modelsSource: W.step === 4 && W.upd ? 'live' : '',
+    modelsAccount: W.step === 4 && W.provider === 'copilot' ? 'Account GitHub: demo-utente (accesso: gh-cli)' : '', modelSaved: W.step === 4 ? (S.settings[WIZ_MODEL_KEY[W.provider]] || (W.provider === 'copilot' ? 'default' : '')) : '' };
 }
 function wizOpen(from) { const p = (S.settings.aiprovider || '').toLowerCase(); S.wiz = Object.assign(freshWiz(), { open: true, from: !!from, provider: WIZ_INSTALL[p] ? p : '' }); S.prq.feedback = ''; render(); }
 function wizOpenPrereq() { S.wiz = Object.assign(freshWiz(), { open: true, mode: 'prereq' }); S.prq.feedback = ''; render(); }
@@ -1600,9 +1605,11 @@ const WIZ = {
   wizardNext: () => {
     const W = S.wiz; if (W.step === 2 || W.step === 3) wizApplyPending();
     if (!wizCompute().canNext || W.step >= 4) return render();
-    W.step++; if (W.step === 4) W.model = WIZ_MODELS[W.provider][0][0]; render();
+    W.step++; if (W.step === 4) { W.model = WIZ_MODELS[W.provider][0][0]; W.upd = new Date().toISOString(); W.refreshes = 0; } render();
   },
   wizardRecheck: () => { wizApplyPending(); render(); },
+  wizardModelsRefresh: () => { const W = S.wiz; if (W.step !== 4) return; W.refreshes++; W.upd = new Date().toISOString(); if (!wizModels(W).some(m => m[0] === W.model)) W.model = wizModels(W)[0][0]; render(); },
+  wizardOpenModels: () => { const p = (S.settings.aiprovider || '').toLowerCase(); wizOpen(true); const W = S.wiz; W.provider = WIZ_INSTALL[p] ? p : 'copilot'; W.step = 4; W.model = wizModels(W)[0][0]; W.upd = new Date().toISOString(); render(); },
   wizardRun: async a => {
     const W = S.wiz, it = wizCompute().items.find(x => x.id === a.id); if (!it || W.busy) return;
     if (a.id === 'ai') { wizOpen(false); return; }
@@ -1630,8 +1637,8 @@ const WIZ = {
   },
   wizardFinish: async a => {
     const W = S.wiz; if (W.step !== 4) throw new Error('La procedura non è arrivata al passo del modello.');
-    if (!WIZ_MODELS[W.provider].some(m => m[0] === a.model)) throw new Error('Modello non valido: ' + a.model);
-    S.settings.aiprovider = W.provider; S.settings[WIZ_MODEL_KEY[W.provider]] = a.model; S.f.optionsSaved = true;
+    if (!/^[A-Za-z0-9][A-Za-z0-9._:\/@+-]{0,199}$/.test(String(a.model || '').trim())) throw new Error('Modello non valido: ' + a.model);   // qualsiasi id valido, anche da "Altro..."
+    S.settings.aiprovider = W.provider; S.settings[WIZ_MODEL_KEY[W.provider]] = String(a.model).trim(); S.f.optionsSaved = true;
     const from = W.from; W.open = false; prqRefresh(); render();
     if (from) await vmAi('gen');
   },

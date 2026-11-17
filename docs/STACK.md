@@ -130,7 +130,7 @@ In testo: **VS → Host (in-proc) → Backend (processo separato) → svn.exe**;
   I log vanno in `%LOCALAPPDATA%\SVNAssist\logs\backend-aaaammgg.log`.
 - **Contratto** `src/Shared/RpcContract.cs` (compilato sia nell'host sia nel backend):
   - `IBackend`: `DispatchAsync(view, json)`, `SettingsChangedAsync`, `SolutionChangedAsync`, `ThemeChangedAsync(kind)`,
-    `RunPathCommandAsync(command, paths)`, `GetChangedBlocksAsync(file)`, `IdeActiveChangedAsync`, `GetSccStatesAsync`;
+    `RunPathCommandAsync(command, paths)`, `GetChangedBlocksAsync(file)`, `IdeActiveChangedAsync`, `GetSccStatesAsync`, `ListAiModelsAsync(provider, forceRefresh)` (JSON con i modelli del provider; l'host non lo usa ancora);
   - `IHost`: `PushAsync(view, json)`, `PromptAsync`, `PromptTextAsync`, `PromptCredentialsAsync`, `GetSettingsAsync`,
     `SetSettingAsync`, `OpenDiffAsync`, `ShowFolderDiffAsync`, `OpenFileAsync`, `ShowLogAsync`, `ShowLogWindowAsync`,
     `ShowChangesWindowAsync`, `OpenSettingsAsync`, `OpenUrlAsync` (solo `https`), `RunInTerminalAsync`,

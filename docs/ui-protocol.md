@@ -111,7 +111,9 @@ Stato e logica nel backend (`WizardStore`); la UI mostra `wizard` e invia solo q
 | `wizardRun` | `id`, `primary` | azione di un prerequisito del passo 2 (stesse azioni della checklist) |
 | `wizardLogin` | – | login nel terminale (`gh auth login --web`, o Claude Code; se manca gh lo installa) |
 | `wizardSetAuth` | `endpoint`, `key` | salva la chiave (Claude API / OpenAI-compatibile) e l'endpoint (https, o http su localhost); vuoto = non cambiare. La chiave non torna mai nello snapshot |
-| `wizardFinish` | `model` | salva `aiProvider` + modello con le chiavi di Tools > Options e chiude; se la procedura veniva da "Genera con AI", genera |
+| `wizardFinish` | `model` | salva `aiProvider` + modello con le chiavi di Tools > Options e chiude; se la procedura veniva da "Genera con AI", genera. `model` e' qualsiasi id valido (lettere, cifre, `. _ : / @ + -`, niente spazi): dall'elenco del provider o scritto in "Altro..." |
+| `wizardModelsRefresh` | – | passo Modello: richiede di nuovo l'elenco dei modelli al provider ignorando la copia salvata (pulsante "Aggiorna elenco"); ignorato fuori dal passo 4 |
+| `wizardOpenModels` | – | apre la procedura direttamente sul passo Modello del provider dell'ultimo errore AI (o di quello configurato; se non noto parte dal passo 1), con elenco riletto; con Fine rigenera il messaggio. E' il comando di `commit.aiAction` |
 | `openOptions` | – | "Faccio io": chiude la procedura e apre Tools > Options > SVNAssist (`IHost.OpenSettingsAsync`) |
 
 Menu di VS: `Extensions > SVNAssist > Change AI Provider...` (comando `CmdAiSetup` 0x0104) mostra Changes e invia `wizardOpen`.
@@ -183,7 +185,7 @@ Parser (`MergeParser`, `tests/SVNAssist.Tests/MergeTests.cs`): righe d'azione = 
 ```
 workingCopy {path, showInput, branch, rev?, svnVersion?, head?, revState?: current|behind|unknown, revNote?}   // rev/head/revState = indicatore della revisione in basso (verde current, arancio behind, neutro unknown con il perche' in revNote); head = last-changed-revision del ramo sul server   // branch = ramo dedotto dall'URL (trunk, branches/x, tags/y, "/ (radice)"); svnVersion = es. "1.14.2" (la UI nasconde le funzioni che richiedono svn piu' recente)
 commit      {text, aiStatus, aiLevel: ""|busy|ok|warn|err|info, aiSeq, busy, lang, trace[{name,state,detail}], download{pct,label}|null,
-             count?, all?, recent?[]}   // count = elementi del prossimo commit; all = Staged vuoto -> "Commit All"; recent = ultimi messaggi committati nel repository (max 25, il più recente per primo)
+             count?, all?, recent?[], aiAction?{label,cmd}}   // aiAction = pulsante accanto a un errore AI causato dal modello (ritirato/non abilitato): "Aggiorna elenco modelli" -> `wizardOpenModels`; count = elementi del prossimo commit; all = Staged vuoto -> "Commit All"; recent = ultimi messaggi committati nel repository (max 25, il più recente per primo)
 view        "tree" | "list"
 theme       {mode: auto|light|dark|blue, kind: light|dark|blue}
 sections[3] {id: staged|changes|unversioned, title, count, expanded, rows[]}
@@ -193,7 +195,12 @@ status      {msg, err, seq?, action?{label, cmd:"cleanup"|"update"|"switchResume
 prereq      {open, summary, ai, feedback, items[{id, group, title, ok, detail, instructions, primary, secondary}]}
 loading     bool
 wizard      {open, mode: ai|prereq, step 1-4, fromGenerate, provider, busy, feedback, providers[{id,title,cost}], items[prereq item],
-             auth: ""|github|claudecode|key|openai, authOk, authDetail, endpoint, models[{value,label}], model, canNext}
+             auth: ""|github|claudecode|key|openai, authOk, authDetail, endpoint, models[{value,label,cost?}], model, canNext,
+             modelsLoading?, modelsUpdated?, modelsNote?, modelsError?, modelsAccount?, modelsSource?: ""|live|cache|fallback, modelSaved?}
+             // passo 4: models viene dal provider (Copilot: SDK `ListModelsAsync`, con `cost` = moltiplicatore di richieste premium dichiarato, vuoto se non lo dice; Claude API: GET /v1/models;
+             // GitHub Models: GET models.github.ai/catalog/models; OpenAI-compatibile: GET {base}/models). Cache di 24 ore (1 ora alla riapertura del passo), forzabile.
+             // modelsUpdated = ISO UTC dell'ultimo aggiornamento ('' = elenco predefinito dell'app); modelsAccount = account con cui il provider ha risposto (login GitHub di Copilot);
+             // modelSaved = modello oggi in uso (un valore non piu' in elenco resta in `models` con etichetta "non piu' nell'elenco" e in `modelsNote`). La voce "Altro..." e' solo UI (testo libero -> wizardFinish.model).
 revPicker?  {open, target, loading, error, canMore, items[{rev, author, date (ISO), msg (prima riga)}]}   // modale "Update to revision"
 switchPicker? {open, mode: switch|merge, loading, error, items[{name, kind: trunk|branch|tag, current, rev, author, date}], recent[name]}   // modale "SVN Switch" / sorgente di "SVN Merge" (senza il ramo corrente); name relativo alla base (trunk, branches/x, tags/1.0); rev/author/date = ultima modifica da svn list --xml; recent = ultimi usati per repository
 shelves?    [{id, name, date, files}]   // 0.5.0: shelve della working copy (`.svn-assist/shelves`, riletti a ogni refresh), il piu' recente per primo; id = nome del file senza estensione, date ISO locale, files = file nella patch. Assente se non ce ne sono: la UI disegna la sezione "Shelved (n)" (chiusa di default) sotto l'elenco, tasto destro = unshelve / unshelve+keep / shelveSave / shelveDelete
@@ -293,12 +300,12 @@ L'host le espone in Tools > Options > SVNAssist (categoria "SVNAssist") e le res
 | Chiave | Tipo | Default | Valori ammessi |
 |---|---|---|---|
 | `aiProvider` | enum | `auto` | `auto`, `copilot`, `claudecode`, `claude`, `openai` |
-| `claudeModel` | enum | `claude-sonnet-5-5` | `claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-opus-5-5` |
+| `claudeModel` | string | `claude-sonnet-5-5` | qualsiasi id modello valido (suggerimenti: `claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-opus-5-5`); l'elenco vero e' nella procedura guidata |
 | `anthropicApiKey` | string (segreto) | `` | vuota = variabile `ANTHROPIC_API_KEY` |
-| `copilotModel` | enum | `default` | `default`, `gpt-4.1`, `gpt-5-mini`, `claude-sonnet-4.5` |
+| `copilotModel` | string | `default` | `default` = il modello che sceglie Copilot per l'account; altrimenti qualsiasi id dall'elenco di Copilot (procedura guidata, con il costo) |
 | `aiEndpoint` | string | `https://models.github.ai/inference/chat/completions` | URL Chat Completions OpenAI-compatibile |
 | `aiApiKey` | string (segreto) | `` | chiave o GitHub PAT |
-| `aiModel` | enum | `openai/gpt-4o-mini` | `openai/gpt-4o-mini`, `openai/gpt-4o`, `openai/gpt-4.1-mini`, `openai/gpt-4.1` |
+| `aiModel` | string | `openai/gpt-4o-mini` | qualsiasi id valido (suggerimenti: `openai/gpt-4o-mini`, `openai/gpt-4o`, `openai/gpt-4.1-mini`, `openai/gpt-4.1`); un id fuori elenco si usa comunque |
 | `defaultLanguage` | enum | `auto` | `auto`, `italiano`, `english` |
 | `workingCopyPath` | string | `` | se valorizzato vince sull'auto-rilevamento dalla solution |
 | `repoLayout` | string | `trunk/branches/tags` | nomi delle cartelle tronco/branch/tag separati da `/` (o `,` `;`); se non sono tre nomi ricade sul default. Funziona anche con il progetto alla radice (base vuota) o sotto un sottopercorso (`^/progetto/trunk` -> branch in `^/progetto/branches`) |

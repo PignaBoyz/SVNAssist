@@ -40,6 +40,13 @@ namespace SVNAssist.Rpc
 
         /// <summary>Stato SVN dei percorsi non "normali" della working copy aperta (percorso completo -> nome di SvnStatusKind), dalla cache in memoria di Changes: per i glifi di Solution Explorer.</summary>
         Task<Dictionary<string, string>> GetSccStatesAsync();
+
+        /// <summary>
+        /// Modelli AI realmente disponibili per un provider (copilot | claudecode | claude | openai), come JSON
+        /// <c>{provider, source: live|cache|fallback, updated, account, error, models:[{id,label,cost}]}</c>. Cache datata di 24 ore:
+        /// forceRefresh la ignora. La UI web non lo usa (passa dai comandi wizard*): serve all'host, ad esempio per le Options.
+        /// </summary>
+        Task<string> ListAiModelsAsync(string provider, bool forceRefresh);
     }
 
     /// <summary>Metodi esposti dall'HOST, chiamati dal backend.</summary>

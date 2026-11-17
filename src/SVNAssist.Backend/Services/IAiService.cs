@@ -1,5 +1,11 @@
 namespace SVNAssist.Services;
 
+/// <summary>Provider che dichiara il modello usato davvero per l'ultima risposta (es. Copilot con il modello predefinito): la UI lo mostra.</summary>
+internal interface IReportsModel
+{
+    string? LastModelUsed { get; }
+}
+
 /// <summary>
 /// Interfaccia per la generazione di commit message tramite AI.
 /// L'implementazione concreta (<see cref="AiService"/>) chiama un endpoint

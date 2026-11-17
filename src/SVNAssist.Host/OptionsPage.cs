@@ -36,8 +36,11 @@ namespace SVNAssist.Host
         private readonly (string Value, string Label)[] _choices;
         protected ChoiceConverter(params (string, string)[] choices) { _choices = choices; }
 
+        /// <summary>false = la tendina e' anche un campo di testo: si puo' scrivere un valore fuori elenco (usato per i modelli AI).</summary>
+        protected virtual bool Exclusive { get { return true; } }
+
         public override bool GetStandardValuesSupported(ITypeDescriptorContext c) => true;
-        public override bool GetStandardValuesExclusive(ITypeDescriptorContext c) => true;
+        public override bool GetStandardValuesExclusive(ITypeDescriptorContext c) => Exclusive;
         public override StandardValuesCollection GetStandardValues(ITypeDescriptorContext c) =>
             new StandardValuesCollection(_choices.Select(x => x.Value).ToArray());
 
@@ -58,22 +61,25 @@ namespace SVNAssist.Host
             ("claudecode", Loc.K("Claude Code (abbonamento Claude)")), ("claude", Loc.K("Claude API (API key Anthropic)")), ("openai", Loc.K("OpenAI-compatibile / GitHub Models"))) { }
     }
 
+    // Modelli AI: la tendina e' solo un suggerimento e il campo accetta qualsiasi id (l'elenco vero e aggiornato, con costi, e' nella procedura
+    // guidata "Cambia provider AI..."). Gli id fissi qui sono quelli del default dell'app, non una scelta consigliata.
     internal sealed class ClaudeModelConverter : ChoiceConverter
     {
-        public ClaudeModelConverter() : base(("claude-sonnet-5-5", Loc.K("Sonnet (consigliato, equilibrato)")), ("claude-haiku-5-5", Loc.K("Haiku (il più economico e veloce)")),
-            ("claude-opus-5-5", Loc.K("Opus (il più potente, costoso)"))) { }
+        public ClaudeModelConverter() : base(("claude-sonnet-5-5", "claude-sonnet-5-5"), ("claude-haiku-5-5", "claude-haiku-5-5"), ("claude-opus-5-5", "claude-opus-5-5")) { }
+        protected override bool Exclusive { get { return false; } }
     }
 
     internal sealed class CopilotModelConverter : ChoiceConverter
     {
-        public CopilotModelConverter() : base(("default", Loc.K("Predefinito di Copilot (consigliato)")), ("gpt-4.1", Loc.K("GPT-4.1")),
-            ("gpt-5-mini", Loc.K("GPT-5 mini")), ("claude-sonnet-4.5", Loc.K("Claude Sonnet 4.5"))) { }
+        public CopilotModelConverter() : base(("default", "default")) { }
+        protected override bool Exclusive { get { return false; } }
     }
 
     internal sealed class AiModelConverter : ChoiceConverter
     {
-        public AiModelConverter() : base(("openai/gpt-4o-mini", Loc.K("GPT-4o mini (consigliato, gratuito su GitHub Models)")), ("openai/gpt-4o", Loc.K("GPT-4o")),
-            ("openai/gpt-4.1-mini", Loc.K("GPT-4.1 mini")), ("openai/gpt-4.1", Loc.K("GPT-4.1"))) { }
+        public AiModelConverter() : base(("openai/gpt-4o-mini", "openai/gpt-4o-mini"), ("openai/gpt-4o", "openai/gpt-4o"),
+            ("openai/gpt-4.1-mini", "openai/gpt-4.1-mini"), ("openai/gpt-4.1", "openai/gpt-4.1")) { }
+        protected override bool Exclusive { get { return false; } }
     }
 
     internal sealed class LanguageConverter : ChoiceConverter
@@ -110,6 +116,7 @@ namespace SVNAssist.Host
         public string AiProvider { get; set; } = "auto";
 
         [LCategory("Commit message AI"), LDisplayName("Modello Claude (solo Claude Code e Claude API)"), DefaultValue("claude-sonnet-5-5"), TypeConverter(typeof(ClaudeModelConverter))]
+        [LDescription("Scrivi o scegli un id modello. L'elenco aggiornato dei modelli disponibili e' nella procedura guidata (Extensions > SVNAssist > Cambia provider AI).")]
         public string ClaudeModel { get; set; } = "claude-sonnet-5-5";
 
         [LCategory("Commit message AI"), LDisplayName("API key Anthropic (solo Claude API)"), PasswordPropertyText(true)]
@@ -117,7 +124,7 @@ namespace SVNAssist.Host
         public string AnthropicApiKey { get; set; } = "";
 
         [LCategory("Commit message AI"), LDisplayName("Modello Copilot (solo Copilot)"), DefaultValue("default"), TypeConverter(typeof(CopilotModelConverter))]
-        [LDescription("Serve un abbonamento Copilot e 'gh auth login'.")]
+        [LDescription("Serve un abbonamento Copilot e 'gh auth login'. 'default' = il modello che sceglie Copilot. L'elenco dei modelli del tuo account (con il costo) e' nella procedura guidata (Cambia provider AI).")]
         public string CopilotModel { get; set; } = "default";
 
         [LCategory("Commit message AI"), LDisplayName("URL endpoint (solo OpenAI-compatibile)"), DefaultValue(GitHubModelsEndpoint)]
@@ -129,6 +136,7 @@ namespace SVNAssist.Host
         public string AiApiKey { get; set; } = "";
 
         [LCategory("Commit message AI"), LDisplayName("Modello (solo OpenAI-compatibile / GitHub Models)"), DefaultValue("openai/gpt-4o-mini"), TypeConverter(typeof(AiModelConverter))]
+        [LDescription("Scrivi o scegli un id modello. L'elenco aggiornato dei modelli disponibili e' nella procedura guidata (Cambia provider AI).")]
         public string AiModel { get; set; } = "openai/gpt-4o-mini";
 
         [LCategory("Commit message AI"), LDisplayName("Lingua dei commit message"), DefaultValue("auto"), TypeConverter(typeof(LanguageConverter))]
@@ -226,12 +234,12 @@ namespace SVNAssist.Host
             var d = new Dictionary<string, string>
             {
                 ["aiProvider"] = Pick(AiProvider, new AiProviderConverter(), "auto"),
-                ["claudeModel"] = Pick(ClaudeModel, new ClaudeModelConverter(), "claude-sonnet-5-5"),
+                ["claudeModel"] = Model(ClaudeModel, "claude-sonnet-5-5"),
                 ["anthropicApiKey"] = AnthropicApiKey ?? "",
-                ["copilotModel"] = Pick(CopilotModel, new CopilotModelConverter(), "default"),
+                ["copilotModel"] = Model(CopilotModel, "default"),
                 ["aiEndpoint"] = endpoint,
                 ["aiApiKey"] = AiApiKey ?? "",
-                ["aiModel"] = Pick(AiModel, new AiModelConverter(), "openai/gpt-4o-mini"),
+                ["aiModel"] = Model(AiModel, "openai/gpt-4o-mini"),
                 ["defaultLanguage"] = Pick(DefaultLanguage, new LanguageConverter(), "auto"),
                 ["workingCopyPath"] = WorkingCopyPath ?? "",
                 ["repoLayout"] = string.IsNullOrWhiteSpace(RepoLayout) ? "trunk/branches/tags" : RepoLayout,
@@ -243,6 +251,12 @@ namespace SVNAssist.Host
             // Alias minuscoli: sono gli id dei setting della 0.1.0 (SettingDefinitions), per chi li usa ancora.
             foreach (var k in Keys.ToList()) d[k.ToLowerInvariant()] = d[k];
             return d;
+        }
+
+        /// <summary>Modello AI: qualsiasi id e' valido (anche uno non in elenco, scelto nella procedura guidata o scritto a mano); vuoto = default.</summary>
+        private static string Model(string value, string fallback)
+        {
+            return string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
         }
 
         private static string Pick(string value, ChoiceConverter conv, string fallback)
