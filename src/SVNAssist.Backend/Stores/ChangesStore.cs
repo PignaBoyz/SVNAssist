@@ -263,9 +263,19 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             repo = _repoRoot;
         }
 
-        if (!string.IsNullOrEmpty(repo))
+        if (!string.IsNullOrEmpty(repo) && !string.IsNullOrEmpty(commitText))
             Recent?.Add(repo, commitText);
         NotifyChanged();
+    }
+
+    /// <summary>Elementi in conflitto nell'ultimo stato letto (per la finestra di avanzamento di un merge fermato).</summary>
+    internal int ConflictedCount
+    {
+        get
+        {
+            lock (_stateLock)
+                return _entries.Count(e => e.Status == SvnStatusKind.Conflicted);
+        }
     }
 
     private void ClearMergeBanner()

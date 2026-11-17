@@ -56,7 +56,7 @@ internal sealed class MergeStore
         get
         {
             lock (_lock)
-                return _error.Length > 0 ? (_error, true) : (_message, false);
+                return _error.Length > 0 ? (string.Empty, false) : (_message, false); // l'errore sta gia' nel pannello: non si ripete nella riga in fondo
         }
     }
 
@@ -544,6 +544,7 @@ internal sealed class MergeStore
             var label = revs is null ? AllLabel() : RevsLabel(revs);
             MergeOutput? output = null;
             Task? reload = null;
+            var stopped = false;
             await _changes.RunExclusiveAsync(async () =>
             {
                 try
@@ -573,13 +574,25 @@ internal sealed class MergeStore
                 {
                     await _changes.FinishMergeCancelledAsync(wc, ct);
                 }
+                catch (Exception ex) when (!ct.IsCancellationRequested && SvnErrors.IsMergeStoppedByConflict(ex.Message))
+                {
+                    stopped = true;
+                    await MergeStoppedAsync(ex, source, ct);
+                }
                 catch (Exception ex) when (!ct.IsCancellationRequested)
                 {
+                    BackendLog.Warn("merge fallito: " + ex.Message);
                     Fail(ex);
                     _changes.Progress.Done(false, Loc.T("Errore: {0}", ex.Message));
                     await _changes.RefreshAsync(ct, reloadBranch: false); // un merge fallito a meta' puo' aver toccato dei file
                 }
             });
+
+            if (stopped)
+            {
+                await ReloadEligibleAsync(ct); // le revisioni gia' applicate non sono piu' da unire, quelle dopo il conflitto si
+                BackendLog.Info($"merge fermato da un conflitto: {Format(times)}, totale {total.ElapsedMilliseconds} ms");
+            }
 
             if (output is not null)
             {
@@ -620,6 +633,30 @@ internal sealed class MergeStore
                 return new MergeRevFilesDto(r, e?.Author ?? string.Empty, (e?.Msg ?? string.Empty).Split('\n')[0], items, more, files.Count(f => f.C));
             }).ToList();
         }
+    }
+
+    /// <summary>
+    /// <c>svn merge</c> si e' fermato alla prima revisione in conflitto (E155015): quelle prima sono applicate, quella ha i conflitti, le successive no.
+    /// Non e' un errore da mostrare in inglese e tre volte: Changes si aggiorna con la sezione Conflitti, "Annulla merge" resta disponibile
+    /// e la spiegazione (in italiano, con cosa fare) compare una volta sola, nel pannello.
+    /// </summary>
+    private async Task MergeStoppedAsync(Exception ex, SwitchPickerStore.Target source, CancellationToken ct)
+    {
+        BackendLog.Warn("merge fermato da un conflitto: " + ex.Message);
+        var rev = SvnErrors.ConflictingRevision(ex.Message);
+        var why = rev is { } r
+            ? Loc.T("Il merge si è fermato alla revisione r{0}, che è andata in conflitto: le revisioni successive non sono state applicate.", r)
+            : Loc.T("Il merge si è fermato alla prima revisione in conflitto: le revisioni successive non sono state applicate.");
+        var todo = Loc.T("Risolvi i conflitti in Changes, poi rifai il merge delle revisioni rimaste (restano in elenco), oppure annulla il merge.");
+        lock (_lock)
+        {
+            _error = why + "\n" + todo;
+            _result = null;
+        }
+
+        await _changes.RefreshAsync(ct, reloadBranch: false, Loc.T("Merge fermato da un conflitto: risolvi i conflitti qui sotto."));
+        _changes.AfterMerge(string.Empty, Loc.T("Merge da {0} fermato da un conflitto: risolvi i conflitti, poi committa oppure annulla il merge.", "^/" + source.Path));
+        _changes.Progress.Done(false, why, _changes.ConflictedCount);
     }
 
     private bool TryBusy(out SwitchPickerStore.Target source, out string wc, out long[]? revs, bool forMerge = false)

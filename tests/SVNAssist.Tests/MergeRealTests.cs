@@ -160,4 +160,31 @@ public class MergeRealTests
         Assert.Equal("feat: modifica a", by[0].Msg);
         Assert.Empty(await e.Svn.GetLocalChangesAsync(e.Wc, Ct));   // l'anteprima non tocca la working copy
     }
+
+    [Fact]
+    public async Task SvnVero_MergeFermatoDalConflitto_ChangesSiAggiornaEMostraIConflitti_ErroreUnaSolaVolta()
+    {
+        using var e = new Env();
+        MergeStore.FilesDebounce = TimeSpan.Zero;
+        // trunk modifica la stessa riga di a.txt di r4: il merge di r4 va in conflitto e svn si ferma prima di r7 (passate separate)
+        e.Write("a.txt", "line1\nline2 TRUNK\nline3\n");
+        e.Run("commit -m \"trunk: modifica a\"");
+        e.Run("update");
+        await e.OpenMergeAsync();
+        await e.LogCmd("mergeToggle", new { rev = 4 });
+        await e.LogCmd("mergeToggle", new { rev = 7 });
+
+        await e.LogCmd("mergeSelected");
+
+        var changes = (ChangesState)e.Changes.GetSnapshot();
+        Assert.NotEmpty(changes.Conflicts ?? []);                      // la sezione Conflitti c'e'
+        Assert.Contains(changes.Sections.SelectMany(s => s.Rows), r => r.Status == "C");
+        Assert.NotNull(changes.Merge);                                  // e si puo' annullare il merge parziale
+        Assert.Contains("fermato", e.Merge.Error);                      // spiegazione in italiano
+        Assert.Contains("successive", e.Merge.Error);
+        var snap = e.LogSnap;
+        Assert.DoesNotContain("E155015", snap.Msg);                      // l'errore non e' ripetuto nella riga in fondo
+        Assert.NotNull(changes.Progress);
+        Assert.False(changes.Progress!.Running);
+    }
 }

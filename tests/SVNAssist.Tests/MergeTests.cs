@@ -404,7 +404,7 @@ public class MergeTests
         Assert.Equal("a.txt r3 ↔ r4", f.Host.Diffs[1].Caption);
 
         await f.LogCmd("mergeFileOpen", new { p = "inesistente.txt" });
-        Assert.True(f.LogSnap.Err);
+        Assert.Contains("non presente", f.Merge.Error);
         Assert.Equal(2, f.Host.Diffs.Count);
     }
 

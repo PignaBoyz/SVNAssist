@@ -9,6 +9,11 @@ namespace SVNAssist
     {
         internal static readonly Dictionary<string, string> En = new Dictionary<string, string>
         {
+            ["Il merge si è fermato alla revisione r{0}, che è andata in conflitto: le revisioni successive non sono state applicate."] = "The merge stopped at revision r{0}, which ran into a conflict: the following revisions were not applied.",
+            ["Il merge si è fermato alla prima revisione in conflitto: le revisioni successive non sono state applicate."] = "The merge stopped at the first revision in conflict: the following revisions were not applied.",
+            ["Risolvi i conflitti in Changes, poi rifai il merge delle revisioni rimaste (restano in elenco), oppure annulla il merge."] = "Resolve the conflicts in Changes, then merge the remaining revisions again (they stay in the list), or undo the merge.",
+            ["Merge fermato da un conflitto: risolvi i conflitti qui sotto."] = "Merge stopped by a conflict: resolve the conflicts below.",
+            ["Merge da {0} fermato da un conflitto: risolvi i conflitti, poi committa oppure annulla il merge."] = "Merge from {0} stopped by a conflict: resolve the conflicts, then commit or undo the merge.",
             ["Nessun merge in corso."] = "No merge in progress.",
             ["File non presente nelle revisioni scelte."] = "File not present in the selected revisions.",
             ["Impossibile controllare le nuove revisioni: {0}"] = "Cannot check for new revisions: {0}",
