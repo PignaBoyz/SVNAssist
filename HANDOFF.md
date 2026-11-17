@@ -43,3 +43,23 @@ Vedi `prompt.md` (aggiornato per la 0.3.0).
 - Struttura: Novità / Modifiche / Correzioni / Requisiti e installazione + blocco richiudibile "Dettagli tecnici" con il testo vecchio.
 - Lingua: prima si valida l'italiano, poi si aggiunge l'inglese. Nomi dell'interfaccia (Staged, Changes, ...) restano in inglese.
 - Piano: esempio v0.2.0 in docs/release-notes/v0.2.0.user.md (da approvare) → 0.3.0, 0.3.1, 0.4.0 → 0.5.0 per ultima → CHANGELOG.md unico da cui la CI ricava il testo della Release; i testi delle Release già pubblicate si aggiornano dalla sessione locale (token GitHub). Il tag v0.1.0 non si tocca.
+
+## STATO 2026-11-17 sera (sessione cloud interrotta dal limite di utilizzo, riprende dopo le 22:30 UTC)
+Branch `claude/eager-archimedes-kvbdoo` (tutto pushato). 859 xUnit verdi + 56 rossi PRE-ESISTENTI (percorsi Windows `C:\wc`, non toccarli qui; su Windows dovrebbero passare) + 158 node verdi. NIENTE compilato dentro VS (Host net472): compilare e provare sul Windows dell'utente.
+
+### Bug 0.4.0 dell'utente (docs/feedback/0.4.0/bugs.md): stato
+- [x] 2-3 Recenti (testo subito nel campo)
+- [x] 8 Modelli AI: elenco dal provider (cache 24h, Aggiorna elenco, "Altro...", costo Copilot = moltiplicatore premium, account collegato, errore reale). Non provato contro provider veri.
+- [x] 4 Merge da cartella (verdetto Compatibile/Non possibile), 5 "Usa entrambe", tasto destro su conflitti, InfoBar "Segna come risolto" sul file aperto (host, non compilata), progresso doppio (origine)
+- [x] 1 Merge lento (analisi del codice, nessun log: i tempi per fase vanno in %LOCALAPPDATA%\SVNAssist\logs\backend-aaaammgg.log; chiedere all'utente il log dopo un merge lento), 6 file per revisione + anteprima per revisione + menu sul Log, 7 merge con modifiche pendenti + backup + Annulla che ripristina
+- [~] 13 Merge a passaggi con "N di TOT", stop dopo il conflitto, stato su disco, Continua merge: BACKEND FATTO e mergiato (MergeRunner, PendingMerge, MergeStore, banner "Merge interrotto" nello snapshot di ChangesStore, test con svn vero MergeResumeRealTests; misure in docs/feedback/0.4.0/bug13-prestazioni.md: 420 revisioni = 54 s a 50 ms di round trip, intervalli da 50). MANCANO (agente interrotto dal limite): (a) UI web: banner "Merge interrotto" con messaggio chiaro (applicate/rimaste/passi numerati: risolvi i conflitti, segna risolti, Continua merge; NON serve rifare il merge) e pulsanti Continua merge (disabilitato con motivo finché restano conflitti) / Annulla / Scarta stato, in js/changes.js e js/log.js (marca "applicata in questo merge"); (b) comandi/contratto: docs/ui-protocol.md, src/SVNAssist.UI.Web/contract/*.schema.json, mock-bridge + demo (stato "merge fermo") + `node tools/build-demo.mjs`; (c) testi it/en in i18n.js (LocEn.cs già fatto lato backend); (d) passi di checklist in docs/verifica/0.5.0/checklist.md; (e) test node. Prima di scrivere la UI leggere i campi dello snapshot in src/SVNAssist.Backend/Stores/Snapshots.cs e i comandi in MergeStore.cs (cercare "Continua"/resume).
+- [ ] 14/9-12 richieste varie: tutte coperte sopra tranne il punto 13 (UI).
+- Aperto: "No changes" dopo merge fermato per conflitto NON riprodotto (checklist passo 23).
+- Non fatto: "Apri su..." nel menu del Log; ID .vsct 0x0160 (CmdSeMerge) possibile collisione: controllare in Ids.cs/.vsct sul Windows.
+
+### Note di rilascio per l'utente
+- Guida: docs/release-notes/GUIDA.md; script immagini tools/screenshots-release.mjs (demo del tag); esempio docs/release-notes/v0.2.0.user.md con 6 immagini (img/0.2.0). Segnaposto da fornire dall'utente (screenshot veri di VS): 07 Log come documento, 08 diff nativo, 09 menu Solution Explorer, 10 login SVN, 11 menu Lingua.
+- IN ATTESA: approvazione dell'utente dell'italiano della 0.2.0 (verificare "Visual Studio 2026 (18.x)" e "disinstallare la 0.1.0 prima": affermazioni non verificate dall'agente). Poi: 0.3.0, 0.3.1, 0.4.0 con lo stesso stile, 0.5.0 per ultima, versione inglese dopo la validazione, CHANGELOG.md unico, CI che ne ricava il testo della Release, aggiornamento dei testi delle Release già pubblicate (v0.2.0-v0.4.0) dalla sessione locale col token GitHub. Il tag v0.1.0 non si cancella.
+
+### Per chiudere la 0.5.0
+1. Finire il punto 13 (UI) sopra. 2. Aggiornare docs/verifica/0.5.0/checklist.md e docs/release-notes/v0.5.0.md (+ versione utente). 3. Sul Windows: build Release, `msb -t:Rebuild`, installare il VSIX in SvnHost, collaudo dell'utente. 4. develop -> main, tag v0.5.0, Release (CI).
