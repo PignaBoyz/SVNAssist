@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SVNAssist - Illustrazioni per le note di rilascio</title>
+<!--
+  Ricostruzioni dell'aspetto di Visual Studio (tema scuro) per le note di rilascio: NON sono screenshot veri.
+  Usata solo da tools/screenshots-release.mjs (non fa parte della demo pubblica).
+  Parametri: ?scene=<id>&lang=it|en
+  Scene: log-doc (07), diff (08), se-menu (09), login (10), ext-menu (11).
+  Per log-doc la pagina aspetta l'immagine del Log vero (catturata dalla demo) con window.setLogImage(dataUrl).
+  I testi delle voci di menu e del dialogo vengono da SVNAssist.vsct, PromptDialog.cs, DiffOpener.cs, Loc/LocEn.cs.
+  Tutto cio' che non e' di SVNAssist (altre voci di menu, nomi dei file) e' contorno di esempio.
+-->
+<style>
+:root {
+  --bg: #1c1c1c; --bg2: #252526; --panel: #2b2b2b; --border: #454545; --text: #e6e6e6; --muted: #9d9d9d;
+  --accent: #3794ff; --sel: #094771; --hover: #3a3a3d; --status: #141414;
+  --add: #1f3a26; --add-strong: #2d5a38; --del: #4b1f22; --del-strong: #7a2d31;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: #0f0f0f; }
+body { font: 12px/1.3 'Segoe UI', Inter, system-ui, sans-serif; color: var(--text); }
+.mono { font-family: 'Cascadia Mono', Consolas, 'DejaVu Sans Mono', monospace; }
+#stage { position: relative; overflow: hidden; background: var(--bg); }
+.abs { position: absolute; }
+/* sfondo: l'intera finestra di VS, sfocata e scurita */
+.backdrop { position: absolute; left: 0; top: 0; filter: blur(4.5px) brightness(.55); transform: scale(1.04); transform-origin: center; }
+.backdrop.dark { filter: blur(5px) brightness(.4); }
+.vs { position: relative; background: var(--bg); overflow: hidden; }
+.vs .title { position: absolute; left: 0; top: 0; right: 0; height: 30px; display: flex; align-items: center; gap: 14px; padding: 0 10px; }
+.vs .title .logo { width: 16px; height: 16px; background: #8661c5; border-radius: 3px; }
+.vs .title .mi { padding: 0 2px; }
+.vs .tool { position: absolute; left: 0; right: 0; top: 30px; height: 28px; display: flex; align-items: center; gap: 8px; padding: 0 10px; }
+.vs .tool .btn { height: 18px; min-width: 18px; border-radius: 3px; background: #333; }
+.vs .tool .dd { height: 20px; padding: 2px 8px; background: #2a2a2a; border: 1px solid #3c3c3c; border-radius: 3px; }
+.vs .se { position: absolute; left: 0; top: 58px; bottom: 22px; background: var(--bg); border-right: 1px solid #2f2f2f; padding: 0; }
+.vs .doc { position: absolute; top: 58px; bottom: 22px; background: var(--bg); }
+.vs .dock { position: absolute; right: 0; top: 58px; bottom: 22px; background: var(--panel); border-left: 1px solid #2f2f2f; }
+.vs .status { position: absolute; left: 0; right: 0; bottom: 0; height: 22px; background: var(--status); display: flex; align-items: center; padding: 0 10px; color: var(--muted); font-size: 11px; }
+.pane-h { height: 24px; line-height: 24px; padding: 0 10px; background: #232323; color: var(--muted); font-size: 11px; }
+.tabs { display: flex; height: 28px; background: #232323; border-bottom: 1px solid #2f2f2f; }
+.tab { display: flex; align-items: center; gap: 8px; padding: 0 12px; color: var(--muted); border-right: 1px solid #2f2f2f; white-space: nowrap; }
+.tab.on { background: var(--bg); color: var(--text); border-top: 2px solid var(--accent); padding-top: 0; }
+.tab .x { color: var(--muted); font-size: 10px; }
+.tree { padding: 4px 0; }
+.tr { display: flex; align-items: center; height: 21px; gap: 5px; white-space: nowrap; }
+.tr.sel { background: var(--sel); }
+.tr .car { width: 10px; color: var(--muted); font-size: 8px; text-align: center; }
+.ic { width: 14px; height: 14px; flex: none; }
+.codeline { height: 15px; white-space: pre; font-size: 11px; color: #c8c8c8; }
+/* menu */
+.menu { position: absolute; background: var(--bg2); border: 1px solid var(--border); padding: 3px 0; box-shadow: 0 6px 18px rgba(0,0,0,.55); font-size: 12px; }
+.menu .it { display: flex; align-items: center; height: 24px; padding: 0 26px 0 28px; position: relative; white-space: nowrap; }
+.menu .it.hl { background: var(--sel); }
+.menu .it .chk { position: absolute; left: 9px; top: 4px; width: 14px; text-align: center; }
+.menu .it .arrow { position: absolute; right: 9px; top: 0; line-height: 24px; font-size: 9px; color: var(--muted); }
+.menu .it .kb { margin-left: auto; padding-left: 28px; color: var(--muted); }
+.menu .it.dis { color: #6d6d6d; }
+.menu .sep { height: 1px; background: var(--border); margin: 4px 1px; }
+.bar-hl { background: var(--sel); }
+/* diff */
+.dwrap { display: flex; flex-direction: column; height: 100%; }
+.dhead { display: flex; height: 26px; background: #232323; border-bottom: 1px solid #2f2f2f; }
+.dhead > div { flex: 1; display: flex; align-items: center; padding: 0 10px; color: var(--text); }
+.dhead > div + div { border-left: 1px solid #2f2f2f; }
+.dbody { display: flex; flex: 1; position: relative; overflow: hidden; }
+.dside { flex: 1; overflow: hidden; }
+.dside + .dside { border-left: 1px solid #2f2f2f; }
+.dl { display: flex; height: 18px; line-height: 18px; font-size: 10.8px; white-space: pre; }
+.dl .n { width: 34px; padding-right: 8px; text-align: right; color: #6e7681; flex: none; }
+.dl .c { flex: 1; padding-left: 4px; overflow: hidden; }
+.dl.add { background: var(--add); }
+.dl.del { background: var(--del); }
+.dl.ph { background: repeating-linear-gradient(135deg, #222 0 4px, #1c1c1c 4px 8px); }
+.dl .hlw { background: var(--add-strong); }
+.dl.del .hlw { background: var(--del-strong); }
+.k { color: #569cd6; } .t { color: #4ec9b0; } .s { color: #ce9178; } .cm { color: #6a9955; } .m { color: #dcdcaa; } .v { color: #9cdcfe; }
+/* dialogo */
+.dlg { position: absolute; background: #2b2b2b; border: 1px solid #555; box-shadow: 0 10px 30px rgba(0,0,0,.7); }
+.dlg .cap { height: 30px; display: flex; align-items: center; justify-content: space-between; padding: 0 6px 0 12px; background: #1f1f1f; color: var(--text); }
+.dlg .body { padding: 16px; }
+.dlg .msg { margin-bottom: 12px; line-height: 1.4; word-break: break-word; }
+.dlg .lbl { margin: 8px 0 2px; }
+.dlg .fld { height: 24px; border: 1px solid #5a5a5a; background: #1f1f1f; padding: 0 6px; display: flex; align-items: center; }
+.dlg .fld.focus { border-color: var(--accent); }
+.dlg .chkrow { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.dlg .cb { width: 14px; height: 14px; border: 1px solid #7a7a7a; background: #1f1f1f; display: flex; align-items: center; justify-content: center; font-size: 11px; line-height: 1; }
+.dlg .btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.dlg .b { min-width: 80px; height: 26px; border: 1px solid #5a5a5a; background: #3a3a3a; display: flex; align-items: center; justify-content: center; }
+.dlg .b.def { background: #0e639c; border-color: #3794ff; }
+.logimg { display: block; width: 100%; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script>
+'use strict';
+const P = new URLSearchParams(location.search), SCENE = P.get('scene') || 'se-menu', LANG = P.get('lang') === 'en' ? 'en' : 'it';
+const T = (it, en) => LANG === 'en' ? en : it;
+const stage = document.getElementById('stage');
+
+// ---------- icone ----------
+const svg = (body, c) => `<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="${c || '#c5c5c5'}" stroke-width="1.1">${body}</svg>`;
+const IC = {
+  folder: svg('<path d="M1.5 4h4l1.2 1.5h7.8V13H1.5z" fill="#dcb67a" stroke="none"/>'),
+  cs: svg('<path d="M3.5 1.5h6l3 3v10h-9z" fill="#2b2b2b" stroke="#9a7bd6"/><path d="M9.5 1.5v3h3" stroke="#9a7bd6"/><text x="4.4" y="12" font-size="5.5" fill="#9a7bd6" stroke="none" font-family="sans-serif" font-weight="700">C#</text>'),
+  proj: svg('<rect x="2" y="2.5" width="12" height="11" rx="1.5" fill="#2b2b2b" stroke="#9a7bd6"/><text x="3.6" y="11" font-size="6.5" fill="#9a7bd6" stroke="none" font-family="sans-serif" font-weight="700">C#</text>'),
+  sln: svg('<path d="M2 8l6-5.5 6 5.5-6 5.5z" fill="#2b2b2b" stroke="#b180d7"/>'),
+  ref: svg('<rect x="3" y="3" width="10" height="10" rx="1" stroke="#c5c5c5"/><path d="M5.5 6.5h5M5.5 9.5h5" stroke="#c5c5c5"/>'),
+  logo: '<span class="logo"></span>',
+};
+const caret = o => `<span class="car">${o ? '&#9660;' : '&#9654;'}</span>`;
+const row = (indent, open, icon, label, cls) => `<div class="tr ${cls || ''}" style="padding-left:${6 + indent * 14}px">${open === null ? '<span class="car"></span>' : caret(open)}${icon}<span>${label}</span></div>`;
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+// ---------- albero di Esplora soluzioni (contorno di esempio) ----------
+function seTree(selectName) {
+  const f = (n, ind) => row(ind, null, IC.cs, n, n === selectName ? 'sel' : '');
+  return `<div class="tree">` +
+    row(0, true, IC.sln, "Solution 'Acme.Shop' (1 of 1 project)") +
+    row(1, true, IC.proj, 'Acme.Shop.Core') +
+    row(2, false, IC.ref, 'Dependencies') +
+    row(2, true, IC.folder, 'Models') + f('Coupon.cs', 3) + f('Order.cs', 3) +
+    row(2, true, IC.folder, 'Services') + f('IInventoryService.cs', 3) + f('OrderService.cs', 3) + f('PaymentGateway.cs', 3) +
+    f('Program.cs', 2) +
+  `</div>`;
+}
+
+// ---------- finestra di VS (sfondo sfocato) ----------
+const MENUBAR = ['File', 'Edit', 'View', 'Git', 'Project', 'Build', 'Debug', 'Test', 'Analyze', 'Tools', 'Extensions', 'Window', 'Help'];
+function codeLines(n) {
+  const src = ['<span class="k">using</span> System;', '<span class="k">using</span> System.Linq;', '', '<span class="k">namespace</span> Acme.Shop.Core.Services', '{', '    <span class="k">public class</span> <span class="t">OrderService</span>', '    {', '        <span class="k">private readonly</span> <span class="t">IInventoryService</span> _inventory;', '', '        <span class="k">public</span> <span class="t">OrderService</span>(<span class="t">IInventoryService</span> inventory)', '        {', '            _inventory = inventory;', '        }', '', '        <span class="k">public decimal</span> <span class="m">CalculateTotal</span>(<span class="t">Order</span> order)', '        {', '            <span class="k">return</span> order.Lines.<span class="m">Sum</span>(l =&gt; l.Price * l.Quantity);', '        }', '    }', '}'];
+  let h = ''; for (let i = 0; i < n; i++) h += `<div class="codeline mono">${src[i % src.length]}</div>`; return h;
+}
+// opts: W,H, seW, dockW, docHtml (contenuto della zona documento nello sfondo; di solito codice), tabs
+function vsFrame({ W, H, seW = 150, dockW = 150, docInner, tabsHtml, seSelect = 'OrderService.cs' }) {
+  const menu = MENUBAR.map(m => `<span class="mi">${m}</span>`).join('');
+  const docX = seW, docW = W - seW - dockW;
+  return `<div class="vs" style="width:${W}px;height:${H}px">
+    <div class="title">${IC.logo}${menu}<span style="margin-left:auto;color:var(--muted)">Acme.Shop</span></div>
+    <div class="tool"><span class="btn"></span><span class="btn"></span><span class="btn"></span><span class="dd">Debug</span><span class="dd">Any CPU</span><span class="dd">&#9654; Acme.Shop.Web</span></div>
+    <div class="se" style="width:${seW}px"><div class="pane-h">Solution Explorer</div>${seTree(seSelect)}</div>
+    <div class="doc" style="left:${docX}px;width:${docW}px">${tabsHtml || '<div class="tabs"><div class="tab on">OrderService.cs <span class="x">&#10005;</span></div></div>'}<div style="padding:8px 8px">${docInner || codeLines(24)}</div></div>
+    <div class="dock" style="width:${dockW}px"><div class="pane-h">SVN Changes</div><div style="padding:8px;color:var(--muted)">trunk r124<br><br>Staged 2<br>Changes 5<br>Unversioned 3</div></div>
+    <div class="status">Ready</div>
+  </div>`;
+}
+const backdrop = (o, dark) => `<div class="backdrop${dark ? ' dark' : ''}">${vsFrame(o)}</div>`;
+
+// ---------- menu ----------
+// voce: string | {t, sub, chk, hl, dis, kb} | '-' (separatore)
+function menuHtml(items, style) {
+  const body = items.map(i => {
+    if (i === '-') return '<div class="sep"></div>';
+    if (typeof i === 'string') i = { t: i };
+    return `<div class="it${i.hl ? ' hl' : ''}${i.dis ? ' dis' : ''}">${i.chk ? '<span class="chk">&#10003;</span>' : ''}${esc(i.t)}${i.kb ? `<span class="kb">${esc(i.kb)}</span>` : ''}${i.sub ? '<span class="arrow">&#9654;</span>' : ''}</div>`;
+  }).join('');
+  return `<div class="menu" style="${style}">${body}</div>`;
+}
+
+// ---------- scene ----------
+const SCENES = {};
+
+// 07: il Log come documento nell'area editor (scheda "Log: <cartella>", titolo come HostService.LogTitle)
+SCENES['log-doc'] = () => {
+  const W = 940, H = 440, seW = 130, dockW = 130, docW = W - seW - dockW;
+  const tabs = `<div class="tabs"><div class="tab">Program.cs <span class="x">&#10005;</span></div><div class="tab">OrderService.cs <span class="x">&#10005;</span></div><div class="tab on">Log: Acme.Shop <span class="x">&#10005;</span></div></div>`;
+  stage.style.width = W + 'px'; stage.style.height = H + 'px';
+  stage.innerHTML = backdrop({ W, H, seW, dockW }) +
+    `<div class="abs" style="left:${seW}px;top:58px;width:${docW}px;bottom:22px;background:var(--bg);box-shadow:0 0 0 1px #3a3a3a, 0 8px 24px rgba(0,0,0,.6)">${tabs}<div id="logbox" style="overflow:hidden;height:calc(100% - 28px)"><img id="logimg" class="logimg" alt=""></div></div>`;
+  return W + 'x' + H;
+};
+window.setLogImage = url => new Promise(res => { const i = document.getElementById('logimg'); i.onload = () => res(); i.src = url; });
+
+// 08: diff nativo di VS (titoli come DiffOpener: "<file> — BASE ⇄ working copy", etichette "<file> (BASE)" / "<file> (working copy)")
+SCENES['diff'] = () => {
+  const W = 1040, H = 440, seW = 60, dockW = 60, docW = W - seW - dockW;
+  const L = (n, c, cls) => `<div class="dl ${cls || ''}"><span class="n">${n === null ? '' : n}</span><span class="c mono">${c}</span></div>`;
+  const left = [
+    L(1, '<span class="k">using</span> System;'), L(2, '<span class="k">using</span> System.Linq;'), L(3, '<span class="k">using</span> Acme.Shop.Core.Models;'), L(4, ''),
+    L(5, '<span class="k">namespace</span> Acme.Shop.Core.Services'), L(6, '{'), L(7, '  <span class="k">public class</span> <span class="t">OrderService</span>'), L(8, '  {'),
+    L(9, '    <span class="k">public decimal</span> <span class="m">CalculateTotal</span>(<span class="t">Order</span> order)'), L(10, '    {'),
+    L(11, '      <span class="k">return</span> order.Lines.<span class="m">Sum</span>(l =&gt; l.Price * l.Quantity);', 'del'),
+    null, null, null, null,
+    L(12, '    }'), L(13, '  }'), L(14, '}')
+  ];
+  const right = [
+    L(1, '<span class="k">using</span> System;'), L(2, '<span class="k">using</span> System.Linq;'), L(3, '<span class="k">using</span> Acme.Shop.Core.Models;'), L(4, ''),
+    L(5, '<span class="k">namespace</span> Acme.Shop.Core.Services'), L(6, '{'), L(7, '  <span class="k">public class</span> <span class="t">OrderService</span>'), L(8, '  {'),
+    L(9, '    <span class="k">public decimal</span> <span class="m">CalculateTotal</span>(<span class="t">Order</span> order)'), L(10, '    {'),
+    L(11, '      <span class="k">var</span> subtotal = order.Lines.<span class="m">Sum</span>(l =&gt; l.Price * l.Quantity);', 'add'),
+    L(12, '      <span class="k">if</span> (order.Coupon == <span class="k">null</span>)', 'add'),
+    L(13, '        <span class="k">return</span> subtotal;', 'add'),
+    L(14, '', 'add'),
+    L(15, '      <span class="k">return</span> Math.<span class="m">Max</span>(0, order.Coupon.<span class="m">Apply</span>(subtotal));', 'add'),
+    L(16, '    }'), L(17, '  }'), L(18, '}')
+  ];
+  const ph = '<div class="dl ph"><span class="n"></span><span class="c"></span></div>';
+  const lcol = left.map(x => x === null ? ph : x).join('');
+  const caption = 'OrderService.cs — BASE ⇄ working copy';
+  const tabs = `<div class="tabs"><div class="tab">Program.cs <span class="x">&#10005;</span></div><div class="tab on">${caption} <span class="x">&#10005;</span></div></div>`;
+  stage.style.width = W + 'px'; stage.style.height = H + 'px';
+  stage.innerHTML = backdrop({ W, H, seW, dockW }) +
+    `<div class="abs" style="left:${seW}px;top:58px;width:${docW}px;bottom:22px;background:var(--bg);box-shadow:0 0 0 1px #3a3a3a, 0 8px 24px rgba(0,0,0,.6)">${tabs}
+      <div class="dwrap" style="height:calc(100% - 28px)"><div class="dhead"><div>OrderService.cs (BASE)</div><div>OrderService.cs (working copy)</div></div>
+      <div class="dbody"><div class="dside">${lcol}</div><div class="dside">${right.join('')}</div></div></div></div>`;
+};
+
+// 09: menu del tasto destro in Solution Explorer (sottomenu SVN, voci da SVNAssist.vsct, gruppi Sync / Inspect / Edit)
+SCENES['se-menu'] = () => {
+  const W = 800, H = 520, seW = 270, dockW = 0;
+  stage.style.width = W + 'px'; stage.style.height = H + 'px';
+  const seBox = `<div class="abs" style="left:0;top:58px;width:${seW}px;bottom:22px;background:var(--bg);box-shadow:0 0 0 1px #3a3a3a, 0 8px 24px rgba(0,0,0,.6)"><div class="pane-h" style="background:#232323;color:var(--text)">Solution Explorer</div>${seTree('OrderService.cs')}</div>`;
+  const ctx = menuHtml(['Open', 'Open With...', '-', 'Exclude From Project', '-', { t: 'SVN', sub: true, hl: true }, '-', { t: 'Cut', kb: 'Ctrl+X' }, { t: 'Copy', kb: 'Ctrl+C' }, { t: 'Delete', kb: 'Del' }, { t: 'Rename', kb: 'F2' }, '-', 'Properties'], 'left:150px;top:196px;width:210px');
+  const svn = menuHtml(['SVN Update', 'SVN Update to revision...', 'SVN Commit...', '-', 'Diff with BASE', 'Show Log', '-', 'SVN Add', 'SVN Revert', 'Add to Ignore List', 'SVN Cleanup', 'SVN Lock...', 'SVN Unlock'], 'left:358px;top:216px;width:240px');
+  stage.innerHTML = backdrop({ W, H, seW, dockW }) + seBox + ctx + svn;
+};
+
+// 10: popup di login SVN (PromptDialog.ShowCredentials; testi da Loc: "Il server SVN richiede l'accesso.", Utente, Ricorda, Annulla)
+SCENES['login'] = () => {
+  const W = 760, H = 400;
+  stage.style.width = W + 'px'; stage.style.height = H + 'px';
+  const detail = "svn: E170013: Unable to connect to a repository at URL 'https://svn.acme.example/repos/shop'";
+  stage.innerHTML = backdrop({ W, H, seW: 150, dockW: 150 }, true) +
+    `<div class="dlg" style="left:${(W - 440) / 2}px;top:${(H - 290) / 2}px;width:440px">
+      <div class="cap"><span>SVNAssist</span><span style="color:var(--muted);padding:0 8px">&#10005;</span></div>
+      <div class="body"><div class="msg">${T("Il server SVN richiede l'accesso.", 'The SVN server requires authentication.')}<br>${esc(detail)}</div>
+      <div class="lbl">${T('Utente', 'User')}</div><div class="fld focus">andre</div>
+      <div class="lbl">Password</div><div class="fld">&#9679;&#9679;&#9679;&#9679;&#9679;&#9679;&#9679;&#9679;&#9679;&#9679;</div>
+      <div class="chkrow"><span class="cb">&#10003;</span>${T('Ricorda', 'Remember')}</div>
+      <div class="btns"><div class="b def">OK</div><div class="b">${T('Annulla', 'Cancel')}</div></div></div></div>`;
+};
+
+// 11: Extensions > SVNAssist > Language / Lingua (SVNAssist.vsct: MenuMain, GroupMainPrimary/Secondary, MenuLang)
+SCENES['ext-menu'] = () => {
+  const W = 1000, H = 420, X0 = 470, SW = 775; // si ritaglia la parte sinistra della barra dei menu
+  stage.style.width = SW + 'px'; stage.style.height = '345px';
+  const frame = backdrop({ W, H, seW: 150, dockW: 150 });
+  const items = MENUBAR.map(m => `<span class="mi" style="padding:0 6px;height:30px;line-height:30px;${m === 'Extensions' ? 'background:var(--sel)' : ''}">${m}</span>`).join('');
+  // posizioni calcolate a mano: la barra parte a x=36 e ogni voce occupa ~ la sua larghezza
+  const bar = `<div class="abs" id="mb" style="left:36px;top:0;height:30px;display:flex;gap:8px;background:var(--bg)">${items}</div>`;
+  const dd = menuHtml(['Manage Extensions', '-', { t: 'SVNAssist', sub: true, hl: true }], 'left:0;top:30px;width:175px');
+  const m1 = menuHtml(['SVN Changes', 'Commit...', '-', 'Update', 'Update to revision...', 'Log / History', 'Change AI Provider...', 'Cleanup', '-', { t: 'Language / Lingua', sub: true, hl: true }], 'left:0;top:0;width:220px');
+  const m2 = menuHtml(['Automatica / Automatic (lingua di Visual Studio)', { t: 'Italiano', chk: LANG === 'it' }, { t: 'English', chk: LANG === 'en' }], 'left:0;top:0;width:305px');
+  stage.innerHTML = `<div class="abs" style="left:${-X0}px;top:0;width:${W}px;height:${H}px">${frame}${bar}
+    <div id="ddh" class="abs" style="top:0;left:0">${dd}</div><div id="m1h" class="abs">${m1}</div><div id="m2h" class="abs">${m2}</div></div>`;
+  // allinea il menu a tendina sotto "Extensions", i sottomenu a destra della voce evidenziata
+  const ext = [...document.querySelectorAll('#mb .mi')].find(e => e.textContent === 'Extensions').getBoundingClientRect(), box = stage.getBoundingClientRect();
+  const left0 = ext.left - box.left + X0;
+  const q = (id, x, y) => { const e = document.getElementById(id); e.style.left = x + 'px'; e.style.top = y + 'px'; };
+  q('ddh', left0 - 6, 0);
+  const sv = document.querySelector('#ddh .it.hl').getBoundingClientRect();
+  const x1 = sv.right - box.left + X0 - 2, y1 = sv.top - box.top - 4;
+  q('m1h', x1, y1);
+  const lg = document.querySelectorAll('#m1h .it.hl')[0].getBoundingClientRect();
+  q('m2h', lg.right - box.left + X0 - 2, lg.top - box.top - 4);
+};
+
+SCENES[SCENE]();
+window.__ready = true;
+</script>
+</body>
+</html>

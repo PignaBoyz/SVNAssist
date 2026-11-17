@@ -58,7 +58,7 @@ Branch `claude/eager-archimedes-kvbdoo` (tutto pushato). 859 xUnit verdi + 56 ro
 - Non fatto: "Apri su..." nel menu del Log; ID .vsct 0x0160 (CmdSeMerge) possibile collisione: controllare in Ids.cs/.vsct sul Windows.
 
 ### Note di rilascio per l'utente
-- Guida: docs/release-notes/GUIDA.md; script immagini tools/screenshots-release.mjs (demo del tag); esempio docs/release-notes/v0.2.0.user.md con 6 immagini (img/0.2.0). Segnaposto da fornire dall'utente (screenshot veri di VS): 07 Log come documento, 08 diff nativo, 09 menu Solution Explorer, 10 login SVN, 11 menu Lingua.
+- Guida: docs/release-notes/GUIDA.md; script immagini tools/screenshots-release.mjs (demo del tag); esempio docs/release-notes/v0.2.0.user.md con 11 immagini per lingua (img/0.2.0/it e /en): 01-06 dalla demo, 07-11 illustrazioni (ricostruzioni di VS da docs/demo/src/illustrations.html, didascalia "Illustrazione:"/"Illustration:"; non sono screenshot veri).
 - IN ATTESA: approvazione dell'utente dell'italiano della 0.2.0 (verificare "Visual Studio 2026 (18.x)" e "disinstallare la 0.1.0 prima": affermazioni non verificate dall'agente). Poi: 0.3.0, 0.3.1, 0.4.0 con lo stesso stile, 0.5.0 per ultima, versione inglese dopo la validazione, CHANGELOG.md unico, CI che ne ricava il testo della Release, aggiornamento dei testi delle Release già pubblicate (v0.2.0-v0.4.0) dalla sessione locale col token GitHub. Il tag v0.1.0 non si cancella.
 
 ### Per chiudere la 0.5.0

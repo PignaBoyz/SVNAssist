@@ -45,17 +45,23 @@ Ogni voce deve corrispondere a un cambiamento visibile all'utente. Le voci puram
 
 ## 6. Immagini
 
-- Posizione: `docs/release-notes/img/<versione>/NN-nome.png` (nomi senza spazi, numerazione progressiva).
-- Generazione dalla demo: `node tools/screenshots-release.mjs --version X.Y.Z` (opzioni: `--scenes a,b`, `--list`, `--demo <file>`, `--out`, `--scale`, `--locale`). Se esiste il tag `vX.Y.Z` lo script costruisce la demo da quel tag, così le immagini mostrano solo ciò che esisteva in quella versione; senza tag usa `docs/demo/svnassist-demo.html`. Per una nuova release: aggiungere le scene in `SCENES` e l'elenco in `SETS`.
-- Non usare nelle note funzioni che la demo mostra ma che non appartengono alla versione.
-- Segnaposto per ciò che la demo non può mostrare (diff nativo di Visual Studio, menu di Esplora soluzioni, icone di stato in Esplora soluzioni, popup di login SVN, menu di Visual Studio):
-  `> [IMMAGINE DA FORNIRE: <cosa deve mostrare>] (file: docs/release-notes/img/<versione>/NN-nome.png)`
-- Le immagini dell'interfaccia vera fornite dall'utente vanno in `docs/release-notes/img/<versione>/` con il nome indicato nel segnaposto; poi si sostituisce il segnaposto con l'immagine.
-- Sintassi: `<img src="https://raw.githubusercontent.com/PignaBoyz/SVNAssist/main/docs/release-notes/img/<versione>/NN-nome.png" width="720" alt="...">` (il file è raggiungibile solo dopo il rilascio su main). Sotto ogni immagine una didascalia in corsivo, neutra: dice cosa mostra, senza aggettivi.
+- Posizione: `docs/release-notes/img/<versione>/<lang>/NN-nome.png`, con `<lang>` = `it` o `en` (nomi senza spazi, numerazione progressiva uguale nelle due lingue). Le note italiane puntano a `.../img/<versione>/it/...`, quelle inglesi a `.../img/<versione>/en/...`.
+- Generazione: `node tools/screenshots-release.mjs --version X.Y.Z` produce tutte le immagini della versione in italiano e in inglese. Opzioni: `--lang it|en` (una lingua sola), `--scenes a,b`, `--list`, `--demo <file>`, `--out`, `--scale` (default 2). La lingua si imposta con il selettore di lingua della demo (stesso campo `lang` che manda l'host) e lo script si ferma con un errore se i testi della UI non risultano nella lingua richiesta. Se esiste il tag `vX.Y.Z` lo script costruisce la demo da quel tag, cosi' le immagini mostrano solo cio' che esisteva in quella versione; senza tag usa `docs/demo/svnassist-demo.html`. Per una nuova release: aggiungere le scene in `SCENES` e l'elenco in `SETS`.
+- Due tipi di immagine:
+  - **UI vera** (scene `kind: 'ui'`, di solito 01-06): catturate dalla demo, che usa la stessa UI web dell'estensione; si ritaglia solo il pannello o il documento, senza la cornice finta di Visual Studio. Didascalia neutra.
+  - **Illustrazioni** (scene `kind: 'illus'`): per ciò che la demo non mostra (Log come scheda documento, diff nativo, menu di Esplora soluzioni, popup di login SVN, menu di Visual Studio). Sono ricostruzioni, NON screenshot di Visual Studio, disegnate in `docs/demo/src/illustrations.html` (pagina usata solo da questo script, non fa parte della demo pubblica; parametri `?scene=<id>&lang=it|en`). Hanno tema scuro, la parte rilevante nitida e il resto della finestra sfocato e scurito. I testi delle voci di menu, dei titoli e dei dialoghi vanno copiati dalle fonti reali (`SVNAssist.vsct`, `Loc.cs`/`LocEn.cs`, `PromptDialog.cs`, `DiffOpener.cs`, `i18n.js`), mai inventati; l'unico contorno di esempio ammesso e' quello che non e' di SVNAssist (altre voci di menu, nomi di file). Il Log della scena 07 e' la UI vera catturata dalla demo e incorporata nella cornice. Per una nuova illustrazione: aggiungere la scena in `illustrations.html` (funzione in `SCENES`) e la voce in `screenshots-release.mjs` (`kind: 'illus'`, `run: ({ illus }) => illus('<scena>')`).
+- Regola "Illustrazione:": ogni immagine che non e' la UI vera ha sotto una didascalia in corsivo che inizia con `Illustrazione:` (in inglese `Illustration:`) e dice che e' una ricostruzione, non uno screenshot di Visual Studio. Le immagini della UI vera (scene `ui`) hanno una didascalia neutra, senza quel prefisso.
+- Non usare nelle note funzioni che la demo o le illustrazioni mostrano ma che non appartengono alla versione (es. nelle illustrazioni di una versione compaiono solo le voci di menu che esistevano in quel tag: si controlla `SVNAssist.vsct` del tag).
+- Se un'immagine non puo' essere prodotta ne' dalla demo ne' da un'illustrazione, resta il segnaposto:
+  `> [IMMAGINE DA FORNIRE: <cosa deve mostrare>] (file: docs/release-notes/img/<versione>/<lang>/NN-nome.png)`
+  Una vera immagine di Visual Studio fornita dall'utente va in `docs/release-notes/img/<versione>/<lang>/` con il nome indicato e sostituisce il segnaposto (e la didascalia "Illustrazione:" si toglie).
+- Limiti noti: i dati di esempio della demo (messaggi di commit, nomi di file) sono in italiano in entrambe le lingue; i campi data del Log mostrano `mm/dd/yyyy` perche' dipendono dal browser di Chromium; i menu di Visual Studio (voci di `SVNAssist.vsct`) sono in inglese in tutte e due le lingue, quindi 08, 09 e 11 sono uguali (11 cambia solo la voce con il segno di spunta).
+- Sintassi: `<img src="https://raw.githubusercontent.com/PignaBoyz/SVNAssist/main/docs/release-notes/img/<versione>/<lang>/NN-nome.png" width="720" alt="...">` (il file e' raggiungibile solo dopo il rilascio su main). Sotto ogni immagine una didascalia in corsivo, neutra: dice cosa mostra, senza aggettivi.
+- Dimensione: ogni PNG sotto i 400 KB (scala 2, larghezza finale ~1000-2000 px); se serve, ridurre l'area catturata.
 
 ## 7. Lingua
 
-Prima l'italiano, validato dall'utente. Poi la traduzione inglese in `docs/release-notes/vX.Y.Z.en.md`, con stessa struttura e stesse immagini.
+Prima l'italiano, validato dall'utente. Poi la traduzione inglese in `docs/release-notes/vX.Y.Z.user.en.md`, con stessa struttura e le stesse immagini nella versione `en`.
 
 ## 8. Processo
 
@@ -81,7 +87,8 @@ Prima l'italiano, validato dall'utente. Poi la traduzione inglese in `docs/relea
 - [ ] Nessun nome interno (file, classi, flag svn, JSON, RPC, WebView2, backend, SDK) fuori dai dettagli tecnici.
 - [ ] Correzioni nella forma "Prima: X. Ora: Y.".
 - [ ] Requisiti verificati; il resto marcato "(da verificare)".
-- [ ] Immagini presenti oppure segnaposto con nome file e descrizione.
-- [ ] Didascalie neutre sotto ogni immagine.
-- [ ] Link raw con il nome utente/repo e il percorso `img/<versione>/` corretti.
+- [ ] Immagini presenti in `it` e `en` oppure segnaposto con nome file e descrizione.
+- [ ] Didascalie neutre sotto ogni immagine della UI vera; "Illustrazione:" / "Illustration:" sotto le ricostruzioni.
+- [ ] Link raw con il nome utente/repo e il percorso `img/<versione>/<lang>/` corretti (it nelle note italiane, en nelle inglesi).
+- [ ] Ogni PNG sotto i 400 KB, guardato a occhio (testi non tagliati ne' sovrapposti).
 - [ ] Versione inglese pronta, CHANGELOG.md aggiornato.
