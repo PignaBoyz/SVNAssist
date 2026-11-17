@@ -256,4 +256,11 @@ public interface ISvnService
     /// (merge automatico, svn 1.8+); con le revisioni fa il cherry-pick. Non committa.
     /// </summary>
     Task<MergeOutput> MergeAsync(string workingCopyPath, string sourceUrl, IReadOnlyList<long>? revisions, bool dryRun, CancellationToken ct);
+
+    /// <summary>
+    /// <c>svn merge [--dry-run] --accept postpone -c A-B,C,D-E SRC</c>: ogni intervallo e' un passaggio a se' (un solo processo svn, che si ferma al primo passaggio in conflitto con E155015).
+    /// L'intervallo <c>A-B</c> comprende anche i numeri di revisione in mezzo che non toccano il sorgente o sono gia' unite (svn le salta): serve a unire in un colpo revisioni
+    /// consecutive <i>nell'elenco da unire</i> ma non nel numero (altri commit del repository in mezzo). Con <c>A == B</c> e' la singola revisione.
+    /// </summary>
+    Task<MergeOutput> MergeRangesAsync(string workingCopyPath, string sourceUrl, IReadOnlyList<(long First, long Last)> ranges, bool dryRun, CancellationToken ct);
 }

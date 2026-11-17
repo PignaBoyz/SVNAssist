@@ -1109,6 +1109,22 @@ public class SvnService : ISvnService
         // Puo' durare a lungo su repository lenti: niente timeout (l'utente puo' annullare).
         => MergeParser.ParseMerge(await RunSvnAsync(BuildMergeArgs(sourceUrl, revisions, dryRun), workingCopyPath, ct, applyTimeout: false));
 
+    /// <inheritdoc />
+    public async Task<MergeOutput> MergeRangesAsync(string workingCopyPath, string sourceUrl, IReadOnlyList<(long First, long Last)> ranges, bool dryRun, CancellationToken ct)
+        => MergeParser.ParseMerge(await RunSvnAsync(BuildMergeRangesArgs(sourceUrl, ranges, dryRun), workingCopyPath, ct, applyTimeout: false));
+
+    /// <summary><c>-c 5-9,12</c>: un passaggio (e un giro al server) per intervallo. Gli intervalli restano come sono, non si fondono (<c>5,6</c> sono due passaggi: si ferma tra l'uno e l'altro).</summary>
+    internal static List<string> BuildMergeRangesArgs(string sourceUrl, IReadOnlyList<(long First, long Last)> ranges, bool dryRun)
+    {
+        var args = new List<string> { "merge" };
+        if (dryRun)
+            args.Add("--dry-run");
+        args.AddRange(["--accept", "postpone", "-c",
+            string.Join(",", ranges.Select(r => r.First == r.Last ? r.First.ToString(CultureInfo.InvariantCulture) : $"{r.First.ToString(CultureInfo.InvariantCulture)}-{r.Last.ToString(CultureInfo.InvariantCulture)}")),
+            Peg(sourceUrl)]);
+        return args;
+    }
+
     /// <summary><c>--accept postpone</c>: nessun editor, i conflitti restano nel pannello Changes. <c>--non-interactive</c> lo aggiunge RunSvnOnceAsync.</summary>
     internal static List<string> BuildMergeArgs(string sourceUrl, IReadOnlyList<long>? revisions, bool dryRun)
     {

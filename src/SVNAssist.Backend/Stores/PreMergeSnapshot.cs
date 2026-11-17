@@ -133,6 +133,36 @@ internal sealed class PreMergeSnapshot
     }
 
     /// <summary>
+    /// Rilegge dal disco una copia di sicurezza (dopo un riavvio di VS, per "Annulla merge" di un merge interrotto). <c>null</c> se la cartella manca
+    /// o e' incompleta: meglio nessuna copia che una copia che ripristina a meta'.
+    /// </summary>
+    internal static PreMergeSnapshot? Load(string dir)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(dir) || !Directory.Exists(dir))
+                return null;
+            var manifest = Path.Combine(dir, "manifest.json");
+            var patch = Path.Combine(dir, "changes.patch");
+            if (!File.Exists(manifest) || !File.Exists(patch))
+                return null;
+            using var doc = JsonDocument.Parse(File.ReadAllText(manifest));
+            var wc = doc.RootElement.GetProperty("wc").GetString() ?? string.Empty;
+            var entries = doc.RootElement.GetProperty("entries").EnumerateArray()
+                .Select(e => new PreMergeEntry(e.GetProperty("Path").GetString() ?? string.Empty, e.GetProperty("Status").GetString() ?? "M",
+                    e.GetProperty("IsDir").GetBoolean(), e.GetProperty("Sha256").ValueKind == JsonValueKind.String ? e.GetProperty("Sha256").GetString() : null))
+                .ToList();
+            var diff = File.ReadAllText(patch, new UTF8Encoding(false));
+            return new PreMergeSnapshot(wc, dir, diff, entries, entries.Select(e => Full(wc, e.Path)).ToList());
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or KeyNotFoundException or InvalidOperationException)
+        {
+            BackendLog.Warn("Copia di sicurezza non riletta: " + ex.Message);
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Rimette le modifiche pendenti dopo il <c>revert -R</c> di "Annulla merge". Ritorna i problemi (vuoto = ripristino verificato identico):
     /// con problemi il chiamante tiene il backup e lo dice all'utente.
     /// </summary>

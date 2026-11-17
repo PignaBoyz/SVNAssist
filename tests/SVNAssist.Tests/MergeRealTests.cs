@@ -358,8 +358,14 @@ public class MergeRealTests
         Assert.NotEmpty(changes.Conflicts ?? []);                      // la sezione Conflitti c'e'
         Assert.Contains(changes.Sections.SelectMany(s => s.Rows), r => r.Status == "C");
         Assert.NotNull(changes.Merge);                                  // e si puo' annullare il merge parziale
-        Assert.Contains("fermato", e.Merge.Error);                      // spiegazione in italiano
-        Assert.Contains("successive", e.Merge.Error);
+        var pending = changes.Merge!.Pending!;                          // e il banner dice cosa e' stato fatto, cosa manca e cosa fare
+        Assert.Equal([4L], pending.AppliedRevs);                         // si e' fermato DOPO la r4 (in conflitto), la 7 non e' stata applicata
+        Assert.Equal([7L], pending.RemainingRevs);
+        Assert.Equal(4L, pending.ConflictRev);
+        Assert.Contains("ferma alla r4 per conflitto", pending.AppliedText);
+        Assert.Contains("Continua merge", pending.Steps.Last());
+        Assert.False(pending.CanContinue);
+        Assert.Equal("", e.Merge.Error);                                // niente errore in inglese ne' ripetuto: la spiegazione e' una sola, nel pannello
         var snap = e.LogSnap;
         Assert.DoesNotContain("E155015", snap.Msg);                      // l'errore non e' ripetuto nella riga in fondo
         Assert.NotNull(changes.Progress);
