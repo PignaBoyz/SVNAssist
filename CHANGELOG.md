@@ -49,7 +49,7 @@ Installazione: come la 0.2.0. Provata su Visual Studio 18 (2026). Visual Studio 
   - Il messaggio indica cosa è stato applicato, cosa manca e cosa fare: risolvere i conflitti, segnarli come risolti, scegliere Continua merge. Non serve rifare il merge.
   - **Continua merge** applica solo le revisioni rimaste.
   - Lo stato è salvato su disco: il merge si può riprendere dopo il riavvio di Visual Studio.
-  - Il banner con i pulsanti Continua merge, Annulla e Scarta stato e il testo del messaggio sono in corso di completamento (da verificare).
+  - Il banner "Merge interrotto" in Changes e nel Log mostra applicate, rimaste e passi da fare, con i pulsanti Continua merge, Annulla merge e Scarta stato (da verificare in Visual Studio).
 - **Avanzamento con percentuale.** Switch, Update e Update to revision mostrano una barra con percentuale e "N di circa M elementi" quando il totale si ricava (massimo 10 secondi di attesa). Altrimenti resta la barra indeterminata.
 - **Update to revision con finestra di avanzamento** e pulsante Annulla.
 - **Stato più completo.** Changes riconosce conflitti di proprietà, elementi ostruiti, elementi incompleti e tree conflict.
