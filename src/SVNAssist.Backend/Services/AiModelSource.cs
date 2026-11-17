@@ -56,8 +56,8 @@ internal sealed class AiModelSource : IAiModelSource
     {
         var token = await _tokens.ResolveAsync(ct)
             ?? throw new InvalidOperationException(Loc.T("Per elencare i modelli di Copilot serve il login a GitHub (gh auth login): torna al passo Accesso."));
-        var (raw, account) = await CopilotAiService.ListModelsAsync(_http, token, force, ct);
-        return new AiModelsFetched(AiModelCatalog.BuildCopilotModels(raw), account);
+        var (raw, account, defaultModel) = await CopilotAiService.ListModelsAsync(_http, token, force, ct);
+        return new AiModelsFetched(AiModelCatalog.BuildCopilotModels(raw, defaultModel), account);
     }
 
     private async Task<AiModelsFetched?> ListAnthropicAsync(string provider, CancellationToken ct)

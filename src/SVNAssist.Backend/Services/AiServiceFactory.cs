@@ -176,6 +176,11 @@ internal sealed class FallbackAiService : IAiService
     /// <summary>Nome del provider che ha risposto all'ultima richiesta riuscita (<c>null</c> se nessuna).</summary>
     public string? LastUsedProvider { get; private set; }
 
+    /// <summary>Modello usato dal provider che ha risposto, se il provider lo riporta (es. Copilot).</summary>
+    public string? LastUsedModel => _lastService is IReportsModel r ? r.LastModelUsed : null;
+
+    private IAiService? _lastService;
+
     public Task<string> GenerateCommitMessageAsync(string diff, string language, CancellationToken ct, string? projectInstructions = null)
         => TryEachAsync(s => s.GenerateCommitMessageAsync(diff, language, ct, projectInstructions), ct);
 
@@ -191,6 +196,7 @@ internal sealed class FallbackAiService : IAiService
             {
                 var result = await call(service);
                 LastUsedProvider = name;
+                _lastService = service;
                 return result;
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)

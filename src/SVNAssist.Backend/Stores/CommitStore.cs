@@ -344,7 +344,9 @@ internal sealed class CommitStore
         var provider = DescribeProvider(ai);
         SetTrace(chainNames, provider, finished: true);
         var done = improve ? Loc.T("Messaggio migliorato") : Loc.T("Messaggio generato con AI");
-        AiStatus = provider is null ? $"{done}." : $"{done} ({provider}).";
+        var usedModel = ai switch { FallbackAiService f => f.LastUsedModel, IReportsModel r => r.LastModelUsed, _ => null };
+        var detail = string.Join(", ", new[] { provider, usedModel is null ? null : Loc.T("modello {0}", usedModel) }.Where(x => x is not null));
+        AiStatus = detail.Length == 0 ? $"{done}." : $"{done} ({detail}).";
         if (rules is not null)
             AiStatus += Loc.T(" Regole di commit del progetto applicate.");
     }

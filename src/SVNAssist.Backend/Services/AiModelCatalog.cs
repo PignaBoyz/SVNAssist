@@ -288,17 +288,25 @@ internal sealed class AiModelCatalog : IAiModelCatalog
     /// Modelli di Copilot (<c>ListModelsAsync</c>): tutti quelli abilitati per l'account (i disabilitati da piano/organizzazione non si offrono);
     /// "Predefinito" resta sempre primo. Il costo e' il moltiplicatore di richieste premium dichiarato da Copilot, mai stimato.
     /// </summary>
-    internal static List<AiModelInfo> BuildCopilotModels(IEnumerable<(string Id, string? Name, string? State, double? Multiplier)> raw)
+    internal static List<AiModelInfo> BuildCopilotModels(IEnumerable<(string Id, string? Name, string? State, double? Multiplier)> raw, string? defaultModelId = null)
     {
-        var models = new List<AiModelInfo> { new(SettingDefinitions.CopilotDefaultModel, Loc.T("Predefinito di Copilot (lo sceglie Copilot per il tuo account)")) };
+        var list = raw.ToList();
+        // "Predefinito": se il runtime ha detto quale modello usa da solo, lo si scrive (l'utente vuole sapere quale sara' usato).
+        var defName = defaultModelId is null ? null : list.FirstOrDefault(m => string.Equals(m.Id, defaultModelId, StringComparison.OrdinalIgnoreCase)).Name;
+        var defLabel = string.IsNullOrWhiteSpace(defaultModelId)
+            ? Loc.T("Predefinito di Copilot (lo sceglie Copilot per il tuo account)")
+            : Loc.T("Predefinito di Copilot: {0}", string.IsNullOrWhiteSpace(defName) ? defaultModelId : defName + " (" + defaultModelId + ")");
+        var models = new List<AiModelInfo> { new(SettingDefinitions.CopilotDefaultModel, defLabel) };
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { SettingDefinitions.CopilotDefaultModel };
-        foreach (var (id, name, state, multiplier) in raw)
+        foreach (var (id, name, state, multiplier) in list)
         {
             if (!AiModelIds.IsPlausible(id) || !seen.Add(id.Trim()))
                 continue;
-            if (!string.IsNullOrEmpty(state) && !string.Equals(state, "enabled", StringComparison.OrdinalIgnoreCase))
-                continue;
-            models.Add(new AiModelInfo(id.Trim(), string.IsNullOrWhiteSpace(name) ? id.Trim() : name.Trim(), CopilotCost(multiplier)));
+            // Tutti i modelli che Copilot elenca: quelli non abilitati restano visibili con il motivo, cosi' si capisce perche' l'elenco e' diverso da quello di un altro account.
+            var cost = string.IsNullOrEmpty(state) || string.Equals(state, "enabled", StringComparison.OrdinalIgnoreCase) ? CopilotCost(multiplier)
+                : string.Equals(state, "disabled", StringComparison.OrdinalIgnoreCase) ? Loc.T("non abilitato per il tuo account o la tua organizzazione")
+                : Loc.T("non ancora abilitato ({0})", state);
+            models.Add(new AiModelInfo(id.Trim(), string.IsNullOrWhiteSpace(name) ? id.Trim() : name.Trim(), cost));
         }
 
         return models;

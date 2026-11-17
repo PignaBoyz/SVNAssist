@@ -69,7 +69,7 @@ public class AiModelCatalogTests : IDisposable
     }
 
     [Fact]
-    public void CopilotModels_PredefinitoSempreInTesta_DisabilitatiEsclusi_CostoDalMoltiplicatore()
+    public void CopilotModels_PredefinitoInTesta_NonAbilitatiVisibiliConIlMotivo_CostoDalMoltiplicatore()
     {
         var models = AiModelCatalog.BuildCopilotModels(
         [
@@ -77,13 +77,25 @@ public class AiModelCatalogTests : IDisposable
             ("vecchio", "Vecchio", "disabled", 1.0),
             ("gratis", null, null, 0.0),
             ("senza-costo", "Senza costo", "enabled", null),
+            ("da-accettare", "Da accettare", "unconfigured", 2.0),
         ]);
 
-        Assert.Equal(["default", "gpt-x", "gratis", "senza-costo"], models.Select(m => m.Id));
+        Assert.Equal(["default", "gpt-x", "vecchio", "gratis", "senza-costo", "da-accettare"], models.Select(m => m.Id));
         Assert.Equal("1× richieste premium per richiesta", models[1].Cost);
-        Assert.Equal("0× richieste premium per richiesta", models[2].Cost);
-        Assert.Equal("gratis", models[2].Label);
-        Assert.Equal(string.Empty, models[3].Cost); // mai un costo inventato
+        Assert.Contains("non abilitato", models[2].Cost); // visibile, con il motivo: capire perche' l'elenco e' diverso
+        Assert.Equal("0× richieste premium per richiesta", models[3].Cost);
+        Assert.Equal("gratis", models[3].Label);
+        Assert.Equal(string.Empty, models[4].Cost); // mai un costo inventato
+        Assert.Contains("unconfigured", models[5].Cost);
+    }
+
+    [Fact]
+    public void CopilotModels_PredefinitoNominaIlModelloCheUsaDaSolo_SeIlRuntimeLoDice()
+    {
+        var raw = new (string, string?, string?, double?)[] { ("gpt-5.6", "GPT 5.6", "enabled", 1.0) };
+        Assert.Equal("Predefinito di Copilot: GPT 5.6 (gpt-5.6)", AiModelCatalog.BuildCopilotModels(raw, "gpt-5.6")[0].Label);
+        Assert.Equal("Predefinito di Copilot: ignoto-id", AiModelCatalog.BuildCopilotModels(raw, "ignoto-id")[0].Label);
+        Assert.Contains("lo sceglie Copilot", AiModelCatalog.BuildCopilotModels(raw)[0].Label); // senza informazione: lo dice, non inventa
     }
 
     [Theory]
@@ -287,6 +299,24 @@ public class AiModelCatalogTests : IDisposable
         Assert.Equal("wizardOpenModels", snap.AiAction!.Cmd);
         Assert.Equal("Aggiorna elenco modelli", snap.AiAction.Label);
         Assert.Equal("copilot", vm.FailedProvider);
+    }
+
+    private sealed class ModelReportingAi : IAiService, IReportsModel
+    {
+        public string? LastModelUsed => "gpt-5.6";
+
+        public Task<string> GenerateCommitMessageAsync(string diff, string language, CancellationToken ct, string? projectInstructions = null) => Task.FromResult("Titolo");
+
+        public Task<string> ImproveCommitMessageAsync(string draft, string diff, string language, CancellationToken ct, string? projectInstructions = null, string? style = null) => Task.FromResult("Titolo");
+    }
+
+    [Fact]
+    public async Task GeneraConAi_MostraIlModelloUsatoDavvero_SeIlProviderLoRiporta()
+    {
+        var (vm, ai) = CreateVm();
+        ai.Custom = new ModelReportingAi();
+        await vm.GenerateAsync(Ct);
+        Assert.Contains("modello gpt-5.6", vm.AiStatus);
     }
 
     [Fact]
