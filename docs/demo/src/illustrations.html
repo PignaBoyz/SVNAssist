@@ -8,7 +8,7 @@
   Ricostruzioni dell'aspetto di Visual Studio (tema scuro) per le note di rilascio: NON sono screenshot veri.
   Usata solo da tools/screenshots-release.mjs (non fa parte della demo pubblica).
   Parametri: ?scene=<id>&lang=it|en
-  Scene: log-doc (07), diff (08), se-menu (09), login (10), ext-menu (11); delle versioni successive: ext-menu-actions (0.3.0).
+  Scene: log-doc (07), diff (08), se-menu (09), login (10), ext-menu (11); delle versioni successive: ext-menu-actions (0.3.0), se-menu-scc (0.4.0).
   Per log-doc la pagina aspetta l'immagine del Log vero (catturata dalla demo) con window.setLogImage(dataUrl).
   I testi delle voci di menu e del dialogo vengono da SVNAssist.vsct, PromptDialog.cs, DiffOpener.cs, Loc/LocEn.cs.
   Tutto cio' che non e' di SVNAssist (altre voci di menu, nomi dei file) e' contorno di esempio.
@@ -278,6 +278,39 @@ SCENES['ext-menu-actions'] = () => {
   q('ddh', ext.left - box.left + X0 - 6, 0);
   const sv = document.querySelector('#ddh .it.hl').getBoundingClientRect();
   q('m1h', sv.right - box.left + X0 - 2, sv.top - box.top - 4);
+};
+
+// 0.4.0: Solution Explorer con le icone di stato SVN e il menu del tasto destro su un file modificato.
+// Voci da SVNAssist.vsct del tag v0.4.0 (gruppo GroupSe nei menu di file, progetto e cartella: Show Log, SVN Add, Check for Modifications;
+// DefaultInvisible + DynamicVisibility, quindi "SVN Add" compare solo per gli elementi non versionati). Non c'e' piu' il sottomenu "SVN".
+// Le icone di stato sono SCHEMATICHE: Visual Studio mostra le proprie icone standard di source control, che qui non sono riprodotte.
+const GL = {
+  normal: '<svg class="gl" viewBox="0 0 10 10"><rect x="1.5" y="4.5" width="7" height="4.5" rx=".8" fill="#6a9fd8"/><path d="M3 4.5V3a2 2 0 014 0v1.5" fill="none" stroke="#6a9fd8" stroke-width="1.1"/></svg>',
+  modified: '<svg class="gl" viewBox="0 0 10 10"><path d="M1.5 5.2l2.4 2.5 4.6-5.4" fill="none" stroke="#e5534b" stroke-width="1.7"/></svg>',
+  added: '<svg class="gl" viewBox="0 0 10 10"><path d="M5 1.5v7M1.5 5h7" stroke="#4ec27a" stroke-width="1.8"/></svg>',
+  unversioned: '<svg class="gl" viewBox="0 0 10 10"><circle cx="5" cy="5" r="3.4" fill="none" stroke="#9d9d9d" stroke-width="1.2" stroke-dasharray="1.6 1.2"/></svg>',
+  conflict: '<svg class="gl" viewBox="0 0 10 10"><path d="M5 1.2L9.2 8.8H.8z" fill="#e8a838"/><path d="M5 4v2.4M5 7.3v.4" stroke="#222" stroke-width="1"/></svg>',
+};
+SCENES['se-menu-scc'] = () => {
+  const W = 800, H = 520, seW = 300, dockW = 0;
+  stage.style.width = W + 'px'; stage.style.height = H + 'px';
+  const css = document.createElement('style');
+  css.textContent = '.gw{position:relative;display:inline-flex}.gw .gl{position:absolute;left:-5px;bottom:-4px;width:10px;height:10px}';
+  document.head.appendChild(css);
+  const txt = svg('<path d="M3.5 1.5h6l3 3v10h-9z" fill="#2b2b2b" stroke="#9d9d9d"/><path d="M9.5 1.5v3h3M5.5 8h5M5.5 10.5h5" stroke="#9d9d9d"/>');
+  const f = (n, ind, g, sel) => `<div class="tr ${sel ? 'sel' : ''}" style="padding-left:${6 + ind * 14}px"><span class="car"></span><span class="gw">${/\.txt$/.test(n) ? txt : IC.cs}${GL[g]}</span><span>${n}</span></div>`;
+  const tree = `<div class="tree">` +
+    row(0, true, IC.sln, "Solution 'Acme.Shop' (2 of 2 projects)") +
+    row(1, true, IC.proj, 'Acme.Shop.Core') +
+    row(2, true, IC.folder, 'Models') + f('Coupon.cs', 3, 'added') + f('Order.cs', 3, 'normal') +
+    row(2, true, IC.folder, 'Services') + f('OrderService.cs', 3, 'modified', true) + f('PaymentGateway.cs', 3, 'normal') +
+    row(1, true, IC.proj, 'Acme.Shop.Web') +
+    row(2, true, IC.folder, 'Controllers') + f('CartController.cs', 3, 'normal') + f('CheckoutController.cs', 3, 'conflict') +
+    f('notes.txt', 2, 'unversioned') +
+  `</div>`;
+  const seBox = `<div class="abs" style="left:0;top:58px;width:${seW}px;bottom:22px;background:var(--bg);box-shadow:0 0 0 1px #3a3a3a, 0 8px 24px rgba(0,0,0,.6)"><div class="pane-h" style="background:#232323;color:var(--text)">Solution Explorer</div>${tree}</div>`;
+  const ctx = menuHtml(['Open', 'Open With...', '-', 'Exclude From Project', '-', { t: 'Show Log', hl: true }, 'Check for Modifications', '-', { t: 'Cut', kb: 'Ctrl+X' }, { t: 'Copy', kb: 'Ctrl+C' }, { t: 'Delete', kb: 'Del' }, { t: 'Rename', kb: 'F2' }, '-', 'Properties'], 'left:210px;top:208px;width:230px');
+  stage.innerHTML = backdrop({ W, H, seW, dockW }) + seBox + ctx;
 };
 
 SCENES[SCENE]();
