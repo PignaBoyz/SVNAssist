@@ -9,6 +9,8 @@ namespace SVNAssist
     {
         internal static readonly Dictionary<string, string> En = new Dictionary<string, string>
         {
+            ["Nessun merge in corso."] = "No merge in progress.",
+            ["File non presente nelle revisioni scelte."] = "File not present in the selected revisions.",
             ["Impossibile controllare le nuove revisioni: {0}"] = "Cannot check for new revisions: {0}",
             ["Controllo delle nuove revisioni spento (Tools > Options > SVNAssist > Controllo nuove revisioni)."] = "New-revision check is off (Tools > Options > SVNAssist > New revision check).",
             ["Controllo delle nuove revisioni in corso..."] = "Checking for new revisions...",

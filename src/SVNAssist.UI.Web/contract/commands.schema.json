@@ -2438,6 +2438,122 @@
           }
         }
       }
+    },
+    {
+      "title": "mergeFocus",
+      "description": "Log in modalita merge (menu contestuale Mostra file modificati): l'elenco dei file mostra solo questa revisione. rev 0 = torna alla scelta.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "mergeFocus"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "rev"
+          ],
+          "properties": {
+            "rev": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "mergePreviewRev",
+      "description": "Menu contestuale Anteprima di questa: la scelta diventa questa sola revisione e parte l'anteprima (svn merge --dry-run).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "mergePreviewRev"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "rev"
+          ],
+          "properties": {
+            "rev": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "mergeRev",
+      "description": "Menu contestuale Merge di questa revisione: la scelta diventa questa sola revisione e parte il merge (cherry-pick).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "mergeRev"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "rev"
+          ],
+          "properties": {
+            "rev": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "mergeFileOpen",
+      "description": "Clic su un file dell'elenco del merge: diff nativo. Con rev (elenco per revisione dell'anteprima) r-1 contro r; senza, prima della prima revisione scelta che lo tocca contro dopo l'ultima.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "mergeFileOpen"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "p"
+          ],
+          "properties": {
+            "p": {
+              "type": "string",
+              "minLength": 1
+            },
+            "rev": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      }
     }
   ]
 }

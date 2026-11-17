@@ -131,6 +131,7 @@ public class MergeTests
 
         public Fixture()
         {
+            MergeStore.FilesDebounce = TimeSpan.Zero;
             Svn.InfoRelativeUrl = "^/trunk";
             Svn.Folders["file:///repo"] = ["branches", "tags", "trunk"];
             Svn.Folders["file:///repo/branches"] = ["feature-x", "con spazio"];
@@ -298,6 +299,172 @@ public class MergeTests
 
         var json = UiJson.Serialize(f.Log.GetSnapshot());
         Assert.True(json.Length < 120_000, $"snapshot di {json.Length} byte");   // con -v erano ~1,6 MB per 600 revisioni di 30 file
+    }
+
+    // ── File coinvolti (bug 6): elenco per la scelta, per revisione e nell'anteprima ──
+
+    private static async Task<MergeFilesDto> FilesAsync(Fixture f)
+    {
+        for (var i = 0; i < 200; i++)
+        {
+            if (f.Merge.Files is { Loading: false } files)
+                return files;
+            await Task.Delay(10);
+        }
+
+        throw new TimeoutException("i file non sono arrivati");
+    }
+
+    private static SvnLogPath P(string a, string p, string k = "file") => new(a, p, k);
+
+    [Fact]
+    public void MergeFiles_Unione_EffettoNettoPerPercorso()
+    {
+        var map = new Dictionary<long, IReadOnlyList<SvnLogPath>>
+        {
+            [1] = [P("A", "/branches/x/new.txt"), P("M", "/branches/x/a.txt"), P("D", "/branches/x/old.txt"), P("A", "/branches/x"), P("M", "/trunk/altro.txt")],
+            [2] = [P("M", "/branches/x/new.txt"), P("D", "/branches/x/a.txt"), P("A", "/branches/x/old.txt"), P("A", "/branches/x/tmp.txt")],
+            [3] = [P("D", "/branches/x/tmp.txt"), P("M", "/branches/x/src", "dir")],
+        };
+
+        var items = MergeFiles.Union([3, 1, 2], r => map[r], "branches/x");
+
+        Assert.Equal(new[] { "A new.txt x2", "D a.txt x2", "R old.txt x2", "M src x1", "M /trunk/altro.txt x1" }.Order(), items.Select(i => $"{i.A} {i.P} x{i.N}").Order());
+        Assert.DoesNotContain(items, i => i.P == "tmp.txt");   // aggiunto e poi eliminato: nessun effetto
+        Assert.Equal("dir", items.Single(i => i.P == "src").K);
+        Assert.Null(MergeFiles.Relative("/branches/x", "branches/x"));
+        Assert.Equal("a/b.cs", MergeFiles.Relative("/branches/x/a/b.cs", "branches/x"));
+    }
+
+    [Fact]
+    public async Task Merge_ScelgoLeRevisioni_FileInAsincrono_UnioneConConteggio_PoiInCache()
+    {
+        using var f = new Fixture();
+        await f.OpenMergeAsync();
+        Assert.Null(f.Merge.Files);   // niente scelta, niente elenco, e nessun log -v finora
+        Assert.DoesNotContain(f.Svn.RangeCalls, c => c.WithPaths);
+
+        await f.LogCmd("mergeToggle", new { rev = 4 });
+        await f.LogCmd("mergeToggle", new { rev = 7 });
+        var files = await FilesAsync(f);
+
+        Assert.Equal("r4, r7", files.Subject);
+        Assert.Equal(["M a.txt", "D b.txt"], files.Items.Select(i => $"{i.A} {i.P}"));
+        Assert.Equal(2, files.Files);
+        Assert.Equal(2, f.Svn.RangeCalls.Count(c => c.WithPaths));   // 4 e 7 non sono adiacenti nell'elenco (la 5 sta in mezzo): due richieste
+        var before = f.Svn.RangeCalls.Count;
+
+        await f.LogCmd("mergeToggle", new { rev = 7 });   // toglie la 7
+        await f.LogCmd("mergeToggle", new { rev = 7 });   // la rimette: in cache
+        files = await FilesAsync(f);
+        Assert.Equal(before, f.Svn.RangeCalls.Count);
+        Assert.Equal(["M a.txt", "D b.txt"], files.Items.Select(i => $"{i.A} {i.P}"));
+        Assert.Equal(1, f.Svn.RangeCalls.Count(c => c.WithPaths && c.Min == 4 && c.Max == 4));
+    }
+
+    [Fact]
+    public async Task Merge_MenuContestuale_MostraFileDiUnaRevisione_SenzaToccareLaScelta()
+    {
+        using var f = new Fixture();
+        await f.OpenMergeAsync();
+        await f.LogCmd("mergeToggle", new { rev = 4 });
+        await FilesAsync(f);
+
+        await f.LogCmd("mergeFocus", new { rev = 5 });
+        var files = await FilesAsync(f);
+
+        Assert.True(files.Focus);
+        Assert.Equal("r5", files.Subject);
+        Assert.Equal(["A new.txt"], files.Items.Select(i => $"{i.A} {i.P}"));
+        Assert.Equal([4L], f.Merge.Selected);
+        await f.LogCmd("mergeFocus", new { rev = 0 });
+        files = await FilesAsync(f);
+        Assert.False(files.Focus);
+        Assert.Equal("r4", files.Subject);
+    }
+
+    [Fact]
+    public async Task Merge_ClicSuUnFile_ApreIlDiff_PrimaDellaPrimaEDopoLUltimaRevisione()
+    {
+        using var f = new Fixture();
+        f.Svn.RangeLog = [.. f.Svn.RangeLog, new SvnLogEntry(8, "mrossi", DateTimeOffset.UnixEpoch, "ancora a", [P("M", "/branches/feature-x/a.txt")])];
+        f.Svn.Eligible = [4, 5, 7, 8];
+        await f.OpenMergeAsync();
+        await f.LogCmd("mergeToggle", new { rev = 4 });
+        await f.LogCmd("mergeToggle", new { rev = 8 });
+        var files = await FilesAsync(f);
+        Assert.Equal(2, files.Items.Single(i => i.P == "a.txt").N);
+
+        await f.LogCmd("mergeFileOpen", new { p = "a.txt" });
+
+        Assert.Equal("a.txt r3 ↔ r8", f.Host.Diffs.Single().Caption);   // 4-1 e 8
+        Assert.Contains(f.Svn.ExportedRevisions, x => x.Target == "file:///repo/branches/feature-x/a.txt");
+
+        await f.LogCmd("mergeFileOpen", new { p = "a.txt", rev = 4 });
+        Assert.Equal("a.txt r3 ↔ r4", f.Host.Diffs[1].Caption);
+
+        await f.LogCmd("mergeFileOpen", new { p = "inesistente.txt" });
+        Assert.True(f.LogSnap.Err);
+        Assert.Equal(2, f.Host.Diffs.Count);
+    }
+
+    [Fact]
+    public async Task Anteprima_PerRevisione_FileDiOgniRevisioneEConflittiDelDryRun()
+    {
+        using var f = new Fixture();
+        f.Svn.MergeResult = MergeParser.ParseMerge("--- Merging r4 through r7 into '.':\nC    a.txt\nA    new.txt\nD    b.txt\n");
+        await f.OpenMergeAsync();
+
+        await f.LogCmd("mergePreview");
+
+        var r = f.Merge.Result!;
+        Assert.Equal([4L, 5, 7], r.ByRev!.Select(g => g.Rev));   // dalla piu' vecchia: l'ordine in cui il merge le applica
+        Assert.Equal("mrossi", r.ByRev![0].Author);
+        Assert.Equal("feat: modifica a", r.ByRev[0].Msg);
+        Assert.Equal(["M a.txt"], r.ByRev[0].Files.Select(x => $"{x.A} {x.P}"));
+        Assert.True(r.ByRev[0].Files[0].C);   // a.txt e' in conflitto nel dry-run
+        Assert.Equal(1, r.ByRev[0].Conflicts);
+        Assert.False(r.ByRev[1].Files[0].C);
+        Assert.Equal("feat: aggiunge new", r.ByRev[1].Msg);   // solo la prima riga del messaggio
+        Assert.Equal(1, r.Counts.Conflicted);
+    }
+
+    [Fact]
+    public async Task MenuContestuale_AnteprimaEMergeDiUnaSolaRevisione_LaScelta_DiventaQuella()
+    {
+        using var f = new Fixture();
+        f.Svn.MergeResult = MergeParser.ParseMerge(DryRun);
+        await f.OpenMergeAsync();
+        f.MergeLeavesChanges();
+        await f.LogCmd("mergeToggle", new { rev = 4 });
+
+        await f.LogCmd("mergePreviewRev", new { rev = 5 });
+        Assert.Equal([5L], f.Merge.Selected);
+        Assert.Equal("preview", f.Merge.Result!.Mode);
+        Assert.Equal([5L], f.Merge.Result.ByRev!.Select(g => g.Rev));
+
+        await f.LogCmd("mergeRev", new { rev = 7 });
+        Assert.Equal(["5 True", "7 False"], Fixture.Calls(f));
+        Assert.Equal("merge", f.Merge.Result!.Mode);
+        Assert.Null(f.Merge.Files);   // dopo il merge la scelta si azzera
+    }
+
+    [Fact]
+    public async Task Snapshot_ConFileEAnteprimaPerRevisione_RispettanoLoSchema()
+    {
+        using var f = new Fixture();
+        f.Svn.MergeResult = MergeParser.ParseMerge(DryRun + "C    a.txt\n");
+        await f.OpenMergeAsync();
+        await f.LogCmd("mergeToggle", new { rev = 5 });
+        await FilesAsync(f);
+        await f.LogCmd("mergePreview");
+
+        var json = UiJson.Serialize(f.Log.GetSnapshot());
+
+        Assert.Contains("\"files\"", json);
+        Assert.Contains("\"byRev\"", json);
+        var errors = SnapshotSchemaTests.Validate("log-state", json);
+        Assert.Empty(errors);
     }
 
     [Fact]

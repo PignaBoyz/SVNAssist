@@ -1073,7 +1073,20 @@ function mgResult(m, mode, revs) {
   const fl = new Map();
   for (const r of MG[m.name] || []) if (revs.includes(r.rev)) for (const [k, p] of r.files) fl.set(p, k);
   const items = [...fl].map(([p, k]) => ({ a: k === 'U' ? 'M' : k, p: fwd(p) })), n = k => items.filter(i => i.a === k).length;
-  return { mode, revs: mgLabel(m, revs), counts: { updated: n('M'), added: n('A'), deleted: n('D'), merged: 0, conflicted: n('C') }, items, skipped: 0 };
+  const res = { mode, revs: mgLabel(m, revs), counts: { updated: n('M'), added: n('A'), deleted: n('D'), merged: 0, conflicted: n('C') }, items, skipped: 0 };
+  if (mode === 'preview') {   // anteprima per revisione: i file di ogni revisione (svn log -v) e i conflitti del dry-run complessivo
+    res.byRev = revs.map(rv => { const e = (MG[m.name] || []).find(x => x.rev === rv); const files = (e ? e.files : []).map(([k, p]) => ({ a: k === 'U' || k === 'C' ? 'M' : k, p: fwd(p), ...(k === 'C' ? { c: true } : {}) }));
+      return { rev: rv, author: e ? e.author : '', msg: e ? String(e.msg).split('\n')[0] : '', files, more: 0, conflicts: files.filter(f => f.c).length }; });
+  }
+  return res;
+}
+// file coinvolti dalla scelta (unione delle revisioni) o da una revisione scelta dal menu contestuale
+function mgFilesSnap(m) {
+  const revs = m.focus ? [m.focus] : m.sel.slice().sort((a, b) => a - b); if (!revs.length) return null;
+  const map = new Map();
+  for (const r of MG[m.name] || []) if (revs.includes(r.rev)) for (const [k, p] of r.files) { const a = k === 'U' || k === 'C' ? 'M' : k, c = map.get(p); map.set(p, c ? { a: c.a === 'A' ? 'A' : a, n: c.n + 1 } : { a, n: 1 }); }
+  const items = [...map].map(([p, v]) => ({ a: v.a, p: fwd(p), ...(v.n > 1 ? { n: v.n } : {}) })).sort((x, y) => x.p.localeCompare(y.p));
+  return { subject: m.focus ? 'r' + m.focus : revs.length <= 6 ? revs.map(r => 'r' + r).join(', ') : `r${revs[0]}-r${revs[revs.length - 1]} (selezione di ${revs.length} revisioni)`, focus: !!m.focus, loading: false, error: '', items, files: items.length, more: 0 };
 }
 async function mgStart(name) {
   S.vm.sw = null; const m = S.lvm.merge = { name, loading: true, busy: false, error: '', blocked: '', sel: [], result: null, msg: 'Lettura delle revisioni da unire...' };

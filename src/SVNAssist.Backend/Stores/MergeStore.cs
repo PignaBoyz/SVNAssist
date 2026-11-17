@@ -20,6 +20,15 @@ internal sealed class MergeStore
     private readonly HashSet<long> _selected = [];
     // Autore, data e messaggio gia' letti (per revisione): dopo un merge, un annulla o un update si rilegge solo mergeinfo e si chiede il log delle revisioni nuove.
     private readonly Dictionary<long, LogEntryDto> _logCache = [];
+    // File toccati da ogni revisione (svn log -v), letti solo per le revisioni di cui serve l'elenco e poi in cache: una revisione non cambia.
+    private readonly Dictionary<long, IReadOnlyList<SvnLogPath>> _paths = [];
+    private long? _focus;   // revisione scelta dal menu contestuale per vederne i file (vale al posto della scelta)
+    private long _filesGen;
+    private bool _filesLoading;
+    private string _filesError = string.Empty;
+    private MergeFilesDto? _filesDto;
+    private CancellationTokenSource _filesCts = new();
+    private string? _repoRoot;
 
     private bool _active, _loading, _busy;
     private string _wc = string.Empty, _error = string.Empty, _blocked = string.Empty, _message = string.Empty;
@@ -61,7 +70,7 @@ internal sealed class MergeStore
         var pending = _changes.MergePending; // prima del lock: prende il lock di ChangesStore
         lock (_lock)
             return !_active || _source is null ? null
-                : new MergeDto(_source.Name, Title(_source), _loading, _busy, _error, _blocked, _selected.Order().ToList(), _entries.Count, _result, pending, SvnErrors.SuggestsUpdate(_error));
+                : new MergeDto(_source.Name, Title(_source), _loading, _busy, _error, _blocked, _selected.Order().ToList(), _entries.Count, _result, pending, SvnErrors.SuggestsUpdate(_error), _filesDto);
     }
 
     internal void Close()
@@ -72,6 +81,7 @@ internal sealed class MergeStore
             _entries = [];
             _selected.Clear();
             _result = null;
+            ResetFiles();
         }
 
         Changed?.Invoke();
@@ -91,6 +101,7 @@ internal sealed class MergeStore
             _logCache.Clear();
             _selected.Clear();
             _result = null;
+            ResetFiles();
             _error = string.Empty;
             _blocked = string.Empty;
             _message = Loc.T("Lettura delle revisioni da unire...");
@@ -204,9 +215,10 @@ internal sealed class MergeStore
             if (!_selected.Remove(rev))
                 _selected.Add(rev);
             _result = null; // l'anteprima riguardava un'altra scelta
+            _focus = null;
         }
 
-        Changed?.Invoke();
+        RequestFiles();
     }
 
     internal void ClearSelection()
@@ -215,9 +227,257 @@ internal sealed class MergeStore
         {
             _selected.Clear();
             _result = null;
+            _focus = null;
+        }
+
+        RequestFiles();
+    }
+
+    /// <summary>Menu contestuale: lascia la scelta com'e' e mostra i file di una sola revisione (<paramref name="rev"/> 0 = torna alla scelta).</summary>
+    internal void Focus(long rev)
+    {
+        lock (_lock)
+        {
+            if (rev != 0 && !_entries.Any(e => e.Rev == rev))
+                return;
+            _focus = rev == 0 ? null : rev;
+        }
+
+        RequestFiles();
+    }
+
+    /// <summary>Menu contestuale "Anteprima di questa" / "Merge di questa revisione": la scelta diventa solo questa revisione.</summary>
+    private bool SelectOnly(long rev)
+    {
+        lock (_lock)
+        {
+            if (_busy || _loading || !_active || !_entries.Any(e => e.Rev == rev))
+                return false;
+            _selected.Clear();
+            _selected.Add(rev);
+            _result = null;
+            _focus = null;
+        }
+
+        RequestFiles();
+        return true;
+    }
+
+    internal Task PreviewRevisionAsync(long rev, CancellationToken ct) => SelectOnly(rev) ? PreviewAsync(ct) : Task.CompletedTask;
+
+    internal Task MergeRevisionAsync(long rev, CancellationToken ct) => SelectOnly(rev) ? RunAsync(all: false, ct) : Task.CompletedTask;
+
+    // ── File coinvolti (bug 6) ───────────────────────────────────────
+
+    /// <summary>Svuota tutto quello che riguarda i file (nuovo merge, chiusura). Chiamare col lock preso.</summary>
+    private void ResetFiles()
+    {
+        _paths.Clear();
+        _focus = null;
+        _filesDto = null;
+        _filesLoading = false;
+        _filesError = string.Empty;
+        _repoRoot = null;
+        _filesGen++;
+        var old = _filesCts;
+        _filesCts = new CancellationTokenSource();
+        try { old.Cancel(); } catch (ObjectDisposedException) { /* gia' chiuso */ }
+    }
+
+    private List<long> SubjectRevs() => _focus is { } f ? [f] : _selected.Order().ToList();
+
+    /// <summary>Ricostruisce l'elenco dalla cache. Chiamare col lock preso.</summary>
+    private void RebuildFiles()
+    {
+        var revs = SubjectRevs();
+        if (revs.Count == 0 || _source is null)
+        {
+            _filesDto = null;
+            return;
+        }
+
+        var subject = _focus is { } f ? $"r{f}" : RevsLabel(revs);
+        if (_filesLoading)
+        {
+            _filesDto = new MergeFilesDto(subject, _focus is not null, true, string.Empty, [], 0, 0);
+            return;
+        }
+
+        var all = MergeFiles.Union(revs, r => _paths.GetValueOrDefault(r), _source.Path);
+        var (items, more) = MergeFiles.Cap(all, MergeFiles.MaxItems);
+        _filesDto = new MergeFilesDto(subject, _focus is not null, false, _filesError, items, all.Count(i => i.K is null), more);
+    }
+
+    /// <summary>La scelta (o la revisione del menu) e' cambiata: i file mancanti in cache si leggono in background (poche richieste, dopo una breve attesa per le raffiche di clic).</summary>
+    private void RequestFiles()
+    {
+        long gen;
+        List<long> missing;
+        CancellationToken ct;
+        lock (_lock)
+        {
+            gen = ++_filesGen;
+            _filesError = string.Empty;
+            missing = SubjectRevs().Where(r => !_paths.ContainsKey(r)).ToList();
+            _filesLoading = missing.Count > 0;
+            RebuildFiles();
+            ct = _filesCts.Token;
         }
 
         Changed?.Invoke();
+        if (missing.Count > 0)
+            _ = LoadFilesAsync(gen, missing, ct);
+    }
+
+    private async Task LoadFilesAsync(long gen, List<long> missing, CancellationToken ct)
+    {
+        try
+        {
+            await Task.Delay(FilesDebounce, ct);
+            lock (_lock)
+            {
+                if (gen != _filesGen)
+                    return; // una scelta piu' recente ha gia' chiesto quello che le serve
+            }
+
+            await EnsurePathsAsync(missing, ct);
+            lock (_lock)
+            {
+                if (gen != _filesGen)
+                    return;
+                _filesLoading = false;
+                RebuildFiles();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            BackendLog.Warn("merge files: " + ex.Message);
+            lock (_lock)
+            {
+                if (gen != _filesGen)
+                    return;
+                _filesLoading = false;
+                _filesError = Loc.T("Errore: {0}", ex.Message);
+                RebuildFiles();
+            }
+        }
+
+        Changed?.Invoke();
+    }
+
+    /// <summary>Attesa prima di leggere i file dopo un clic (sostituibile nei test).</summary>
+    internal static TimeSpan FilesDebounce { get; set; } = TimeSpan.FromMilliseconds(200);
+
+    /// <summary>
+    /// Mette in cache i file toccati dalle revisioni indicate: <c>svn log -v</c> a gruppi di revisioni adiacenti nell'elenco (nessuna revisione in mezzo
+    /// da scartare, una richiesta per gruppo, in parallelo) e non una chiamata per revisione.
+    /// </summary>
+    private async Task EnsurePathsAsync(IReadOnlyList<long> revs, CancellationToken ct)
+    {
+        List<long> missing;
+        Dictionary<long, int> index;
+        SwitchPickerStore.Target source;
+        lock (_lock)
+        {
+            source = _source!;
+            missing = revs.Where(r => !_paths.ContainsKey(r)).Distinct().ToList();
+            index = [];
+            for (var i = 0; i < _entries.Count; i++)
+                index[_entries[i].Rev] = i;
+        }
+
+        if (missing.Count == 0)
+            return;
+        var sw = Stopwatch.StartNew();
+        var runs = new List<(long Min, long Max)>();
+        int? prev = null;
+        foreach (var r in missing.OrderBy(r => index.GetValueOrDefault(r, int.MaxValue)))
+        {
+            var i = index.GetValueOrDefault(r, int.MaxValue);
+            if (prev is { } p && i == p + 1)
+                runs[^1] = (Math.Min(runs[^1].Min, r), Math.Max(runs[^1].Max, r));
+            else
+                runs.Add((r, r));
+            prev = i;
+        }
+
+        using var gate = new SemaphoreSlim(LogParallelism);
+        var batches = await Task.WhenAll(runs.Select(async g =>
+        {
+            await gate.WaitAsync(ct);
+            try { return await _svn.GetLogRangeAsync(source.Url, g.Min, g.Max, ct, withPaths: true); }
+            finally { gate.Release(); }
+        }));
+        var wanted = missing.ToHashSet();
+        lock (_lock)
+        {
+            foreach (var e in batches.SelectMany(b => b).Where(e => wanted.Contains(e.Revision)))
+                _paths[e.Revision] = e.Paths ?? [];
+            foreach (var r in missing)
+                _paths.TryAdd(r, []); // il log non l'ha restituita (permessi): elenco vuoto, non si richiede di nuovo
+        }
+
+        BackendLog.Info($"merge files: {missing.Count} revisioni in {runs.Count} richieste di log -v, {sw.ElapsedMilliseconds} ms");
+    }
+
+    private async Task<string> RepoRootAsync(CancellationToken ct)
+    {
+        SwitchPickerStore.Target source;
+        lock (_lock)
+        {
+            if (_repoRoot is not null)
+                return _repoRoot;
+            source = _source!;
+        }
+
+        var root = (await _svn.GetRepositoryRootAsync(source.Url, ct)).TrimEnd('/');
+        lock (_lock)
+            _repoRoot = root;
+        return root;
+    }
+
+    /// <summary>
+    /// Clic su un file dell'elenco: URL, nome e revisioni (sinistra, destra) per il diff. Con <paramref name="rev"/> (elenco per revisione dell'anteprima) <c>r-1 ↔ r</c>;
+    /// altrimenti prima della prima revisione che lo tocca ↔ dopo l'ultima (comprende anche eventuali revisioni intermedie non scelte).
+    /// </summary>
+    internal async Task<(string Url, string Name, long? Left, long? Right)> ResolveFileAsync(long? rev, string rel, CancellationToken ct)
+    {
+        List<long> revs;
+        string sourcePath;
+        lock (_lock)
+        {
+            revs = rev is { } r ? [r] : SubjectRevs();
+            sourcePath = _source?.Path ?? throw new ArgumentException(Loc.T("Nessun merge in corso."));
+        }
+
+        await EnsurePathsAsync(revs, ct);
+        var hits = new List<(long Rev, SvnLogPath P)>();
+        lock (_lock)
+        {
+            foreach (var r in revs.Order())
+            foreach (var p in _paths.GetValueOrDefault(r) ?? [])
+                if (string.Equals(MergeFiles.Relative(p.Path, sourcePath), rel, StringComparison.Ordinal))
+                    hits.Add((r, p));
+        }
+
+        if (hits.Count == 0 || hits[^1].P.Kind == "dir")
+            throw new ArgumentException(Loc.T("File non presente nelle revisioni scelte."));
+        var root = await RepoRootAsync(ct);
+        var url = root + hits[^1].P.Path;
+        var name = System.IO.Path.GetFileName(rel);
+        if (hits.Count == 1)
+        {
+            var (l, r2) = DiffOpener.ForRevision(hits[0].P.Action, hits[0].Rev);
+            return (url, name, l, r2);
+        }
+
+        var net = MergeFiles.NetAction(hits[0].P.Action, hits[^1].P.Action) ?? "M";
+        var (left, right) = DiffOpener.ForRange(net, hits[0].Rev - 1, hits[^1].Rev);
+        return (url, name, left, right);
     }
 
     /// <summary>Anteprima (<c>--dry-run</c>): le revisioni scelte, o tutte quelle da unire se non ce n'e' nessuna.</summary>
@@ -232,10 +492,16 @@ internal sealed class MergeStore
             // L'anteprima non modifica nulla: lo stato (solo per aggiornare l'avviso) si legge in parallelo al dry-run.
             var blocked = Timed(times, "status", () => CheckBlockedAsync(ct));
             var merge = Timed(times, "dry-run", () => _svn.MergeAsync(wc, source.Url, revs, dryRun: true, ct));
-            await Task.WhenAll(blocked, merge);
+            // Per revisione: i file di ogni revisione (svn log -v, in cache) piu' il dry-run complessivo per i conflitti. Un dry-run per revisione
+            // sarebbe N visite della working copy (e non prevederebbe comunque i conflitti tra revisioni successive).
+            var shown = (revs ?? Entries.Select(e => e.Rev).Order().ToArray()).Take(MergeFiles.MaxRevisionsInPreview).ToList();
+            var paths = Timed(times, "files", async () => { await EnsurePathsAsync(shown, ct); return 0; });
+            await Task.WhenAll(blocked, merge, paths).ConfigureAwait(false);
             var output = await merge;
+            var total = revs?.Length ?? Entries.Count;
+            var result = ToResult("preview", revs is null ? AllLabel() : RevsLabel(revs), output) with { ByRev = ByRevision(shown, output), ByRevMore = Math.Max(0, total - shown.Count) };
             lock (_lock)
-                _result = ToResult("preview", revs is null ? AllLabel() : RevsLabel(revs), output);
+                _result = result;
             Say(Loc.T("Anteprima completata."));
             BackendLog.Info($"merge preview: {Format(times)}, totale {sw.ElapsedMilliseconds} ms, {output.Items.Count} file");
         }
@@ -321,6 +587,7 @@ internal sealed class MergeStore
                     await reload;
                 lock (_lock)
                     _selected.Clear();
+                RequestFiles();
                 BackendLog.Info($"merge run: {Format(times)}, totale {total.ElapsedMilliseconds} ms, {output.Items.Count} file, {output.Conflicts} conflitti");
                 Say(output.Conflicts > 0
                     ? Loc.T("Merge eseguito, da committare. Conflitti da risolvere in Changes: {0}.", output.Conflicts)
@@ -335,6 +602,23 @@ internal sealed class MergeStore
         finally
         {
             Idle();
+        }
+    }
+
+    /// <summary>Elenco per revisione (dalla piu' vecchia, l'ordine in cui il merge le applica) con i conflitti previsti dal dry-run.</summary>
+    private IReadOnlyList<MergeRevFilesDto> ByRevision(IReadOnlyList<long> revs, MergeOutput dryRun)
+    {
+        var conflicts = MergeFiles.ConflictPaths(dryRun);
+        lock (_lock)
+        {
+            var sourcePath = _source!.Path;
+            return revs.Select(r =>
+            {
+                var files = MergeFiles.ForRevision(_paths.GetValueOrDefault(r) ?? [], sourcePath, conflicts);
+                var (items, more) = MergeFiles.Cap(files, MergeFiles.MaxPerRevision);
+                var e = _logCache.GetValueOrDefault(r);
+                return new MergeRevFilesDto(r, e?.Author ?? string.Empty, (e?.Msg ?? string.Empty).Split('\n')[0], items, more, files.Count(f => f.C));
+            }).ToList();
         }
     }
 
@@ -361,6 +645,23 @@ internal sealed class MergeStore
     {
         lock (_lock)
             _busy = false;
+        Changed?.Invoke();
+    }
+
+    /// <summary>Esito di un'azione fuori dal merge (es. aprire il diff di un file): messaggio della barra di stato o errore del pannello.</summary>
+    internal void Report(string text, bool err)
+    {
+        lock (_lock)
+        {
+            if (err)
+                _error = text;
+            else
+            {
+                _error = string.Empty;
+                _message = text;
+            }
+        }
+
         Changed?.Invoke();
     }
 
@@ -496,6 +797,8 @@ internal sealed class MergeStore
             _selected.IntersectWith(entries.Select(e => e.Rev));
             _message = entries.Count == 0 ? Loc.T("Nessuna revisione da unire: {0} è già allineato.", source.Name) : Loc.T("{0} revisioni da unire.", entries.Count);
         }
+
+        RequestFiles(); // la scelta puo' essere cambiata (revisioni sparite dall'elenco)
     }
 
     /// <summary>Working copy con modifiche locali ai file versionati? Aggiorna <c>Blocked</c> e ritorna <c>true</c> se il merge e' da rifiutare.</summary>

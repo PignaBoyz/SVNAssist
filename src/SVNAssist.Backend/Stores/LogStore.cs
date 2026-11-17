@@ -97,7 +97,7 @@ internal sealed class LogStore : ViewStore
         }
 
         lock (_lock)
-            return new LogState(_path, _msgInitial ? Loc.T("Inserisci il percorso della working copy e premi Carica log.") : _msg, _err, _loading, _canMore, _sel, _entries, _diff, _filterText, FilesDto(), null, _stopOnCopy, _includeMerged, _changes?.Progress.GetSnapshot());
+            return new LogState(_path, _msgInitial ? Loc.T("Inserisci il percorso della working copy e premi Carica log.") : _msg, _err, _loading, _canMore, _sel, _entries, _diff, _filterText, FilesDto(), null, _stopOnCopy, _includeMerged, _changes?.Progress.GetSnapshot(), _affectedBase);
     }
 
     private LogFilesDto? FilesDto() => _filesKind is null
@@ -159,6 +159,21 @@ internal sealed class LogStore : ViewStore
             case "mergePreview":
                 if (Merge is not null)
                     await Merge.PreviewAsync(ct);
+                break;
+            case "mergeFocus":
+                Merge?.Focus(Args.Long(args, "rev"));
+                break;
+            case "mergePreviewRev":
+                if (Merge is not null)
+                    await Merge.PreviewRevisionAsync(Args.Long(args, "rev"), ct);
+                break;
+            case "mergeRev":
+                if (Merge is not null)
+                    await Merge.MergeRevisionAsync(Args.Long(args, "rev"), ct);
+                break;
+            case "mergeFileOpen":
+                if (Merge is not null)
+                    await GuardMergeAsync(() => OpenMergeFileAsync(args, ct));
                 break;
             case "mergeAll":
                 if (Merge is not null)
@@ -366,6 +381,7 @@ internal sealed class LogStore : ViewStore
             var entries = await _svnService.GetLogAsync(path, limit, _filter with { StopOnCopy = _stopOnCopy, IncludeMerged = _includeMerged }, ct);
 
             var dtos = entries.SelectMany(e => Flatten(e, 0)).ToList();
+            await EnsureAffectedBaseAsync(path, ct);
 
             lock (_lock)
             {
@@ -390,6 +406,39 @@ internal sealed class LogStore : ViewStore
         finally
         {
             _loadGate.Release();
+        }
+    }
+
+    // Percorso del repository della cartella o del file di cui si legge il log (/trunk/src): serve all'opzione "solo percorsi interessati" (come TortoiseSVN).
+    private string? _affectedBase;
+    private string? _affectedBaseFor;
+
+    private async Task EnsureAffectedBaseAsync(string path, CancellationToken ct)
+    {
+        if (_affectedBaseFor == path)
+            return;
+        string? result = null;
+        try
+        {
+            if (RepositoryUrl.IsMatch(path))
+                result = Uri.UnescapeDataString(path.TrimEnd('/')[(await RepoRootAsync(path, ct)).Length..]);
+            else
+            {
+                var isFile = File.Exists(path);
+                var info = await _svnService.GetInfoAsync(isFile ? System.IO.Path.GetDirectoryName(path)! : path, ct);
+                var rel = Uri.UnescapeDataString(info.RelativeUrl).TrimStart('^').TrimEnd('/');
+                result = isFile ? rel + "/" + System.IO.Path.GetFileName(path) : rel;
+            }
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            BackendLog.Info("Log: percorso nel repository non disponibile: " + ex.Message);
+        }
+
+        lock (_lock)
+        {
+            _affectedBase = string.IsNullOrEmpty(result) ? "/" : (result.StartsWith('/') ? result : "/" + result);
+            _affectedBaseFor = path;
         }
     }
 
@@ -450,6 +499,34 @@ internal sealed class LogStore : ViewStore
         }
 
         return _repoRoot;
+    }
+
+    /// <summary>Clic su un file dell'elenco del merge: diff nativo (una revisione: <c>r-1 ↔ r</c>; piu' revisioni: prima della prima e dopo l'ultima che lo tocca).</summary>
+    private async Task OpenMergeFileAsync(JsonElement args, CancellationToken ct)
+    {
+        long? rev = args.TryGetProperty("rev", out _) ? Args.Long(args, "rev") : null;
+        var (url, name, left, right) = await Merge!.ResolveFileAsync(rev, Args.Str(args, "p"), ct);
+        await _diffs!.OpenRevisionsAsync(url, name, left, right, ct);
+        Merge.Report(Loc.T("Diff aperto: {0}", DiffOpener.Title(name, left, right)), err: false);
+    }
+
+    /// <summary>Come <see cref="GuardAsync"/>, ma in modalita' merge lo stato del Log e' quello del merge: l'esito va li'.</summary>
+    private async Task GuardMergeAsync(Func<Task> action)
+    {
+        try
+        {
+            if (_diffs is null || _host is null)
+                throw new InvalidOperationException(Loc.T("diff non disponibile"));
+            await action();
+        }
+        catch (ArgumentException ex)
+        {
+            Merge!.Report(Loc.T("Errore: {0}", ex.Message), err: true);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Merge!.Report(Loc.T("Errore diff: {0}", ex.Message), err: true);
+        }
     }
 
     /// <summary>Clic su un file di una revisione: diff nativo <c>r-1 ↔ r</c> (per i file aggiunti/eliminati un lato e' vuoto).</summary>

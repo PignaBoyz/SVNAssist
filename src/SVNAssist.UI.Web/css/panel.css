@@ -148,6 +148,13 @@ pre.cmd{background:var(--bg0);border:1px solid var(--bd);padding:6px 8px;font:12
 .ck .ic{width:10px;height:10px}
 .mact{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 2px}
 .mres{padding:8px 12px}
+.mf,.mrv{padding:0 12px 6px}
+.mrv{padding:0 0 4px}
+.mrv .pth b{color:var(--fg)}
+.warn-t{color:var(--warn);text-transform:none;letter-spacing:0;font-weight:600}
+.fcnt{flex:none;margin-left:auto;font:11px var(--mono)}
+.mdr{margin-top:10px}
+.mdr summary{cursor:pointer;color:var(--fg2)}
 .lbody{flex:1;min-height:0;display:flex;flex-direction:column}
 .llist{--c1:64px;--c2:120px;--c3:140px;flex:none;height:45%;min-height:120px;overflow:auto;resize:vertical;background:var(--bg1);border-top:1px solid var(--bd)}
 .lh,.lr{display:grid;grid-template-columns:var(--c1) var(--c2) var(--c3) minmax(0,1fr);gap:0;min-width:520px}
