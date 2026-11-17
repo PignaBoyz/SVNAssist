@@ -476,6 +476,8 @@
                 "edit",
                 "mine",
                 "theirs",
+                "bothMT",
+                "bothTM",
                 "resolved"
               ]
             },
@@ -488,7 +490,7 @@
     },
     {
       "title": "resolveAllConflicts",
-      "description": "Sezione Conflitti: \"Usa la mia per tutti\" (op mine, resolve --accept mine-full) o \"Usa la loro per tutti\" (op theirs, theirs-full) su tutti i conflitti di TESTO, dopo conferma con l'elenco dei file. I conflitti ad albero e di proprieta' non sono toccati; un errore su uno non ferma gli altri.",
+      "description": "Sezione Conflitti (o selezione multipla di righe in conflitto, con keys): \"Usa la mia per tutti\" (op mine, resolve --accept mine-full) o \"Usa la loro per tutti\" (op theirs, theirs-full) su tutti i conflitti di TESTO, dopo conferma con l'elenco dei file. I conflitti ad albero e di proprieta' non sono toccati; un errore su uno non ferma gli altri.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -509,8 +511,83 @@
             "op": {
               "enum": [
                 "mine",
-                "theirs"
+                "theirs",
+                "bothMT",
+                "bothTM",
+                "resolved"
               ]
+            },
+            "keys": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "conflictOpPath",
+      "description": "Come conflictOp ma da percorso completo del file in conflitto (la InfoBar dell'host sul documento aperto in Visual Studio: Segna come risolto, Usa la mia/loro/entrambe, Apri editor di merge).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "conflictOpPath"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op",
+            "path"
+          ],
+          "properties": {
+            "op": {
+              "enum": [
+                "edit",
+                "mine",
+                "theirs",
+                "bothMT",
+                "bothTM",
+                "resolved"
+              ]
+            },
+            "path": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "openFile",
+      "description": "Menu contestuale di una riga file di Changes: apre il file nell'editor di Visual Studio.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "openFile"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "key"
+          ],
+          "properties": {
+            "key": {
+              "type": "string"
             }
           }
         }
@@ -602,7 +679,7 @@
     },
     {
       "title": "mergeOpen",
-      "description": "SVN Merge: apre il selettore della sorgente (trunk, branch o tag, escluso il ramo corrente). Con OK il Log si apre in modalita merge sul sorgente scelto (switchOk).",
+      "description": "SVN Merge: apre il selettore della sorgente (trunk, branch o tag, escluso il ramo corrente). Con `path` (cartella assoluta, da Solution Explorer) o `key` (riga cartella di Changes) il merge riguarda solo quella cartella: prima un controllo di compatibilita (Compatibile / Non possibile + motivo). Con OK il Log si apre in modalita merge sul sorgente scelto (switchOk).",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -617,7 +694,14 @@
           "type": "object",
           "additionalProperties": false,
           "required": [],
-          "properties": {}
+          "properties": {
+            "key": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            }
+          }
         }
       }
     },
@@ -1006,6 +1090,27 @@
       "properties": {
         "name": {
           "const": "switchWarnCancel"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "progressGoto",
+      "description": "Striscia di avanzamento in Changes (operazione avviata dal Log): porta in primo piano il documento Log.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "progressGoto"
         },
         "args": {
           "type": "object",

@@ -107,7 +107,7 @@
     const list = root.querySelector('#llist'), had = list.contains(document.activeElement), top = list.scrollTop;
     if (U.setHTML(list, U.logHTML.list(st))) { list.scrollTop = top; if (had) { const f = list.querySelector('[tabindex="0"]'); if (f) f.focus(); } }
     U.setHTML(root.querySelector('#ldet'), U.logHTML.detail(st));
-    root.querySelector('.app').inert = U.ops.render(root.querySelector('#ops'), st);
+    root.querySelector('.app').inert = U.ops.render(root.querySelector('#ops'), st, 'log');
     const m = root.querySelector('#lmsg'); m.textContent = st.msg || ''; m.className = 'foot msg' + (st.err ? ' err' : '');
   }
   U.views.log = {

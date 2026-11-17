@@ -250,6 +250,112 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
     // Merge eseguito e non ancora committato: banner con "Annulla merge".
     private string? _mergeBanner;
 
+    // Merge di UNA cartella (bug 4): cartella della working copy e suo sottopercorso relativo (con "/"); null = merge dell'intera working copy.
+    // Resta fino al prossimo "SVN Merge...": "Annulla merge" e "Revert di tutto" del merge agiscono solo li' sotto.
+    private string? _mergeScope, _mergeSub;
+
+    /// <summary>"SVN Merge..." da una cartella: <paramref name="path"/> vuoto o uguale alla radice = tutta la working copy. Falso se la cartella e' fuori dalla working copy.</summary>
+    private bool SetMergeScope(string path)
+    {
+        _mergeScope = _mergeSub = null;
+        if (string.IsNullOrWhiteSpace(path))
+            return true;
+        var root = Path.GetFullPath(WorkingCopyPath).TrimEnd('\\', '/');
+        var full = Path.GetFullPath(File.Exists(path) ? Path.GetDirectoryName(path)! : path).TrimEnd('\\', '/');
+        if (string.Equals(full, root, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (!IsUnder(full, root))
+            return false;
+        _mergeScope = full;
+        _mergeSub = Path.GetRelativePath(root, full).Replace('\\', '/');
+        return true;
+    }
+
+    /// <summary>Cartella dal comando: <c>path</c> (Solution Explorer) oppure <c>key</c> di una riga cartella di Changes.</summary>
+    private string MergeFolderArg(JsonElement args)
+    {
+        static string Opt(JsonElement a, string n)
+            => a.ValueKind == JsonValueKind.Object && a.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? string.Empty : string.Empty;
+        var path = Opt(args, "path");
+        if (path.Length > 0)
+            return path;
+        var key = Opt(args, "key");
+        if (key.Length == 0)
+            return string.Empty;
+        var rel = ResolveKey(key).Path;
+        return rel.Length == 0 ? string.Empty : Path.Combine(WorkingCopyPath, rel.Replace('/', Path.DirectorySeparatorChar));
+    }
+
+    private bool InMergeScope(string fullPath)
+        => _mergeScope is null || string.Equals(fullPath, _mergeScope, StringComparison.OrdinalIgnoreCase) || IsUnder(fullPath, _mergeScope);
+
+    /// <summary>Messaggio italiano per il motivo per cui svn non puo' unire la cartella (codice o testo dell'errore di svn).</summary>
+    internal static string ExplainSubtreeMergeError(string svnMessage, string sub, string source)
+    {
+        var m = svnMessage ?? string.Empty;
+        if (m.Contains("E170000", StringComparison.Ordinal) || m.Contains("E160013", StringComparison.Ordinal)
+            || m.Contains("doesn't exist", StringComparison.OrdinalIgnoreCase) || m.Contains("non-existent", StringComparison.OrdinalIgnoreCase)
+            || m.Contains("path not found", StringComparison.OrdinalIgnoreCase) || m.Contains("not found in revision", StringComparison.OrdinalIgnoreCase))
+            return Loc.T("La cartella \"{0}\" non esiste in {1}: manca lo stesso sottopercorso nel ramo scelto.", sub, source);
+        if (m.Contains("E195012", StringComparison.Ordinal) || m.Contains("E195016", StringComparison.Ordinal) || m.Contains("ancestrally", StringComparison.OrdinalIgnoreCase) || m.Contains("common ancestor", StringComparison.OrdinalIgnoreCase)
+            || m.Contains("unrelated", StringComparison.OrdinalIgnoreCase) || m.Contains("Unable to find repository location", StringComparison.OrdinalIgnoreCase))
+            return Loc.T("La cartella \"{0}\" non ha storia in comune con quella di {1} (nessun antenato comune): svn non può unirle.", sub, source);
+        return Loc.T("svn risponde: {0}", FirstLine(m));
+    }
+
+    /// <summary>
+    /// Controllo di compatibilita' prima del merge di una cartella (la cartella equivalente di un altro ramo): modifiche locali sotto la cartella,
+    /// sottopercorso presente nel ramo, storia in comune (<c>svn mergeinfo --show-revs eligible</c>) e anteprima (<c>--dry-run</c>).
+    /// Mostra il verdetto (Compatibile / Non possibile + motivo); ritorna la sorgente da unire (URL del sottopercorso) solo se compatibile e confermata.
+    /// </summary>
+    private async Task<SwitchPickerStore.Target?> CheckSubtreeMergeAsync(SwitchPickerStore.Target source, string sub, CancellationToken ct)
+    {
+        var folder = _mergeScope!;
+        var url = source.Url.TrimEnd('/') + "/" + string.Join("/", sub.Split('/', StringSplitOptions.RemoveEmptyEntries).Select(Uri.EscapeDataString));
+        var named = source with { Name = source.Name + "/" + sub, Url = url, Path = source.Path + "/" + sub };
+        SetStatus(Loc.T("Controllo se la cartella \"{0}\" si può unire da {1}...", sub, source.Name));
+        string? reason = null;
+        var eligible = 0;
+        MergeOutput? preview = null;
+        try
+        {
+            var local = (await _svnService.GetStatusAsync(folder, ct)).Count(x => x.Status is SvnStatusKind.Modified or SvnStatusKind.Added or SvnStatusKind.Deleted
+                or SvnStatusKind.Replaced or SvnStatusKind.Missing or SvnStatusKind.Conflicted or SvnStatusKind.Obstructed or SvnStatusKind.Incomplete);
+            if (local > 0)
+                reason = Loc.T("La cartella \"{0}\" ha {1} elementi con modifiche locali: per unire serve che sia pulita (così \"Annulla merge\" non tocca altro lavoro). Fai prima Commit oppure Revert.", sub, local);
+            else
+            {
+                eligible = (await _svnService.GetEligibleRevisionsAsync(folder, url, ct)).Count;
+                preview = await _svnService.MergeAsync(folder, url, null, dryRun: true, ct);
+            }
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            reason = ExplainSubtreeMergeError(ex.Message, sub, source.Name);
+        }
+
+        if (ct.IsCancellationRequested)
+            return null;
+        if (reason is not null)
+        {
+            await _dialogs.AskAsync(Loc.T("Merge della cartella \"{0}\" da {1}: NON POSSIBILE.\n\n{2}", sub, source.Name, reason), Loc.T("Chiudi"), Loc.T("Annulla"), ct);
+            SetStatus(Loc.T("Merge della cartella \"{0}\" non possibile: {1}", sub, reason));
+            return null;
+        }
+
+        if (eligible == 0)
+        {
+            await _dialogs.AskAsync(Loc.T("Merge della cartella \"{0}\" da {1}: COMPATIBILE, ma non c'è nulla da unire (la cartella è già allineata).", sub, source.Name), Loc.T("Chiudi"), Loc.T("Annulla"), ct);
+            SetStatus(Loc.T("Nessuna revisione da unire per la cartella \"{0}\".", sub));
+            return null;
+        }
+
+        var o = preview!;
+        var ok = await _dialogs.AskAsync(Loc.T("Merge della cartella \"{0}\" da {1}: COMPATIBILE.\n\n{2} revisioni da unire. Anteprima: {3} elementi toccati, {4} conflitti.\n\nIl merge riguarda solo questa cartella e svn registra le informazioni di merge (svn:mergeinfo) sulla cartella e non sulla radice del ramo. Continuare e scegliere le revisioni?",
+            sub, source.Name, eligible, o.Items.Count, o.Conflicts), Loc.T("Continua"), Loc.T("Annulla"), ct);
+        return ok ? named : null;
+    }
+
     /// <summary>
     /// Dopo un merge: banner con "Annulla merge" e messaggio di commit (stile TortoiseSVN) in cima ai Recenti del repository.
     /// Il campo del messaggio non si tocca: il messaggio resta nei Recenti anche dopo un revert e lo si inserisce da li' se serve.
@@ -571,6 +677,18 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             case "shelveDelete":
                 await RunExclusiveAsync(() => DeleteShelveAsync(Args.Str(args, "id"), ct));
                 break;
+            case "openFile":
+                {
+                    var file = ResolveKey(Args.Str(args, "key")).Entries.FirstOrDefault(e => !e.IsDirectory);
+                    if (file is not null)
+                        await _host.OpenFileAsync(file.FullPath);
+                    break;
+                }
+            case "progressGoto":
+                // Striscia "in corso nella scheda Log" di Changes: porta in primo piano il documento Log dell'operazione.
+                if (Progress.GetSnapshot() is { Origin: "log" } p)
+                    await _host.ShowLogWindowAsync(p.Title);
+                break;
             case "revealInExplorer":
                 RevealInExplorer(args.GetProperty("key").GetString() ?? string.Empty);
                 break;
@@ -601,6 +719,8 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             case "mergeOpen":
                 if (string.IsNullOrWhiteSpace(WorkingCopyPath))
                     SetStatus(Loc.T("Nessuna working copy configurata."));
+                else if (!SetMergeScope(MergeFolderArg(args)))
+                    SetStatus(Loc.T("La cartella scelta non è dentro la working copy: il merge di una cartella parte da una cartella della working copy."));
                 else
                     await Switch.OpenAsync(WorkingCopyPath, ct, mode: "merge");
                 break;
@@ -627,13 +747,18 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                 await RunExclusiveAsync(() => SwitchBackCoreAsync(ct));
                 break;
             case "conflictOp":
-                await RunExclusiveAsync(() => ConflictOpAsync(Args.OneOf(args, "op", "edit", "mine", "theirs", "resolved"), Args.Str(args, "key"), ct));
+                await RunExclusiveAsync(() => ConflictOpAsync(Args.OneOf(args, "op", "edit", "mine", "theirs", "bothMT", "bothTM", "resolved"), Args.Str(args, "key"), ct));
+                break;
+            case "conflictOpPath":
+                // Dal documento aperto in VS (InfoBar dell'host): il percorso completo del file in conflitto al posto della chiave di riga.
+                await RunExclusiveAsync(() => ConflictOpByPathAsync(Args.OneOf(args, "op", "edit", "mine", "theirs", "bothMT", "bothTM", "resolved"), Args.Str(args, "path"), ct));
                 break;
             case "resolveTreeConflicts":
                 await RunExclusiveAsync(() => ResolveTreeConflictsAsync(ct));
                 break;
             case "resolveAllConflicts":
-                await RunExclusiveAsync(() => ResolveAllTextConflictsAsync(Args.OneOf(args, "op", "mine", "theirs"), ct));
+                await RunExclusiveAsync(() => ResolveAllTextConflictsAsync(Args.OneOf(args, "op", "mine", "theirs", "bothMT", "bothTM", "resolved"),
+                    args.ValueKind == JsonValueKind.Object && args.TryGetProperty("keys", out _) ? Args.Keys(args) : null, ct));
                 break;
             case "showLog":
                 if (string.IsNullOrWhiteSpace(WorkingCopyPath))
@@ -1822,8 +1947,16 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             // Sorgente scelta: il resto (revisioni, anteprima, merge) sta nel Log in modalita' merge.
             Switch.RememberUsed(target.Name);
             Switch.Close();
+            var mergeSource = target;
+            if (_mergeScope is not null && _mergeSub is not null)
+            {
+                if (await CheckSubtreeMergeAsync(target, _mergeSub, ct) is not { } sub)
+                    return;
+                mergeSource = sub;
+            }
+
             if (StartMerge is not null)
-                await StartMerge(WorkingCopyPath, target, ct);
+                await StartMerge(_mergeScope ?? WorkingCopyPath, mergeSource, ct);
             return;
         }
 
@@ -2038,10 +2171,10 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
     /// </summary>
     private async Task UndoMergeCoreAsync(CancellationToken ct)
     {
-        var wc = WorkingCopyPath;
+        var wc = _mergeScope ?? WorkingCopyPath; // merge di una cartella: si annulla solo quella
         List<ChangeEntry> entries;
         lock (_stateLock)
-            entries = _entries.Where(e => StatusPresentation.IsRevertable(e.Status)).ToList();
+            entries = _entries.Where(e => StatusPresentation.IsRevertable(e.Status) && InMergeScope(e.FullPath)).ToList();
         if (string.IsNullOrWhiteSpace(wc) || entries.Count == 0)
         {
             ClearMergeBanner();
@@ -2049,8 +2182,10 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             return;
         }
 
-        if (!await _dialogs.ConfirmAsync(Loc.T("Annullare il merge? Tutte le modifiche locali della working copy ({0} elementi) tornano allo stato di BASE.\n\n{1}\n\nL'operazione non è annullabile.",
-                entries.Count, ListForConfirmation(entries)), ct))
+        if (!await _dialogs.ConfirmAsync((_mergeSub is null ? Loc.T("Annullare il merge? Tutte le modifiche locali della working copy ({0} elementi) tornano allo stato di BASE.\n\n{1}\n\nL'operazione non è annullabile.",
+                entries.Count, ListForConfirmation(entries))
+                : Loc.T("Annullare il merge della cartella \"{2}\"? Le modifiche locali sotto questa cartella ({0} elementi) tornano allo stato di BASE; il resto della working copy non è toccato.\n\n{1}\n\nL'operazione non è annullabile.",
+                    entries.Count, ListForConfirmation(entries), _mergeSub)), ct))
             return;
 
         var (proceed, backup, note) = await BackupBeforeAsync("undo-merge", [wc], ct);
@@ -2080,7 +2215,7 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
         {
             List<ChangeEntry> all;
             lock (_stateLock)
-                all = _entries.Where(e => SectionOf(e) != ChangeSection.Unversioned).ToList();
+                all = _entries.Where(e => SectionOf(e) != ChangeSection.Unversioned && InMergeScope(e.FullPath)).ToList();
             return RevertCoreAsync(new KeyTarget(ChangeSection.Changes, true, string.Empty, all), ct, everything: true);
         });
     }
@@ -2482,10 +2617,30 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
         catch (IOException) { return false; }
     }
 
-    private async Task ConflictOpAsync(string op, string key, CancellationToken ct)
+    private Task ConflictOpAsync(string op, string key, CancellationToken ct) => ConflictOpCoreAsync(op, ResolveKey(key).SingleFile, ct);
+
+    /// <summary>Come <see cref="ConflictOpAsync"/> ma da percorso completo (documento aperto in VS). Se la lista non e' aggiornata la rilegge una volta.</summary>
+    private async Task ConflictOpByPathAsync(string op, string path, CancellationToken ct)
     {
-        var target = ResolveKey(key);
-        if (target.SingleFile is not { Status: SvnStatusKind.Conflicted } entry)
+        ChangeEntry? Find()
+        {
+            lock (_stateLock)
+                return _entries.FirstOrDefault(e => e.Status == SvnStatusKind.Conflicted && string.Equals(e.FullPath, path, StringComparison.OrdinalIgnoreCase));
+        }
+
+        var entry = Find();
+        if (entry is null)
+        {
+            await RefreshAsync(ct, reloadBranch: false);
+            entry = Find();
+        }
+
+        await ConflictOpCoreAsync(op, entry, ct);
+    }
+
+    private async Task ConflictOpCoreAsync(string op, ChangeEntry? file, CancellationToken ct)
+    {
+        if (file is not { Status: SvnStatusKind.Conflicted } entry)
         {
             SetStatus(Loc.T("Seleziona un file in conflitto da risolvere."));
             return;
@@ -2510,6 +2665,10 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                 if (await _dialogs.ConfirmAsync(Loc.T("Prendere la versione LORO (del server) di \"{0}\"? Le TUE modifiche locali su questo file vengono scartate.", entry.RelativePath), ct))
                     await ApplyResolveAsync(entry, SvnConflictChoice.TheirsFull, ct);
                 break;
+            case "bothMT":
+            case "bothTM":
+                await UseBothAsync(entry, op == "bothMT", ct);
+                break;
             default:
                 if (entry.IsTreeConflict ? !await ConfirmTreeConflictAsync(entry, ct)
                     : SameAsBase(entry) && !await _dialogs.ConfirmAsync(Loc.T("\"{0}\" è identico alla versione di partenza: non contiene né le tue modifiche né quelle in arrivo (succede togliendo la spunta nell'editor di merge di VS). Segnare comunque come risolto?", entry.RelativePath), ct))
@@ -2517,6 +2676,38 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                 await ApplyResolveAsync(entry, SvnConflictChoice.Working, ct);
                 break;
         }
+    }
+
+    private bool IsPropertyConflict(ChangeEntry e)
+    {
+        lock (_stateLock)
+            return _conflictInfo.TryGetValue(e.FullPath, out var i) && i.Type == "property";
+    }
+
+    /// <summary>
+    /// "Usa entrambe" (bug 5): nel file con i marcatori tiene i due lati di ogni blocco, nell'ordine scelto, poi <c>resolve --accept working</c>.
+    /// Solo conflitti di testo; con conferma. Se i marcatori non ci sono o sono sbilanciati il file non viene toccato.
+    /// </summary>
+    private async Task UseBothAsync(ChangeEntry entry, bool mineFirst, CancellationToken ct)
+    {
+        if (entry.IsTreeConflict || IsPropertyConflict(entry))
+        {
+            SetStatus(Loc.T("\"Usa entrambe\" vale solo per i conflitti di testo."));
+            return;
+        }
+
+        if (!await _dialogs.ConfirmAsync(mineFirst
+                ? Loc.T("Tenere entrambe le versioni di \"{0}\", prima la TUA poi la LORO, per ogni blocco in conflitto? Il file viene riscritto senza marcatori; controllalo prima di committare.", entry.RelativePath)
+                : Loc.T("Tenere entrambe le versioni di \"{0}\", prima la LORO poi la TUA, per ogni blocco in conflitto? Il file viene riscritto senza marcatori; controllalo prima di committare.", entry.RelativePath), ct))
+            return;
+
+        if (!ConflictMarkers.TryTakeBoth(entry.FullPath, mineFirst, out _))
+        {
+            SetStatus(Loc.T("Impossibile unire le due versioni di \"{0}\": non ci sono marcatori di conflitto ben formati (<<<<<<<, =======, >>>>>>>) oppure il file non è di testo. Usa l'editor di merge.", entry.RelativePath));
+            return;
+        }
+
+        await ApplyResolveAsync(entry, SvnConflictChoice.Working, ct);
     }
 
     /// <summary>
@@ -2560,15 +2751,41 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
     }
 
     /// <summary>"Usa la mia/loro per tutti": solo i conflitti di testo (mai ad albero ne' di proprieta'), con conferma che elenca i file.</summary>
-    private async Task ResolveAllTextConflictsAsync(string op, CancellationToken ct)
+    private async Task ResolveAllTextConflictsAsync(string op, IReadOnlyList<string>? keys, CancellationToken ct)
     {
+        // keys = selezione multipla di righe (menu contestuale): solo quei file; altrimenti tutti i conflitti di testo.
+        var only = keys is null ? null : keys.SelectMany(k => ResolveKey(k).Entries).Select(e => e.FullPath).ToHashSet(StringComparer.OrdinalIgnoreCase);
         List<ChangeEntry> texts;
         lock (_stateLock)
-            texts = _entries.Where(e => e.Status == SvnStatusKind.Conflicted && !e.IsTreeConflict
+            texts = _entries.Where(e => e.Status == SvnStatusKind.Conflicted && !e.IsTreeConflict && (only is null || only.Contains(e.FullPath))
                 && !(_conflictInfo.TryGetValue(e.FullPath, out var i) && i.Type == "property")).ToList();
         if (texts.Count == 0)
         {
             SetStatus(Loc.T("Nessun conflitto di testo da risolvere."));
+            return;
+        }
+
+        if (op is "bothMT" or "bothTM")
+        {
+            await ResolveAllBothAsync(texts, op == "bothMT", ct);
+            return;
+        }
+
+        if (op == "resolved")
+        {
+            if (!await _dialogs.ConfirmAsync(Loc.T("Segnare come risolti {0} conflitti di testo (resolve --accept working)? Un file con ancora i marcatori di conflitto viene rifiutato.\n\n{1}", texts.Count, ListForConfirmation(texts)), ct))
+                return;
+            SetStatus(Loc.T("Risoluzione conflitti in corso..."));
+            var bad = new List<string>();
+            foreach (var entry in texts)
+            {
+                try { await _svnService.ResolveAsync(entry.FullPath, SvnConflictChoice.Working, ct); }
+                catch (Exception ex) when (!ct.IsCancellationRequested) { bad.Add($"{entry.RelativePath}: {FirstLine(ex.Message)}"); }
+            }
+
+            await RefreshAsync(ct, reloadBranch: false, bad.Count == 0
+                ? Loc.T("Conflitti di testo risolti: {0}.", texts.Count)
+                : Loc.T("Errore resolve: {0} conflitti risolti, {1} falliti. {2}", texts.Count - bad.Count, bad.Count, string.Join(" | ", bad)));
             return;
         }
 
@@ -2583,6 +2800,33 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
         foreach (var entry in texts)
         {
             try { await _svnService.ResolveAsync(entry.FullPath, mine ? SvnConflictChoice.MineFull : SvnConflictChoice.TheirsFull, ct); }
+            catch (Exception ex) when (!ct.IsCancellationRequested) { failed.Add($"{entry.RelativePath}: {FirstLine(ex.Message)}"); }
+        }
+
+        var done = texts.Count - failed.Count;
+        await RefreshAsync(ct, reloadBranch: false, failed.Count == 0
+            ? Loc.T("Conflitti di testo risolti: {0}.", done)
+            : Loc.T("Errore resolve: {0} conflitti risolti, {1} falliti. {2}", done, failed.Count, string.Join(" | ", failed)));
+    }
+
+    private async Task ResolveAllBothAsync(List<ChangeEntry> texts, bool mineFirst, CancellationToken ct)
+    {
+        if (!await _dialogs.ConfirmAsync(mineFirst
+                ? Loc.T("Tenere entrambe le versioni (prima la TUA poi la LORO) in {0} conflitti di testo? I file vengono riscritti senza marcatori; i file senza marcatori ben formati restano com'è. I conflitti ad albero e di proprietà non sono toccati.\n\n{1}", texts.Count, ListForConfirmation(texts))
+                : Loc.T("Tenere entrambe le versioni (prima la LORO poi la TUA) in {0} conflitti di testo? I file vengono riscritti senza marcatori; i file senza marcatori ben formati restano com'è. I conflitti ad albero e di proprietà non sono toccati.\n\n{1}", texts.Count, ListForConfirmation(texts)), ct))
+            return;
+
+        SetStatus(Loc.T("Risoluzione conflitti in corso..."));
+        var failed = new List<string>();
+        foreach (var entry in texts)
+        {
+            try
+            {
+                if (!ConflictMarkers.TryTakeBoth(entry.FullPath, mineFirst, out _))
+                    failed.Add($"{entry.RelativePath}: {Loc.T("marcatori di conflitto assenti o non validi")}");
+                else
+                    await _svnService.ResolveAsync(entry.FullPath, SvnConflictChoice.Working, ct);
+            }
             catch (Exception ex) when (!ct.IsCancellationRequested) { failed.Add($"{entry.RelativePath}: {FirstLine(ex.Message)}"); }
         }
 

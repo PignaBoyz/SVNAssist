@@ -95,6 +95,10 @@ namespace SVNAssist.Host
             _active && !string.IsNullOrEmpty(path) && _states.TryGetValue(path.TrimEnd('\\', '/'), out var s)
             && (s == "Modified" || s == "Replaced" || s == "Conflicted");
 
+        /// <summary>True se il provider e' attivo e la cache dice che il file e' in conflitto (InfoBar sul documento aperto).</summary>
+        internal bool IsConflicted(string path) =>
+            _active && !string.IsNullOrEmpty(path) && _states.TryGetValue(path.TrimEnd('\\', '/'), out var s) && s == "Conflicted";
+
         private SccGlyph GlyphOf(string path)
         {
             var r = _root;

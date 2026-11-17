@@ -105,6 +105,13 @@ namespace SVNAssist.Host
             await FromViewAsync(view, msg.ToString(Newtonsoft.Json.Formatting.None)).ConfigureAwait(false);
         }
 
+        /// <summary>Come <see cref="SendCommandAsync"/> ma senza portare in primo piano la finestra (InfoBar sul documento aperto): i dialoghi sono quelli dell'host.</summary>
+        public async Task SendQuietAsync(string view, string name, JObject args)
+        {
+            var msg = new JObject { ["v"] = 1, ["id"] = Interlocked.Increment(ref _seq), ["type"] = "cmd", ["name"] = name, ["args"] = args ?? new JObject() };
+            await FromViewAsync(view, msg.ToString(Newtonsoft.Json.Formatting.None)).ConfigureAwait(false);
+        }
+
         public async Task<int[]> GetChangedBlocksAsync(string file)
         {
             var b = await _backend.GetAsync().ConfigureAwait(false);
