@@ -18,6 +18,12 @@ public interface ISvnService
     Task<IReadOnlyList<SvnFileStatus>> GetStatusAsync(string workingCopyPath, CancellationToken ct);
 
     /// <summary>
+    /// Solo gli elementi versionati con modifiche (<c>svn status -q --xml</c>: niente non versionati, quindi niente XML enorme con bin/obj).
+    /// Serve ai controlli "la working copy e' pulita?" (merge), dove i non versionati non contano.
+    /// </summary>
+    Task<IReadOnlyList<SvnFileStatus>> GetLocalChangesAsync(string workingCopyPath, CancellationToken ct);
+
+    /// <summary>
     /// Esegue il commit dei file specificati con il messaggio dato.
     /// </summary>
     /// <param name="paths">
@@ -238,8 +244,11 @@ public interface ISvnService
     /// <summary>Revisioni del sorgente ancora da unire nella working copy (<c>svn mergeinfo --show-revs eligible SRC .</c>), in ordine crescente. Richiede svn 1.5+ (l'unione automatica 1.8+).</summary>
     Task<IReadOnlyList<long>> GetEligibleRevisionsAsync(string workingCopyPath, string sourceUrl, CancellationToken ct);
 
-    /// <summary>Autore, data e messaggio delle revisioni del sorgente comprese tra <paramref name="min"/> e <paramref name="max"/> (<c>svn log --xml -v -r max:min URL</c>), dalla piu' recente.</summary>
-    Task<IReadOnlyList<SvnLogEntry>> GetLogRangeAsync(string url, long min, long max, CancellationToken ct);
+    /// <summary>
+    /// Autore, data e messaggio delle revisioni del sorgente comprese tra <paramref name="min"/> e <paramref name="max"/> (<c>svn log --xml [-v] -r max:min URL</c>), dalla piu' recente.
+    /// <paramref name="withPaths"/> aggiunge <c>-v</c> (file toccati): e' la parte pesante del log, si chiede solo per le revisioni di cui serve l'elenco.
+    /// </summary>
+    Task<IReadOnlyList<SvnLogEntry>> GetLogRangeAsync(string url, long min, long max, CancellationToken ct, bool withPaths = true);
 
     /// <summary>
     /// <c>svn merge [--dry-run] --accept postpone [-c N,M] SRC</c> dalla radice della working copy. Senza <paramref name="revisions"/> unisce tutto quello che e' da unire

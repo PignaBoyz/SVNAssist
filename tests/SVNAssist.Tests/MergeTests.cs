@@ -222,6 +222,84 @@ public class MergeTests
         Assert.Empty(f.LogSnap.Entries);
     }
 
+    // ── Prestazioni (0.5.0, "merge lento"): niente -v nella lista, log a gruppi e in cache, status senza non versionati ──
+
+    [Fact]
+    public async Task Merge_Caricamento_LogSenzaVerbose_UnaRichiestaPerGruppo_StatusSenzaNonVersionati()
+    {
+        using var f = new Fixture();
+
+        await f.OpenMergeAsync();
+
+        Assert.Equal([(4L, 7L, false)], f.Svn.RangeCalls);   // un solo giro, senza -v (i file si leggono solo per le revisioni scelte)
+        Assert.All(f.LogSnap.Entries, e => Assert.Empty(e.Paths));
+        Assert.Equal(1, f.Svn.LocalChangesCalls);
+    }
+
+    [Fact]
+    public async Task Merge_DopoIlMerge_SiRileggeSoloMergeinfo_IlLogDelleRevisioniGiaViste_EInCache()
+    {
+        using var f = new Fixture();
+        await f.OpenMergeAsync();
+        f.MergeLeavesChanges();
+        f.Svn.EligibleAfterMerge = [5];
+        f.Svn.RangeCalls.Clear();
+
+        await f.LogCmd("mergeAll");
+
+        Assert.Empty(f.Svn.RangeCalls);   // la 5 era gia' in cache: nessun svn log
+        Assert.Equal([5L], f.LogSnap.Entries.Select(e => e.Rev));
+        Assert.Equal("lbianchi", f.LogSnap.Entries[0].Author);
+    }
+
+    [Fact]
+    public void GroupRevisions_VicineInUnGruppo_LontaneSeparate()
+    {
+        Assert.Equal([(4L, 7L)], MergeStore.GroupRevisions([4, 5, 7]));
+        Assert.Equal([(10L, 20L), (5000L, 5001L)], MergeStore.GroupRevisions([10, 12, 20, 5000, 5001]));
+        Assert.Empty(MergeStore.GroupRevisions([]));
+    }
+
+    [Fact]
+    public void BuildMergeArgs_RevisioniConsecutive_UnIntervalloSolo_UnaPassataDiSvn()
+    {
+        Assert.Equal("5-7,9", SvnService.BuildMergeArgs("file:///r", [5, 6, 7, 9], false)[^2]);
+        Assert.Equal(["log", "--xml", "-r", "9:4", "file:///r"], SvnService.BuildLogRangeArgs("file:///r", 4, 9, withPaths: false));
+        Assert.Equal(["log", "--xml", "-v", "-r", "9:4", "file:///r"], SvnService.BuildLogRangeArgs("file:///r", 4, 9, withPaths: true));
+    }
+
+    [Fact]
+    public async Task Avanzamento_MilleRighe_NonSonoMilleNotifiche()
+    {
+        var progress = new OperationProgress();
+        var notifications = 0;
+        progress.Changed += () => Interlocked.Increment(ref notifications);
+        progress.Begin("merge", "Merge", "...");
+        var before = notifications;
+
+        for (var i = 0; i < 2000; i++)
+            progress.Line($"U    src/f{i}.txt");
+        await Task.Delay(OperationProgress.LineNotifyInterval + TimeSpan.FromMilliseconds(250));
+
+        Assert.True(notifications - before < 10, $"notifiche: {notifications - before}");   // la prima subito e una in coda con l'ultimo stato
+        Assert.Equal(2000, progress.GetSnapshot()!.Processed);
+        Assert.Equal(OperationProgress.MaxLines, progress.GetSnapshot()!.Lines.Count);
+    }
+
+    [Fact]
+    public async Task Merge_SnapshotDelLog_SenzaPercorsi_ResteLeggero()
+    {
+        using var f = new Fixture();
+        f.Svn.Eligible = Enumerable.Range(1, 600).Select(r => (long)r).ToList();
+        f.Svn.RangeLog = f.Svn.Eligible.Select(r => new SvnLogEntry(r, "mrossi", DateTimeOffset.UnixEpoch, "fix " + r,
+            Enumerable.Range(0, 30).Select(i => new SvnLogPath("M", $"/branches/feature-x/src/d{i}/file{r}.cs", "file")).ToList())).ToList();
+
+        await f.OpenMergeAsync();
+
+        var json = UiJson.Serialize(f.Log.GetSnapshot());
+        Assert.True(json.Length < 120_000, $"snapshot di {json.Length} byte");   // con -v erano ~1,6 MB per 600 revisioni di 30 file
+    }
+
     [Fact]
     public async Task Merge_WorkingCopySporca_Bloccata_ConSpiegazione_NienteMerge()
     {

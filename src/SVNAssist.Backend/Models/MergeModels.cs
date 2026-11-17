@@ -27,6 +27,36 @@ public static partial class MergeParser
             .Distinct().Order().ToList();
 
     /// <summary>
+    /// Intervalli come TortoiseSVN: <c>1,3-5</c> (revisioni consecutive unite in un intervallo). Per <c>svn merge -c</c> conta: con <c>5,6,7</c> svn fa
+    /// una passata (e un giro al server) per ogni revisione, con <c>5-7</c> una sola.
+    /// </summary>
+    public static string RevisionRanges(IEnumerable<long> revs)
+    {
+        var parts = new List<string>();
+        long? start = null, prev = null;
+        void Flush()
+        {
+            if (start is { } s)
+                parts.Add(s == prev ? $"{s}" : $"{s}-{prev}");
+        }
+
+        foreach (var r in revs.Distinct().Order())
+        {
+            if (prev is { } p && r == p + 1)
+            {
+                prev = r;
+                continue;
+            }
+
+            Flush();
+            start = prev = r;
+        }
+
+        Flush();
+        return string.Join(",", parts);
+    }
+
+    /// <summary>
     /// Righe d'azione: 4 colonne di stato + spazio + percorso (<c>U    a.c</c>, <c> U   dir</c> proprieta', <c>   C x</c> conflitto ad albero),
     /// ignorando le intestazioni <c>--- Merging r1 through r3 into '.':</c> e <c>--- Recording mergeinfo ...</c>.
     /// </summary>
