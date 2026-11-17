@@ -26,6 +26,11 @@
 //     tema scuro, cornice sfocata e scurita intorno alla parte rilevante. NON sono screenshot di Visual Studio:
 //     nelle note vanno con la didascalia "Illustrazione:" / "Illustration:" (vedi docs/release-notes/GUIDA.md).
 //
+// Scene per versione: le scene della 0.2.0 sono qui sotto (SCENES/SETS); quelle delle versioni successive stanno
+// in un modulo tools/release-scenes/<versione>.mjs (export `scenes` e `set`), caricato se esiste per --version.
+// Una scena del modulo con lo stesso id di una scena di SCENES ha la precedenza (solo per quella versione).
+// Campi facoltativi di una scena: `langs: ['it']` (esiste solo in quelle lingue) e `needsDemo: true` (una scena 'illus' che usa la demo).
+//
 // Per aggiungere una scena: una voce in SCENES (id, file, kind, funzione) e, se serve, l'id in SETS per la versione.
 import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
@@ -189,8 +194,18 @@ const SETS = {
   '0.2.0': ['changes', 'log', 'log-confronto', 'wizard', 'temi', 'menu-changes', 'log-documento', 'diff-nativo', 'menu-esplora-soluzioni', 'login-svn', 'lingua-menu'],
 };
 
+// scene specifiche di una versione (moduli in tools/release-scenes/): hanno la precedenza sugli id di SCENES
+let VSCENES = [], VSET = null;
+if (args.version && args.version !== true) {
+  const modFile = path.join(root, 'tools/release-scenes', args.version + '.mjs');
+  if (existsSync(modFile)) { const mod = await import(pathToFileURL(modFile).href); VSCENES = mod.scenes || []; VSET = mod.set || null; }
+}
+const findScene = id => VSCENES.find(s => s.id === id) || SCENES.find(s => s.id === id);
+// scene che hanno bisogno della demo: quelle dell'interfaccia vera, il log-documento e quelle con `needsDemo`
+const usesDemo = s => s.kind === 'ui' || s.id === 'log-documento' || !!s.needsDemo;
+
 if (args.list) {
-  for (const s of SCENES) console.log(`${s.id.padEnd(24)} ${s.file.padEnd(30)} ${s.kind.padEnd(6)} ${s.desc}`);
+  for (const s of [...VSCENES, ...SCENES.filter(x => !VSCENES.some(v => v.id === x.id))]) console.log(`${s.id.padEnd(24)} ${s.file.padEnd(30)} ${s.kind.padEnd(6)} ${s.desc}`);
   process.exit(0);
 }
 
@@ -201,11 +216,11 @@ const scale = Number(args.scale || 2);
 const outBase = path.resolve(args.out && args.out !== true ? args.out : path.join(root, 'docs/release-notes/img', version));
 const langs = (args.lang && args.lang !== true ? String(args.lang) : 'it,en').split(',').map(s => s.trim());
 for (const l of langs) if (l !== 'it' && l !== 'en') { console.error('--lang deve essere it, en o it,en'); process.exit(1); }
-const ids = args.scenes && args.scenes !== true ? String(args.scenes).split(',') : (SETS[version] || SCENES.map(s => s.id));
-const scenes = ids.map(id => SCENES.find(s => s.id === id) || (() => { throw new Error('Scena sconosciuta: ' + id); })());
+const ids = args.scenes && args.scenes !== true ? String(args.scenes).split(',') : (VSET || SETS[version] || SCENES.map(s => s.id));
+const scenes = ids.map(id => findScene(id) || (() => { throw new Error('Scena sconosciuta: ' + id); })());
 
 // demo: dal tag della versione se esiste, altrimenti quella del repo (serve solo se ci sono scene dell'interfaccia vera o il log-documento)
-const needDemo = scenes.some(s => s.kind === 'ui' || s.id === 'log-documento');
+const needDemo = scenes.some(usesDemo);
 let demoPath = args.demo && args.demo !== true ? path.resolve(args.demo) : null;
 let tmpWt = null;
 if (needDemo && !demoPath) {
@@ -233,10 +248,12 @@ try {
     mkdirSync(out, { recursive: true });
     const T = (it, en) => lang === 'en' ? en : it;
     for (const sc of scenes) {
+      // `langs`: la scena esiste solo in alcune lingue (es. la demo del tag non traduce quei testi: niente traduzioni inventate)
+      if (sc.langs && !sc.langs.includes(lang)) { console.log(`-- ${sc.id}: solo ${sc.langs.join(', ')}, saltata in ${lang}`); continue; }
       const ctx = await browser.newContext({ viewport: { width: 1500, height: 1150 }, deviceScaleFactor: scale, locale: lang === 'en' ? 'en-US' : 'it-IT', colorScheme: 'dark' });
       const page = await ctx.newPage();
       const ui = helpers(page, lang);
-      if (sc.kind === 'ui' || sc.id === 'log-documento') {
+      if (usesDemo(sc)) {
         await page.goto(pathToFileURL(demoPath).href);
         await page.waitForTimeout(500);
         await page.click('text=Esplora liberamente');

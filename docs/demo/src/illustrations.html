@@ -8,7 +8,7 @@
   Ricostruzioni dell'aspetto di Visual Studio (tema scuro) per le note di rilascio: NON sono screenshot veri.
   Usata solo da tools/screenshots-release.mjs (non fa parte della demo pubblica).
   Parametri: ?scene=<id>&lang=it|en
-  Scene: log-doc (07), diff (08), se-menu (09), login (10), ext-menu (11).
+  Scene: log-doc (07), diff (08), se-menu (09), login (10), ext-menu (11); delle versioni successive: ext-menu-actions (0.3.0).
   Per log-doc la pagina aspetta l'immagine del Log vero (catturata dalla demo) con window.setLogImage(dataUrl).
   I testi delle voci di menu e del dialogo vengono da SVNAssist.vsct, PromptDialog.cs, DiffOpener.cs, Loc/LocEn.cs.
   Tutto cio' che non e' di SVNAssist (altre voci di menu, nomi dei file) e' contorno di esempio.
@@ -256,6 +256,28 @@ SCENES['ext-menu'] = () => {
   q('m1h', x1, y1);
   const lg = document.querySelectorAll('#m1h .it.hl')[0].getBoundingClientRect();
   q('m2h', lg.right - box.left + X0 - 2, lg.top - box.top - 4);
+};
+
+// ---------- scene delle versioni successive (0.3.0, 0.4.0) ----------
+// Le voci di menu sono quelle di SVNAssist.vsct del tag della versione; le scene della 0.2.0 qui sopra non cambiano.
+
+// 0.3.0: Extensions > SVNAssist con le voci Switch... e Merge... (SVNAssist.vsct del tag v0.3.0: gruppi MainPrimary / MainSecondary / LangHost,
+// priorita' Update 0, Update to revision 5, Switch 6, Merge 7, Log 0x10, Change AI Provider 0x20, Cleanup 0x30, Next/Previous Change in Diff 0x40/0x41; Alt+F8 / Shift+Alt+F8)
+SCENES['ext-menu-actions'] = () => {
+  const W = 1000, H = 440, X0 = 470, SW = 760;
+  stage.style.width = SW + 'px'; stage.style.height = '400px';
+  const frame = backdrop({ W, H, seW: 150, dockW: 150 });
+  const items = MENUBAR.map(m => `<span class="mi" style="padding:0 6px;height:30px;line-height:30px;${m === 'Extensions' ? 'background:var(--sel)' : ''}">${m}</span>`).join('');
+  const bar = `<div class="abs" id="mb" style="left:36px;top:0;height:30px;display:flex;gap:8px;background:var(--bg)">${items}</div>`;
+  const dd = menuHtml(['Manage Extensions', '-', { t: 'SVNAssist', sub: true, hl: true }], 'left:0;top:30px;width:175px');
+  const m1 = menuHtml(['SVN Changes', 'Commit...', '-', 'Update', 'Update to revision...', { t: 'Switch...', hl: true }, 'Merge...', 'Log / History', 'Change AI Provider...', 'Cleanup', { t: 'Next Change in Diff', kb: 'Alt+F8' }, { t: 'Previous Change in Diff', kb: 'Shift+Alt+F8' }, '-', { t: 'Language / Lingua', sub: true }], 'left:0;top:0;width:290px');
+  stage.innerHTML = `<div class="abs" style="left:${-X0}px;top:0;width:${W}px;height:${H}px">${frame}${bar}
+    <div id="ddh" class="abs" style="top:0;left:0">${dd}</div><div id="m1h" class="abs">${m1}</div></div>`;
+  const ext = [...document.querySelectorAll('#mb .mi')].find(e => e.textContent === 'Extensions').getBoundingClientRect(), box = stage.getBoundingClientRect();
+  const q = (id, x, y) => { const e = document.getElementById(id); e.style.left = x + 'px'; e.style.top = y + 'px'; };
+  q('ddh', ext.left - box.left + X0 - 6, 0);
+  const sv = document.querySelector('#ddh .it.hl').getBoundingClientRect();
+  q('m1h', sv.right - box.left + X0 - 2, sv.top - box.top - 4);
 };
 
 SCENES[SCENE]();
