@@ -55,6 +55,21 @@ public static class SvnErrors
                || text.Contains("mixed-revision", StringComparison.OrdinalIgnoreCase)
                || text.Contains("out of date", StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>
+    /// <c>svn merge</c> fermato da un conflitto (E155015 "One or more conflicts were produced while merging r14040:14041 ... resolve all conflicts and rerun the merge"):
+    /// con piu' intervalli svn li applica uno alla volta e si ferma al primo in conflitto; le revisioni successive non sono state applicate.
+    /// </summary>
+    public static bool IsMergeStoppedByConflict(string? text)
+        => !string.IsNullOrEmpty(text)
+           && (text.Contains("E155015", StringComparison.Ordinal) || text.Contains("conflicts were produced while merging", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>La revisione in conflitto di un E155015 (<c>merging r14040:14041</c> = la 14041); <c>null</c> se non si ricava.</summary>
+    public static long? ConflictingRevision(string? text)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(text ?? string.Empty, @"while merging r(\d+):(\d+)");
+        return m.Success && long.TryParse(m.Groups[2].Value, out var r) ? r : null;
+    }
+
     /// <summary><c>svn lock</c> fallito perché il file è già bloccato da un altro (W160035/E160035, E200035 "already locked").</summary>
     public static bool IsLockedByOther(string? text)
         => !string.IsNullOrEmpty(text)

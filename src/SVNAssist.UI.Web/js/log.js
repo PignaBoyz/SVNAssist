@@ -15,6 +15,32 @@
   const fld =(name, label, val, ph, type) => `<label for="lf-${name}">${label}</label><input id="lf-${name}" name="${name}" type="${type || 'text'}" value="${esc(val)}"${ph ? ` placeholder="${esc(ph)}"` : ''} spellcheck="false">`;
   // finche' il merge non e' committato o annullato non e' "0 da unire": le revisioni da unire sono gia' ricalcolate
   const mgState = m => m.pending ? t('Merge eseguito, da committare') : t('{0} revisioni da unire', m.eligible);
+  let onlyAffected = false;   // "Solo percorsi interessati" (come TortoiseSVN): nasconde i percorsi della revisione fuori dalla cartella/file di cui si legge il log
+  const inBase = (p, b) => !b || b === '/' || p === b || p.startsWith(b + '/');
+  const copyText = txt => {
+    const fb = () => { const a = document.createElement('textarea'); a.value = txt; a.style.position = 'fixed'; a.style.opacity = '0'; document.body.appendChild(a); a.select(); try { document.execCommand('copy'); } catch (e) { /* niente appunti */ } a.remove(); };
+    try { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(txt).catch(fb); return; } } catch (e) { /* ripiega su execCommand */ }
+    fb();
+  };
+  // menu contestuale di una riga (tasto destro, tasto Menu, Maiusc+F10): azioni sulla revisione; in modalita' merge anche scelta, anteprima e merge di quella revisione
+  U.logRowMenu = (s, rev) => {
+    const e = s.entries.find(x => x.rev === rev); if (!e) return [];
+    const copy = (txt, what) => () => { copyText(txt); if (U.toast) U.toast(t('Copiato: {0}', what)); };
+    const tail = [{ label: t('Copia numero revisione'), run: copy('r' + rev, 'r' + rev) }, { label: t('Copia messaggio'), run: copy(e.msg || '', t('messaggio')), disabled: !e.msg }];
+    if (s.merge) {
+      const m = s.merge, off = m.busy || m.loading;
+      return [{ label: m.selected.includes(rev) ? t('Deseleziona') : t('Seleziona'), cmd: 'mergeToggle', args: { rev }, disabled: off },
+        { label: t('Mostra file modificati'), cmd: 'mergeFocus', args: { rev }, hint: t('Elenca i file toccati da questa revisione, senza cambiare la scelta') }, { sep: true },
+        { label: t('Anteprima di questa revisione'), cmd: 'mergePreviewRev', args: { rev }, disabled: off, hint: t('Scegli solo questa revisione e simula il merge (svn merge --dry-run)') },
+        { label: t('Merge di questa revisione'), cmd: 'mergeRev', args: { rev }, disabled: off || !!m.blocked, hint: t('Scegli solo questa revisione e uniscila (cherry-pick)') }, { sep: true }, ...tail];
+    }
+    const files = (e.paths || []).filter(p => p.k !== 'dir');
+    const items = [{ label: t('Mostra file modificati'), cmd: 'logSelect', args: { rev }, hint: t('Elenco dei file della revisione (svn log -v) e diff') },
+      files.length === 1 ? { label: t('Diff con la precedente'), cmd: 'logOpenFile', args: { rev, i: e.paths.indexOf(files[0]) }, hint: t('Apre il diff di r{0} contro la precedente in Visual Studio', rev) }
+        : { label: t('Diff con la precedente'), cmd: 'logSelect', args: { rev }, hint: t('Mostra il diff della revisione sotto la tabella') }];
+    if (s.sel != null && s.sel !== rev) items.push({ label: t('Confronta con r{0}', s.sel), cmd: 'logCompare', args: { a: s.sel, b: rev }, hint: t('Elenca i file cambiati tra le due revisioni') });
+    return [...items, { sep: true }, ...tail];
+  };
   let mcur = null;   // revisione col focus nella tabella del merge (roving tabindex): sopravvive ai ridisegni
   U.logHTML = {
     top(s) {
@@ -73,7 +99,33 @@
         `<p class="muted">${r.mode === 'preview' ? t("L'anteprima non prevede sempre i conflitti ad albero e di proprietà: possono comparire solo con il merge vero.") : t('Le modifiche sono nella working copy, non ancora committate: rivedile in Changes (i conflitti compaiono lì).')}</p>` +
         (r.skipped ? `<p class="muted">${t('{0} percorsi saltati da svn.', r.skipped)}</p>` : '') +
         (r.mode === 'merge' && r.counts.conflicted ? `<div class="mb warn" role="alert">${U.icon('warn')}<span>${t('{0} in conflitto: vanno risolti prima di committare.', r.counts.conflicted)}</span><span class="fill"></span>${U.btn('btn sm primary', t('Risolvi i conflitti'), 'diff', 'mergeResolve', null, t('Apre Changes, sezione Conflitti, con le azioni per ogni file'))}</div>` : '') +
-        (r.items.length ? `<div class="pth">${t('Azione')} / ${t('Percorso')} · ${t('{0} file', r.items.length)}</div><ul class="paths">${r.items.map(U.logHTML.mergeRow).join('')}</ul>` : `<p class="muted">${t('Nessun file da mostrare.')}</p>`) + `</div>`;
+        (r.byRev ? U.logHTML.mergeByRev(r) + `<details class="mdr"><summary>${t('Esito complessivo del dry-run ({0} file)', r.items.length)}</summary><ul class="paths">${r.items.map(U.logHTML.mergeRow).join('')}</ul></details>`
+          : r.items.length ? `<div class="pth">${t('Azione')} / ${t('Percorso')} · ${t('{0} file', r.items.length)}</div><ul class="paths">${r.items.map(U.logHTML.mergeRow).join('')}</ul>` : `<p class="muted">${t('Nessun file da mostrare.')}</p>`) + `</div>`;
+    },
+    // riga di un file del merge: azione, percorso (clic = diff in Visual Studio), in quante delle revisioni scelte compare, conflitto previsto
+    mergeFileRow(p, rev) {
+      const st = `<span class="st ${U.stClass(p.a)}" title="${esc(U.statusName(p.a))}">${esc(p.a)}</span><span class="sn">${esc(U.statusName(p.a))}</span>`;
+      const cf = p.c ? `<span class="st st-C" title="${esc(t('Il dry-run prevede un conflitto su questo file'))}">C</span>` : '';
+      const n = p.n > 1 ? `<span class="muted fcnt" title="${esc(t('Toccato da {0} revisioni scelte', p.n))}">×${p.n}</span>` : '';
+      if (p.k === 'dir') return `<li>${st}<span class="muted pt" title="${esc(t('Cartella'))}">${esc(p.p)}</span>${n}</li>`;
+      return `<li>${st}<button type="button" class="pl pt" ${U.cmd('mergeFileOpen', rev ? { p: p.p, rev } : { p: p.p })} title="${esc(rev || !(p.n > 1) ? t('Apri il diff in Visual Studio') : t('Apri il diff: prima della prima revisione scelta che lo tocca e dopo l\'ultima'))}">${esc(p.p)}</button>${cf}${n}</li>`;
+    },
+    // file coinvolti dalla scelta (unione, effetto netto) o da una revisione del menu contestuale; lettura asincrona
+    mergeFiles(f) {
+      if (!f) return '';
+      const head = `<div class="pth">${f.focus ? t('File della revisione {0}', f.subject) : t('File coinvolti da {0}', f.subject)}${f.loading ? '' : ' · ' + t('{0} file', f.files)} ` +
+        (f.focus ? U.btn('btn sm', t('Torna alla scelta'), null, 'mergeFocus', { rev: 0 }, t('Mostra i file di tutte le revisioni scelte')) : '') + `</div>`;
+      if (f.loading) return `<div class="mf" aria-busy="true">${head}<p class="muted">${t('Lettura dei file delle revisioni…')}</p></div>`;
+      return `<div class="mf">${head}${f.error ? `<div class="rp-err" role="alert">${U.icon('x')}<span>${esc(f.error)}</span></div>` : ''}` +
+        (f.items.length ? `<ul class="paths">${f.items.map(p => U.logHTML.mergeFileRow(p, null)).join('')}</ul>` + (f.more ? `<p class="muted">${t('… e altre {0} voci non elencate.', f.more)}</p>` : '')
+          : `<p class="muted">${t('Nessun file da mostrare.')}</p>`) + `</div>`;
+    },
+    // anteprima raggruppata per revisione (file di ogni revisione da svn log -v; i conflitti dal dry-run complessivo)
+    mergeByRev(r) {
+      return r.byRev.map(g => `<div class="mrv"><div class="pth"><b>r${g.rev}</b> <span class="muted">${esc(g.author)} · ${esc(g.msg)}</span>${g.conflicts ? ` <span class="warn-t">${t('{0} possibili conflitti', g.conflicts)}</span>` : ''}</div>` +
+        (g.files.length ? `<ul class="paths">${g.files.map(p => U.logHTML.mergeFileRow(p, g.rev)).join('')}</ul>` : `<p class="muted">${t('Nessun file da mostrare.')}</p>`) +
+        (g.more ? `<p class="muted">${t('… e altre {0} voci non elencate.', g.more)}</p>` : '') + `</div>`).join('') +
+        (r.byRevMore ? `<p class="muted">${t('… e altre {0} revisioni non elencate.', r.byRevMore)}</p>` : '');
     },
     mergePanel(s) {
       const m = s.merge, n = m.selected.length, off = m.busy || m.loading || !m.eligible ? 'disabled' : '';
@@ -82,21 +134,26 @@
         (m.blocked ? `<div class="mb warn" role="alert">${U.icon('warn')}<span>${esc(m.blocked)}</span><span class="fill"></span>` +
           U.btn('btn sm primary', t('SVN Revert di tutto…'), 'undo', 'mergeRevertAll', null, t('Annulla tutte le modifiche locali (conferma con l’elenco dei file; i non versionati non si toccano), poi il merge si può rifare'), m.busy ? 'disabled' : '') +
           U.btn('btn sm', t('Vai a Changes'), 'diff', 'mergeResolve', null, t('Apre Changes per committare o rivedere le modifiche locali')) + `</div>` : '') +
+        (m.dirty && !m.blocked && !m.pending ? `<div class="mb info" role="note">${U.icon('warn')}<span>${t('Hai {0} elementi con modifiche non committate: puoi unire lo stesso. Prima del merge ti chiedo conferma (con i file in comune, a rischio di conflitto) e salvo una copia di sicurezza; "Annulla merge" le ripristina.', m.dirty)}</span></div>` : '') +
         (m.error ? `<div class="rp-err" role="alert">${U.icon('x')}<span>${esc(m.error)}</span>${m.needsUpdate ? '<span class="fill"></span>' + U.btn('btn sm primary', t('SVN Update ora'), 'refresh', 'mergeUpdate', null, t('Aggiorna la working copy (svn update) e ricalcola le revisioni da unire'), m.busy ? 'disabled' : '') : ''}</div>` : '') +
         `<div class="mact">` +
         U.btn('btn', t('Anteprima'), 'refresh', 'mergePreview', null, n ? t('Simula il merge delle {0} revisioni scelte (svn merge --dry-run)', n) : t('Simula il merge di tutte le revisioni da unire (svn merge --dry-run)'), off) +
         U.btn('btn primary', t('Merge tutto'), 'branch', 'mergeAll', null, t('Unisce tutte le revisioni da unire nella working copy (svn merge); non committa'), off) +
         U.btn('btn', t('Merge selezionate ({0})', n), 'branch', 'mergeSelected', null, t('Cherry-pick: unisce solo le revisioni scelte (svn merge -c)'), n ? off : 'disabled') +
         (n ? U.btn('btn ghost', t('Deseleziona'), null, 'mergeClear', null, t('Toglie la scelta a tutte le revisioni'), m.busy ? 'disabled' : '') : '') + `</div></div>` +
-        (m.result ? U.logHTML.mergeResult(m.result) : '');
+        U.logHTML.mergeFiles(m.files) + (m.result ? U.logHTML.mergeResult(m.result) : '');
     },
     detail(s) {
       if (s.merge) return U.logHTML.mergePanel(s);
       if (s.files) return U.logHTML.files(s);
       const e = s.entries.find(x => x.rev === s.sel);
       if (!e) return `<div class="empty-state"><span class="muted">${t("Seleziona una revisione per vederne le modifiche. Ctrl+clic su un'altra revisione per confrontarle.")}</span></div>`;
+      const all = e.paths.map((p, i) => ({ p, i })), rows = onlyAffected ? all.filter(x => inBase(x.p.p, s.base)) : all;
+      const cnt = ['A', 'M', 'D', 'R'].map(a => [a, rows.filter(x => x.p.a === a && x.p.k !== 'dir').length]).filter(x => x[1]).map(([a, n]) => `${n} ${esc(U.statusName(a))}`).join(' · ');
+      const opt = s.base && s.base !== '/' ? `<label class="lo-c" title="${esc(t('Nasconde i percorsi della revisione fuori da {0} (come TortoiseSVN: Only affected paths)', s.base))}"><input type="checkbox" id="lonly"${onlyAffected ? ' checked' : ''}><span>${t('Solo percorsi interessati')}</span></label>` : '';
       return `<div class="ld-h"><b>r${e.rev}</b> · ${esc(e.author)} · <span class="muted">${U.fmtDate(e.date)}</span><p class="lmsg">${esc(e.msg)}</p>` +
-        `<div class="pth">${t('Azione')} / ${t('Percorso')} · ${t('{0} file', e.paths.length)}</div><ul class="paths">${e.paths.map((p, i) => U.logHTML.pathRow(p, 'logOpenFile', { rev: e.rev, i })).join('')}</ul></div>` + `<div class="ld-d">${U.diffHTML(s.diff)}</div>`;
+        `<div class="pth">${t('Percorsi modificati')} · ${t('{0} file', rows.length)}${cnt ? ' · ' + cnt : ''}${onlyAffected && rows.length < all.length ? ' · ' + t('{0} nascosti', all.length - rows.length) : ''}</div>${opt}` +
+        `<ul class="paths">${rows.map(x => U.logHTML.pathRow(x.p, 'logOpenFile', { rev: e.rev, i: x.i })).join('')}</ul></div>` + `<div class="ld-d">${U.diffHTML(s.diff)}</div>`;
     },
   };
   function render(root) {
@@ -118,6 +175,7 @@
         else if (e.target.id === 'logfilter') { e.preventDefault(); const a = {}; for (const i of e.target.querySelectorAll('input')) a[i.name] = i.value; U.bridge.send('logFilter', a); }
       });
       root.addEventListener('change', e => {
+        if (e.target.id === 'lonly') { onlyAffected = e.target.checked; if (st) render(root); return; }
         if (!e.target.closest('#logopts')) return;
         const v = n => e.target.closest('#logopts').querySelector(`[name=${n}]`).checked;
         U.bridge.send('logOptions', { stopOnCopy: v('stopOnCopy'), merged: v('merged') });
@@ -125,6 +183,7 @@
       U.ops.wire(root.querySelector('#ops'), () => st);
       const list = root.querySelector('#llist');
       list.addEventListener('click', e => { const r = e.target.closest('.lr'); if (r && st && st.merge) { mcur = +r.dataset.rev; U.bridge.send('mergeToggle', { rev: mcur }); } else if (r) { const c = U.logClick(st && st.sel, +r.dataset.rev, e.ctrlKey || e.shiftKey || e.metaKey); U.bridge.send(c.cmd, c.args); } });
+      list.addEventListener('contextmenu', e => { const r = e.target.closest('.lr'); if (!r || !st) return; e.preventDefault(); U.menu.open(e.clientX, e.clientY, U.logRowMenu(st, +r.dataset.rev), r); });
       list.addEventListener('pointerdown', e => {   // trascina il bordo dell'intestazione per cambiare la larghezza della colonna
         const g = e.target.closest('.rz'); if (!g) return; e.preventDefault(); e.stopPropagation();
         const cell = g.parentElement, x0 = e.clientX, w0 = cell.getBoundingClientRect().width;
@@ -134,6 +193,7 @@
       });
       list.addEventListener('keydown', e => {
         const rs = [...list.querySelectorAll('.lr')], i = rs.indexOf(document.activeElement); if (i < 0) return;
+        if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) { e.preventDefault(); const b = rs[i].getBoundingClientRect(); U.menu.open(b.left + 24, b.bottom, U.logRowMenu(st, +rs[i].dataset.rev), rs[i]); return; }
         const rev = U.logKey(e.key, rs.map(r => +r.dataset.rev), +rs[i].dataset.rev); if (rev == null) return;
         e.preventDefault();
         if (st && st.merge) {   // nel merge le frecce spostano il focus, Spazio/Invio scelgono o tolgono la revisione

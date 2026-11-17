@@ -240,7 +240,7 @@
         },
         "blocked": {
           "type": "string",
-          "description": "Perche non si puo unire (working copy con modifiche locali); vuoto se si puo. La UI affianca i pulsanti SVN Revert di tutto (mergeRevertAll) e Vai a Changes (mergeResolve)."
+          "description": "Perche non si puo unire (conflitti, file mancanti o elementi a meta nella working copy: dopo un merge non si ripristinano in modo affidabile); vuoto se si puo. Le modifiche pendenti (M, A, D, R) NON bloccano: vedi dirty. La UI affianca i pulsanti SVN Revert di tutto (mergeRevertAll) e Vai a Changes (mergeResolve)."
         },
         "selected": {
           "type": "array",
@@ -355,8 +355,174 @@
             "skipped": {
               "type": "integer",
               "minimum": 0
+            },
+            "byRev": {
+              "type": "array",
+              "description": "Solo anteprima: per ogni revisione (dalla piu' vecchia) i file che tocca (svn log -v), con c vero sui file che il dry-run complessivo prevede in conflitto.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "rev",
+                  "author",
+                  "msg",
+                  "files",
+                  "more"
+                ],
+                "properties": {
+                  "rev": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "author": {
+                    "type": "string"
+                  },
+                  "msg": {
+                    "type": "string",
+                    "description": "Prima riga del messaggio."
+                  },
+                  "files": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "a",
+                        "p"
+                      ],
+                      "properties": {
+                        "a": {
+                          "enum": [
+                            "A",
+                            "M",
+                            "D",
+                            "R"
+                          ]
+                        },
+                        "p": {
+                          "type": "string",
+                          "description": "Percorso relativo al ramo (uguale a quello della working copy)."
+                        },
+                        "n": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "description": "Solo nell'elenco unito: quante delle revisioni considerate toccano il file."
+                        },
+                        "k": {
+                          "enum": [
+                            "dir"
+                          ],
+                          "description": "Cartella (non si apre nel diff). Assente = file."
+                        },
+                        "c": {
+                          "type": "boolean",
+                          "description": "Solo nell'anteprima: il dry-run prevede un conflitto su questo file."
+                        }
+                      }
+                    }
+                  },
+                  "more": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "conflicts": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              }
+            },
+            "byRevMore": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Revisioni non elencate in byRev."
             }
           }
+        },
+        "files": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "subject",
+            "focus",
+            "loading",
+            "error",
+            "items",
+            "files",
+            "more"
+          ],
+          "description": "File coinvolti dalla scelta (unione delle revisioni scelte, con l'effetto netto) o, con focus vero, da una sola revisione scelta dal menu contestuale (mergeFocus). Assente se non c'e' ne' scelta ne' focus. Si legge in modo asincrono (svn log -v solo per le revisioni scelte, in cache); clic su un file = mergeFileOpen.",
+          "properties": {
+            "subject": {
+              "type": "string",
+              "description": "Es. r120, r124 oppure r120."
+            },
+            "focus": {
+              "type": "boolean",
+              "description": "Mostra una sola revisione (menu contestuale) al posto della scelta: la UI offre Torna alla scelta (mergeFocus rev 0)."
+            },
+            "loading": {
+              "type": "boolean"
+            },
+            "error": {
+              "type": "string"
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "a",
+                  "p"
+                ],
+                "properties": {
+                  "a": {
+                    "enum": [
+                      "A",
+                      "M",
+                      "D",
+                      "R"
+                    ]
+                  },
+                  "p": {
+                    "type": "string",
+                    "description": "Percorso relativo al ramo (uguale a quello della working copy)."
+                  },
+                  "n": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Solo nell'elenco unito: quante delle revisioni considerate toccano il file."
+                  },
+                  "k": {
+                    "enum": [
+                      "dir"
+                    ],
+                    "description": "Cartella (non si apre nel diff). Assente = file."
+                  },
+                  "c": {
+                    "type": "boolean",
+                    "description": "Solo nell'anteprima: il dry-run prevede un conflitto su questo file."
+                  }
+                }
+              }
+            },
+            "files": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "File veri (cartelle escluse)."
+            },
+            "more": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Voci non elencate (limite dell'elenco)."
+            }
+          }
+        },
+        "dirty": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Elementi con modifiche pendenti (M, A, D, R); assente se zero. Non bloccano il merge: prima si chiede conferma (con i file in comune col merge, a rischio di conflitto) e si salva una copia di sicurezza in .svn-assist/backups che Annulla merge ripristina."
         }
       }
     },
@@ -490,6 +656,10 @@
           }
         }
       }
+    },
+    "base": {
+      "type": "string",
+      "description": "Percorso nel repository della cartella o del file di cui si legge il log (es. /trunk/src). Serve all'opzione Solo percorsi interessati: i percorsi di una revisione fuori da qui si nascondono."
     }
   }
 }

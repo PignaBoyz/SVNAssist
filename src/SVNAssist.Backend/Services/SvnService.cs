@@ -86,6 +86,10 @@ public class SvnService : ISvnService
     }
 
     /// <inheritdoc />
+    public async Task<IReadOnlyList<SvnFileStatus>> GetLocalChangesAsync(string workingCopyPath, CancellationToken ct)
+        => ParseStatusXml(await RunSvnAsync(["status", "-q", "--xml"], workingCopyPath, ct));
+
+    /// <inheritdoc />
     public async Task<IReadOnlyList<SvnRemoteLock>> GetRemoteLocksAsync(string workingCopyPath, CancellationToken ct)
     {
         // RunSvnOnceAsync: controllo in background, mai il dialogo di login.
@@ -141,7 +145,8 @@ public class SvnService : ISvnService
                 kind = SvnStatusKind.Conflicted;
 
             results.Add(new SvnFileStatus(path, kind, isTreeConflict, IsLocked: wcStatus?.Element("lock") is not null,
-                IsSwitched: wcStatus?.Attribute("switched")?.Value == "true", IsWcLocked: wcStatus?.Attribute("wc-locked")?.Value == "true"));
+                IsSwitched: wcStatus?.Attribute("switched")?.Value == "true", IsWcLocked: wcStatus?.Attribute("wc-locked")?.Value == "true",
+                IsCopied: wcStatus?.Attribute("copied")?.Value == "true" || wcStatus?.Attribute("moved-from") is not null || wcStatus?.Attribute("moved-to") is not null));
         }
 
         return results;
@@ -205,13 +210,13 @@ public class SvnService : ISvnService
     }
 
     /// <inheritdoc />
-    public async Task AddAsync(IEnumerable<string> paths, CancellationToken ct)
+    public async Task AddAsync(IEnumerable<string> paths, CancellationToken ct, bool nonRecursive = false)
     {
         var pathList = paths.ToList();
         if (pathList.Count == 0)
             return;
 
-        await RunSvnWithTargetsAsync(["add", "--force", "--parents"], pathList, workingDirectory: null, ct);
+        await RunSvnWithTargetsAsync(nonRecursive ? ["add", "--depth", "empty", "--parents"] : ["add", "--force", "--parents"], pathList, workingDirectory: null, ct);
     }
 
     /// <inheritdoc />
@@ -1087,8 +1092,17 @@ public class SvnService : ISvnService
         => MergeParser.ParseRevisions(await RunSvnAsync(["mergeinfo", "--show-revs", "eligible", Peg(sourceUrl)], workingCopyPath, ct));
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<SvnLogEntry>> GetLogRangeAsync(string url, long min, long max, CancellationToken ct)
-        => ParseLogXml(await RunSvnAsync(["log", "--xml", "-v", "-r", $"{max}:{min}", Peg(url)], workingDirectory: null, ct));
+    public async Task<IReadOnlyList<SvnLogEntry>> GetLogRangeAsync(string url, long min, long max, CancellationToken ct, bool withPaths = true)
+        => ParseLogXml(await RunSvnAsync(BuildLogRangeArgs(url, min, max, withPaths), workingDirectory: null, ct));
+
+    internal static List<string> BuildLogRangeArgs(string url, long min, long max, bool withPaths)
+    {
+        var args = new List<string> { "log", "--xml" };
+        if (withPaths)
+            args.Add("-v");
+        args.AddRange(["-r", $"{max.ToString(CultureInfo.InvariantCulture)}:{min.ToString(CultureInfo.InvariantCulture)}", Peg(url)]);
+        return args;
+    }
 
     /// <inheritdoc />
     public async Task<MergeOutput> MergeAsync(string workingCopyPath, string sourceUrl, IReadOnlyList<long>? revisions, bool dryRun, CancellationToken ct)
@@ -1103,7 +1117,7 @@ public class SvnService : ISvnService
             args.Add("--dry-run");
         args.AddRange(["--accept", "postpone"]);
         if (revisions is { Count: > 0 })
-            args.AddRange(["-c", string.Join(",", revisions.Select(r => r.ToString(CultureInfo.InvariantCulture)))]);
+            args.AddRange(["-c", MergeParser.RevisionRanges(revisions)]); // consecutive in un intervallo (5-7): una passata sola invece di una per revisione
         args.Add(Peg(sourceUrl));
         return args;
     }

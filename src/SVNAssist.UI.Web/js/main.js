@@ -15,6 +15,7 @@
     let t = document.getElementById('toast'); if (!t) { t = document.createElement('div'); t.id = 'toast'; t.setAttribute('role', 'status'); document.body.appendChild(t); }
     t.textContent = msg; t.classList.add('on'); clearTimeout(t.__t); t.__t = setTimeout(() => t.classList.remove('on'), 3500);
   }
+  U.toast = toast;   // anche per i menu delle viste (es. "Copiata la revisione")
   function theme(m) {   // {kind:'dark|light|blue', vars:{'--bg0':'#..',...}}
     document.documentElement.dataset.theme = m.kind;
     const s = document.documentElement.style;

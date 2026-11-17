@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using SVNAssist.Models;
 using SVNAssist.Services;
 
@@ -16,12 +18,24 @@ internal sealed class MergeStore
     private readonly ChangesStore _changes;
     private readonly object _lock = new();
     private readonly HashSet<long> _selected = [];
+    // Autore, data e messaggio gia' letti (per revisione): dopo un merge, un annulla o un update si rilegge solo mergeinfo e si chiede il log delle revisioni nuove.
+    private readonly Dictionary<long, LogEntryDto> _logCache = [];
+    // File toccati da ogni revisione (svn log -v), letti solo per le revisioni di cui serve l'elenco e poi in cache: una revisione non cambia.
+    private readonly Dictionary<long, IReadOnlyList<SvnLogPath>> _paths = [];
+    private long? _focus;   // revisione scelta dal menu contestuale per vederne i file (vale al posto della scelta)
+    private long _filesGen;
+    private bool _filesLoading;
+    private string _filesError = string.Empty;
+    private MergeFilesDto? _filesDto;
+    private CancellationTokenSource _filesCts = new();
+    private string? _repoRoot;
 
     private bool _active, _loading, _busy;
     private string _wc = string.Empty, _error = string.Empty, _blocked = string.Empty, _message = string.Empty;
     private SwitchPickerStore.Target? _source;
     private IReadOnlyList<LogEntryDto> _entries = [];
     private MergeResultDto? _result;
+    private IReadOnlyList<SvnFileStatus> _pending = []; // modifiche pendenti (M, A, D, R) dell'ultimo controllo
 
     public MergeStore(ISvnService svn, ChangesStore changes)
     {
@@ -43,7 +57,7 @@ internal sealed class MergeStore
         get
         {
             lock (_lock)
-                return _error.Length > 0 ? (_error, true) : (_message, false);
+                return _error.Length > 0 ? (string.Empty, false) : (_message, false); // l'errore sta gia' nel pannello: non si ripete nella riga in fondo
         }
     }
 
@@ -57,7 +71,7 @@ internal sealed class MergeStore
         var pending = _changes.MergePending; // prima del lock: prende il lock di ChangesStore
         lock (_lock)
             return !_active || _source is null ? null
-                : new MergeDto(_source.Name, Title(_source), _loading, _busy, _error, _blocked, _selected.Order().ToList(), _entries.Count, _result, pending, SvnErrors.SuggestsUpdate(_error));
+                : new MergeDto(_source.Name, Title(_source), _loading, _busy, _error, _blocked, _selected.Order().ToList(), _entries.Count, _result, pending, SvnErrors.SuggestsUpdate(_error), _filesDto, _pending.Count);
     }
 
     internal void Close()
@@ -68,6 +82,7 @@ internal sealed class MergeStore
             _entries = [];
             _selected.Clear();
             _result = null;
+            ResetFiles();
         }
 
         Changed?.Invoke();
@@ -84,8 +99,10 @@ internal sealed class MergeStore
             _wc = workingCopy;
             _source = source;
             _entries = [];
+            _logCache.Clear();
             _selected.Clear();
             _result = null;
+            ResetFiles();
             _error = string.Empty;
             _blocked = string.Empty;
             _message = Loc.T("Lettura delle revisioni da unire...");
@@ -96,15 +113,29 @@ internal sealed class MergeStore
 
     internal async Task LoadAsync(CancellationToken ct)
     {
+        var sw = Stopwatch.StartNew();
+        var times = new ConcurrentDictionary<string, long>();
         try
         {
-            if (await _svn.GetSvnVersionAsync(ct) is { } v && v < new Version(1, 8))
+            // Tre letture indipendenti (versione di svn, revisioni da unire, stato della working copy) in parallelo: prima erano in fila.
+            var version = Timed(times, "version", () => _svn.GetSvnVersionAsync(ct));
+            var eligible = ReloadEligibleAsync(ct, times);
+            var blocked = Timed(times, "status", () => CheckBlockedAsync(ct));
+            var all = Task.WhenAll(version, eligible, blocked);
+            if (await version is { } v && v < new Version(1, 8))
+            {
+                try { await all; } catch (Exception) { /* l'errore che conta e' la versione */ }
+                lock (_lock)
+                    _entries = [];
                 throw new InvalidOperationException(Loc.T("SVN Merge richiede svn 1.8 o successivo (trovato {0}).", v));
-            await ReloadEligibleAsync(ct);
-            await CheckBlockedAsync(ct);
+            }
+
+            await all;
+            BackendLog.Info($"merge load: {Format(times)}, totale {sw.ElapsedMilliseconds} ms, {Entries.Count} revisioni da unire");
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
+            BackendLog.Warn($"merge load fallito dopo {sw.ElapsedMilliseconds} ms ({Format(times)}): {ex.Message}");
             lock (_lock)
                 _error = Loc.T("Errore: {0}", ex.Message);
         }
@@ -116,17 +147,37 @@ internal sealed class MergeStore
         }
     }
 
+    /// <summary>Esegue <paramref name="body"/> e ne registra la durata (ms) sotto <paramref name="name"/>, anche in caso di errore.</summary>
+    private static async Task<T> Timed<T>(ConcurrentDictionary<string, long> times, string name, Func<Task<T>> body)
+    {
+        var sw = Stopwatch.StartNew();
+        try { return await body(); }
+        finally { times.AddOrUpdate(name, sw.ElapsedMilliseconds, (_, old) => old + sw.ElapsedMilliseconds); }
+    }
+
+    private static async Task TimedRun(ConcurrentDictionary<string, long> times, string name, Func<Task> body)
+    {
+        var sw = Stopwatch.StartNew();
+        try { await body(); }
+        finally { times.AddOrUpdate(name, sw.ElapsedMilliseconds, (_, old) => old + sw.ElapsedMilliseconds); }
+    }
+
+    private static string Format(ConcurrentDictionary<string, long> times)
+        => string.Join(", ", times.OrderBy(t => t.Key, StringComparer.Ordinal).Select(t => $"{t.Key} {t.Value} ms"));
+
     /// <summary>Rilegge le revisioni da unire e la working copy (dopo "Annulla merge"): l'esito precedente non vale piu'.</summary>
     internal async Task RefreshAsync(CancellationToken ct)
     {
         if (!Active)
             return;
+        var sw = Stopwatch.StartNew();
+        var times = new ConcurrentDictionary<string, long>();
         try
         {
-            await ReloadEligibleAsync(ct);
-            await CheckBlockedAsync(ct);
+            await Task.WhenAll(ReloadEligibleAsync(ct, times), Timed(times, "status", () => CheckBlockedAsync(ct)));
             lock (_lock)
                 _result = null;
+            BackendLog.Info($"merge refresh: {Format(times)}, totale {sw.ElapsedMilliseconds} ms");
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
@@ -165,9 +216,10 @@ internal sealed class MergeStore
             if (!_selected.Remove(rev))
                 _selected.Add(rev);
             _result = null; // l'anteprima riguardava un'altra scelta
+            _focus = null;
         }
 
-        Changed?.Invoke();
+        RequestFiles();
     }
 
     internal void ClearSelection()
@@ -176,9 +228,257 @@ internal sealed class MergeStore
         {
             _selected.Clear();
             _result = null;
+            _focus = null;
+        }
+
+        RequestFiles();
+    }
+
+    /// <summary>Menu contestuale: lascia la scelta com'e' e mostra i file di una sola revisione (<paramref name="rev"/> 0 = torna alla scelta).</summary>
+    internal void Focus(long rev)
+    {
+        lock (_lock)
+        {
+            if (rev != 0 && !_entries.Any(e => e.Rev == rev))
+                return;
+            _focus = rev == 0 ? null : rev;
+        }
+
+        RequestFiles();
+    }
+
+    /// <summary>Menu contestuale "Anteprima di questa" / "Merge di questa revisione": la scelta diventa solo questa revisione.</summary>
+    private bool SelectOnly(long rev)
+    {
+        lock (_lock)
+        {
+            if (_busy || _loading || !_active || !_entries.Any(e => e.Rev == rev))
+                return false;
+            _selected.Clear();
+            _selected.Add(rev);
+            _result = null;
+            _focus = null;
+        }
+
+        RequestFiles();
+        return true;
+    }
+
+    internal Task PreviewRevisionAsync(long rev, CancellationToken ct) => SelectOnly(rev) ? PreviewAsync(ct) : Task.CompletedTask;
+
+    internal Task MergeRevisionAsync(long rev, CancellationToken ct) => SelectOnly(rev) ? RunAsync(all: false, ct) : Task.CompletedTask;
+
+    // ── File coinvolti (bug 6) ───────────────────────────────────────
+
+    /// <summary>Svuota tutto quello che riguarda i file (nuovo merge, chiusura). Chiamare col lock preso.</summary>
+    private void ResetFiles()
+    {
+        _paths.Clear();
+        _focus = null;
+        _filesDto = null;
+        _filesLoading = false;
+        _filesError = string.Empty;
+        _repoRoot = null;
+        _filesGen++;
+        var old = _filesCts;
+        _filesCts = new CancellationTokenSource();
+        try { old.Cancel(); } catch (ObjectDisposedException) { /* gia' chiuso */ }
+    }
+
+    private List<long> SubjectRevs() => _focus is { } f ? [f] : _selected.Order().ToList();
+
+    /// <summary>Ricostruisce l'elenco dalla cache. Chiamare col lock preso.</summary>
+    private void RebuildFiles()
+    {
+        var revs = SubjectRevs();
+        if (revs.Count == 0 || _source is null)
+        {
+            _filesDto = null;
+            return;
+        }
+
+        var subject = _focus is { } f ? $"r{f}" : RevsLabel(revs);
+        if (_filesLoading)
+        {
+            _filesDto = new MergeFilesDto(subject, _focus is not null, true, string.Empty, [], 0, 0);
+            return;
+        }
+
+        var all = MergeFiles.Union(revs, r => _paths.GetValueOrDefault(r), _source.Path);
+        var (items, more) = MergeFiles.Cap(all, MergeFiles.MaxItems);
+        _filesDto = new MergeFilesDto(subject, _focus is not null, false, _filesError, items, all.Count(i => i.K is null), more);
+    }
+
+    /// <summary>La scelta (o la revisione del menu) e' cambiata: i file mancanti in cache si leggono in background (poche richieste, dopo una breve attesa per le raffiche di clic).</summary>
+    private void RequestFiles()
+    {
+        long gen;
+        List<long> missing;
+        CancellationToken ct;
+        lock (_lock)
+        {
+            gen = ++_filesGen;
+            _filesError = string.Empty;
+            missing = SubjectRevs().Where(r => !_paths.ContainsKey(r)).ToList();
+            _filesLoading = missing.Count > 0;
+            RebuildFiles();
+            ct = _filesCts.Token;
         }
 
         Changed?.Invoke();
+        if (missing.Count > 0)
+            _ = LoadFilesAsync(gen, missing, ct);
+    }
+
+    private async Task LoadFilesAsync(long gen, List<long> missing, CancellationToken ct)
+    {
+        try
+        {
+            await Task.Delay(FilesDebounce, ct);
+            lock (_lock)
+            {
+                if (gen != _filesGen)
+                    return; // una scelta piu' recente ha gia' chiesto quello che le serve
+            }
+
+            await EnsurePathsAsync(missing, ct);
+            lock (_lock)
+            {
+                if (gen != _filesGen)
+                    return;
+                _filesLoading = false;
+                RebuildFiles();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            BackendLog.Warn("merge files: " + ex.Message);
+            lock (_lock)
+            {
+                if (gen != _filesGen)
+                    return;
+                _filesLoading = false;
+                _filesError = Loc.T("Errore: {0}", ex.Message);
+                RebuildFiles();
+            }
+        }
+
+        Changed?.Invoke();
+    }
+
+    /// <summary>Attesa prima di leggere i file dopo un clic (sostituibile nei test).</summary>
+    internal static TimeSpan FilesDebounce { get; set; } = TimeSpan.FromMilliseconds(200);
+
+    /// <summary>
+    /// Mette in cache i file toccati dalle revisioni indicate: <c>svn log -v</c> a gruppi di revisioni adiacenti nell'elenco (nessuna revisione in mezzo
+    /// da scartare, una richiesta per gruppo, in parallelo) e non una chiamata per revisione.
+    /// </summary>
+    private async Task EnsurePathsAsync(IReadOnlyList<long> revs, CancellationToken ct)
+    {
+        List<long> missing;
+        Dictionary<long, int> index;
+        SwitchPickerStore.Target source;
+        lock (_lock)
+        {
+            source = _source!;
+            missing = revs.Where(r => !_paths.ContainsKey(r)).Distinct().ToList();
+            index = [];
+            for (var i = 0; i < _entries.Count; i++)
+                index[_entries[i].Rev] = i;
+        }
+
+        if (missing.Count == 0)
+            return;
+        var sw = Stopwatch.StartNew();
+        var runs = new List<(long Min, long Max)>();
+        int? prev = null;
+        foreach (var r in missing.OrderBy(r => index.GetValueOrDefault(r, int.MaxValue)))
+        {
+            var i = index.GetValueOrDefault(r, int.MaxValue);
+            if (prev is { } p && i == p + 1)
+                runs[^1] = (Math.Min(runs[^1].Min, r), Math.Max(runs[^1].Max, r));
+            else
+                runs.Add((r, r));
+            prev = i;
+        }
+
+        using var gate = new SemaphoreSlim(LogParallelism);
+        var batches = await Task.WhenAll(runs.Select(async g =>
+        {
+            await gate.WaitAsync(ct);
+            try { return await _svn.GetLogRangeAsync(source.Url, g.Min, g.Max, ct, withPaths: true); }
+            finally { gate.Release(); }
+        }));
+        var wanted = missing.ToHashSet();
+        lock (_lock)
+        {
+            foreach (var e in batches.SelectMany(b => b).Where(e => wanted.Contains(e.Revision)))
+                _paths[e.Revision] = e.Paths ?? [];
+            foreach (var r in missing)
+                _paths.TryAdd(r, []); // il log non l'ha restituita (permessi): elenco vuoto, non si richiede di nuovo
+        }
+
+        BackendLog.Info($"merge files: {missing.Count} revisioni in {runs.Count} richieste di log -v, {sw.ElapsedMilliseconds} ms");
+    }
+
+    private async Task<string> RepoRootAsync(CancellationToken ct)
+    {
+        SwitchPickerStore.Target source;
+        lock (_lock)
+        {
+            if (_repoRoot is not null)
+                return _repoRoot;
+            source = _source!;
+        }
+
+        var root = (await _svn.GetRepositoryRootAsync(source.Url, ct)).TrimEnd('/');
+        lock (_lock)
+            _repoRoot = root;
+        return root;
+    }
+
+    /// <summary>
+    /// Clic su un file dell'elenco: URL, nome e revisioni (sinistra, destra) per il diff. Con <paramref name="rev"/> (elenco per revisione dell'anteprima) <c>r-1 ↔ r</c>;
+    /// altrimenti prima della prima revisione che lo tocca ↔ dopo l'ultima (comprende anche eventuali revisioni intermedie non scelte).
+    /// </summary>
+    internal async Task<(string Url, string Name, long? Left, long? Right)> ResolveFileAsync(long? rev, string rel, CancellationToken ct)
+    {
+        List<long> revs;
+        string sourcePath;
+        lock (_lock)
+        {
+            revs = rev is { } r ? [r] : SubjectRevs();
+            sourcePath = _source?.Path ?? throw new ArgumentException(Loc.T("Nessun merge in corso."));
+        }
+
+        await EnsurePathsAsync(revs, ct);
+        var hits = new List<(long Rev, SvnLogPath P)>();
+        lock (_lock)
+        {
+            foreach (var r in revs.Order())
+            foreach (var p in _paths.GetValueOrDefault(r) ?? [])
+                if (string.Equals(MergeFiles.Relative(p.Path, sourcePath), rel, StringComparison.Ordinal))
+                    hits.Add((r, p));
+        }
+
+        if (hits.Count == 0 || hits[^1].P.Kind == "dir")
+            throw new ArgumentException(Loc.T("File non presente nelle revisioni scelte."));
+        var root = await RepoRootAsync(ct);
+        var url = root + hits[^1].P.Path;
+        var name = System.IO.Path.GetFileName(rel);
+        if (hits.Count == 1)
+        {
+            var (l, r2) = DiffOpener.ForRevision(hits[0].P.Action, hits[0].Rev);
+            return (url, name, l, r2);
+        }
+
+        var net = MergeFiles.NetAction(hits[0].P.Action, hits[^1].P.Action) ?? "M";
+        var (left, right) = DiffOpener.ForRange(net, hits[0].Rev - 1, hits[^1].Rev);
+        return (url, name, left, right);
     }
 
     /// <summary>Anteprima (<c>--dry-run</c>): le revisioni scelte, o tutte quelle da unire se non ce n'e' nessuna.</summary>
@@ -188,11 +488,43 @@ internal sealed class MergeStore
             return;
         try
         {
-            await CheckBlockedAsync(ct); // l'anteprima non modifica nulla: serve solo ad aggiornare l'avviso
-            var output = await _svn.MergeAsync(wc, source.Url, revs, dryRun: true, ct);
+            var sw = Stopwatch.StartNew();
+            var times = new ConcurrentDictionary<string, long>();
+            // L'anteprima non modifica nulla: lo stato (solo per aggiornare l'avviso) si legge in parallelo al dry-run.
+            var blocked = Timed(times, "status", () => CheckBlockedAsync(ct));
+            var merge = Timed(times, "dry-run", () => _svn.MergeAsync(wc, source.Url, revs, dryRun: true, ct));
+            // Per revisione: i file di ogni revisione (svn log -v, in cache) piu' il dry-run complessivo per i conflitti. Un dry-run per revisione
+            // sarebbe N visite della working copy (e non prevederebbe comunque i conflitti tra revisioni successive).
+            var shown = (revs ?? Entries.Select(e => e.Rev).Order().ToArray()).Take(MergeFiles.MaxRevisionsInPreview).ToList();
+            var paths = Timed(times, "files", async () => { await EnsurePathsAsync(shown, ct); return 0; });
+            MergeOutput output;
+            string? incomplete = null;
+            try
+            {
+                await Task.WhenAll(blocked, merge, paths);
+                output = await merge;
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested && SvnErrors.IsMergeStoppedByConflict(ex.Message))
+            {
+                // Il dry-run applica una revisione alla volta senza vedere le precedenti e si ferma al primo conflitto: i file di ogni revisione (log -v) si mostrano lo stesso.
+                try { await Task.WhenAll(blocked, paths); } catch (Exception) { /* l'errore che conta e' il conflitto */ }
+                output = new MergeOutput([], 0, 0);
+                incomplete = SvnErrors.ConflictingRevision(ex.Message) is { } r
+                    ? Loc.T("Anteprima incompleta: il dry-run si è fermato alla revisione r{0}, che va in conflitto, e le successive non sono state simulate. I file di ogni revisione sono elencati qui sotto, ma i conflitti previsti arrivano solo fino a lì.", r)
+                    : Loc.T("Anteprima incompleta: il dry-run si è fermato alla prima revisione in conflitto e le successive non sono state simulate. I file di ogni revisione sono elencati qui sotto, ma i conflitti previsti arrivano solo fino a lì.");
+            }
+
+            var total = revs?.Length ?? Entries.Count;
+            var result = ToResult("preview", revs is null ? AllLabel() : RevsLabel(revs), output) with { ByRev = ByRevision(shown, output), ByRevMore = Math.Max(0, total - shown.Count) };
             lock (_lock)
-                _result = ToResult("preview", revs is null ? AllLabel() : RevsLabel(revs), output);
+            {
+                _result = result;
+                if (incomplete is not null)
+                    _error = incomplete;
+            }
+
             Say(Loc.T("Anteprima completata."));
+            BackendLog.Info($"merge preview: {Format(times)}, totale {sw.ElapsedMilliseconds} ms, {output.Items.Count} file");
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
@@ -224,31 +556,88 @@ internal sealed class MergeStore
         try
         {
             var revs = all ? null : picked;
+            var total = Stopwatch.StartNew();
+            var times = new ConcurrentDictionary<string, long>();
             // Il merge richiede una working copy pulita: lo si ricontrolla sempre, e' cambiata dall'ultima volta.
-            if (await CheckBlockedAsync(ct))
+            if (await Timed(times, "status", () => CheckBlockedAsync(ct)))
                 return;
 
             var label = revs is null ? AllLabel() : RevsLabel(revs);
             MergeOutput? output = null;
+            PreMergeSnapshot? snapshot = null;
+            Task? reload = null;
+            var stopped = false;
             await _changes.RunExclusiveAsync(async () =>
             {
                 try
                 {
+                    // Modifiche pendenti: avviso con i file in comune (dry-run) e copia di sicurezza PRIMA di toccare qualcosa; senza copia il merge non parte.
+                    List<SvnFileStatus> dirty;
+                    lock (_lock)
+                        dirty = _pending.ToList();
+                    if (dirty.Count > 0)
+                    {
+                        // I file in comune: dal dry-run. Un E155015 qui NON e' un merge fermato (non e' stato toccato nulla: il dry-run applica una revisione alla volta
+                        // senza vedere le precedenti): i file in comune si ricavano allora dal log. Mai verso i gestori del merge vero.
+                        List<string> overlap;
+                        var known = true;
+                        try
+                        {
+                            var dry = await Timed(times, "dry-run", () => _svn.MergeAsync(wc, source.Url, revs, dryRun: true, ct));
+                            overlap = Overlap(dirty, dry);
+                        }
+                        catch (Exception ex) when (!ct.IsCancellationRequested && SvnErrors.IsMergeStoppedByConflict(ex.Message))
+                        {
+                            BackendLog.Info("merge: il dry-run dei file in comune si e' fermato su un conflitto, si usa il log: " + ex.Message.Split('\n')[0]);
+                            try { overlap = await OverlapFromLogAsync(dirty, revs, ct); }
+                            catch (Exception ex2) when (!ct.IsCancellationRequested)
+                            {
+                                BackendLog.Warn("merge: file in comune non prevedibili: " + ex2.Message);
+                                (overlap, known) = ([], false);
+                            }
+                        }
+
+                        if (!await _changes.ConfirmAsync(PendingMergeText(dirty.Count, overlap, known), ct))
+                        {
+                            Say(Loc.T("Merge non eseguito: le modifiche pendenti non sono state toccate."));
+                            return;
+                        }
+
+                        try { snapshot = await Timed(times, "backup", () => PreMergeSnapshot.CaptureAsync(_svn, wc, dirty, null, ct)); }
+                        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                        {
+                            BackendLog.Warn("Backup delle modifiche pendenti prima del merge: " + ex.Message);
+                            lock (_lock)
+                                _error = ex is PatchBackup.NoSpaceException ns
+                                    ? Loc.T("Non c'è abbastanza spazio per la copia di sicurezza delle modifiche pendenti (servono {0}, liberi {1}): il merge non è partito e non è stato toccato nulla.",
+                                        PatchBackup.FormatBytes(ns.Needed), PatchBackup.FormatBytes(ns.Free))
+                                    : Loc.T("Copia di sicurezza delle modifiche pendenti non riuscita ({0}): il merge non è partito e non è stato toccato nulla.", ex.Message);
+                            Changed?.Invoke();
+                            return;
+                        }
+
+                    }
+
+                    // Sempre, anche senza modifiche pendenti (null): una copia di una working copy precedente non deve mai servire a questo annullamento.
+                    _changes.SetPreMerge(snapshot);
                     Say(Loc.T("Merge da {0} in corso...", source.Name));
                     var ot = _changes.Progress.Begin("merge", Loc.T("Merge da {0}", source.Name), Loc.T("Merge in corso..."), ct, origin: "log");
-                    output = await SvnProgress.RunAsync(_changes.Progress.Line, () => _svn.MergeAsync(wc, source.Url, revs, dryRun: false, ot));
+                    output = await Timed(times, "svn merge", () => SvnProgress.RunAsync(_changes.Progress.Line, () => _svn.MergeAsync(wc, source.Url, revs, dryRun: false, ot)));
+                    // Le revisioni ancora da unire si rileggono (mergeinfo) mentre Changes rilegge lo stato: due letture indipendenti.
+                    IReadOnlyList<LogEntryDto> shown;
+                    lock (_lock)
+                        shown = _entries; // prima della rilettura: il messaggio di commit descrive le revisioni appena unite
+                    reload = ReloadEligibleAsync(ct, times);
                     var summary = ToResult("merge", label, output);
                     lock (_lock)
                         _result = summary;
-                    IReadOnlyList<LogEntryDto> shown;
-                    lock (_lock)
-                        shown = _entries;
-                    await _changes.RefreshAsync(ct, reloadBranch: false, output.Conflicts > 0
+                    await TimedRun(times, "refresh", () => _changes.RefreshAsync(ct, reloadBranch: false, output.Conflicts > 0
                         ? Loc.T("Merge completato: {0} file in conflitto da risolvere.", output.Conflicts)
-                        : Loc.T("Merge completato: rivedi le modifiche e committa."));
+                        : Loc.T("Merge completato: rivedi le modifiche e committa.")));
                     // Dopo il refresh: il repository (chiave dei Recenti) e' noto.
                     _changes.AfterMerge(MergeCommitMessage(revs is null ? shown.Select(e => e.Rev).ToList() : revs, shown, source.Path),
-                        Loc.T("Merge {0} da {1}: rivedi le modifiche e committa, oppure annulla il merge. Messaggio del merge disponibile nei Recenti.", label, "^/" + source.Path));
+                        Loc.T("Merge {0} da {1}: rivedi le modifiche e committa, oppure annulla il merge. Messaggio del merge disponibile nei Recenti.", label, "^/" + source.Path)
+                        + (snapshot is null ? string.Empty : " " + Loc.T("Le tue {0} modifiche pendenti sono nella working copy insieme al merge (finiscono nello stesso commit se non scegli i file): \"Annulla merge\" le ripristina.", snapshot.Entries.Count)));
                     _changes.Progress.Done(true, output.Conflicts > 0
                         ? Loc.T("Merge completato con {0} conflitti: vanno risolti prima di committare.", output.Conflicts)
                         : Loc.T("Merge completato: rivedi le modifiche e committa."), output.Conflicts);
@@ -257,19 +646,39 @@ internal sealed class MergeStore
                 {
                     await _changes.FinishMergeCancelledAsync(wc, ct);
                 }
+                catch (Exception ex) when (!ct.IsCancellationRequested && SvnErrors.IsMergeStoppedByConflict(ex.Message))
+                {
+                    stopped = true;
+                    await MergeStoppedAsync(ex, source, ct);
+                }
                 catch (Exception ex) when (!ct.IsCancellationRequested)
                 {
+                    BackendLog.Warn("merge fallito: " + ex.Message);
                     Fail(ex);
                     _changes.Progress.Done(false, Loc.T("Errore: {0}", ex.Message));
                     await _changes.RefreshAsync(ct, reloadBranch: false); // un merge fallito a meta' puo' aver toccato dei file
+                    if (snapshot is not null)
+                        // Le modifiche pendenti sono mescolate a quelle di un merge a meta': si lascia "Annulla merge", che le ripristina dalla copia di sicurezza.
+                        _changes.AfterMerge(string.Empty, Loc.T("Il merge non è andato a buon fine e può aver modificato dei file. Per tornare com'eri prima annulla il merge: le tue {0} modifiche pendenti vengono ripristinate dalla copia di sicurezza.", snapshot.Entries.Count));
+                    else
+                        _changes.SetPreMerge(null);
                 }
             });
 
+            if (stopped)
+            {
+                await ReloadEligibleAsync(ct); // le revisioni gia' applicate non sono piu' da unire, quelle dopo il conflitto si
+                BackendLog.Info($"merge fermato da un conflitto: {Format(times)}, totale {total.ElapsedMilliseconds} ms");
+            }
+
             if (output is not null)
             {
-                await ReloadEligibleAsync(ct);
+                if (reload is not null)
+                    await reload;
                 lock (_lock)
                     _selected.Clear();
+                RequestFiles();
+                BackendLog.Info($"merge run: {Format(times)}, totale {total.ElapsedMilliseconds} ms, {output.Items.Count} file, {output.Conflicts} conflitti");
                 Say(output.Conflicts > 0
                     ? Loc.T("Merge eseguito, da committare. Conflitti da risolvere in Changes: {0}.", output.Conflicts)
                     : Loc.T("Merge eseguito, da committare."));
@@ -284,6 +693,90 @@ internal sealed class MergeStore
         {
             Idle();
         }
+    }
+
+    /// <summary>Elenco per revisione (dalla piu' vecchia, l'ordine in cui il merge le applica) con i conflitti previsti dal dry-run.</summary>
+    private IReadOnlyList<MergeRevFilesDto> ByRevision(IReadOnlyList<long> revs, MergeOutput dryRun)
+    {
+        var conflicts = MergeFiles.ConflictPaths(dryRun);
+        lock (_lock)
+        {
+            var sourcePath = _source!.Path;
+            return revs.Select(r =>
+            {
+                var files = MergeFiles.ForRevision(_paths.GetValueOrDefault(r) ?? [], sourcePath, conflicts);
+                var (items, more) = MergeFiles.Cap(files, MergeFiles.MaxPerRevision);
+                var e = _logCache.GetValueOrDefault(r);
+                return new MergeRevFilesDto(r, e?.Author ?? string.Empty, (e?.Msg ?? string.Empty).Split('\n')[0], items, more, files.Count(f => f.C));
+            }).ToList();
+        }
+    }
+
+    /// <summary>
+    /// <c>svn merge</c> si e' fermato alla prima revisione in conflitto (E155015): quelle prima sono applicate, quella ha i conflitti, le successive no.
+    /// Non e' un errore da mostrare in inglese e tre volte: Changes si aggiorna con la sezione Conflitti, "Annulla merge" resta disponibile
+    /// e la spiegazione (in italiano, con cosa fare) compare una volta sola, nel pannello.
+    /// </summary>
+    private async Task MergeStoppedAsync(Exception ex, SwitchPickerStore.Target source, CancellationToken ct)
+    {
+        BackendLog.Warn("merge fermato da un conflitto: " + ex.Message);
+        var rev = SvnErrors.ConflictingRevision(ex.Message);
+        var why = rev is { } r
+            ? Loc.T("Il merge si è fermato alla revisione r{0}, che è andata in conflitto: le revisioni successive non sono state applicate.", r)
+            : Loc.T("Il merge si è fermato alla prima revisione in conflitto: le revisioni successive non sono state applicate.");
+        var todo = Loc.T("Risolvi i conflitti in Changes, poi rifai il merge delle revisioni rimaste (restano in elenco), oppure annulla il merge.");
+        lock (_lock)
+        {
+            _error = why + "\n" + todo;
+            _result = null;
+        }
+
+        await _changes.RefreshAsync(ct, reloadBranch: false, Loc.T("Merge fermato da un conflitto: risolvi i conflitti qui sotto."));
+        _changes.AfterMerge(string.Empty, Loc.T("Merge da {0} fermato da un conflitto: risolvi i conflitti, poi committa oppure annulla il merge.", "^/" + source.Path));
+        _changes.Progress.Done(false, why, _changes.ConflictedCount);
+    }
+
+    /// <summary>File con modifiche pendenti che il merge tocca (dal dry-run): a rischio di conflitto. Percorsi relativi con <c>/</c>.</summary>
+    internal static List<string> Overlap(IReadOnlyList<SvnFileStatus> pending, MergeOutput dryRun)
+    {
+        static string Norm(string p)
+        {
+            p = p.Replace('\\', '/');
+            return p.StartsWith("./", StringComparison.Ordinal) ? p[2..] : p;
+        }
+
+        var touched = dryRun.Items.Select(i => Norm(i.Path)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return pending.Select(p => Norm(p.Path)).Where(touched.Contains).Order(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    /// <summary>File in comune con le modifiche pendenti dal log (<c>svn log -v</c> in cache): per quando il dry-run non e' utilizzabile.</summary>
+    private async Task<List<string>> OverlapFromLogAsync(IReadOnlyList<SvnFileStatus> pending, long[]? revs, CancellationToken ct)
+    {
+        List<long> all;
+        string sourcePath;
+        lock (_lock)
+        {
+            all = revs?.ToList() ?? _entries.Select(e => e.Rev).Order().ToList();
+            sourcePath = _source!.Path;
+        }
+
+        await EnsurePathsAsync(all, ct);
+        HashSet<string> touched;
+        lock (_lock)
+            touched = all.SelectMany(r => _paths.GetValueOrDefault(r) ?? []).Select(p => MergeFiles.Relative(p.Path, sourcePath)).Where(p => p is not null).Select(p => p!).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return pending.Select(p => p.Path.Replace('\\', '/')).Select(p => p.StartsWith("./", StringComparison.Ordinal) ? p[2..] : p).Where(touched.Contains).Order(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    /// <summary>Avviso prima di un merge su una working copy con modifiche pendenti. <paramref name="overlapKnown"/> falso = non si e' potuto prevedere quali file il merge tocca.</summary>
+    internal static string PendingMergeText(int pendingCount, IReadOnlyList<string> overlap, bool overlapKnown = true)
+    {
+        var text = Loc.T("La working copy ha {0} elementi con modifiche non committate.\n\nIl merge verrà fatto sopra le tue modifiche. Prima ne salvo una copia di sicurezza (cartella .svn-assist\\backups della working copy): \"Annulla merge\" le ripristinerà com'erano. Se poi committi, finiscono nello stesso commit del merge (a meno che tu scelga solo alcuni file).", pendingCount);
+        if (overlap.Count > 0)
+            text += "\n\n" + Loc.T("ATTENZIONE: il merge tocca {0} file che hai già modificato, quindi c'è rischio di conflitti: {1}", overlap.Count,
+                string.Join(", ", overlap.Take(8)) + (overlap.Count > 8 ? Loc.T(" e altri {0}", overlap.Count - 8) : string.Empty));
+        if (!overlapKnown)
+            text += "\n\n" + Loc.T("Non ho potuto prevedere quali file il merge tocca: se ne hai modificati in comune possono esserci conflitti.");
+        return text + "\n\n" + Loc.T("Unire comunque?");
     }
 
     private bool TryBusy(out SwitchPickerStore.Target source, out string wc, out long[]? revs, bool forMerge = false)
@@ -309,6 +802,23 @@ internal sealed class MergeStore
     {
         lock (_lock)
             _busy = false;
+        Changed?.Invoke();
+    }
+
+    /// <summary>Esito di un'azione fuori dal merge (es. aprire il diff di un file): messaggio della barra di stato o errore del pannello.</summary>
+    internal void Report(string text, bool err)
+    {
+        lock (_lock)
+        {
+            if (err)
+                _error = text;
+            else
+            {
+                _error = string.Empty;
+                _message = text;
+            }
+        }
+
         Changed?.Invoke();
     }
 
@@ -341,31 +851,7 @@ internal sealed class MergeStore
     }
 
     /// <summary>Intervalli come TortoiseSVN: <c>1,3-5</c> (revisioni consecutive unite in un intervallo).</summary>
-    internal static string RevRanges(IEnumerable<long> revs)
-    {
-        var parts = new List<string>();
-        long? start = null, prev = null;
-        void Flush()
-        {
-            if (start is { } s)
-                parts.Add(s == prev ? $"{s}" : $"{s}-{prev}");
-        }
-
-        foreach (var r in revs.Distinct().Order())
-        {
-            if (prev is { } p && r == p + 1)
-            {
-                prev = r;
-                continue;
-            }
-
-            Flush();
-            start = prev = r;
-        }
-
-        Flush();
-        return string.Join(",", parts);
-    }
+    internal static string RevRanges(IEnumerable<long> revs) => MergeParser.RevisionRanges(revs);
 
     /// <summary>
     /// Messaggio di commit dopo un merge, nel formato di TortoiseSVN: <c>Merged revision(s) 4-6 from branches/x:</c> e, per ogni revisione,
@@ -394,9 +880,35 @@ internal sealed class MergeStore
             : Loc.T("{0} (selezione di {1} revisioni)", $"r{sorted[0]}-r{sorted[^1]}", sorted.Count);
     }
 
-    /// <summary>Elenca le revisioni del sorgente ancora da unire con autore, data e messaggio (<c>svn log</c> sul sorgente, filtrato lato client).</summary>
-    private async Task ReloadEligibleAsync(CancellationToken ct)
+    /// <summary>Distanza massima (in numeri di revisione) tra due revisioni da unire perche' stiano nella stessa richiesta di log.</summary>
+    internal const long LogGap = 500;
+    private const int LogParallelism = 4;
+
+    /// <summary>
+    /// Gruppi di revisioni vicine: un <c>svn log -r max:min</c> per gruppo (un giro al server ciascuno). Una revisione isolata e lontana
+    /// non fa leggere migliaia di revisioni in mezzo; revisioni vicine restano in una richiesta sola, senza una chiamata per revisione.
+    /// </summary>
+    internal static List<(long Min, long Max)> GroupRevisions(IEnumerable<long> sortedRevs, long gap = LogGap)
     {
+        var groups = new List<(long Min, long Max)>();
+        foreach (var r in sortedRevs)
+        {
+            if (groups.Count > 0 && r - groups[^1].Max <= gap)
+                groups[^1] = (groups[^1].Min, r);
+            else
+                groups.Add((r, r));
+        }
+
+        return groups;
+    }
+
+    /// <summary>
+    /// Elenca le revisioni del sorgente ancora da unire con autore, data e messaggio. Il log si chiede <b>senza <c>-v</c></b> (i file toccati sono
+    /// la parte pesante: si leggono solo per le revisioni scelte), solo per le revisioni non gia' in cache, a gruppi e in parallelo.
+    /// </summary>
+    private async Task ReloadEligibleAsync(CancellationToken ct, ConcurrentDictionary<string, long>? times = null)
+    {
+        times ??= new();
         string wc;
         SwitchPickerStore.Target source;
         lock (_lock)
@@ -405,23 +917,45 @@ internal sealed class MergeStore
             source = _source!;
         }
 
-        var eligible = await _svn.GetEligibleRevisionsAsync(wc, source.Url, ct);
-        var byRev = new Dictionary<long, LogEntryDto>();
-        if (eligible.Count > 0)
+        var eligible = await Timed(times, "eligible", () => _svn.GetEligibleRevisionsAsync(wc, source.Url, ct));
+        List<long> missing;
+        lock (_lock)
+            missing = eligible.Where(r => !_logCache.ContainsKey(r)).ToList();
+        if (missing.Count > 0)
         {
-            foreach (var e in await _svn.GetLogRangeAsync(source.Url, eligible[0], eligible[^1], ct))
-                byRev[e.Revision] = LogStore.ToDto(e);
+            var sw = Stopwatch.StartNew();
+            var groups = GroupRevisions(missing);
+            using var gate = new SemaphoreSlim(LogParallelism);
+            var batches = await Task.WhenAll(groups.Select(async g =>
+            {
+                await gate.WaitAsync(ct);
+                try { return await _svn.GetLogRangeAsync(source.Url, g.Min, g.Max, ct, withPaths: false); }
+                finally { gate.Release(); }
+            }));
+            lock (_lock)
+            {
+                var wanted = missing.ToHashSet();
+                foreach (var e in batches.SelectMany(b => b).Where(e => wanted.Contains(e.Revision)))
+                    _logCache[e.Revision] = LogStore.ToDto(e);
+            }
+
+            times.AddOrUpdate("log", sw.ElapsedMilliseconds, (_, old) => old + sw.ElapsedMilliseconds);
+            times.AddOrUpdate("logCalls", groups.Count, (_, old) => old + groups.Count);
         }
 
         // Una revisione che il log non restituisce (permessi) resta comunque unibile: riga senza dettagli.
-        var entries = eligible.OrderByDescending(r => r)
-            .Select(r => byRev.TryGetValue(r, out var d) ? d : new LogEntryDto(r, string.Empty, string.Empty, string.Empty, [])).ToList();
+        List<LogEntryDto> entries;
+        lock (_lock)
+            entries = eligible.OrderByDescending(r => r)
+                .Select(r => _logCache.TryGetValue(r, out var d) ? d : new LogEntryDto(r, string.Empty, string.Empty, string.Empty, [])).ToList();
         lock (_lock)
         {
             _entries = entries;
             _selected.IntersectWith(entries.Select(e => e.Rev));
             _message = entries.Count == 0 ? Loc.T("Nessuna revisione da unire: {0} è già allineato.", source.Name) : Loc.T("{0} revisioni da unire.", entries.Count);
         }
+
+        RequestFiles(); // la scelta puo' essere cambiata (revisioni sparite dall'elenco)
     }
 
     /// <summary>Working copy con modifiche locali ai file versionati? Aggiorna <c>Blocked</c> e ritorna <c>true</c> se il merge e' da rifiutare.</summary>
@@ -430,12 +964,17 @@ internal sealed class MergeStore
         string wc;
         lock (_lock)
             wc = _wc;
-        var local = (await _svn.GetStatusAsync(wc, ct)).Count(s => s.Status is SvnStatusKind.Modified or SvnStatusKind.Added or SvnStatusKind.Deleted
-            or SvnStatusKind.Replaced or SvnStatusKind.Missing or SvnStatusKind.Conflicted or SvnStatusKind.Obstructed or SvnStatusKind.Incomplete);
+        var changes = await _svn.GetLocalChangesAsync(wc, ct);
+        // Un elemento aggiunto con storia (svn copy/move, o file aggiunto da un merge non ancora committato) dopo un revert e una patch tornerebbe "aggiunto" senza storia: si blocca.
+        var hard = changes.Count(s => PreMergeSnapshot.IsBlocking(s.Status) || (PreMergeSnapshot.IsPending(s.Status) && s.IsCopied));
+        var pending = changes.Where(s => PreMergeSnapshot.IsPending(s.Status) && !s.IsCopied).ToList();
         lock (_lock)
         {
-            _blocked = local == 0 ? string.Empty
-                : Loc.T("La working copy ha {0} elementi con modifiche locali. Per unire serve una working copy pulita (così \"Annulla merge\" non tocca altro lavoro): fai prima Commit oppure Revert, poi riprova.", local);
+            // Le modifiche pendenti (M, A, D, R) non bloccano: il merge chiede conferma e salva prima una copia di sicurezza che "Annulla merge" ripristina.
+            // Blocca cio' che svn non ripristina in modo affidabile dopo un revert: conflitti, file mancanti, elementi a meta' o al posto di altri.
+            _pending = pending;
+            _blocked = hard == 0 ? string.Empty
+                : Loc.T("La working copy ha {0} elementi in conflitto, mancanti, a metà o aggiunti con storia (svn copy/move, o file aggiunti da un merge non ancora committato): dopo un merge non si possono ripristinare in modo affidabile. Risolvili o committali (Changes) oppure fai Revert, poi riprova.", hard);
             return _blocked.Length > 0;
         }
     }

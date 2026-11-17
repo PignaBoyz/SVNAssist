@@ -57,6 +57,10 @@ internal static class PatchBackup
                 files.Remove(f);
             }
 
+            // copie di sicurezza di un merge su working copy sporca (<data-ora>-pre-merge/): servono finche' il merge si puo' annullare, poi si tolgono da sole
+            foreach (var d in dir.GetDirectories("*-pre-merge*").Where(d => d.LastWriteTimeUtc < limit - TimeSpan.FromDays(23)))
+                d.Delete(recursive: true);
+
             var total = files.Sum(f => f.Length);
             foreach (var f in files)
             {

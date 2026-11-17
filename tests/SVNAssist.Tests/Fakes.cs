@@ -93,6 +93,15 @@ internal sealed class FakeSvnService : ISvnService
         return Task.FromResult<IReadOnlyList<SvnFileStatus>>(Statuses.ToList());
     }
 
+    public int LocalChangesCalls { get; private set; }
+    public Task<IReadOnlyList<SvnFileStatus>> GetLocalChangesAsync(string workingCopyPath, CancellationToken ct)
+    {
+        LocalChangesCalls++;
+        if (StatusError is not null)
+            throw new InvalidOperationException(StatusError);
+        return Task.FromResult<IReadOnlyList<SvnFileStatus>>(Statuses.Where(s => s.Status != SvnStatusKind.Unversioned).ToList());
+    }
+
     public string AiDiff { get; set; } = "@@ diff @@";
     public List<string> CommitWholeFolders { get; } = [];
     public List<bool> DeleteForced { get; } = [];
@@ -116,7 +125,7 @@ internal sealed class FakeSvnService : ISvnService
         return 42;
     }
 
-    public Task AddAsync(IEnumerable<string> paths, CancellationToken ct) { Added.Add(paths.ToList()); return Task.CompletedTask; }
+    public Task AddAsync(IEnumerable<string> paths, CancellationToken ct, bool nonRecursive = false) { Added.Add(paths.ToList()); return Task.CompletedTask; }
     public Task DeleteAsync(IEnumerable<string> paths, CancellationToken ct, bool force = false) { Deleted.Add(paths.ToList()); DeleteForced.Add(force); return Task.CompletedTask; }
     public List<bool> RevertRecursive { get; } = [];
     public Exception? RevertError { get; set; }
@@ -334,6 +343,9 @@ internal sealed class FakeSvnService : ISvnService
     public IReadOnlyList<long> Eligible { get; set; } = [];
     public IReadOnlyList<SvnLogEntry> RangeLog { get; set; } = [];
     public string? MergeError { get; set; }
+    /// <summary>Errore solo per il dry-run (es. E155015: simula una revisione alla volta senza vedere le precedenti) o solo per il merge vero.</summary>
+    public string? DryRunError { get; set; }
+    public string? RealMergeError { get; set; }
     public MergeOutput MergeResult { get; set; } = new([], 0, 0);
     public List<(string Path, string Url, long[]? Revs, bool DryRun)> Merges { get; } = [];
     /// <summary>Stati che un merge vero lascia nella working copy.</summary>
@@ -343,13 +355,25 @@ internal sealed class FakeSvnService : ISvnService
 
     public Task<IReadOnlyList<long>> GetEligibleRevisionsAsync(string workingCopyPath, string sourceUrl, CancellationToken ct) => Task.FromResult(Eligible);
 
-    public Task<IReadOnlyList<SvnLogEntry>> GetLogRangeAsync(string url, long min, long max, CancellationToken ct)
-        => Task.FromResult<IReadOnlyList<SvnLogEntry>>(RangeLog.Where(e => e.Revision >= min && e.Revision <= max).OrderByDescending(e => e.Revision).ToList());
+    /// <summary>Chiamate a GetLogRangeAsync: (min, max, withPaths).</summary>
+    public List<(long Min, long Max, bool WithPaths)> RangeCalls { get; } = [];
+
+    public Task<IReadOnlyList<SvnLogEntry>> GetLogRangeAsync(string url, long min, long max, CancellationToken ct, bool withPaths = true)
+    {
+        lock (RangeCalls)
+            RangeCalls.Add((min, max, withPaths));
+        return Task.FromResult<IReadOnlyList<SvnLogEntry>>(RangeLog.Where(e => e.Revision >= min && e.Revision <= max).OrderByDescending(e => e.Revision)
+            .Select(e => withPaths ? e : e with { Paths = [] }).ToList());
+    }
 
     public Task<MergeOutput> MergeAsync(string workingCopyPath, string sourceUrl, IReadOnlyList<long>? revisions, bool dryRun, CancellationToken ct)
     {
         if (MergeError is not null)
             throw new InvalidOperationException(MergeError);
+        if (dryRun && DryRunError is not null)
+            throw new InvalidOperationException(DryRunError);
+        if (!dryRun && RealMergeError is not null)
+            throw new InvalidOperationException(RealMergeError);
         Merges.Add((workingCopyPath, sourceUrl, revisions?.ToArray(), dryRun));
         if (!dryRun)
         {

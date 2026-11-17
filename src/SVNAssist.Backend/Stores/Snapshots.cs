@@ -157,11 +157,15 @@ internal sealed record LogEntryDto(long Rev, string Author, string Date, string 
 internal sealed record MergeCountsDto(int Updated, int Added, int Deleted, int Merged, int Conflicted);
 
 /// <summary>Esito dell'anteprima (<c>preview</c>) o del merge (<c>merge</c>): conteggi, file e conflitti. <c>Revs</c> = "r120-r135" o "r120, r124".</summary>
-internal sealed record MergeResultDto(string Mode, string Revs, MergeCountsDto Counts, IReadOnlyList<LogPathDto> Items, int Skipped);
+/// <param name="ByRev">Solo anteprima: i file per revisione (<c>svn log -v</c>) con i conflitti previsti dal dry-run complessivo; <c>ByRevMore</c> = revisioni non elencate.</param>
+internal sealed record MergeResultDto(string Mode, string Revs, MergeCountsDto Counts, IReadOnlyList<LogPathDto> Items, int Skipped,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<MergeRevFilesDto>? ByRev = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int ByRevMore = 0);
 
 /// <summary>Il Log in modalita' merge: <c>Selected</c> = revisioni scelte per il cherry-pick; <c>Blocked</c> = perche' non si puo' fare il merge (working copy sporca), vuoto se si puo'.
 /// <c>NeedsUpdate</c> = l'errore suggerisce SVN Update (revisioni miste): la UI offre "SVN Update ora".
-/// <c>Pending</c> = merge eseguito e non ancora committato ne' annullato (le revisioni "da unire" non vanno mostrate come zero).</summary>
+/// <c>Pending</c> = merge eseguito e non ancora committato ne' annullato (le revisioni "da unire" non vanno mostrate come zero).
+/// <c>Dirty</c> = elementi con modifiche pendenti (M, A, D, R): non bloccano il merge, che chiede conferma e salva prima una copia di sicurezza.</summary>
 internal sealed record MergeDto(
     string Source,
     string Title,
@@ -173,7 +177,9 @@ internal sealed record MergeDto(
     int Eligible,
     MergeResultDto? Result,
     bool Pending = false,
-    bool NeedsUpdate = false);
+    bool NeedsUpdate = false,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] MergeFilesDto? Files = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int Dirty = 0);
 
 /// <summary>Snapshot della vista <c>log</c> (log-state.schema.json).</summary>
 internal sealed record LogState(
@@ -190,7 +196,8 @@ internal sealed record LogState(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] MergeDto? Merge = null,
     bool StopOnCopy = false,
     bool IncludeMerged = false,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ProgressDto? Progress = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ProgressDto? Progress = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Base = null);
 
 /// <summary>Riepilogo della working copy sporca prima di uno switch: conteggi per tipo (i non versionati non portano modifiche ma si contano).</summary>
 internal sealed record DirtyCountsDto(int Modified, int Added, int Deleted, int Conflicted, int Unversioned);

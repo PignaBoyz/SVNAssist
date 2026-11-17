@@ -16,7 +16,8 @@ namespace SVNAssist.Models;
 /// </param>
 /// <param name="IsSwitched">Attributo <c>switched</c> di <c>wc-status</c>: l'elemento sta su un ramo diverso dal padre.</param>
 /// <param name="IsWcLocked">Attributo <c>wc-locked</c>: lock della working copy lasciato da un'operazione interrotta (serve cleanup).</param>
-public sealed record SvnFileStatus(string Path, SvnStatusKind Status, bool IsTreeConflict = false, bool IsLocked = false, bool IsSwitched = false, bool IsWcLocked = false);
+/// <param name="IsCopied">Aggiunto con storia (<c>copied</c>, <c>moved-from</c>, <c>moved-to</c>: svn copy/move, o file aggiunto da un merge): un revert e una patch non ne ricreano la storia.</param>
+public sealed record SvnFileStatus(string Path, SvnStatusKind Status, bool IsTreeConflict = false, bool IsLocked = false, bool IsSwitched = false, bool IsWcLocked = false, bool IsCopied = false);
 
 /// <summary>Lock di un altro utente su un file (da <c>svn status -u</c>, <c>repos-status/lock</c>).</summary>
 public sealed record SvnRemoteLock(string Path, string Owner, string Comment, string Created);

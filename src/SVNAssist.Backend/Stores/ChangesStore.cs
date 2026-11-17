@@ -369,16 +369,40 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             repo = _repoRoot;
         }
 
-        if (!string.IsNullOrEmpty(repo))
+        if (!string.IsNullOrEmpty(repo) && !string.IsNullOrEmpty(commitText))
             Recent?.Add(repo, commitText);
         NotifyChanged();
     }
+
+    /// <summary>Elementi in conflitto nell'ultimo stato letto (per la finestra di avanzamento di un merge fermato).</summary>
+    internal int ConflictedCount
+    {
+        get
+        {
+            lock (_stateLock)
+                return _entries.Count(e => e.Status == SvnStatusKind.Conflicted);
+        }
+    }
+
+    // Copia di sicurezza delle modifiche pendenti di prima del merge (working copy sporca): "Annulla merge" le ripristina; si elimina a commit riuscito o ripristino verificato.
+    private PreMergeSnapshot? _preMerge;
+
+    /// <summary>Il merge sta per partire su una working copy con modifiche pendenti: la copia di sicurezza serve all'annullamento (e a un merge fermato o annullato a meta').</summary>
+    internal void SetPreMerge(PreMergeSnapshot? snapshot)
+    {
+        lock (_stateLock)
+            _preMerge = snapshot;
+    }
+
+    /// <summary>Domanda di conferma (es. merge con modifiche pendenti, con l'avviso dei file in comune).</summary>
+    internal Task<bool> ConfirmAsync(string message, CancellationToken ct) => _dialogs.ConfirmAsync(message, ct);
 
     private void ClearMergeBanner()
     {
         lock (_stateLock)
         {
             _mergeBanner = null;
+            _preMerge = null; // il banner non c'e' piu': niente da annullare. I file della copia restano su disco (li toglie Prune)
         }
     }
 
@@ -439,7 +463,10 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             lock (_stateLock)
             {
                 if (!string.Equals(_workingCopyPath, value, StringComparison.OrdinalIgnoreCase))
+                {
                     _mergeBanner = null; // il merge riguardava un'altra working copy
+                    _preMerge = null;    // e la sua copia di sicurezza non va mai usata su questa (i file restano su disco)
+                }
                 _workingCopyPath = value;
             }
         }
@@ -1719,7 +1746,11 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             if (!string.IsNullOrEmpty(repo))
                 Recent?.Add(repo, message);
             CommitMessage.Clear();
+            PreMergeSnapshot? preMerge;
+            lock (_stateLock)
+                preMerge = _preMerge;
             ClearMergeBanner();
+            preMerge?.Delete(); // il merge e le modifiche pendenti sono nel repository: la copia di sicurezza non serve piu'
 
             var done = revision is { } rev
                 ? Loc.T("Commit completato: revisione {0} ({1} elementi).", rev, selected.Count)
@@ -2188,13 +2219,22 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             return;
         }
 
-        if (!await _dialogs.ConfirmAsync((_mergeSub is null ? Loc.T("Annullare il merge? Tutte le modifiche locali della working copy ({0} elementi) tornano allo stato di BASE.\n\n{1}\n\nL'operazione non è annullabile.",
-                entries.Count, ListForConfirmation(entries))
+        PreMergeSnapshot? pre;
+        lock (_stateLock)
+            pre = _preMerge is { } p && string.Equals(p.Wc, wc, StringComparison.OrdinalIgnoreCase) ? p : null;
+        var confirm = pre is not null
+            ? Loc.T("Annullare il merge? Le modifiche del merge vengono tolte e le tue {0} modifiche pendenti di prima del merge vengono ripristinate (copia di sicurezza in {1}).\n\nElementi con modifiche locali ora: {2}\n\n{3}",
+                pre.Entries.Count, pre.Dir, entries.Count, ListForConfirmation(entries))
+            : _mergeSub is null
+                ? Loc.T("Annullare il merge? Tutte le modifiche locali della working copy ({0} elementi) tornano allo stato di BASE.\n\n{1}\n\nL'operazione non è annullabile.",
+                    entries.Count, ListForConfirmation(entries))
                 : Loc.T("Annullare il merge della cartella \"{2}\"? Le modifiche locali sotto questa cartella ({0} elementi) tornano allo stato di BASE; il resto della working copy non è toccato.\n\n{1}\n\nL'operazione non è annullabile.",
-                    entries.Count, ListForConfirmation(entries), _mergeSub)), ct))
+                    entries.Count, ListForConfirmation(entries), _mergeSub);
+        if (!await _dialogs.ConfirmAsync(confirm, ct))
             return;
 
-        var (proceed, backup, note) = await BackupBeforeAsync("undo-merge", [wc], ct);
+        // Tutto quello che c'e' ora (merge compreso) in una patch: se il ripristino non torna identico non si perde nulla. Percorsi espliciti: a --depth empty la radice sola non salverebbe niente.
+        var (proceed, backup, note) = await BackupBeforeAsync("undo-merge", entries.Where(e => e.Status != SvnStatusKind.Unversioned).Select(e => e.FullPath).ToList(), ct);
         if (!proceed)
             return;
         try
@@ -2202,8 +2242,37 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             SetStatus(Loc.T("Annullamento del merge in corso..."));
             await _svnService.RevertAsync([wc], ct, recursive: true);
             ClearMergeBanner();
-            await RefreshAsync(ct, reloadBranch: false, Loc.T("Merge annullato: {0} elementi ripristinati.", entries.Count) + note);
-            OfferRestore(backup);
+            if (pre is null)
+            {
+                await RefreshAsync(ct, reloadBranch: false, Loc.T("Merge annullato: {0} elementi ripristinati.", entries.Count) + note);
+                OfferRestore(backup);
+            }
+            else
+            {
+                SetStatus(Loc.T("Ripristino delle modifiche pendenti..."));
+                List<string> problems;
+                try { problems = await pre.RestoreAsync(_svnService, wc, ct); }
+                catch (Exception ex) when (!ct.IsCancellationRequested)
+                {
+                    BackendLog.Warn("Ripristino delle modifiche pendenti: " + ex.Message);
+                    problems = [ex.Message.Split('\n')[0]];
+                }
+
+                if (problems.Count == 0)
+                {
+                    var count = pre.Entries.Count;
+                    pre.Delete();
+                    PatchBackup.Delete(backup); // ripristino verificato: ne' la copia di prima ne' quella di adesso servono piu'
+                    await RefreshAsync(ct, reloadBranch: false, Loc.T("Merge annullato: le tue {0} modifiche pendenti sono state ripristinate.", count) + note);
+                }
+                else
+                {
+                    var shown = string.Join("\n", problems.Take(8)) + (problems.Count > 8 ? "\n" + Loc.T("... e altri {0} problemi.", problems.Count - 8) : string.Empty);
+                    await RefreshAsync(ct, reloadBranch: false, Loc.T("Merge annullato, ma il ripristino delle modifiche pendenti non è verificato:\n{0}\nLe tue modifiche originali sono salvate in {1} (stato prima dell'annullamento: {2}).",
+                        shown, pre.Dir, backup ?? "-"));
+                }
+            }
+
             if (MergeUndone is not null)
                 await MergeUndone(ct);
         }

@@ -132,12 +132,12 @@ test('mock: apri (senza il ramo corrente), scegli, anteprima, cherry-pick con co
   let m = last('log').merge;
   assert.equal(m.title, 'Merge da branches/feature-coupon'); assert.equal(m.eligible, 4);
   assert.deepEqual(last('log').entries.map(e => e.rev), [131, 129, 128, 126]);
-  assert.match(m.blocked, /modifiche locali/, 'la working copy della demo parte sporca: il merge e bloccato');
+  assert.match(m.blocked, /in conflitto, mancanti o a metà/, 'la working copy della demo parte con conflitti e file mancanti: il merge e bloccato');
 
   // avviso giallo: "SVN Revert di tutto..." con conferma (negata = niente), poi il merge si puo' fare
   await run('modal = async () => false', 't');
   await send('log', 'mergeRevertAll', {}); ok();
-  assert.match(last('log').merge.blocked, /modifiche locali/, 'conferma negata: la working copy resta sporca');
+  assert.match(last('log').merge.blocked, /in conflitto, mancanti o a metà/, 'conferma negata: la working copy resta sporca');
   await run('modal = async () => true', 't');   // dialoghi (conferma di revert e annullamento): senza DOM non esistono
   await send('log', 'mergeRevertAll', {}); ok();
   assert.equal(last('log').merge.blocked, '', 'dopo il revert di tutto il merge si puo rifare');
@@ -220,4 +220,113 @@ test('demo: Revert di sezione con conferma negata non tocca nulla, confermata an
   assert.ok(before > 1);
   await run("rowOp('revert', 'section:changes')", 't');
   assert.equal(await run("S.files.filter(f => ['M', 'A', 'D', 'R', '!', 'C'].includes(f.st)).length", 't'), before, 'conferma negata: niente');
+});
+
+// ── File coinvolti, anteprima per revisione e menu contestuale (0.5.0) ──
+
+const FILES = o => Object.assign({
+  subject: 'r123, r124', focus: false, loading: false, error: '', files: 3, more: 0,
+  items: [{ a: 'M', p: 'src/a.cs', n: 2 }, { a: 'A', p: 'src/<b>.cs' }, { a: 'D', p: 'src/old.cs' }, { a: 'M', p: 'src', k: 'dir' }],
+}, o);
+
+test('Log merge: elenco dei file coinvolti dalla scelta (azione, percorso scappato, conteggio, cartelle non cliccabili)', () => {
+  const s = logState({ selected: [123, 124], files: FILES({}) });
+  const h = U.logHTML.mergePanel(s);
+  assert.match(h, /File coinvolti da r123, r124/); assert.match(h, /3 file/);
+  assert.match(h, /×2/); assert.match(h, /src\/&lt;b&gt;\.cs/); assert.doesNotMatch(h, /<b>\.cs/);
+  const opens = args(h).filter(c => c.name === 'mergeFileOpen');
+  assert.deepEqual(opens.map(c => c.args.p), ['src/a.cs', 'src/&lt;b&gt;.cs', 'src/old.cs']);   // la cartella non e' un pulsante
+  opens.forEach(c => assert.deepEqual(validate(cmds, c), [], JSON.stringify(c)));
+  assert.deepEqual(validate(contract('log-state.schema.json'), s), []);
+});
+
+test('Log merge: file in lettura, in errore, di una sola revisione (con Torna alla scelta) e assenti', () => {
+  assert.doesNotMatch(U.logHTML.mergePanel(logState({})), /File coinvolti/);
+  const loading = U.logHTML.mergePanel(logState({ selected: [123], files: FILES({ loading: true, items: [] }) }));
+  assert.match(loading, /Lettura dei file delle revisioni/); assert.match(loading, /aria-busy="true"/);
+  assert.match(U.logHTML.mergePanel(logState({ selected: [123], files: FILES({ error: 'Errore: boh' }) })), /Errore: boh/);
+  const focus = U.logHTML.mergePanel(logState({ selected: [123], files: FILES({ focus: true, subject: 'r124' }) }));
+  assert.match(focus, /File della revisione r124/);
+  const back = args(focus).find(c => c.name === 'mergeFocus'); assert.deepEqual(back.args, { rev: 0 }); assert.deepEqual(validate(cmds, back), []);
+  assert.match(U.logHTML.mergePanel(logState({ selected: [123], files: FILES({ more: 12 }) })), /altre 12 voci/);
+});
+
+test('Anteprima per revisione: un gruppo per revisione, conflitti previsti evidenziati, clic = diff di quella revisione', () => {
+  const r = result({ byRev: [
+    { rev: 123, author: 'mrossi', msg: 'fix <x>', files: [{ a: 'M', p: 'src/a.cs', c: true }], more: 0, conflicts: 1 },
+    { rev: 124, author: 'lbianchi', msg: 'nuovo', files: [{ a: 'A', p: 'src/b.cs' }], more: 3, conflicts: 0 }], byRevMore: 5 });
+  const s = logState({ result: r }), h = U.logHTML.mergePanel(s);
+  assert.match(h, /<b>r123<\/b>/); assert.match(h, /<b>r124<\/b>/); assert.match(h, /1 possibili conflitti/); assert.match(h, /fix &lt;x&gt;/);
+  assert.match(h, /class="st st-C"/); assert.match(h, /altre 3 voci/); assert.match(h, /altre 5 revisioni/);
+  assert.match(h, /Esito complessivo del dry-run \(3 file\)/);
+  const opens = args(h).filter(c => c.name === 'mergeFileOpen'); assert.deepEqual(opens.map(c => j(c.args)), [{ p: 'src/a.cs', rev: 123 }, { p: 'src/b.cs', rev: 124 }]);
+  opens.forEach(c => assert.deepEqual(validate(cmds, c), []));
+  assert.deepEqual(validate(contract('log-state.schema.json'), s), []);
+  assert.doesNotMatch(U.logHTML.mergePanel(logState({ result: result({}) })), /mrv/);   // senza byRev: elenco unico come prima
+});
+
+test('menu contestuale del Log: in merge scelta, file, anteprima e merge della revisione; nel log normale file, diff, confronto, copia', () => {
+  const m = logState({ selected: [123] });
+  const items = U.logRowMenu(m, 124).filter(i => !i.sep);
+  assert.deepEqual(j(items.map(i => i.label)), ['Seleziona', 'Mostra file modificati', 'Anteprima di questa revisione', 'Merge di questa revisione', 'Copia numero revisione', 'Copia messaggio']);
+  assert.equal(U.logRowMenu(m, 123)[0].label, 'Deseleziona');
+  for (const i of items.filter(i => i.cmd)) assert.deepEqual(validate(cmds, { name: i.cmd, args: j(i.args) }), [], i.cmd);
+  assert.ok(U.logRowMenu(logState({ selected: [123], busy: true }), 124).find(i => i.cmd === 'mergeRev').disabled);
+  assert.ok(U.logRowMenu(logState({ blocked: 'sporca' }), 124).find(i => i.cmd === 'mergeRev').disabled);
+  const n = fxLog(); n.sel = 123;
+  const labels = U.logRowMenu(n, n.entries[0].rev).filter(i => !i.sep);
+  assert.ok(labels.some(i => i.label === 'Mostra file modificati' && i.cmd === 'logSelect'));
+  assert.ok(labels.some(i => i.label === 'Diff con la precedente'));
+  assert.ok(labels.some(i => /^Confronta con r/.test(i.label)));
+  for (const i of labels.filter(i => i.cmd)) assert.deepEqual(validate(cmds, { name: i.cmd, args: j(i.args) }), [], i.cmd);
+  assert.deepEqual(j(U.logRowMenu(n, 999999)), []);
+});
+
+test('log normale: conteggio per azione e "Solo percorsi interessati" (compare solo con la base nota)', () => {
+  const s = fxLog(); s.sel = s.entries[0].rev;
+  s.entries[0].paths = [{ a: 'M', p: '/trunk/src/a.cs' }, { a: 'A', p: '/trunk/doc/b.md' }, { a: 'M', p: '/trunk/src/c.cs' }];
+  let h = U.logHTML.detail(s);
+  assert.match(h, /Percorsi modificati/); assert.match(h, /3 file/); assert.match(h, /1 Aggiunto · 2 Modificato/); assert.doesNotMatch(h, /lonly/);
+  s.base = '/trunk/src'; h = U.logHTML.detail(s);
+  assert.match(h, /id="lonly"/); assert.match(h, /Solo percorsi interessati/);
+  assert.deepEqual(validate(contract('log-state.schema.json'), s), []);
+});
+
+test('mock: merge con modifiche pendenti: non blocca, chiede conferma con i file in comune, Annulla merge le ripristina', async () => {
+  const { run, bridge } = await loadDemo();
+  const B = bridge(), got = { changes: [], log: [] }, tick = () => new Promise(r => setImmediate(r));
+  const wins = { changes: { frameElement: { isConnected: true } }, log: { frameElement: { isConnected: true } } };
+  for (const v of ['changes', 'log']) { B.attach(wins[v], m => got[v].push(j(m))); }
+  let n = 0;
+  const send = async (view, name, a) => { B.postMessage({ v: 1, id: ++n, type: 'cmd', name, args: a }, wins[view]); for (let i = 0; i < 40; i++) await tick(); };
+  const last = v => got[v].filter(m => m.type === 'state').at(-1).state;
+  await run('autoDetect()', 't');
+  for (const v of ['changes', 'log']) B.postMessage({ v: 1, type: 'ready', view: v, id: null }, wins[v]);
+  await tick();
+  await send('changes', 'refresh', {});
+  await run('modal = async () => true', 't');
+  await send('changes', 'mergeOpen', {}); await send('changes', 'switchOk', { name: 'branches/feature-coupon' });
+  await send('log', 'mergeRevertAll', {});   // via conflitti e mancanti: restano solo le modifiche pendenti vere
+  await run("S.files.forEach(f => { if (f.st !== '?') { f.st = 'N'; f.text = f.base; } })", 't');
+  const mine = await run("(() => { const f = S.files.find(f => f.st === 'N' && f.text != null); f.st = 'M'; f.text = 'MIO TESTO'; return f.path; })()", 't');
+  await send('log', 'mergePreview', {});
+  assert.equal(last('log').merge.blocked, '', 'le modifiche pendenti non bloccano');
+  assert.equal(last('log').merge.dirty, 1);
+  assert.deepEqual(validate(contract('log-state.schema.json'), last('log')), []);
+  assert.match(U.logHTML.mergePanel(last('log')), /Hai 1 elementi con modifiche non committate/);
+
+  let asked = '';
+  await run('modal = async m => { globalThis.__asked = String(m.body); return false; }', 't');
+  await send('log', 'mergeAll', {});
+  asked = await run('globalThis.__asked', 't');
+  assert.match(asked, /1 elementi con modifiche non committate/); assert.match(asked, /copia di sicurezza/); assert.match(asked, /Unire comunque\?/);
+  assert.ok(!last('changes').merge, 'conferma negata: nessun merge');
+
+  await run('modal = async () => true', 't');
+  await send('log', 'mergeAll', {});
+  assert.ok(last('changes').merge, 'merge fatto sopra le modifiche pendenti');
+  await send('changes', 'mergeUndo', {});
+  assert.ok(!last('changes').merge);
+  assert.match(last('changes').status.msg, /le tue 1 modifiche pendenti sono state ripristinate/);
+  assert.equal(await run(`(() => { const f = S.files.find(f => f.path === ${JSON.stringify(mine)}); return f.st + ':' + f.text; })()`, 't'), 'M:MIO TESTO', 'il lavoro dell\'utente e\' tornato');
 });

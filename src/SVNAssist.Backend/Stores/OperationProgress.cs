@@ -129,7 +129,38 @@ internal sealed partial class OperationProgress
             }
         }
 
-        Changed?.Invoke();
+        NotifyLine();
+    }
+
+    /// <summary>Intervallo minimo tra due notifiche per riga: ogni notifica fa rileggere e serializzare lo stato completo delle viste (Log con centinaia di revisioni compreso).</summary>
+    internal static readonly TimeSpan LineNotifyInterval = TimeSpan.FromMilliseconds(150);
+
+    private long _lastNotifyTicks;
+    private int _trailingScheduled;
+
+    /// <summary>
+    /// Una riga per ogni file toccato (anche migliaia) non deve produrre migliaia di snapshot: si notifica al massimo ogni
+    /// <see cref="LineNotifyInterval"/>, con una notifica in coda che garantisce l'ultimo stato (le righe sono comunque tutte in <c>_lines</c>).
+    /// </summary>
+    private void NotifyLine()
+    {
+        var now = Environment.TickCount64;
+        var last = Interlocked.Read(ref _lastNotifyTicks);
+        if (now - last >= LineNotifyInterval.TotalMilliseconds && Interlocked.CompareExchange(ref _lastNotifyTicks, now, last) == last)
+        {
+            Changed?.Invoke();
+            return;
+        }
+
+        if (Interlocked.Exchange(ref _trailingScheduled, 1) == 0)
+        {
+            _ = Task.Delay(LineNotifyInterval).ContinueWith(_ =>
+            {
+                Interlocked.Exchange(ref _trailingScheduled, 0);
+                Interlocked.Exchange(ref _lastNotifyTicks, Environment.TickCount64);
+                Changed?.Invoke();
+            }, TaskScheduler.Default);
+        }
     }
 
     internal void Done(bool ok, string summary, int? conflicts = null, bool cancelled = false, IReadOnlyList<ProgressActionDto>? actions = null, bool warnings = false)

@@ -40,6 +40,22 @@ Chiudi VS, poi `.\tools\collaudo-mirato.ps1 -Parte B`.
 | 13 | **Usa la loro per tutti**. | Conferma con elenco dei file; poi tutti risolti. | |
 | 14 | Banner merge > **Annulla merge**. | Backup creato prima (o domanda se manca spazio), revert, poi **Ripristina modifiche** disponibile. | |
 
+## Parte C — Log e Merge (feedback 0.4.0: bug 1, 6, 7 e richieste collegate)
+
+Repository della Parte B (feature-coupon da unire in trunk). Dopo il collaudo allega `%LOCALAPPDATA%\SVNAssist\logs\backend-aaaammgg.log` (righe `merge load/files/preview/run: ... ms`): servono per capire quale fase e' lenta.
+
+| # | Passo | Atteso | Esito |
+|---|-------|--------|-------|
+| 15 | SVN Merge... > feature-coupon. Nel Log clic su 2-3 revisioni. | Sotto la tabella compare **File coinvolti da r..** (prima "Lettura dei file...", poi A/M/D, `x2` se un file e' in piu' revisioni); la tabella resta fluida. | |
+| 16 | Clic su un file dell'elenco; poi su uno aggiunto e uno eliminato. | Diff a due pannelli in VS (aggiunto: sinistra vuota; eliminato: destra vuota). | |
+| 17 | **Anteprima** (con scelta, poi senza). | Un gruppo per revisione con i suoi file; sui file in conflitto previsto la **C** rossa e "N possibili conflitti"; sotto "Esito complessivo del dry-run". | |
+| 18 | Tasto destro (e tasto Menu / Maiusc+F10) su una riga. | Menu: Seleziona/Deseleziona, Mostra file modificati, Anteprima di questa revisione, Merge di questa revisione, Copia numero revisione, Copia messaggio. Nel log normale (Show Log) anche Diff con la precedente e Confronta con rN. | |
+| 19 | Show Log da una cartella o da un file: scegli una revisione. | **Percorsi modificati** con conteggi per azione; spunta **Solo percorsi interessati** (nasconde i percorsi fuori dalla cartella/file); clic su un file = diff r-1:r. | |
+| 20 | Modifica `Catalog.cs` (non committare), SVN Merge... > Merge tutto. | Nessun blocco: avviso "N elementi con modifiche non committate", con i file in comune ("rischio di conflitti"). Annulla = nulla cambia. Conferma = merge fatto, banner con "le tue N modifiche pendenti sono nella working copy". | |
+| 21 | Banner > **Annulla merge**. | Conferma che parla delle tue modifiche pendenti; poi `Catalog.cs` e ogni altra tua modifica (anche file aggiunti/eliminati, proprieta') identici a prima: "le tue N modifiche pendenti sono state ripristinate". Cartella `.svn-assist\backups\...-pre-merge` sparita. | |
+| 22 | Come 20, poi **Commit** del merge. | Commit ok (le tue modifiche pendenti sono incluse) e la cartella `...-pre-merge` sparisce. | |
+| 23 | Merge di due revisioni NON adiacenti dove la prima va in conflitto. | Il merge si ferma: Changes mostra la sezione **Conflitti**, un solo messaggio in italiano (revisione in conflitto, "le successive non sono state applicate", cosa fare), banner Annulla merge. Le revisioni non applicate restano in elenco. | |
+
 ## Non provabile qui
-- Avviso "spazio insufficiente per il backup" (serve un disco quasi pieno).
+- Avviso "spazio insufficiente per il backup" (serve un disco quasi pieno); col merge su modifiche pendenti il merge non parte affatto (provato nei test con spazio simulato).
 - VS 2022 (nessuna macchina disponibile).

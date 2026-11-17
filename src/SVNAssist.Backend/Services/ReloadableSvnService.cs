@@ -45,7 +45,9 @@ internal sealed class ReloadableSvnService : ISvnService
     public Task<IReadOnlyList<SvnRemoteLock>> GetRemoteLocksAsync(string workingCopyPath, CancellationToken ct) => Current.GetRemoteLocksAsync(workingCopyPath, ct);
     public Task<IReadOnlyList<SvnFileStatus>> GetStatusAsync(string workingCopyPath, CancellationToken ct) => Current.GetStatusAsync(workingCopyPath, ct);
     public Task<long?> CommitAsync(IEnumerable<string> paths, string message, CancellationToken ct, IEnumerable<string>? includeAllUnder = null) => Current.CommitAsync(paths, message, ct, includeAllUnder);
-    public Task AddAsync(IEnumerable<string> paths, CancellationToken ct) => Current.AddAsync(paths, ct);
+    public Task<IReadOnlyList<SvnFileStatus>> GetLocalChangesAsync(string workingCopyPath, CancellationToken ct) => Current.GetLocalChangesAsync(workingCopyPath, ct);
+
+    public Task AddAsync(IEnumerable<string> paths, CancellationToken ct, bool nonRecursive = false) => Current.AddAsync(paths, ct, nonRecursive);
     public Task DeleteAsync(IEnumerable<string> paths, CancellationToken ct, bool force = false) => Current.DeleteAsync(paths, ct, force);
     public Task<string> GetPatchAsync(string workingCopyPath, IEnumerable<string> paths, CancellationToken ct) => Current.GetPatchAsync(workingCopyPath, paths, ct);
     public Task<string> ApplyPatchAsync(string workingCopyPath, string patchFile, bool dryRun, CancellationToken ct) => Current.ApplyPatchAsync(workingCopyPath, patchFile, dryRun, ct);
@@ -79,6 +81,6 @@ internal sealed class ReloadableSvnService : ISvnService
     public Task<UpdateResult> SwitchAsync(string workingCopyPath, string url, CancellationToken ct, long? revision = null) => Current.SwitchAsync(workingCopyPath, url, ct, revision);
     public Task CopyAsync(string source, string destinationUrl, string message, long? revision, CancellationToken ct) => Current.CopyAsync(source, destinationUrl, message, revision, ct);
     public Task<IReadOnlyList<long>> GetEligibleRevisionsAsync(string workingCopyPath, string sourceUrl, CancellationToken ct) => Current.GetEligibleRevisionsAsync(workingCopyPath, sourceUrl, ct);
-    public Task<IReadOnlyList<SvnLogEntry>> GetLogRangeAsync(string url, long min, long max, CancellationToken ct) => Current.GetLogRangeAsync(url, min, max, ct);
+    public Task<IReadOnlyList<SvnLogEntry>> GetLogRangeAsync(string url, long min, long max, CancellationToken ct, bool withPaths = true) => Current.GetLogRangeAsync(url, min, max, ct, withPaths);
     public Task<MergeOutput> MergeAsync(string workingCopyPath, string sourceUrl, IReadOnlyList<long>? revisions, bool dryRun, CancellationToken ct) => Current.MergeAsync(workingCopyPath, sourceUrl, revisions, dryRun, ct);
 }
