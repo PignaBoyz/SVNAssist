@@ -278,7 +278,7 @@ public class MergeResumeRealTests
         await e.Cmd("conflictOp", new { op = "theirs", key = "changes:f1.txt" });
         Assert.True(e.ChangesSnap.Merge!.Pending!.CanContinue);
         var progressSeen = new List<MergeStepDto>();
-        e.Changes.Progress.Changed += () => { if (e.Changes.Progress.GetSnapshot()?.Step is { } s) lock (progressSeen) progressSeen.Add(s); };
+        e.Spy.Around = (m, a, run) => { if (m.Name == "MergeRangesAsync" && !(bool)a[3]! && e.Changes.Progress.GetSnapshot()?.Step is { } s) lock (progressSeen) progressSeen.Add(s); return run(); };   // il passo e' scritto prima di ogni chiamata a svn
         await e.Cmd("mergeContinue");
 
         Assert.Equal([$"{r4}-{e.FeatRevs[6]}"], e.Spy.Merges(real: true).Skip(before).Select(c => c["merge ".Length..]));   // un intervallo con le 4 rimaste (la 7a e' l'ultima)

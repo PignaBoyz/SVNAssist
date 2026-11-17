@@ -1159,8 +1159,10 @@ async function mgRun(all) {
         (overlap.length ? `\n\nATTENZIONE: il merge tocca ${overlap.length} file che hai già modificato, quindi c'è rischio di conflitti: ${overlap.slice(0, 8).join(', ')}` : '') + '\n\nUnire comunque?')) { m.msg = 'Merge non eseguito: le modifiche pendenti non sono state toccate.'; m.busy = false; return render(); }
       S.mgPre = dirty.map(f => ({ path: f.path, st: f.st, text: f.text }));
     }
-    const pick = all ? [] : m.sel.slice(), revs = all ? mgEligible(m.name).map(r => r.rev).sort((a, b) => a - b) : pick.sort((a, b) => a - b);
-    const probe = { name: m.name, sel: pick }, label = mgLabel(probe, revs);
+    const pick = all ? [] : m.sel.slice(); let revs = all ? mgEligible(m.name).map(r => r.rev).sort((a, b) => a - b) : pick.sort((a, b) => a - b);
+    const allRevs = revs, cIdx = revs.findIndex(rv => (MG[m.name] || []).some(r => r.rev === rv && r.files.some(([k]) => k === 'C')));
+    if (cIdx >= 0 && cIdx < revs.length - 1) revs = revs.slice(0, cIdx + 1);   // un conflitto a meta': si ferma DOPO la revisione in conflitto, le successive restano da unire
+    const probe = { name: m.name, sel: pick }, label = mgLabel(probe, allRevs);
     await svn(`merge --accept postpone ${all ? '' : '-c ' + revs.join(',') + ' '}^/${m.name}`, 300);
     const mlines = [`--- Merging r${revs[0]} through r${revs[revs.length - 1]} into '.':`];
     for (const r of MG[m.name]) if (revs.includes(r.rev)) for (const [k, p] of r.files) mlines.push((k === 'C' ? 'C    ' : k === 'A' ? 'A    ' : k === 'D' ? 'D    ' : 'U    ') + fwd(p));
@@ -1175,6 +1177,15 @@ async function mgRun(all) {
       else if (f && f.st !== 'C') { f.st = 'M'; f.text = (f.base || '') + `\n// unito da ${m.name}`; }
     }
     (S.mgDone = S.mgDone || []).push({ name: m.name, revs });
+    const stoppedMid = revs.length < allRevs.length;
+    if (stoppedMid) {   // merge fermo: stato salvato (nella demo in memoria), banner "Merge interrotto" con Continua / Annulla
+      S.pendMerge = { name: m.name, revs: allRevs, applied: revs.slice(), conflictRev: revs[revs.length - 1] };
+      S.vm.mergeBanner = null;
+      m.sel = []; m.msg = pendText().applied;
+      await vmRefresh(L('Merge fermato da un conflitto: risolvi i conflitti qui sotto, poi "Continua merge".', 'Merge stopped by a conflict: resolve the conflicts below, then "Continue merge".'), false);
+      progDone(false, L(`Merge fermo alla r${revs[revs.length - 1]} per conflitto: applicate ${revs.length} di ${allRevs.length}, rimaste ${allRevs.length - revs.length}. Cosa fare è scritto in Changes.`, `Merge stopped at r${revs[revs.length - 1]} because of a conflict: ${revs.length} of ${allRevs.length} applied, ${allRevs.length - revs.length} remaining. What to do is written in Changes.`), res.counts.conflicted);
+      m.busy = false; return render();
+    }
     const text = `Merge ${label} da ^/${m.name}`, ctext = mgCommitText(m.name, revs);
     S.vm.mergeBanner = { text: `${text}: rivedi le modifiche e committa, oppure annulla il merge. Messaggio del merge disponibile nei Recenti.`, conflicts: res.counts.conflicted };
     S.recentMsgs = [ctext].concat(S.recentMsgs.filter(x => x !== ctext)).slice(0, 25);   // il messaggio (stile TortoiseSVN) va in cima ai Recenti, non nel campo
@@ -1184,16 +1195,54 @@ async function mgRun(all) {
   } catch (e) { if (!e.cancelled) { m.error = 'Errore: ' + e.message; progDone(false, 'Errore: ' + e.message); } }
   m.busy = false; render();
 }
+// Merge fermo a meta' (S.pendMerge): testi come PendingMergeDto del backend
+const L = (it, en) => __mockBridge.getLang() === 'en' ? en : it;
+const revsText = rs => rs.length <= 6 ? rs.map(r => 'r' + r).join(', ') : `r${rs[0]}, r${rs[1]} … r${rs[rs.length - 1]} (${rs.length} ${L('revisioni', 'revisions')})`;
+function pendText() {
+  const p = S.pendMerge, rem = p.revs.filter(r => !p.applied.includes(r)), nc = S.files.filter(f => f.st === 'C').length;
+  const rest = rem.length <= 4 ? rem.map(r => 'r' + r).join(', ') : `r${rem[0]}…r${rem[rem.length - 1]}`;
+  return { rem, nc, rest,
+    applied: L(`Applicate ${p.applied.length} di ${p.revs.length}: ${revsText(p.applied)}; ferma alla r${p.conflictRev} per conflitto${nc ? ` in ${nc} file` : ''}.`, `Applied ${p.applied.length} of ${p.revs.length}: ${revsText(p.applied)}; stopped at r${p.conflictRev} because of a conflict${nc ? ` in ${nc} files` : ''}.`) };
+}
+async function mgContinue() {
+  const p = S.pendMerge; if (!p) return;
+  const { rem, nc } = pendText();
+  if (nc) { setStatus(L(`Restano ${nc} file in conflitto: risolvili e segnali come risolti, poi premi "Continua merge".`, `${nc} files are still in conflict: resolve them and mark them as resolved, then press "Continue merge".`)); return render(); }
+  const lines = [];
+  for (const r of MG[p.name]) if (rem.includes(r.rev)) for (const [k, f] of r.files) lines.push((k === 'A' ? 'A    ' : k === 'D' ? 'D    ' : 'U    ') + fwd(f));
+  await svn(`merge --accept postpone -c ${rem.join(',')} ^/${p.name}`, 300);
+  await progRun('merge', 'Merge da ' + p.name, L('Continuo il merge...', 'Continuing the merge...'), lines);
+  for (const r of MG[p.name]) if (rem.includes(r.rev)) for (const [k, f] of r.files) {
+    const x = fileBy(f);
+    if (k === 'A') { if (!x) S.files.push(F(f, 'A', null, `// ${base(f)}: aggiunto dal merge di ${p.name}\n`)); else x.st = 'A'; }
+    else if (x && k === 'D') { x.st = 'D'; x.text = null; }
+    else if (x && x.st !== 'C') { x.st = 'M'; x.text = (x.base || '') + `\n// unito da ${p.name}`; }
+  }
+  (S.mgDone = S.mgDone || []).push({ name: p.name, revs: rem });
+  const ctext = mgCommitText(p.name, p.revs);
+  S.vm.mergeBanner = { text: `Merge ${mgLabel({ sel: [] }, p.revs)} da ^/${p.name}: rivedi le modifiche e committa, oppure annulla il merge. Messaggio del merge disponibile nei Recenti.`, conflicts: 0 };
+  S.recentMsgs = [ctext].concat(S.recentMsgs.filter(x => x !== ctext)).slice(0, 25);
+  S.pendMerge = null;
+  await vmRefresh('Merge completato: rivedi le modifiche e committa.', false);
+  progDone(true, 'Merge completato: rivedi le modifiche e committa.', 0);
+  const m = S.lvm.merge; if (m) { m.msg = 'Merge eseguito, da committare.'; m.sel = []; }
+  render();
+}
+async function mgDiscard() {
+  const p = S.pendMerge; if (!p) return;
+  if (!await confirmBox(L(`Scartare lo stato del merge interrotto da ${p.name}? Le ${p.applied.length} revisioni già applicate restano nella working copy, ma "Continua merge" non sarà più disponibile.`, `Discard the state of the merge interrupted from ${p.name}? The ${p.applied.length} revisions already applied stay in the working copy, but "Continue merge" will no longer be available.`))) return;
+  S.pendMerge = null; setStatus(L('Stato del merge interrotto scartato.', 'State of the interrupted merge discarded.')); render();
+}
 async function mgUndo() {
   const t = S.files.filter(f => IS_REV.includes(f.st));
-  if (!t.length || !S.vm.mergeBanner) { S.vm.mergeBanner = null; setStatus('Nessun elemento idoneo per SVN Revert.'); return render(); }
+  if (!t.length || !(S.vm.mergeBanner || S.pendMerge)) { S.vm.mergeBanner = null; setStatus('Nessun elemento idoneo per SVN Revert.'); return render(); }
   const pre = S.mgPre;
   if (!await confirmBox(pre ? `Annullare il merge? Le modifiche del merge vengono tolte e le tue ${pre.length} modifiche pendenti di prima del merge vengono ripristinate (copia di sicurezza in .svn-assist\\backups).\n\nElementi con modifiche locali ora: ${t.length}\n\n${listForConfirm(t)}`
     : `Annullare il merge? Tutte le modifiche locali della working copy (${t.length} elementi) tornano allo stato di BASE.\n\n${listForConfirm(t)}\n\nL'operazione non è annullabile.`)) return;
   setStatus('Annullamento del merge in corso...'); render();
   await svn('revert --depth infinity .', 600); t.forEach(f => svnRevert(f.path));
   if (pre) { setStatus('Ripristino delle modifiche pendenti...'); render(); await svn('patch .svn-assist/backups/pre-merge/changes.patch', 400); for (const p of pre) { const f = fileBy(p.path); if (f) { f.st = p.st; f.text = p.text; } } S.mgPre = null; }
-  S.vm.mergeBanner = null; S.mgDone = (S.mgDone || []).slice(0, -1);
+  S.vm.mergeBanner = null; S.pendMerge = null; S.mgDone = (S.mgDone || []).slice(0, -1);
   const m = S.lvm.merge; if (m) { m.result = null; m.sel = []; m.blocked = mgBlocked(); }
   await vmRefresh(pre ? `Merge annullato: le tue ${pre.length} modifiche pendenti sono state ripristinate.` : `Merge annullato: ${t.length} elementi ripristinati.`, false);
 }

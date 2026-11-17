@@ -56,6 +56,23 @@ Repository della Parte B (feature-coupon da unire in trunk). Dopo il collaudo al
 | 22 | Come 20, poi **Commit** del merge. | Commit ok (le tue modifiche pendenti sono incluse) e la cartella `...-pre-merge` sparisce. | |
 | 23 | Merge di due revisioni NON adiacenti dove la prima va in conflitto. | Il merge si ferma: Changes mostra la sezione **Conflitti**, un solo messaggio in italiano (revisione in conflitto, "le successive non sono state applicate", cosa fare), banner Annulla merge. Le revisioni non applicate restano in elenco. | |
 
+## Parte D — Merge interrotto: Continua merge (bug 13)
+
+Repository della Parte B: feature-coupon ha 4 revisioni da unire e la terza va in conflitto. Per una prova su molte revisioni usa un ramo con centinaia di revisioni (qui sotto, passo 31).
+
+| # | Passo | Atteso | Esito |
+|---|-------|--------|-------|
+| 24 | SVN Merge... > feature-coupon > **Merge tutto**. | Finestra con "Applico rN (k di 4)" e barra a revisioni; si ferma alla revisione in conflitto. | |
+| 25 | Leggi il banner in Changes. | **Merge interrotto**: "Applicate 3 di 4: r..., r..., r...; ferma alla r... per conflitto in N file.", "Rimaste 1: r....", 3 passi numerati e l'alternativa Annulla merge. Nessun errore in inglese ripetuto. | |
+| 26 | Guarda **Continua merge**. | Disabilitato, con il motivo ("Restano N file in conflitto...") sia sotto il pulsante sia nel suggerimento. Premendo il comando non parte nulla. | |
+| 27 | Nel Log merge: le 3 applicate e la rimasta. | Blocco **Merge interrotto** identico a Changes; "Applicate in questo merge (3)" con la dicitura "applicata in questo merge"; nella tabella solo la rimasta, evidenziata; Merge tutto / Merge selezionate disabilitati. | |
+| 28 | Chiudi Visual Studio (anche da Gestione attivita'), riaprilo sulla stessa solution. | Il banner **Merge interrotto** ricompare con gli stessi numeri (stato salvato in `%LOCALAPPDATA%\SVNAssist\pending-merge.json`). | |
+| 29 | Risolvi il conflitto (Usa la loro), poi **Continua merge**. | Abilitato appena non restano conflitti. Parte con "Applico r... (4 di 4)" e applica SOLO la rimasta; al termine banner "da committare" e, nei Recenti, il messaggio con TUTTE le 4 revisioni. | |
+| 30 | Ripeti 24-25, poi **Annulla merge**. | Conferma; la working copy torna com'era (con modifiche pendenti ripristinate se c'erano); il banner e lo stato spariscono; le 4 revisioni tornano da unire. | |
+| 31 | Ramo con centinaia di revisioni: Merge tutto; durante l'avanzamento premi **Annulla**. | Il pulsante diventa "Annullamento…": si ferma alla fine del passaggio in corso, il banner dice "Applicate N di TOT", **Continua merge** riprende dalle rimaste (numerazione sull'intero merge). | |
+| 32 | Con un merge interrotto, fai SVN Update (o Switch) e riapri Changes. | Banner senza Continua merge: spiega che la working copy e' cambiata; restano **Annulla merge** e **Scarta stato**. | |
+| 33 | Merge da una cartella (Solution Explorer > SVN Merge...) con conflitto a meta'. | Stesso banner; Continua e Annulla agiscono solo su quella cartella. | |
+
 ## Non provabile qui
 - Avviso "spazio insufficiente per il backup" (serve un disco quasi pieno); col merge su modifiche pendenti il merge non parte affatto (provato nei test con spazio simulato).
 - VS 2022 (nessuna macchina disponibile).

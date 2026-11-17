@@ -739,6 +739,48 @@
       }
     },
     {
+      "title": "mergeContinue",
+      "description": "Continua merge: applica solo le revisioni rimaste del merge interrotto (stato su disco), senza rifare la selezione. Rifiutato se restano conflitti o se la working copy e cambiata.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "mergeContinue"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "mergeDiscard",
+      "description": "Scarta stato: toglie lo stato del merge interrotto (con conferma); le modifiche gia applicate restano nella working copy.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "mergeDiscard"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
       "title": "mergeDismiss",
       "description": "Nasconde il banner del merge senza annullarlo.",
       "type": "object",

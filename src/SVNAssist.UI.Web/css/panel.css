@@ -376,3 +376,18 @@ progress.obar::-webkit-progress-value{background:var(--acc2);border-radius:3px;t
 .ops-strip{position:fixed;left:8px;right:8px;bottom:8px;z-index:120;display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--bg3);box-shadow:0 2px 8px rgba(0,0,0,.25)}
 .ops-strip.err{border-color:var(--bad,#c0392b)}
 .ops-strip-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Merge interrotto (banner in Changes, blocco nel Log): applicato / rimaste / passi numerati / pulsanti */
+.mb-pend{align-items:flex-start}
+.mb-pend .mb-body{flex:1 1 280px;min-width:0}
+.mb-pend .mb-l{margin:3px 0}
+.mb-pend .mb-warn{color:var(--warn-fg);font-weight:600}
+.mb-pend .mb-why{color:var(--warn-fg)}
+.mb-steps{margin:4px 0 4px 18px;padding:0}
+.mb-steps li{margin:2px 0}
+.mb-act{display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start}
+.mapp{margin:6px 8px;font-size:12px}
+.mapl{list-style:none;margin:4px 0 0;padding:0;max-height:160px;overflow:auto}
+.mapl li{padding:1px 0}
+.mtag{display:inline-flex;align-items:center;gap:3px;padding:0 6px;margin-right:4px;border-radius:8px;border:1px solid var(--bd2);color:var(--ok-fg,var(--fg2));font-size:11px}
+.lr.mrem{box-shadow:inset 3px 0 0 var(--warn)}

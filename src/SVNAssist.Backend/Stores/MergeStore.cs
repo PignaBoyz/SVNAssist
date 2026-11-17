@@ -832,7 +832,7 @@ internal sealed class MergeStore
         var checking = false;
         var runner = new MergeRunner(_svn, wc, source.Url, (rs, c) => TouchedAsync(rs, source, c))
         {
-            Phase = text => { checking = true; _changes.Progress.SetPhase(text); },
+            Phase = text => { checking = true; _changes.Progress.SetStep(null); _changes.Progress.SetPhase(text); },
             StopRequested = () => _changes.Progress.SoftCancelRequested,
         };
         runner.StepStarting = step =>
