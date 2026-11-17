@@ -63,3 +63,10 @@ Branch `claude/eager-archimedes-kvbdoo` (tutto pushato). 859 xUnit verdi + 56 ro
 
 ### Per chiudere la 0.5.0
 1. Finire il punto 13 (UI) sopra. 2. Aggiornare docs/verifica/0.5.0/checklist.md e docs/release-notes/v0.5.0.md (+ versione utente). 3. Sul Windows: build Release, `msb -t:Rebuild`, installare il VSIX in SvnHost, collaudo dell'utente. 4. develop -> main, tag v0.5.0, Release (CI).
+
+## FINE SESSIONE 2026-11-17 (sera)
+- Pubblicate le note utente IT/EN (blocchi <details> Italiano aperto / English chiuso) sulle 4 Release esistenti v0.2.0, v0.3.0, v0.3.1, v0.4.0 tramite workflow `Release notes` (si attiva con una modifica a docs/release-notes/.publish su main; solo `gh release edit --notes-file`, asset e tag invariati). I testi precedenti sono in docs/release-notes/archive/<tag>.github.md. v0.2.0 ha 22 immagini (11 IT + 11 EN; 07-11 sono illustrazioni costruite nella demo, didascalia "Illustrazione/Illustration"). Immagini referenziate per SHA di commit (permanenti).
+- Su main sono entrati SOLO documenti e strumenti di pubblicazione (commit cf5de53 e 938d320); main -> develop riunito con merge `-s ours`. Il codice 0.5.0 NON è su main, nessun tag v0.5.0.
+- 0.5.0 (develop e branch claude/eager-archimedes-kvbdoo, tutto pushato): note utente docs/release-notes/v0.5.0.user.md e .user.en.md, CHANGELOG.md/.en.md (la sezione 0.5.0 è solo su develop). IN ATTESA DELLA VALIDAZIONE DELL'UTENTE (collaudo con docs/verifica/0.5.0/checklist.md, parti A-D; il passo 23 e l'InfoBar sono i più incerti). Poi: build Windows (msb -t:Rebuild), VSIX in SvnHost, develop -> main, tag v0.5.0 (la CI usa le note .user*.md), CHANGELOG da portare su main col codice.
+- Per le versioni future: docs/release-notes/GUIDA.md (stile, immagini per lingua con tools/screenshots-release.mjs --lang, .publish).
+- Aperti: "Apri su..." nel menu Log; ID .vsct 0x0160 da controllare; "No changes" dopo merge con conflitto non riprodotto; chiedere backend-*.log dopo un merge lento; nomi inglesi "Select all"/"Delete" nelle note EN non trovati in LocEn.cs/i18n.js (da verificare).
