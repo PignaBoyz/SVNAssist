@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text.Json;
 
 namespace SVNAssist.Services;
 
@@ -36,7 +37,7 @@ internal sealed class ClaudeCodeAiService : AiServiceBase, IReportsModel
         List<string> args =
         [
             "-p",
-            "--output-format", "text",
+            "--output-format", "json", // il JSON e' solo la sorgente di modello, token e costo: all'utente arriva il testo
             "--system-prompt", systemPrompt,
             "--tools", "",
             "--strict-mcp-config",
@@ -50,13 +51,96 @@ internal sealed class ClaudeCodeAiService : AiServiceBase, IReportsModel
         var result = await _processRunner.RunAsync(
             fileName, [.. prefix, .. args], EnsureEmptyWorkingDirectory(), ct, standardInput: userMessage);
 
-        if (result.ExitCode != 0)
+        var parsed = ParseJsonResult(result.StandardOutput);
+        // Con il JSON il testo dell'errore sta in "result" (is_error) o in "subtype", non piu' in stderr: lo stesso formato di prima
+        // permette ad AiErrors.Classify di riconoscere accesso scaduto e modello ritirato.
+        if (parsed is { IsError: true } || result.ExitCode != 0)
             throw new InvalidOperationException(
-                Loc.T("Claude Code fallito (exit code {0}): {1}", result.ExitCode, FirstNonEmpty(result.StandardError, result.StandardOutput)));
+                Loc.T("Claude Code fallito (exit code {0}): {1}", result.ExitCode,
+                    parsed?.ErrorText ?? FirstNonEmpty(result.StandardError, result.StandardOutput)));
 
-        return string.IsNullOrWhiteSpace(result.StandardOutput)
+        // Nessun JSON riconoscibile (CLI diversa da quella attesa): lo stdout e' il testo, senza consumo.
+        var text = parsed is null ? result.StandardOutput : parsed.Text;
+        if (parsed?.Usage is { } usage)
+            AddUsage(usage with { Model = usage.Model ?? (string.IsNullOrWhiteSpace(_model) ? null : _model) });
+        return string.IsNullOrWhiteSpace(text)
             ? throw new InvalidOperationException(Loc.T("Claude Code non ha restituito testo."))
-            : result.StandardOutput;
+            : text;
+    }
+
+    internal sealed record CliResult(bool IsError, string Text, string? ErrorText, AiUsage? Usage);
+
+    /// <summary>
+    /// Legge l'output <c>--output-format json</c> di <c>claude -p</c>: un oggetto, o (versioni recenti) un array di eventi
+    /// il cui ultimo <c>type=result</c> e' quello che conta. <c>null</c> se non e' JSON di quella forma.
+    /// </summary>
+    internal static CliResult? ParseJsonResult(string? stdout)
+    {
+        if (string.IsNullOrWhiteSpace(stdout))
+            return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(stdout);
+            var root = doc.RootElement;
+            if (root.ValueKind == JsonValueKind.Array)
+            {
+                JsonElement? last = null;
+                foreach (var e in root.EnumerateArray())
+                    if (e.ValueKind == JsonValueKind.Object && e.TryGetProperty("type", out var t) && t.ValueKind == JsonValueKind.String && t.GetString() == "result")
+                        last = e;
+                if (last is null)
+                    return null;
+                root = last.Value;
+            }
+
+            if (root.ValueKind != JsonValueKind.Object)
+                return null;
+            var hasResult = root.TryGetProperty("result", out var res);
+            if (!hasResult && !root.TryGetProperty("is_error", out _))
+                return null;
+
+            var text = hasResult && res.ValueKind == JsonValueKind.String ? res.GetString() ?? "" : "";
+            var subtype = root.TryGetProperty("subtype", out var st) && st.ValueKind == JsonValueKind.String ? st.GetString() : null;
+            var isError = root.TryGetProperty("is_error", out var ie) && ie.ValueKind == JsonValueKind.True
+                          || subtype is not null && subtype.StartsWith("error", StringComparison.OrdinalIgnoreCase);
+            var errorText = string.Join(" - ", new[] { text.Trim(), subtype }.Where(x => !string.IsNullOrWhiteSpace(x)));
+            return new CliResult(isError, text, errorText.Length > 0 ? errorText : null, ReadUsage(root));
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static AiUsage? ReadUsage(JsonElement root)
+    {
+        long inTok = 0, outTok = 0;
+        if (root.TryGetProperty("usage", out var u) && u.ValueKind == JsonValueKind.Object)
+        {
+            // La cache e' input a tutti gli effetti: si contano anche i token scritti/letti in cache.
+            foreach (var n in new[] { "input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens" })
+                inTok += u.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt64() : 0;
+            outTok = u.TryGetProperty("output_tokens", out var o) && o.ValueKind == JsonValueKind.Number ? o.GetInt64() : 0;
+        }
+
+        // Piu' modelli nella stessa sessione: si mostra quello che ha prodotto piu' output.
+        string? model = null;
+        if (root.TryGetProperty("modelUsage", out var mu) && mu.ValueKind == JsonValueKind.Object)
+        {
+            long best = -1;
+            foreach (var m in mu.EnumerateObject())
+            {
+                var o = m.Value.ValueKind == JsonValueKind.Object && m.Value.TryGetProperty("outputTokens", out var ot) && ot.ValueKind == JsonValueKind.Number ? ot.GetInt64() : 0;
+                if (o > best)
+                {
+                    best = o;
+                    model = m.Name;
+                }
+            }
+        }
+
+        decimal? cost = root.TryGetProperty("total_cost_usd", out var c) && c.ValueKind == JsonValueKind.Number ? c.GetDecimal() : null;
+        return inTok == 0 && outTok == 0 && cost is null && model is null ? null : new AiUsage(model, inTok, outTok, cost);
     }
 
     private static string FirstNonEmpty(string a, string b) => string.IsNullOrWhiteSpace(a) ? b.Trim() : a.Trim();

@@ -43,6 +43,7 @@ internal sealed class AiModelSource : IAiModelSource
                 "copilot" => await ListCopilotAsync(force, timeout.Token),
                 "claude" or "claudecode" => await ListAnthropicAsync(provider, timeout.Token),
                 "openai" => await ListOpenAiAsync(timeout.Token),
+                "gemini" => await ListGeminiAsync(timeout.Token),
                 _ => null,
             };
         }
@@ -113,6 +114,17 @@ internal sealed class AiModelSource : IAiModelSource
 
         var json = await SendAsync(request, key, ct);
         return new AiModelsFetched(gitHubModels ? AiModelCatalog.ParseGitHubModelsCatalog(json) : AiModelCatalog.ParseOpenAiModels(json));
+    }
+
+    /// <summary>Gemini: <c>GET {base}/models</c> con la API key; senza chiave "Non collegato" (nessun elenco, mai uno scritto a mano).</summary>
+    private async Task<AiModelsFetched?> ListGeminiAsync(CancellationToken ct)
+    {
+        var key = (await _settings.GetAiApiKeyAsync(ct)).Trim();
+        if (key.Length == 0)
+            return null;
+        using var request = new HttpRequestMessage(HttpMethod.Get, AiServiceFactory.GeminiEndpoint + "/models");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
+        return new AiModelsFetched(AiModelCatalog.ParseOpenAiModels(await SendAsync(request, key, ct)));
     }
 
     /// <summary>Esegue la richiesta; se non e' un successo lancia con lo stato e il corpo (senza la chiave) cosi' l'utente vede l'errore vero.</summary>

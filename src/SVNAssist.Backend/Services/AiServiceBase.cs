@@ -37,6 +37,20 @@ public abstract class AiServiceBase : IAiService
     /// <param name="ct">Token di cancellazione.</param>
     protected abstract Task<string> CompleteAsync(string systemPrompt, string userMessage, CancellationToken ct);
 
+    private readonly object _usageLock = new();
+
+    /// <summary>Consumo dell'ultima generazione/miglioramento (tutte le richieste, anche le analisi a blocchi); null se il provider non lo riporta.</summary>
+    public AiUsage? LastUsage { get; private set; }
+
+    /// <summary>Un provider chiama questo dopo ogni risposta con il consumo che dichiara.</summary>
+    protected void AddUsage(AiUsage? usage)
+    {
+        if (usage is null)
+            return;
+        lock (_usageLock)
+            LastUsage = LastUsage is null ? usage : LastUsage.Plus(usage);
+    }
+
     /// <inheritdoc />
     public async Task<string> GenerateCommitMessageAsync(string diff, string language, CancellationToken ct, string? projectInstructions = null)
     {
@@ -50,6 +64,7 @@ public abstract class AiServiceBase : IAiService
                            GetLanguageInstruction(language) +
                            CommitInstructions.ForPrompt(projectInstructions);
 
+        LastUsage = null;
         var diffContext = await GetDiffContextAsync(diff, language, ct);
         return await AskAsync(systemPrompt, diffContext, ct);
     }
@@ -64,6 +79,7 @@ public abstract class AiServiceBase : IAiService
                            GetLanguageInstruction(language) +
                            CommitInstructions.ForPrompt(projectInstructions);
 
+        LastUsage = null;
         var diffContext = await GetDiffContextAsync(diff, language, ct);
         return await AskAsync(systemPrompt, BuildImproveUserMessage(draft, diffContext), ct);
     }

@@ -2284,7 +2284,8 @@
                 "copilot",
                 "claudecode",
                 "claude",
-                "openai"
+                "openai",
+                "gemini"
               ]
             }
           }

@@ -52,6 +52,17 @@ public class AiServiceFactoryTests
             copilotRuntimeInstalled: () => true);
 
     [Fact]
+    public async Task CreateAsync_Gemini_ConChiave_UsaEndpointGoogle_SenzaChiaveNulla_MaiInAuto()
+    {
+        var ai = Assert.IsType<AiService>(await Create(new FakeSettings { Provider = "gemini", ApiKey = "AIza-x", Model = "models/gemini-2.5-flash" }, new FakeTokenResolver(null)).CreateAsync(CancellationToken.None));
+        Assert.True(ai.IsGemini);
+        Assert.Equal("gemini-2.5-flash", ai.LastModelUsed);
+        Assert.Null(await Create(new FakeSettings { Provider = "gemini" }, new FakeTokenResolver(null)).CreateAsync(CancellationToken.None));
+        var auto = await Create(new FakeSettings { Provider = "auto", ApiKey = "AIza-x", Endpoint = "" }, new FakeTokenResolver(null)).CreateAsync(CancellationToken.None);
+        Assert.Null(auto); // la chiave condivisa non va a Google se non scelto
+    }
+
+    [Fact]
     public async Task CreateAsync_NessunProviderDisponibile_RestituisceNull()
     {
         var result = await Create(new FakeSettings(), new FakeTokenResolver(null)).CreateAsync(CancellationToken.None);

@@ -4,6 +4,19 @@ namespace SVNAssist.Services;
 internal interface IReportsModel
 {
     string? LastModelUsed { get; }
+
+    /// <summary>Consumo dell'ultima generazione (somma di tutte le richieste), solo se il provider lo riporta.</summary>
+    AiUsage? LastUsage => null;
+}
+
+/// <summary>
+/// Consumo riportato dal provider: modello reale, token e (solo se lo dice il provider, oggi la CLI di Claude Code) costo in dollari.
+/// Mai stimato con prezzi scritti a mano.
+/// </summary>
+public sealed record AiUsage(string? Model, long InputTokens, long OutputTokens, decimal? CostUsd = null)
+{
+    public AiUsage Plus(AiUsage o) => new(Model ?? o.Model, InputTokens + o.InputTokens, OutputTokens + o.OutputTokens,
+        CostUsd is null && o.CostUsd is null ? null : (CostUsd ?? 0) + (o.CostUsd ?? 0));
 }
 
 /// <summary>

@@ -402,6 +402,8 @@
     "Incolla la API key Anthropic (console.anthropic.com &gt; API keys). Uso a pagamento, a consumo.": "Paste the Anthropic API key (console.anthropic.com &gt; API keys). Pay-as-you-go usage.",
     "Con GitHub Models basta il login GitHub o un token; per altri endpoint (OpenAI, Azure, Ollama) inserisci endpoint e key.": "With GitHub Models a GitHub login or a token is enough; for other endpoints (OpenAI, Azure, Ollama) enter endpoint and key.",
     "API key Anthropic": "Anthropic API key",
+    "Incolla la API key di Google AI Studio (aistudio.google.com/apikey). Livello gratuito limitato, poi a consumo.": "Paste the Google AI Studio API key (aistudio.google.com/apikey). Limited free tier, pay-as-you-go beyond it.",
+    "API key Gemini": "Gemini API key",
     "Chiave o token": "Key or token",
     "Salva (cifrata) nelle impostazioni di Visual Studio": "Save (encrypted) in the Visual Studio settings",
     "Salva": "Save",

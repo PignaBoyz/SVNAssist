@@ -363,12 +363,17 @@ internal sealed class CommitStore
         var isCopilot = last is CopilotAiService;
         if (!showUsage && last is ClaudeCodeAiService or AnthropicAiService or AiService)
             usedModel = null; // il modello configurato (non quello che il provider dichiara) si scrive solo con l'opzione
-        var detail = string.Join(", ", new[]
-        {
-            provider,
-            usedModel is null ? null : Loc.T("modello {0}", usedModel),
-            showUsage ? await UsageCostAsync(isCopilot, usedModel, ct) : null,
-        }.Where(x => x is not null));
+        // Con l'opzione e un provider che riporta il consumo (Claude Code, Claude API, OpenAI-compatibile, Gemini): una sola riga
+        // "modello · token · costo (se lo dice la CLI)"; gli altri (Copilot) restano con modello e costo dichiarato.
+        var usage = showUsage && last is IReportsModel { LastUsage: { } u } ? AiUsageText.Format(u) : string.Empty;
+        var detail = string.Join(", ", (usage.Length > 0
+            ? new[] { provider, usage }
+            : new[]
+            {
+                provider,
+                usedModel is null ? null : Loc.T("modello {0}", usedModel),
+                showUsage ? await UsageCostAsync(isCopilot, usedModel, ct) : null,
+            }).Where(x => x is not null));
         AiStatus = detail.Length == 0 ? $"{done}." : $"{done} ({detail}).";
         if (rules is not null)
             AiStatus += Loc.T(" Regole di commit del progetto applicate.");
@@ -446,7 +451,7 @@ internal sealed class CommitStore
         CopilotAiService => "copilot",
         ClaudeCodeAiService => "claudecode",
         AnthropicAiService => "claude",
-        AiService => "openai",
+        AiService a => a.IsGemini ? "gemini" : "openai",
         _ => null,
     };
 
@@ -457,7 +462,7 @@ internal sealed class CommitStore
         CopilotAiService => "GitHub Copilot",
         ClaudeCodeAiService => "Claude Code",
         AnthropicAiService => "Claude API",
-        AiService => Loc.T("OpenAI-compatibile"),
+        AiService a => a.IsGemini ? "Gemini" : Loc.T("OpenAI-compatibile"),
         _ => null,
     };
 }
