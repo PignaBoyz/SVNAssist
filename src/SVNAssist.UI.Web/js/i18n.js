@@ -9,7 +9,7 @@
     "Con Automatico SVNAssist prova i provider in ordine. Scegline uno per vedere qui modello e chiave.": "With Automatic SVNAssist tries the providers in order. Pick one to see its model and key here.",
     "Provider collegato": "Linked provider",
     "Cambia provider": "Change provider",
-    "Procedura guidata: provider, accesso, modello. Chiudi le Options per proseguirla.": "Guided setup: provider, sign-in, model. Close Options to continue it.",
+    "Chiude le Options e apre la procedura guidata: provider, accesso, modello.": "Closes Options and opens the guided setup: provider, sign-in, model.",
     "Automatico (consigliato)": "Automatic (recommended)",
     "GitHub Copilot (abbonamento)": "GitHub Copilot (subscription)",
     "Claude Code (abbonamento Claude)": "Claude Code (Claude subscription)",

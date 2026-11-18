@@ -160,6 +160,20 @@ namespace SVNAssist.Host
             catch (Exception ex) { Log.Write("FocusPage: " + ex.Message); }
         }
 
+        /// <summary>Chiude il dialogo modale che contiene la pagina (Tools > Options), come Annulla: le modifiche sono gia' salvate. Serve a far usare una finestra che il dialogo coprirebbe.</summary>
+        public void CloseParentDialog()
+        {
+            try
+            {
+                var src = PresentationSource.FromVisual(this) as System.Windows.Interop.HwndSource;
+                var root = src == null ? IntPtr.Zero : GetAncestor(src.Handle, 2 /* GA_ROOT */);
+                if (root != IntPtr.Zero) PostMessage(root, 0x0010 /* WM_CLOSE */, IntPtr.Zero, IntPtr.Zero);
+            }
+            catch (Exception ex) { Log.Write("CloseParentDialog: " + ex.Message); }
+        }
+
+        [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
+        [DllImport("user32.dll")] private static extern bool PostMessage(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
         [DllImport("user32.dll")] private static extern IntPtr GetFocus();
         [DllImport("user32.dll")] private static extern bool IsChild(IntPtr parent, IntPtr child);
 

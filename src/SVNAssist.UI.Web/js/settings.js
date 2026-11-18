@@ -31,7 +31,7 @@
       txt('aiModel', t('Modello (solo OpenAI-compatibile / GitHub Models)'), t("Un id modello. L'elenco aggiornato è nella procedura guidata."));
     const body = p === 'openai' || p === 'gemini' ? oa : f;
     const none = row(wiz, t('Nessun provider scelto'), t('Con Automatico SVNAssist prova i provider in ordine. Scegline uno per vedere qui modello e chiave.'));
-    return card(t('Provider collegato'), body ? body + row(wiz, t('Cambia provider'), t('Procedura guidata: provider, accesso, modello. Chiudi le Options per proseguirla.')) : none);
+    return card(t('Provider collegato'), body ? body + row(wiz, t('Cambia provider'), t('Chiude le Options e apre la procedura guidata: provider, accesso, modello.')) : none);
   }
 
   function render(root) {
