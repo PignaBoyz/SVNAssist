@@ -126,7 +126,7 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             workingCopyPath: () => WorkingCopyPath,
             dialogs: dialogs);
         CommitMessage.Changed += NotifyChanged;
-        Incoming = new IncomingStore(svnService, aiServiceFactory);
+        Incoming = new IncomingStore(svnService, aiServiceFactory, settingsService);
         Incoming.Changed += NotifyChanged;
         RevPicker = new RevisionPickerStore(svnService);
         RevPicker.Changed += NotifyChanged;

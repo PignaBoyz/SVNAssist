@@ -25,8 +25,10 @@ internal sealed class IncomingStore
     private IncomingDto? _state;
     private CancellationTokenSource? _aiCts;
 
-    public IncomingStore(ISvnService svn, IAiServiceFactory aiFactory)
-        => (_svn, _aiFactory) = (svn, aiFactory);
+    private readonly ISvnAssistSettings? _settings;
+
+    public IncomingStore(ISvnService svn, IAiServiceFactory aiFactory, ISvnAssistSettings? settings = null)
+        => (_svn, _aiFactory, _settings) = (svn, aiFactory, settings);
 
     public event Action? Changed;
 
@@ -93,6 +95,13 @@ internal sealed class IncomingStore
         Changed?.Invoke();
     }
 
+    // Lingua del riassunto = "Lingua dei commit message" delle Options; con "auto" segue la lingua dell'interfaccia.
+    private async Task<string> ResolveLanguageAsync(CancellationToken ct)
+    {
+        var stored = _settings is null ? "auto" : (await _settings.GetDefaultLanguageAsync(ct)).Trim().ToLowerInvariant();
+        return stored is "italiano" or "english" ? stored : Loc.Lang == "en" ? "english" : "italiano";
+    }
+
     private async Task SummarizeAsync(IReadOnlyList<SvnLogEntry> log, CancellationToken ct)
     {
         IncomingAiDto result;
@@ -103,7 +112,7 @@ internal sealed class IncomingStore
                 result = new IncomingAiDto("none", string.Empty, string.Empty, null); // AI non collegata: solo l'elenco
             else
             {
-                var text = await ai.SummarizeIncomingAsync(BuildPrompt(log), Loc.Lang == "en" ? "english" : "italiano", ct);
+                var text = await ai.SummarizeIncomingAsync(BuildPrompt(log), await ResolveLanguageAsync(ct), ct);
                 var last = ai is FallbackAiService fl ? fl.LastService : ai;
                 // Sempre la riga di consumo (con il flag acceso): modello dei commit + token/costo se il provider li riporta.
                 var usage = last is IReportsModel { LastUsage: { } u } ? AiUsageText.Format(u) : last is IReportsModel { LastModelUsed: { } m } ? AiUsageText.ShortModel(m) : string.Empty;
