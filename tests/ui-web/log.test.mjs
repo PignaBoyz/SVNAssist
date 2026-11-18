@@ -142,3 +142,12 @@ test('menu del log: Copia percorso nel repository, disabilitata senza file', () 
   s.entries.find(e => e.rev === 123).paths = [];
   assert.ok(U.logRowMenu(s, 123).find(i => i.label === 'Copia percorso nel repository').disabled);
 });
+
+test('menu del log: Apri file di questa revisione nell\'editor (un file) e menu della riga file; schema ok', () => {
+  const s = fx();
+  s.entries.find(e => e.rev === 123).paths = [{ a: 'M', p: '/trunk/a.cs' }];
+  const it = U.logRowMenu(s, 123).find(i => i.label === "Apri file di questa revisione nell'editor");
+  assert.equal(it.cmd + JSON.stringify(it.args), 'logOpenRevFile{"rev":123,"i":0}');
+  assert.equal(U.logPathMenu(123, 2).map(i => i.cmd).join(), 'logOpenFile,logOpenRevFile');
+  valid({ name: 'logOpenRevFile', args: { rev: 123, i: 0 } });
+});

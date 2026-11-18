@@ -206,6 +206,55 @@ public class LogDiffTests : IDisposable
     }
 
     [Fact]
+    public async Task LogOpenRevFile_EsportaNomeOriginaleInSolaLetturaEApreNellEditor()
+    {
+        _svn.LogPaths.Add(new SvnLogPath("M", "/trunk/src/Program.cs", "file"));
+        await _store.ApplyAutoDetectedWorkingCopyAsync(Wc, Ct);
+        await Cmd("logOpenRevFile", new { rev = 3, i = 0 });
+
+        Assert.Equal([("file:///repo/trunk/src/Program.cs", 3L)], _svn.ExportedRevisions.Select(x => (x.Target, x.Rev)));
+        var f = _host.OpenedFiles.Single();
+        Assert.EndsWith(Path.Combine("r3", "Program.cs"), f);
+        Assert.True(new FileInfo(f).IsReadOnly);
+        Assert.False(Snap.Err);
+        Assert.Empty(_host.Diffs);
+
+        _store.CleanTemp();   // la sola lettura non blocca la pulizia
+        Assert.False(File.Exists(f));
+    }
+
+    [Fact]
+    public async Task LogOpenRevFile_FileCancellato_ApreLaVersionePrecedente()
+    {
+        _svn.LogPaths.Add(new SvnLogPath("D", "/trunk/Old.cs", "file"));
+        await _store.ApplyAutoDetectedWorkingCopyAsync(Wc, Ct);
+        await Cmd("logOpenRevFile", new { rev = 3, i = 0 });
+
+        Assert.Equal(2L, _svn.ExportedRevisions.Single().Rev);
+        Assert.EndsWith(Path.Combine("r2", "Old.cs"), _host.OpenedFiles.Single());
+        Assert.Contains("r2", Snap.Msg);
+        Assert.False(Snap.Err);
+    }
+
+    [Fact]
+    public async Task LogOpenRevFile_Binario_Cartella_OIndiceSbagliato_DannoUnMessaggioSenzaAprire()
+    {
+        _svn.LogPaths.Add(new SvnLogPath("M", "/trunk/img.png", "file"));
+        _svn.LogPaths.Add(new SvnLogPath("M", "/trunk/src", "dir"));
+        await _store.ApplyAutoDetectedWorkingCopyAsync(Wc, Ct);
+
+        _svn.ExportContent = "PNG\0\0data";
+        await Cmd("logOpenRevFile", new { rev = 3, i = 0 });
+        Assert.True(Snap.Err);
+        Assert.Contains("binario", Snap.Msg);
+        await Cmd("logOpenRevFile", new { rev = 3, i = 1 });
+        Assert.True(Snap.Err);
+        await Cmd("logOpenRevFile", new { rev = 3, i = 9 });
+        Assert.True(Snap.Err);
+        Assert.Empty(_host.OpenedFiles);
+    }
+
+    [Fact]
     public async Task LogOpenFile_FileAggiunto_LatoSinistroVuoto()
     {
         _svn.LogPaths.Add(new SvnLogPath("A", "/trunk/New.cs", "file"));

@@ -221,10 +221,12 @@ internal sealed class FakeSvnService : ISvnService
 
     public List<(string Target, long Rev, string Destination)> ExportedRevisions { get; } = [];
 
+    public string? ExportContent { get; set; }
+
     public Task ExportRevisionAsync(string target, long revision, string destination, CancellationToken ct)
     {
         ExportedRevisions.Add((target, revision, destination));
-        File.WriteAllText(destination, $"{target}@{revision}");
+        File.WriteAllText(destination, ExportContent ?? $"{target}@{revision}");
         return Task.CompletedTask;
     }
 

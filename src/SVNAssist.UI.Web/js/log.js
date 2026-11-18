@@ -38,11 +38,15 @@
     const items = [{ label: t('Mostra file modificati'), cmd: 'logSelect', args: { rev }, hint: t('Elenco dei file della revisione (svn log -v) e diff') },
       files.length === 1 ? { label: t('Diff con la precedente'), cmd: 'logOpenFile', args: { rev, i: e.paths.indexOf(files[0]) }, hint: t('Apre il diff di r{0} contro la precedente in Visual Studio', rev) }
         : { label: t('Diff con la precedente'), cmd: 'logSelect', args: { rev }, hint: t('Mostra il diff della revisione sotto la tabella') }];
+    if (files.length === 1) items.push(U.logFileOpenItem(rev, e.paths.indexOf(files[0])));
     if (s.sel != null && s.sel !== rev) items.push({ label: t('Confronta con r{0}', s.sel), cmd: 'logCompare', args: { a: s.sel, b: rev }, hint: t('Elenca i file cambiati tra le due revisioni') });
     // l'URL del repository non e' noto alla UI (ne' dove si veda nel browser): si copia percorso@revisione, usabile in svn e nel Repository browser
     const repoPaths = files.map(f => f.p + '@' + rev).join('\n');
     return [...items, { sep: true }, { label: t('Copia percorso nel repository'), run: copy(repoPaths, t('percorso')), disabled: !files.length, hint: t('Copia percorso@revisione dei file della revisione (uno per riga)') }, ...tail];
   };
+  U.logFileOpenItem = (rev, i) => ({ label: t('Apri file di questa revisione nell\'editor'), cmd: 'logOpenRevFile', args: { rev, i }, hint: t('Esporta il file com\'era alla revisione r{0} e lo apre in sola lettura in Visual Studio', rev) });
+  // menu della riga file (dettaglio della revisione): diff e apertura del file alla revisione
+  U.logPathMenu = (rev, i) => [{ label: t('Diff con la precedente'), cmd: 'logOpenFile', args: { rev, i }, hint: t('Apre il diff di r{0} contro la precedente in Visual Studio', rev) }, U.logFileOpenItem(rev, i)];
   // Merge interrotto nel Log: lo stesso blocco di Changes (una volta sola: l'errore non si ripete) + le revisioni gia' applicate "in questo merge"
   const O_pending = (p, m) => U.ops.pendingMergeHTML(p, { extra: U.btn('btn sm', t('Vai a Changes'), 'diff', 'mergeResolve', null, t('Apre Changes, sezione Conflitti, con le azioni per ogni file')) }) +
     `<details class="mapp" open><summary>${esc(t('Applicate in questo merge ({0})', p.applied))}</summary><ul class="mapl">` +
@@ -190,6 +194,10 @@
         U.bridge.send('logOptions', { stopOnCopy: v('stopOnCopy'), merged: v('merged') });
       });
       U.ops.wire(root.querySelector('#ops'), () => st);
+      root.querySelector('#ldet').addEventListener('contextmenu', e => {
+        const b = e.target.closest('.pl[data-cmd="logOpenFile"]'); if (!b) return;
+        const a = JSON.parse(b.dataset.args); e.preventDefault(); U.menu.open(e.clientX, e.clientY, U.logPathMenu(a.rev, a.i), b);
+      });
       const list = root.querySelector('#llist');
       list.addEventListener('click', e => { const r = e.target.closest('.lr'); if (r && st && st.merge) { mcur = +r.dataset.rev; U.bridge.send('mergeToggle', { rev: mcur }); } else if (r) { const c = U.logClick(st && st.sel, +r.dataset.rev, e.ctrlKey || e.shiftKey || e.metaKey); U.bridge.send(c.cmd, c.args); } });
       list.addEventListener('contextmenu', e => { const r = e.target.closest('.lr'); if (!r || !st) return; e.preventDefault(); U.menu.open(e.clientX, e.clientY, U.logRowMenu(st, +r.dataset.rev), r); });
