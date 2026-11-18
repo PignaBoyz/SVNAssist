@@ -5,6 +5,11 @@
 (function (w) {
   const U = w.SVNUI = w.SVNUI || { views: {} };
   const EN = {
+    "Nessun provider scelto": "No provider chosen",
+    "Con Automatico SVNAssist prova i provider in ordine. Scegline uno per vedere qui modello e chiave.": "With Automatic SVNAssist tries the providers in order. Pick one to see its model and key here.",
+    "Provider collegato": "Linked provider",
+    "Cambia provider": "Change provider",
+    "Procedura guidata: provider, accesso, modello. Chiudi le Options per proseguirla.": "Guided setup: provider, sign-in, model. Close Options to continue it.",
     "Automatico (consigliato)": "Automatic (recommended)",
     "GitHub Copilot (abbonamento)": "GitHub Copilot (subscription)",
     "Claude Code (abbonamento Claude)": "Claude Code (Claude subscription)",
@@ -30,7 +35,6 @@
     "Dopo \"Genera con AI\" la riga di stato scrive modello, token e costo o crediti AI, solo se il provider li dichiara. Non finisce nel messaggio di commit.": "After \"Generate with AI\" the status line shows model, tokens and cost or AI credits, only if the provider reports them. It does not go into the commit message.",
     "Spiega le revisioni in arrivo prima di SVN Update": "Explain incoming revisions before SVN Update",
     "Elenca le revisioni in arrivo e, a richiesta, chiede all'AI cosa è entrato. All'AI vanno messaggi di log e modifiche (diff); dei file sensibili solo il nome.": "Lists the incoming revisions and, on request, asks the AI what came in. The AI receives log messages and the changes (diff); for sensitive files only the name.",
-    "Modelli e chiavi": "Models and keys",
     "Modello Claude (solo Claude Code e Claude API)": "Claude model (Claude Code and Claude API only)",
     "Un id modello. L'elenco aggiornato è nella procedura guidata (Extensions > SVNAssist > Cambia provider AI).": "A model id. The up-to-date list is in the guided setup (Extensions > SVNAssist > Change AI provider).",
     "API key Anthropic (solo Claude API)": "Anthropic API key (Claude API only)",

@@ -117,6 +117,7 @@ namespace SVNAssist.Host
                 {
                     var m = JObject.Parse(json);
                     var name = (string)m["name"]; var a = m["args"] as JObject;
+                    if (name == "settingsWizard") { _ = SendCommandAsync("changes", "wizardOpen", null); return; } // si apre in Changes, dietro il dialogo Options (modale): la pagina dice di chiuderlo
                     var key = (string)a?["key"]; var value = (string)a?["value"] ?? "";
                     var secret = key != null && SecretKeys.Contains(key);
                     if (!((name == "settingsSet" && !secret) || (name == "settingsSecret" && secret)) || !_pkg.Options.TrySet(key, value)) { Log.Write("impostazione rifiutata: " + name + " " + key); return; }
