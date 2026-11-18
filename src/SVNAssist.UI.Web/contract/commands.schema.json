@@ -2063,6 +2063,41 @@
       }
     },
     {
+      "title": "logOpenRevFile",
+      "description": "Esporta il file i-esimo della revisione (com'era in quella revisione; se cancellata, la versione precedente) in una cartella temporanea e lo apre nell'editor di VS in sola lettura. Binari e percorsi troppo lunghi: messaggio in status, nessun errore.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "logOpenRevFile"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "rev",
+            "i"
+          ],
+          "properties": {
+            "rev": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Revisione."
+            },
+            "i": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Indice in entries[].paths."
+            }
+          }
+        }
+      }
+    },
+    {
       "title": "logCompare",
       "description": "Elenca i file cambiati tra due revisioni dell'elenco (Ctrl+clic): riempisce files.",
       "type": "object",

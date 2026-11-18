@@ -10,6 +10,8 @@
     "Copia numero revisione": "Copy revision number",
     "Copia messaggio": "Copy message",
     "Copia percorso nel repository": "Copy repository path",
+    "Apri file di questa revisione nell'editor": "Open this revision's file in the editor",
+    "Esporta il file com'era alla revisione r{0} e lo apre in sola lettura in Visual Studio": "Exports the file as it was at revision r{0} and opens it read-only in Visual Studio",
     "percorso": "path",
     "Copia percorso@revisione dei file della revisione (uno per riga)": "Copies path@revision of the revision's files (one per line)",
     "messaggio": "message",

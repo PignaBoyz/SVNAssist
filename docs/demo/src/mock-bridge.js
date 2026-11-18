@@ -368,6 +368,7 @@ Il file .patch viene cancellato e non si recupera.`)) return;
     },
     logOptions: a => { S.lvm.stopOnCopy = !!a.stopOnCopy; S.lvm.includeMerged = !!a.merged; return lvmLoad(50); },
     logOpenFile: a => { const e = logRows(S.lvm).find(x => x.rev === +a.rev), p = e && e.paths[+a.i]; if (p) toast('Diff a due pannelli aperto in Visual Studio: ' + p.p.split('/').pop() + ' r' + (e.rev - 1) + ' ↔ r' + e.rev); },
+    logOpenRevFile: a => { const e = logRows(S.lvm).find(x => x.rev === +a.rev), p = e && e.paths[+a.i]; if (p) toast(p.a === 'D' ? p.p.split('/').pop() + ' eliminato in r' + e.rev + ': aperta la versione di r' + (e.rev - 1) + ' (sola lettura)' : p.p.split('/').pop() + ' aperto alla revisione r' + e.rev + ' (sola lettura)'); },
     logCompare: a => {
       const lo = Math.min(+a.a, +a.b), hi = Math.max(+a.a, +a.b), seen = new Set(), items = [];
       for (const e of S.lvm.entries) if (e.rev > lo && e.rev <= hi) for (const p of e.paths) if (!seen.has(p.p)) { seen.add(p.p); items.push({ a: p.a, p: p.p }); }

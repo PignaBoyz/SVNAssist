@@ -3379,7 +3379,7 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             foreach (var dir in Directory.EnumerateDirectories(TempRoot))
             {
                 if (Directory.GetLastWriteTimeUtc(dir) < DateTime.UtcNow.AddDays(-1))
-                    Directory.Delete(dir, recursive: true);
+                    DiffOpener.DeleteTree(dir);
             }
         }
         catch

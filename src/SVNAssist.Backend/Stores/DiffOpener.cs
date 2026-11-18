@@ -84,6 +84,53 @@ internal sealed class DiffOpener : IDisposable
         await _host.OpenDiffAsync(l, r, left is { } a ? $"{name} r{a}" : Loc.T("(vuoto)"), right is { } b ? $"{name} r{b}" : Loc.T("(vuoto)"), title);
     }
 
+    /// <summary>
+    /// Esporta il file alla revisione <paramref name="rev"/> in una cartella <c>rNNN</c> con nome ed estensione originali (l'editor applica colori e
+    /// linguaggio), in sola lettura. Ritorna il percorso (con eventuale nota) oppure <c>null</c> e il motivo in italiano (binario, percorso troppo lungo, scrittura impossibile).
+    /// </summary>
+    public async Task<(string? File, string? Problem)> ExportForEditorAsync(string target, string name, string action, long rev, CancellationToken ct)
+    {
+        var useRev = action == "D" ? rev - 1 : rev;   // cancellato in rev: l'ultima versione e' la precedente
+        if (useRev < 1)
+            return (null, Loc.T("Il file non esiste prima di r{0}: non c'è una versione da aprire.", rev));
+        var bad = Path.GetInvalidFileNameChars();
+        var safe = string.Concat(name.Select(c => bad.Contains(c) ? '_' : c));
+        string file;
+        try
+        {
+            file = Path.Combine(Directory.CreateDirectory(Path.Combine(NewDir(), "r" + useRev)).FullName, safe);
+            if (file.Length >= 250)
+                return (null, Loc.T("Il percorso temporaneo è troppo lungo per Windows: il file non è stato aperto."));
+            await _svn.ExportRevisionAsync(target, useRev, file, ct);
+            if (IsBinary(file))
+                return (null, Loc.T("{0} è un file binario: non si apre nell'editor. Usa Diff con la precedente o il Repository browser.", name));
+            File.SetAttributes(file, FileAttributes.ReadOnly);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
+        {
+            BackendLog.Info($"Apertura r{useRev} di {name}: {ex.Message}");
+            return (null, Loc.T("Non riesco a salvare {0} nella cartella temporanea di Windows.", name));
+        }
+
+        return (file, action == "D" ? Loc.T("{0} è stato eliminato in r{1}: aperta la versione di r{2}.", name, rev, useRev) : null);
+    }
+
+    private static bool IsBinary(string file)
+    {
+        var buf = new byte[8000];
+        using var fs = File.OpenRead(file);
+        var n = fs.Read(buf, 0, buf.Length);
+        return Array.IndexOf(buf, (byte)0, 0, n) >= 0;
+    }
+
+    /// <summary>Cancella una cartella temporanea anche se contiene file di sola lettura (le revisioni aperte nell'editor).</summary>
+    internal static void DeleteTree(string dir)
+    {
+        foreach (var f in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories))
+            File.SetAttributes(f, FileAttributes.Normal);
+        Directory.Delete(dir, recursive: true);
+    }
+
     private async Task<string> ExportSideAsync(string target, string name, long? rev, string dir, CancellationToken ct)
     {
         var file = Path.Combine(Directory.CreateDirectory(dir).FullName, name);
@@ -118,7 +165,7 @@ internal sealed class DiffOpener : IDisposable
         {
             foreach (var d in _dirs)
             {
-                try { Directory.Delete(d, recursive: true); }
+                try { DeleteTree(d); }
                 catch { /* best effort: file ancora aperto in VS, lo toglie CleanTemp al prossimo avvio */ }
             }
 

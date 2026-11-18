@@ -247,6 +247,9 @@ internal sealed class LogStore : ViewStore
             case "logOpenFile":
                 await GuardAsync(() => OpenRevisionFileAsync(Args.Long(args, "rev"), (int)Args.Long(args, "i"), ct));
                 break;
+            case "logOpenRevFile":
+                await GuardAsync(() => OpenRevisionInEditorAsync(Args.Long(args, "rev"), (int)Args.Long(args, "i"), ct));
+                break;
             case "logCompare":
                 await GuardAsync(() => CompareAsync(Args.Long(args, "a"), Args.Long(args, "b"), ct));
                 break;
@@ -539,6 +542,35 @@ internal sealed class LogStore : ViewStore
         {
             Merge!.Report(Loc.T("Errore diff: {0}", ex.Message), err: true);
         }
+    }
+
+    /// <summary>Menu "Apri file di questa revisione nell'editor": esporta il file alla revisione e lo apre in sola lettura.</summary>
+    private async Task OpenRevisionInEditorAsync(long rev, int index, CancellationToken ct)
+    {
+        string path;
+        LogPathDto file;
+        lock (_lock)
+        {
+            path = _path;
+            var entry = _entries.FirstOrDefault(e => e.Rev == rev) ?? throw new ArgumentException(Loc.T("Revisione {0} non presente nell'elenco.", rev));
+            if (index < 0 || index >= entry.Paths.Count)
+                throw new ArgumentException(Loc.T("File non presente nella revisione."));
+            file = entry.Paths[index];
+        }
+
+        if (file.K == "dir")
+            throw new ArgumentException(Loc.T("è una cartella: scegli un file."));
+        var name = System.IO.Path.GetFileName(file.P);
+        Set(Loc.T("Esporto {0} alla revisione r{1}...", name, rev), err: false, loading: true);
+        var (exported, note) = await _diffs!.ExportForEditorAsync(await RepoRootAsync(path, ct) + file.P, name, file.A, rev, ct);
+        if (exported is null)
+        {
+            Set(note!, err: true);
+            return;
+        }
+
+        await _host!.OpenFileAsync(exported);
+        Set(note ?? Loc.T("{0} aperto alla revisione r{1} (sola lettura).", name, rev), err: false);
     }
 
     /// <summary>Clic su un file di una revisione: diff nativo <c>r-1 ↔ r</c> (per i file aggiunti/eliminati un lato e' vuoto).</summary>
