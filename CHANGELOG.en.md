@@ -2,6 +2,22 @@
 
 List of SVNAssist changes by version, from the most recent to the oldest. Button, menu and window names are those of the interface, in English. Entries marked "(to be verified)" are declared but not yet tested in Visual Studio.
 
+## 0.6.1 (in preparation)
+
+Contents: summary of incoming revisions based on the real changes, Copilot AI credits. Installs over 0.6.0.
+
+Installation: same as 0.2.0. Not tested in Visual Studio (to be verified).
+
+### Changes
+
+- **The summary of incoming revisions explains what came in.** Before: it said that files had been modified. Now: it reads the real changes of each revision (`svn diff`) and says, naming the author, what changes in the behavior of the code, for example "Andrea removed the bottleneck from the message queue". No more lists of files. With many revisions the summary says how many it is based on (to be verified).
+  - The AI now receives log messages and the changes (diff) of the revisions; for sensitive files (`.env`, keys, certificates) only the name. The text under the summary and the option description say so.
+- **GitHub Copilot AI credits.** With **Show model and cost in the generated message** the Copilot status line shows model, tokens and AI credits spent (the ones you see on GitHub), for example "gpt-6-luna · 1,200 tokens in / 300 out · 0.25 AI credits". If Copilot does not report them nothing is written, never zero; if it reports them only for some calls it writes "≥ … (partial)" (to be verified, including the credit conversion).
+
+### Fixes
+
+- **Options choices no longer go back to Automatic.** Before: changing the interface language after saving could send provider, commit language and theme back to Automatic. Now: the choice stays (to be verified).
+
 ## 0.6.0 (2026-11-18)
 
 Contents: AI explanation of incoming revisions before SVN Update (option), AI model and usage in one readable line, Gemini as an AI provider, Open this revision's file in the editor, Copy repository path, confirmation on the diff Undo button.

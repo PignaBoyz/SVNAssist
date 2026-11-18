@@ -601,6 +601,10 @@ public class SvnService : ISvnService
     }
 
     /// <inheritdoc />
+    public Task<string> GetRevisionDiffForAiAsync(string url, long revision, CancellationToken ct)
+        => RunSvnAsync(["diff", "-c", revision.ToString(CultureInfo.InvariantCulture), "-x", "-U 0 -p", "--no-diff-deleted", Peg(SafeTarget(url))], workingDirectory: null, ct);
+
+    /// <inheritdoc />
     /// <remarks>
     /// <c>-U 0</c> toglie il contesto e <c>-p</c> aggiunge il nome della funzione nell'intestazione
     /// delle hunk: l'AI vede solo le righe cambiate. NON si ignorano gli spazi (<c>-w</c>): anche

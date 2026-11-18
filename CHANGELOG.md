@@ -2,6 +2,22 @@
 
 Elenco delle modifiche di SVNAssist per versione, dalla più recente alla più vecchia. I nomi di pulsanti, menu e finestre sono quelli dell'interfaccia, in inglese. Le voci con "(da verificare)" sono dichiarate ma non ancora provate in Visual Studio.
 
+## 0.6.1 (in preparazione)
+
+Contenuti: riassunto delle revisioni in arrivo basato sulle modifiche vere, crediti AI di Copilot. Si installa sopra la 0.6.0.
+
+Installazione: come la 0.2.0. Non provata in Visual Studio (da verificare).
+
+### Modifiche
+
+- **Il riassunto delle revisioni in arrivo spiega cosa è entrato.** Prima: diceva che erano stati modificati dei file. Ora: legge le modifiche vere di ogni revisione (`svn diff`) e dice, con il nome dell'autore, cosa cambia nel comportamento del codice, per esempio "Andrea ha tolto il collo di bottiglia dalla coda dei messaggi". Niente più elenchi di file. Con molte revisioni il riassunto dice su quante si basa (da verificare).
+  - All'AI vanno ora messaggi di log e modifiche (diff) delle revisioni; dei file sensibili (`.env`, chiavi, certificati) solo il nome. Il testo sotto il riassunto e la descrizione dell'opzione lo dicono.
+- **Crediti AI di GitHub Copilot.** Con **Mostra modello e costo nel messaggio generato** la riga di stato di Copilot dice modello, token e crediti AI spesi (quelli che vedi su GitHub), per esempio "gpt-6-luna · 1.200 token in / 300 out · 0,25 crediti AI". Se Copilot non li dichiara non si scrive nulla, mai zero; se li dichiara solo per alcune chiamate si scrive "≥ … (parziale)" (da verificare, anche la conversione in crediti).
+
+### Correzioni
+
+- **Le scelte di Options non tornano ad Automatico.** Prima: cambiando la lingua dell'interfaccia dopo aver salvato, provider, lingua dei commit e tema potevano tornare ad Automatico. Ora: la scelta resta (da verificare).
+
 ## 0.6.0 (2026-11-18)
 
 Contenuti: spiegazione AI delle revisioni in arrivo prima di SVN Update (opzione), modello e consumo dell'AI in una riga leggibile, Gemini come provider AI, Apri file di questa revisione nell'editor, Copia percorso nel repository, conferma sul pulsante Annulla del diff.

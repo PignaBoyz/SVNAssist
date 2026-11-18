@@ -129,8 +129,27 @@ internal sealed class CopilotAiService : AiServiceBase, IReportsModel
 #pragma warning restore GHCP001
         });
 
+        // Consumo dichiarato da Copilot per ogni chiamata al modello (token e crediti AI, in nano-AIU): si somma, mai stimato.
+        long inTok = 0, outTok = 0, nano = 0; var withCredits = 0; var calls = 0; string? usedModel = null;
+        using var usageSub = session.On<AssistantUsageEvent>(e =>
+        {
+            var d = e.Data;
+            lock (session)
+            {
+                calls++;
+                inTok += (long)(d.InputTokens ?? 0); outTok += (long)(d.OutputTokens ?? 0);
+                usedModel ??= d.Model;
+                if (d.CopilotUsage is { } cu) { nano += (long)cu.TotalNanoAiu; withCredits++; }
+            }
+        });
         var reply = await session.SendAndWaitAsync(
             new MessageOptions { Prompt = userMessage }, TimeSpan.FromMinutes(2), ct);
+        lock (session)
+        {
+            if (calls > 0)
+                AddUsage(new AiUsage(usedModel, inTok, outTok, null, withCredits > 0 ? nano / 1_000_000_000m : null, withCredits > 0 && withCredits < calls));
+            BackendLog.Info($"Copilot: {calls} chiamate, {withCredits} con crediti, {nano} nano-AIU, token {inTok}/{outTok}");
+        }
 
         var content = reply?.Data?.Content;
         if (content is not null && !string.IsNullOrWhiteSpace(reply?.Data?.Model))

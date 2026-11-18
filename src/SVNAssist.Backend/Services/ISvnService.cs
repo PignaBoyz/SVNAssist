@@ -157,6 +157,9 @@ public interface ISvnService
     /// <param name="ct">Token per annullare l'operazione.</param>
     Task<string> GetDiffAsync(string targetPath, long revision, CancellationToken ct);
 
+    /// <summary>Diff minimo (<c>-U 0 -p</c>, senza file cancellati) introdotto da una revisione su un URL del repository, per il riassunto AI di SVN Update. Vuoto se non disponibile.</summary>
+    Task<string> GetRevisionDiffForAiAsync(string url, long revision, CancellationToken ct) => Task.FromResult(string.Empty);
+
     /// <summary>
     /// Restituisce il diff <b>minimo</b> dei soli file indicati, pensato per l'AI (commit message):
     /// niente righe di contesto, intestazione di funzione nelle hunk, file cancellati senza contenuto,

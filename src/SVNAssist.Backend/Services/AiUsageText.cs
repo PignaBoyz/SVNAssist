@@ -32,6 +32,11 @@ internal static class AiUsageText
             parts.Add(Loc.T("{0} token in / {1} out", usage.InputTokens.ToString("N0", c), usage.OutputTokens.ToString("N0", c)));
         if (usage.CostUsd is { } cost)
             parts.Add(Loc.T("≈ {0} $", cost.ToString(cost >= 0.01m ? "N2" : "N4", c)));
+        if (usage.AiCredits is { } credits)
+        {
+            var n = credits.ToString(credits >= 0.01m ? "N2" : "N4", c);
+            parts.Add(usage.CreditsPartial ? Loc.T("≥ {0} crediti AI (parziale)", n) : Loc.T("{0} crediti AI", n));
+        }
         return string.Join(" · ", parts);
     }
 }

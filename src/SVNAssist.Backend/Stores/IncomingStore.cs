@@ -7,7 +7,7 @@ namespace SVNAssist.Stores;
 /// <summary>
 /// Anteprima di "SVN Update": le revisioni in arrivo (<c>svn log</c> da BASE+1 a HEAD, con i file toccati) e, se un provider AI e' collegato,
 /// un riassunto a parole semplici. Il riassunto e' facoltativo: se manca o fallisce l'elenco si vede lo stesso e l'Update funziona.
-/// All'AI vanno solo autore, messaggi di log e nomi dei file, mai il contenuto dei file. L'update lo esegue <see cref="ChangesStore"/>.
+/// All'AI vanno autore, messaggio e il diff minimo di ogni revisione (<c>svn diff -c</c>); dei file sensibili (.env, chiavi...) solo il nome. L'update lo esegue <see cref="ChangesStore"/>.
 /// </summary>
 internal sealed class IncomingStore
 {
@@ -25,6 +25,8 @@ internal sealed class IncomingStore
     private IncomingDto? _state;
     private CancellationTokenSource? _aiCts;
     private IReadOnlyList<SvnLogEntry> _log = [];
+    private string _url = string.Empty;
+    private const int MaxDiffRevisions = 40;
 
     private readonly Func<CancellationToken, Task<string>> _commitLanguage;
 
@@ -77,6 +79,7 @@ internal sealed class IncomingStore
             _aiCts?.Cancel();
             _aiCts = cts;
             _log = log;
+            _url = branchUrl;
             FailedProvider = null;
             AiTask = null;
             _state = new IncomingDto(branchLabel, log.Count, items, Math.Max(0, log.Count - items.Count), new IncomingAiDto("idle", string.Empty, string.Empty, null)); // il riassunto parte solo con "incomingSummarize"
@@ -135,7 +138,8 @@ internal sealed class IncomingStore
                 result = new IncomingAiDto("none", string.Empty, string.Empty, null); // AI non collegata: solo l'elenco
             else
             {
-                var prompt = BuildPrompt(log, out var included);
+                var diffs = await FetchDiffsAsync(log, _url, ct);
+                var prompt = BuildPrompt(log, out var included, diffs);
                 var text = await ai.SummarizeIncomingAsync(prompt, await ResolveLanguageAsync(ct), ct);
                 if (included < log.Count)
                     text = Loc.T("Riassunto sulle prime {0} revisioni di {1} (il resto non entrava nel limite dell'AI).", included, log.Count) + "\n" + text;
@@ -181,19 +185,25 @@ internal sealed class IncomingStore
     /// <summary>Solo autore, messaggio e nomi dei file (mai contenuto), entro il limite del provider piu' stretto.</summary>
     internal static string BuildPrompt(IReadOnlyList<SvnLogEntry> log) => BuildPrompt(log, out _);
 
-    internal static string BuildPrompt(IReadOnlyList<SvnLogEntry> log, out int included)
+    internal static string BuildPrompt(IReadOnlyList<SvnLogEntry> log, out int included, IReadOnlyDictionary<long, string>? diffs = null)
     {
         included = 0;
         var sb = new StringBuilder();
+        var share = Math.Clamp(MaxAiChars / Math.Max(1, log.Count), 1_500, 12_000); // quota di diff per revisione
         foreach (var e in log.OrderBy(x => x.Revision))
         {
             var block = new StringBuilder();
             block.Append('r').Append(e.Revision).Append(' ').Append(e.Author).Append(": ").AppendLine(Clip(e.Message.Replace('\n', ' ').Replace('\r', ' '), MaxMessageChars));
             var paths = e.Paths ?? [];
-            foreach (var p in paths.Take(MaxFilesToAi))
-                block.Append("  ").Append(p.Action).Append(' ').AppendLine(p.Path);
-            if (paths.Count > MaxFilesToAi)
-                block.Append("  ... +").Append(paths.Count - MaxFilesToAi).AppendLine(" file");
+            if (diffs is not null && diffs.TryGetValue(e.Revision, out var diff) && diff.Length > 0)
+                block.AppendLine(DiffLimiter.Limit(StripSensitive(diff), share, share).Diff);
+            else
+            {
+                foreach (var p in paths.Take(MaxFilesToAi))
+                    block.Append("  ").Append(p.Action).Append(' ').AppendLine(p.Path);
+                if (paths.Count > MaxFilesToAi)
+                    block.Append("  ... +").Append(paths.Count - MaxFilesToAi).AppendLine(" file");
+            }
             if (sb.Length + block.Length > MaxAiChars)
             {
                 sb.Append("... altre revisioni omesse per lunghezza");
@@ -205,6 +215,41 @@ internal sealed class IncomingStore
         }
 
         return sb.ToString();
+    }
+
+    /// <summary>I file che di solito contengono segreti (chiavi, .env...) arrivano all'AI solo col nome, mai col contenuto.</summary>
+    internal static string StripSensitive(string diff) => string.Concat(DiffLimiter.SplitByFile(diff).Select(s =>
+    {
+        var first = s.Split('\n', 2)[0].TrimEnd('\r');
+        return first.StartsWith("Index: ", StringComparison.Ordinal) && SensitiveFiles.LooksSensitive(first[7..])
+            ? first + " (contenuto non inviato)\n"
+            : s;
+    }));
+
+    /// <summary>Diff minimo di ogni revisione (le prime <see cref="MaxDiffRevisions"/>), 4 richieste alla volta; una che fallisce resta senza diff (basta il log).</summary>
+    private async Task<Dictionary<long, string>> FetchDiffsAsync(IReadOnlyList<SvnLogEntry> log, string url, CancellationToken ct)
+    {
+        var result = new Dictionary<long, string>();
+        using var gate = new SemaphoreSlim(4);
+        await Task.WhenAll(log.OrderBy(x => x.Revision).Take(MaxDiffRevisions).Select(async e =>
+        {
+            await gate.WaitAsync(ct);
+            try
+            {
+                var d = await _svn.GetRevisionDiffForAiAsync(url, e.Revision, ct);
+                lock (result)
+                    result[e.Revision] = d;
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                BackendLog.Warn($"Diff di r{e.Revision} non disponibile: {ex.Message}");
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }));
+        return result;
     }
 
     private static string Clip(string s, int max)

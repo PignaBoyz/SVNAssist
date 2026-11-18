@@ -67,6 +67,7 @@ internal sealed class ReloadableSvnService : ISvnService
     public Task ExportRevisionAsync(string target, long revision, string destination, CancellationToken ct) => Current.ExportRevisionAsync(target, revision, destination, ct);
     public Task<IReadOnlyList<SvnChange>> GetChangedBetweenAsync(string target, long fromRevision, long toRevision, CancellationToken ct) => Current.GetChangedBetweenAsync(target, fromRevision, toRevision, ct);
     public Task<string> GetDiffAsync(string targetPath, long revision, CancellationToken ct) => Current.GetDiffAsync(targetPath, revision, ct);
+    public Task<string> GetRevisionDiffForAiAsync(string url, long revision, CancellationToken ct) => Current.GetRevisionDiffForAiAsync(url, revision, ct);
     public Task<string> GetDiffForAiAsync(IReadOnlyList<string> paths, string? workingCopyPath, CancellationToken ct) => Current.GetDiffForAiAsync(paths, workingCopyPath, ct);
     public Task<string> GetFileDiffAsync(string filePath, CancellationToken ct) => Current.GetFileDiffAsync(filePath, ct);
     public Task ExportBaseAsync(string path, string destination, CancellationToken ct) => Current.ExportBaseAsync(path, destination, ct);

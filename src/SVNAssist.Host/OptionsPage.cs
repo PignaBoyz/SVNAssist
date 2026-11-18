@@ -46,7 +46,7 @@ namespace SVNAssist.Host
 
         public override object ConvertTo(ITypeDescriptorContext c, CultureInfo culture, object value, Type destinationType)
         {
-            if (destinationType == typeof(string) && value is string s)
+            if (destinationType == typeof(string) && value is string s && !Equals(culture, CultureInfo.InvariantCulture))
                 return _choices.Where(x => x.Value == s).Select(x => Loc.T(x.Label)).FirstOrDefault() ?? s;
             return base.ConvertTo(c, culture, value, destinationType);
         }
@@ -129,7 +129,7 @@ namespace SVNAssist.Host
         public bool AiShowUsage { get; set; }
 
         [LCategory("Commit message AI"), LDisplayName("Spiega le revisioni in arrivo prima di SVN Update"), DefaultValue(false)]
-        [LDescription("Prima di SVN Update mostra le revisioni in arrivo (autore, messaggio, file) e un riassunto AI a parole semplici, con modello e consumo; poi chiede Aggiorna o Annulla. All'AI vanno solo messaggi di log e nomi dei file. Spento: SVN Update parte subito, senza AI.")]
+        [LDescription("Prima di SVN Update mostra le revisioni in arrivo (autore, messaggio, file) e un riassunto AI a parole semplici, con modello e consumo; poi chiede Aggiorna o Annulla. All'AI vanno messaggi di log e modifiche (diff) delle revisioni; dei file sensibili solo il nome. Spento: SVN Update parte subito, senza AI.")]
         public bool AiExplainIncoming { get; set; }
 
         [LCategory("Generale"), LDisplayName("Working Copy Path")]

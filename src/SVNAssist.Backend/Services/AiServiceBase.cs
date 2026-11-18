@@ -74,9 +74,12 @@ public abstract class AiServiceBase : IAiService
     {
         LastUsage = null;
         var systemPrompt = "Sei un assistente per sviluppatori. Ti arriva l'elenco delle revisioni SVN che stanno per entrare nella working copy " +
-                           "(autore, messaggio e nomi dei file toccati; il contenuto dei file non c'è). Spiega a parole semplici, per chi non ha letto il log, " +
-                           "cosa sta cambiando (l'intento) e gli eventuali rischi (conflitti probabili con lavoro locale, file di configurazione o di build, " +
-                           "eliminazioni, modifiche molto ampie). Massimo 6 righe brevi, senza titoli, e non inventare nulla che non sia nel log." +
+                           "(autore, messaggio e modifiche reali: diff minimo con le sole righe cambiate, con il nome della funzione). " +
+                           "Leggi le modifiche e spiega a parole semplici COSA è entrato, revisione per revisione: cosa fa il codice di diverso adesso e perché " +
+                           "(es. \"Mario ha tolto il collo di bottiglia dalla coda dei messaggi\"), citando l'autore e, se utile, la classe o la funzione. " +
+                           "NON elencare i file e NON scrivere frasi vuote come \"sono stati modificati dei file\". Una riga per revisione (revisioni simili si possono unire), " +
+                           "poi, solo se ci sono, una riga di rischi concreti (conflitti probabili con lavoro locale, configurazione o build, eliminazioni). " +
+                           "Senza titoli, e non inventare nulla che non sia nel log o nel diff." +
                            GetLanguageInstruction(language);
         return AskAsync(systemPrompt, logText, ct);
     }

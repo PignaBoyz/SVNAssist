@@ -13,10 +13,12 @@ internal interface IReportsModel
 /// Consumo riportato dal provider: modello reale, token e (solo se lo dice il provider, oggi la CLI di Claude Code) costo in dollari.
 /// Mai stimato con prezzi scritti a mano.
 /// </summary>
-public sealed record AiUsage(string? Model, long InputTokens, long OutputTokens, decimal? CostUsd = null)
+public sealed record AiUsage(string? Model, long InputTokens, long OutputTokens, decimal? CostUsd = null, decimal? AiCredits = null, bool CreditsPartial = false)
 {
     public AiUsage Plus(AiUsage o) => new(Model ?? o.Model, InputTokens + o.InputTokens, OutputTokens + o.OutputTokens,
-        CostUsd is null && o.CostUsd is null ? null : (CostUsd ?? 0) + (o.CostUsd ?? 0));
+        CostUsd is null && o.CostUsd is null ? null : (CostUsd ?? 0) + (o.CostUsd ?? 0),
+        AiCredits is null && o.AiCredits is null ? null : (AiCredits ?? 0) + (o.AiCredits ?? 0),
+        CreditsPartial || o.CreditsPartial);
 }
 
 /// <summary>
@@ -52,6 +54,6 @@ public interface IAiService
     /// <returns>Il messaggio di commit migliorato.</returns>
     Task<string> ImproveCommitMessageAsync(string draft, string diff, string language, CancellationToken ct, string? projectInstructions = null, string? style = null);
 
-    /// <summary>Riassunto a parole semplici delle revisioni in arrivo con SVN Update (solo log e nomi file, mai contenuto): intento e rischi, breve.</summary>
+    /// <summary>Riassunto a parole semplici delle revisioni in arrivo con SVN Update (log e diff minimo di ogni revisione, file sensibili solo per nome): cosa e' entrato e rischi, breve.</summary>
     Task<string> SummarizeIncomingAsync(string logText, string language, CancellationToken ct) => throw new NotSupportedException();
 }
