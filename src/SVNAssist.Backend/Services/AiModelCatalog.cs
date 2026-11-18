@@ -44,6 +44,10 @@ internal static class AiModelIds
 {
     private static readonly Regex Plausible = new(@"^[A-Za-z0-9][A-Za-z0-9._:/@+\-]{0,199}$", RegexOptions.Compiled);
 
+    /// <summary>Gemini riporta gli id come <c>models/gemini-...</c>: il prefisso si toglie (le chiamate usano l'id nudo).</summary>
+    internal static string? StripModelsPrefix(string? id)
+        => id is not null && id.StartsWith("models/", StringComparison.OrdinalIgnoreCase) ? id["models/".Length..] : id;
+
     internal static bool IsPlausible(string? id) => id is not null && Plausible.IsMatch(id.Trim());
 }
 
@@ -259,7 +263,7 @@ internal sealed class AiModelCatalog : IAiModelCatalog
         var models = new List<AiModelInfo>();
         foreach (var m in items.EnumerateArray())
         {
-            var id = Str(m, "id")?.Trim();
+            var id = AiModelIds.StripModelsPrefix(Str(m, "id")?.Trim());
             if (!AiModelIds.IsPlausible(id) || NotForChat.IsMatch(id!) || !seen.Add(id!))
                 continue;
             models.Add(new AiModelInfo(id!, id!));

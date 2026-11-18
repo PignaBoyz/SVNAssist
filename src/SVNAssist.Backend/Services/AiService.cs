@@ -46,6 +46,9 @@ public class AiService : AiServiceBase, IReportsModel
         _apiKey = apiKey;
     }
 
+    /// <summary>Endpoint di Gemini (stesso percorso OpenAI-compatibile): serve per nominare il provider e il consumo.</summary>
+    internal bool IsGemini => AiServiceFactory.IsGeminiEndpoint(_endpoint);
+
     /// <inheritdoc />
     public override AiLimits Limits => AiServiceFactory.IsGitHubModelsEndpoint(_endpoint) ? AiLimits.GitHubModels : AiLimits.OpenAiCompatible;
 
@@ -135,7 +138,9 @@ public class AiService : AiServiceBase, IReportsModel
         {
             try
             {
-                return ParseCompletionResponse(responseJson);
+                var text = ParseCompletionResponse(responseJson);
+                AddUsage(ReadUsage(responseJson));
+                return text;
             }
             catch (Exception ex) when (ex is JsonException or KeyNotFoundException)
             {
@@ -173,6 +178,25 @@ public class AiService : AiServiceBase, IReportsModel
 
         return messageContent?.Trim()
             ?? throw new InvalidOperationException(Loc.T("Il contenuto del messaggio AI è null."));
+    }
+
+    /// <summary>Campo <c>usage</c> (prompt_tokens/completion_tokens) e <c>model</c> della risposta; solo token, nessun prezzo. Null se assenti.</summary>
+    internal static AiUsage? ReadUsage(string responseJson)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(responseJson);
+            var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("usage", out var u) || u.ValueKind != JsonValueKind.Object)
+                return null;
+            long Num(string n) => u.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt64(out var l) ? l : 0;
+            var model = root.TryGetProperty("model", out var m) && m.ValueKind == JsonValueKind.String ? AiModelIds.StripModelsPrefix(m.GetString()) : null;
+            return new AiUsage(string.IsNullOrWhiteSpace(model) ? null : model, Num("prompt_tokens"), Num("completion_tokens"));
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private static bool IsTokenLimitError(HttpStatusCode statusCode, string responseJson)

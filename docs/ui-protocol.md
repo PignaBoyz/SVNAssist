@@ -107,7 +107,7 @@ Stato e logica nel backend (`WizardStore`); la UI mostra `wizard` e invia solo q
 |---|---|---|
 | `wizardOpen` | – | apre la procedura AI (passo 1; preseleziona il provider impostato). Parte da sola da "Genera con AI" senza provider |
 | `wizardOpenPrereq` | – | apre la procedura sui prerequisiti mancanti (svn, provider AI); la riga `ai` porta alla procedura AI |
-| `wizardPick` | `provider`: `copilot|claudecode|claude|openai` | sceglie il provider (passo 1) |
+| `wizardPick` | `provider`: `copilot|claudecode|claude|openai|gemini` | sceglie il provider (passo 1) |
 | `wizardNext` / `wizardBack` / `wizardCancel` | – | avanti (solo se il passo e' completo, ricontrolla prima) / indietro / chiude |
 | `wizardRecheck` | – | rilegge prerequisiti e accesso (la UI lo manda da sola ogni 4 s mentre manca qualcosa e al ritorno del focus) |
 | `wizardRun` | `id`, `primary` | azione di un prerequisito del passo 2 (stesse azioni della checklist) |
@@ -220,10 +220,10 @@ status      {msg, err, seq?, action?{label, cmd:"cleanup"|"update"|"switchResume
 prereq      {open, summary, ai, feedback, items[{id, group, title, ok, detail, instructions, primary, secondary}]}
 loading     bool
 wizard      {open, mode: ai|prereq, step 1-4, fromGenerate, provider, busy, feedback, providers[{id,title,cost}], items[prereq item],
-             auth: ""|github|claudecode|key|openai, authOk, authDetail, endpoint, models[{value,label,cost?}], model, canNext,
+             auth: ""|github|claudecode|key|openai|gemini, authOk, authDetail, endpoint, models[{value,label,cost?}], model, canNext,
              modelsLoading?, modelsUpdated?, modelsNote?, modelsError?, modelsAccount?, modelsSource?: ""|live|cache|unlinked, modelSaved?}
              // passo 4: models viene dal provider (Copilot: SDK `ListModelsAsync`, con `cost` = moltiplicatore di richieste premium dichiarato, vuoto se non lo dice; Claude API: GET /v1/models;
-             // GitHub Models: GET models.github.ai/catalog/models; OpenAI-compatibile: GET {base}/models). Cache di 24 ore (1 ora alla riapertura del passo), forzabile.
+             // GitHub Models: GET models.github.ai/catalog/models; OpenAI-compatibile e Gemini: GET {base}/models, per Gemini senza chiave nessun elenco = "Non collegato" e tolto il prefisso `models/`). Cache di 24 ore (1 ora alla riapertura del passo), forzabile.
              // modelsUpdated = ISO UTC dell'ultimo aggiornamento ('' = nessun elenco: provider non collegato); modelsAccount = account con cui il provider ha risposto (login GitHub di Copilot);
              // modelSaved = modello oggi in uso (un valore non piu' in elenco resta in `models` con etichetta "non piu' nell'elenco" e in `modelsNote`). La voce "Altro..." e' solo UI (testo libero -> wizardFinish.model).
 revPicker?  {open, target, loading, error, canMore, items[{rev, author, date (ISO), msg (prima riga)}]}   // modale "Update to revision"
@@ -324,7 +324,7 @@ L'host le espone in Tools > Options > SVNAssist (categoria "SVNAssist") e le res
 
 | Chiave | Tipo | Default | Valori ammessi |
 |---|---|---|---|
-| `aiProvider` | enum | `auto` | `auto`, `copilot`, `claudecode`, `claude`, `openai` |
+| `aiProvider` | enum | `auto` | `auto`, `copilot`, `claudecode`, `claude`, `openai`, `gemini` (Gemini: endpoint Google fisso, chiave `aiApiKey`, modello `aiModel`) |
 | `claudeModel` | string | `claude-sonnet-5-5` | qualsiasi id modello valido (suggerimenti: `claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-opus-5-5`); l'elenco vero e' nella procedura guidata |
 | `anthropicApiKey` | string (segreto) | `` | vuota = variabile `ANTHROPIC_API_KEY` |
 | `copilotModel` | string | `default` | `default` = il modello che sceglie Copilot per l'account; altrimenti qualsiasi id dall'elenco di Copilot (procedura guidata, con il costo) |

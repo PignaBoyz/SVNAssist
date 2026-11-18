@@ -25,6 +25,7 @@ internal static class AiProviderGuide
     internal const string GitHubTokenUrl = "https://github.com/settings/tokens/new?description=SVNAssist&scopes=";
     internal const string CopilotUrl = "https://github.com/features/copilot";
     internal const string AnthropicKeysUrl = "https://console.anthropic.com/settings/keys";
+    internal const string GeminiKeysUrl = "https://aistudio.google.com/apikey";
 
     /// <summary>Normalizza il valore dell'impostazione provider (vuoto = auto).</summary>
     internal static string Normalize(string? provider)
@@ -42,6 +43,7 @@ internal static class AiProviderGuide
                               "usa la quota del tuo abbonamento."),
         "claude" => Loc.T("Claude API: serve una API key Anthropic; l'uso è a pagamento a consumo " +
                           "(Haiku costa meno di Sonnet, Sonnet meno di Opus)."),
+        "gemini" => Loc.T("Gemini: serve una API key di Google AI Studio; l'uso ha un livello gratuito limitato, oltre è a consumo."),
         "openai" => Loc.T("OpenAI-compatibile: con GitHub Models (default) basta il login GitHub (gh auth login) o un token, gratis entro i limiti; " +
                           "con altri endpoint serve la loro API key (a pagamento, tranne Ollama in locale)."),
         _ => Loc.T("Automatico: prova in ordine Copilot, Claude Code, Claude API, OpenAI-compatibile; ne basta uno configurato."),
@@ -53,6 +55,7 @@ internal static class AiProviderGuide
         "copilot" => CopilotUrl,
         "claudecode" => PrerequisitesService.ClaudeCodeDocsUrl,
         "claude" => AnthropicKeysUrl,
+        "gemini" => GeminiKeysUrl,
         _ => GitHubTokenUrl,
     };
 
@@ -62,7 +65,7 @@ internal static class AiProviderGuide
     /// </summary>
     internal static ConsoleCommand? LoginCommand(string provider) => Normalize(provider) switch
     {
-        "claude" => null,
+        "claude" or "gemini" => null,
         "claudecode" => ConsoleCommand.ClaudeLogin,
         _ => ConsoleCommand.GitHubLogin,
     };
@@ -83,6 +86,7 @@ internal static class AiProviderGuide
         "copilot" => Loc.T("GitHub Copilot non è utilizzabile.\n\n{0}\n\nVuoi aprire la pagina di GitHub Copilot?", Requirements("copilot")),
         "claudecode" => Loc.T("Claude Code non è utilizzabile.\n\n{0}\n\nVuoi aprire la documentazione di Claude Code?", Requirements("claudecode")),
         "claude" => Loc.T("Claude API non è utilizzabile.\n\n{0}\nInserisci la chiave in Tools > Options > SVNAssist > Anthropic API Key.\n\nVuoi aprire la pagina per creare la API key Anthropic?", Requirements("claude")),
+        "gemini" => Loc.T("Gemini non è utilizzabile.\n\n{0}\nIncolla la chiave in Tools > Options > SVNAssist > AI API Key.\n\nVuoi aprire la pagina per creare la API key di Google AI Studio?", Requirements("gemini")),
         "openai" => Loc.T("Il provider OpenAI-compatibile non è utilizzabile.\n\n{0}\nIncolla la chiave in Tools > Options > SVNAssist > AI API Key.\n\nVuoi aprire la pagina per creare il token GitHub gratuito?", Requirements("openai")),
         _ => Loc.T("Nessun provider AI trovato per generare i commit. Basta UNA di queste opzioni:\n\n" +
                    "• GitHub Copilot o GitHub CLI: esegui 'gh auth login'\n" +
@@ -256,6 +260,9 @@ internal sealed class PrerequisitesService
         var openAiKeyOk = !string.IsNullOrWhiteSpace(apiKey) || (AiServiceFactory.IsGitHubModelsEndpoint(endpoint) && token is not null);
         if (Use("openai") && openAiKeyOk)
             usable.Add(Loc.T("OpenAI-compatibile"));
+        var geminiKeyOk = !string.IsNullOrWhiteSpace(apiKey);
+        if (provider == "gemini" && geminiKeyOk)
+            usable.Add("Gemini");
 
         var items = new List<PrerequisiteItem>
         {
@@ -303,7 +310,8 @@ internal sealed class PrerequisitesService
                       "Richiede anche il login a GitHub (gh auth login)."),
                 copilotInstalled ? null : Loc.T("Scarica ora (~100 MB)")),
 
-            new(PrerequisiteIds.OpenAiKey, GroupAi, Loc.T("API key / token (OpenAI-compatibile)"), openAiKeyOk,
+            new(PrerequisiteIds.OpenAiKey, GroupAi, provider == "gemini" ? Loc.T("API key Gemini") : Loc.T("API key / token (OpenAI-compatibile)"),
+                provider == "gemini" ? geminiKeyOk : openAiKeyOk,
                 !string.IsNullOrWhiteSpace(apiKey) ? Loc.T("chiave in Tools > Options")
                     : openAiKeyOk ? Loc.T("token GitHub rilevato (GitHub Models)") : Loc.T("nessuna chiave né token GitHub."),
                 Loc.T("Con GitHub Models (default) basta il login GitHub (gh auth login) oppure un token da incollare in\n" +
@@ -327,6 +335,7 @@ internal sealed class PrerequisitesService
         "claudecode" => [PrerequisiteIds.ClaudeCode],
         "claude" => [PrerequisiteIds.AnthropicKey],
         "openai" => [PrerequisiteIds.GitHubCli, PrerequisiteIds.GitHubLogin, PrerequisiteIds.OpenAiKey],
+        "gemini" => [PrerequisiteIds.OpenAiKey],
         _ => null,
     };
 }

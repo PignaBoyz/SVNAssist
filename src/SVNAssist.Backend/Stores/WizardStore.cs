@@ -10,9 +10,9 @@ namespace SVNAssist.Stores;
 /// </summary>
 internal sealed class WizardStore
 {
-    internal const string AuthGitHub = "github", AuthClaudeCode = "claudecode", AuthKey = "key", AuthOpenAi = "openai";
+    internal const string AuthGitHub = "github", AuthClaudeCode = "claudecode", AuthKey = "key", AuthOpenAi = "openai", AuthGemini = "gemini";
 
-    internal static readonly string[] ProviderIds = ["copilot", "claudecode", "claude", "openai"];
+    internal static readonly string[] ProviderIds = ["copilot", "claudecode", "claude", "openai", "gemini"];
 
     private static IReadOnlyList<WizardProviderDto> Providers =>
     [
@@ -20,6 +20,7 @@ internal sealed class WizardStore
         new("claudecode", Loc.T("Claude Code (abbonamento Claude)"), AiProviderGuide.Requirements("claudecode")),
         new("claude", Loc.T("Claude API (API key, a consumo)"), AiProviderGuide.Requirements("claude")),
         new("openai", Loc.T("GitHub Models / OpenAI-compatibile"), AiProviderGuide.Requirements("openai")),
+        new("gemini", Loc.T("Gemini (API key Google)"), AiProviderGuide.Requirements("gemini")),
     ];
 
     private readonly PrereqStore _prereq;
@@ -59,7 +60,7 @@ internal sealed class WizardStore
     internal static string ModelSettingKey(string provider) => provider switch
     {
         "copilot" => SettingDefinitions.CopilotModel,
-        "openai" => SettingDefinitions.AiModel,
+        "openai" or "gemini" => SettingDefinitions.AiModel,
         _ => SettingDefinitions.ClaudeModel,
     };
 
@@ -90,6 +91,7 @@ internal sealed class WizardStore
                 "claudecode" => AuthClaudeCode,
                 "claude" => AuthKey,
                 "openai" => AuthOpenAi,
+                "gemini" => AuthGemini,
                 _ => string.Empty,
             };
             return new WizardDto(_open, _mode, _step, _fromGenerate, _provider, _busy, feedback, Providers,
@@ -374,6 +376,8 @@ internal sealed class WizardStore
                 return string.IsNullOrWhiteSpace(c) ? SettingDefinitions.CopilotDefaultModel : c.Trim();
             case "openai":
                 return AiServiceFactory.NormalizeOpenAiModel(await _settings.GetAiEndpointAsync(ct), await _settings.GetAiModelAsync(ct));
+            case "gemini":
+                return AiServiceFactory.NormalizeGeminiModel(await _settings.GetAiModelAsync(ct));
             case "claude":
             case "claudecode":
                 return AiServiceFactory.ResolveClaudeModel(await _settings.GetClaudeModelAsync(ct));
@@ -420,7 +424,7 @@ internal sealed class WizardStore
         {
             "copilot" => PrerequisiteIds.GitHubLogin,
             "claude" => PrerequisiteIds.AnthropicKey,
-            "openai" => PrerequisiteIds.OpenAiKey,
+            "openai" or "gemini" => PrerequisiteIds.OpenAiKey,
             _ => null,
         };
         var install = InstallIds(provider);
@@ -512,7 +516,7 @@ internal sealed class WizardStore
             await _settings.SetSettingAsync(SettingDefinitions.AiEndpoint, endpoint, ct);
         }
 
-        if (key.Length > 0 && provider is "claude" or "openai")
+        if (key.Length > 0 && provider is "claude" or "openai" or "gemini")
             await _settings.SetSettingAsync(provider == "claude" ? SettingDefinitions.AnthropicApiKey : SettingDefinitions.AiApiKey, key, ct);
 
         await RefreshAsync(ct);

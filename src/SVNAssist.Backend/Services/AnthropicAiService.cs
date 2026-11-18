@@ -53,6 +53,8 @@ internal sealed class AnthropicAiService : AiServiceBase, IReportsModel
         if (response.StopReason == "refusal")
             throw new InvalidOperationException(Loc.T("Claude ha rifiutato la richiesta."));
 
+        AddUsage(new AiUsage(response.Model.ToString().Trim((char)34), response.Usage.InputTokens + (response.Usage.CacheCreationInputTokens ?? 0) + (response.Usage.CacheReadInputTokens ?? 0), response.Usage.OutputTokens));
+
         var text = string.Concat(response.Content
             .Select(b => b.TryPickText(out var t) ? t.Text : null)
             .Where(t => t is not null));

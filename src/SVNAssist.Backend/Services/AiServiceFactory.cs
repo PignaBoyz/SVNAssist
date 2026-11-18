@@ -94,6 +94,15 @@ internal sealed class AiServiceFactory : IAiServiceFactory
         if (Use("openai") && await CreateOpenAiCompatibleAsync(ct) is { } openAi)
             candidates.Add((Loc.T("OpenAI-compatibile"), openAi));
 
+        // Gemini solo se scelto: riusa il percorso OpenAI-compatibile e la chiave "AI API Key", ma l'endpoint e' quello di Google
+        // (in "auto" la chiave condivisa andrebbe all'endpoint sbagliato).
+        if (provider == "gemini")
+        {
+            var key = await _settings.GetAiApiKeyAsync(ct);
+            if (!string.IsNullOrWhiteSpace(key))
+                candidates.Add(("Gemini", new AiService(SharedHttpClient, GeminiEndpoint + "/chat/completions", NormalizeGeminiModel(await _settings.GetAiModelAsync(ct)), key)));
+        }
+
         return candidates.Count switch
         {
             0 => null,
@@ -147,6 +156,18 @@ internal sealed class AiServiceFactory : IAiServiceFactory
 
         return name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ? name[prefix.Length..] : name;
     }
+
+    /// <summary>Base OpenAI-compatibile di Gemini (Google AI Studio, API key).</summary>
+    internal const string GeminiEndpoint = "https://generativelanguage.googleapis.com/v1beta/openai";
+
+    internal static bool IsGeminiEndpoint(string endpoint) =>
+        Uri.TryCreate(endpoint, UriKind.Absolute, out var uri)
+        && uri.Scheme == Uri.UriSchemeHttps
+        && string.Equals(uri.Host, "generativelanguage.googleapis.com", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Gli id di Gemini arrivano come <c>models/gemini-...</c>; le chiamate vogliono l'id nudo.</summary>
+    internal static string NormalizeGeminiModel(string? model)
+        => AiModelIds.StripModelsPrefix(model?.Trim()) ?? string.Empty;
 
     internal static bool IsGitHubModelsEndpoint(string endpoint) =>
         Uri.TryCreate(endpoint, UriKind.Absolute, out var uri)

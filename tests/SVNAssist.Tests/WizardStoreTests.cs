@@ -42,7 +42,7 @@ public class WizardStoreTests
         Assert.True(s.Open);
         Assert.Equal(1, s.Step);
         Assert.False(s.CanNext);
-        Assert.Equal(4, s.Providers.Count);
+        Assert.Equal(5, s.Providers.Count);
 
         wizard.Pick("copilot");
         Assert.True(wizard.GetSnapshot().CanNext);

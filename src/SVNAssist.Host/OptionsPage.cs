@@ -58,7 +58,7 @@ namespace SVNAssist.Host
     internal sealed class AiProviderConverter : ChoiceConverter
     {
         public AiProviderConverter() : base(("auto", Loc.K("Automatico (consigliato)")), ("copilot", Loc.K("GitHub Copilot (abbonamento)")),
-            ("claudecode", Loc.K("Claude Code (abbonamento Claude)")), ("claude", Loc.K("Claude API (API key Anthropic)")), ("openai", Loc.K("OpenAI-compatibile / GitHub Models"))) { }
+            ("claudecode", Loc.K("Claude Code (abbonamento Claude)")), ("claude", Loc.K("Claude API (API key Anthropic)")), ("openai", Loc.K("OpenAI-compatibile / GitHub Models")), ("gemini", Loc.K("Gemini (API key Google)"))) { }
     }
 
     // Modelli AI: campo di testo libero, nessuna tendina con id scritti nell'app. L'elenco vero dei modelli, solo del provider collegato,
