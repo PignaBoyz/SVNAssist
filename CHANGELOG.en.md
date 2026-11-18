@@ -1,29 +1,29 @@
 # Changelog
 
-List of SVNAssist changes by version, from the most recent to the oldest. Button, menu and window names are those of the interface, in English. Entries marked "(to be verified)" are declared but not yet tested in Visual Studio.
+List of SVNAssist changes by version, from the most recent to the oldest. Button, menu and window names are those of the interface, in English. Entries marked "" are declared but not yet tested in Visual Studio.
 
 ## 0.6.1 (2026-11-18)
 
 Contents: Options with the modern interface, summary of incoming revisions based on the real changes, Copilot AI credits. Installs over 0.6.0.
 
-Installation: same as 0.2.0. Not tested in Visual Studio (to be verified).
+Installation: same as 0.2.0. Not tested in Visual Studio.
 
 ### Changes
 
-- **Options with the modern interface.** Tools > Options > SVNAssist (and the **General** link of the new Visual Studio Settings) shows the same interface as Changes and Log, in sections: AI commit messages, Models and keys, General, Shortcuts. Changes apply right away, API keys included (encrypted, never read back into the page). It is not yet the native Settings registration: the "not migrated yet" notice in Settings stays (to be verified).
-- **The summary of incoming revisions explains what came in.** Before: it said that files had been modified. Now: it reads the real changes of each revision (`svn diff`) and says, naming the author, what changes in the behavior of the code, for example "Andrea removed the bottleneck from the message queue". No more lists of files. With many revisions the summary says how many it is based on (to be verified).
+- **Options with the modern interface.** Tools > Options > SVNAssist (and the **General** link of the new Visual Studio Settings) shows the same interface as Changes and Log, in sections: AI commit messages, Models and keys, General, Shortcuts. Changes apply right away, API keys included (encrypted, never read back into the page). It is not yet the native Settings registration: the "not migrated yet" notice in Settings stays.
+- **The summary of incoming revisions explains what came in.** Before: it said that files had been modified. Now: it reads the real changes of each revision (`svn diff`) and says, naming the author, what changes in the behavior of the code, for example "Andrea removed the bottleneck from the message queue". No more lists of files. With many revisions the summary says how many it is based on.
   - The AI now receives log messages and the changes (diff) of the revisions; for sensitive files (`.env`, keys, certificates) only the name. The text under the summary and the option description say so.
-- **GitHub Copilot AI credits.** With **Show model and cost in the generated message** the Copilot status line shows model, tokens and AI credits spent (the ones you see on GitHub), for example "gpt-6-luna · 1,200 tokens in / 300 out · 0.25 AI credits". If Copilot does not report them nothing is written, never zero; if it reports them only for some calls it writes "≥ … (partial)" (to be verified, including the credit conversion).
+- **GitHub Copilot AI credits.** With **Show model and cost in the generated message** the Copilot status line shows model, tokens and AI credits spent (the ones you see on GitHub), for example "gpt-6-luna · 1,200 tokens in / 300 out · 0.25 AI credits". If Copilot does not report them nothing is written, never zero; if it reports them only for some calls it writes "≥ … (partial)".
 
 ### Fixes
 
-- **Options choices no longer go back to Automatic.** Before: changing the interface language after saving could send provider, commit language and theme back to Automatic. Now: the choice stays (to be verified).
+- **Options choices no longer go back to Automatic.** Before: changing the interface language after saving could send provider, commit language and theme back to Automatic. Now: the choice stays.
 
 ## 0.6.0 (2026-11-18)
 
 Contents: AI explanation of incoming revisions before SVN Update (option), AI model and usage in one readable line, Gemini as an AI provider, Open this revision's file in the editor, Copy repository path, confirmation on the diff Undo button.
 
-Installation: same as 0.2.0. Not tested in Visual Studio before release (to be verified).
+Installation: same as 0.2.0. Not tested in Visual Studio before release.
 
 ### New
 
@@ -33,22 +33,22 @@ Installation: same as 0.2.0. Not tested in Visual Studio before release (to be v
   - Under the summary you see the model used (the commit one) and how much it consumed.
   - Only log messages and file names are sent to the AI, never file contents. With many revisions the summary says how many it is based on.
   - **Update now** and **Cancel** stay enabled while the summary is being prepared and stop it.
-  - With the option off, SVN Update starts right away as before. It applies to the Changes command, not to Update from Solution Explorer or to merge (to be verified).
-- **Gemini as an AI provider.** Chosen in the wizard and in Tools > Options, with a Google AI Studio key. The model list comes from Google. "Automatic" never picks it by itself, so the shared key doesn't go to Google by mistake (to be verified).
-- **Open this revision's file in the editor.** In the Log, from the revision menu (if it touches a single file) or from the right-click on the file row, opens the file as it was in that revision, read-only and with language colors. If the file is deleted it opens the previous version. Binary files don't open and a message says so (to be verified).
+  - With the option off, SVN Update starts right away as before. It applies to the Changes command, not to Update from Solution Explorer or to merge.
+- **Gemini as an AI provider.** Chosen in the wizard and in Tools > Options, with a Google AI Studio key. The model list comes from Google. "Automatic" never picks it by itself, so the shared key doesn't go to Google by mistake.
+- **Open this revision's file in the editor.** In the Log, from the revision menu (if it touches a single file) or from the right-click on the file row, opens the file as it was in that revision, read-only and with language colors. If the file is deleted it opens the previous version. Binary files don't open and a message says so.
 - **Copy repository path.** In the Log menu, copies `path@rN` of the revision's files, one per line.
 
 ### Changes
 
-- **AI model and usage in one readable line.** With **Show model and cost in the generated message** the status line reads for example "Sonnet 5.5 · 1,240 tokens in / 310 out · ≈ $0.04". With Claude Code the cost is shown too; with Claude API and OpenAI-compatible only tokens (to be verified with real providers).
-- **Undo in the diff asks for confirmation.** The Undo button next to a diff block asks for confirmation before restoring the block to the BASE version (to be verified).
+- **AI model and usage in one readable line.** With **Show model and cost in the generated message** the status line reads for example "Sonnet 5.5 · 1,240 tokens in / 310 out · ≈ $0.04". With Claude Code the cost is shown too; with Claude API and OpenAI-compatible only tokens.
+- **Undo in the diff asks for confirmation.** The Undo button next to a diff block asks for confirmation before restoring the block to the BASE version.
 - **MessagePack security warnings fixed.** The backend uses an updated version.
 
 ## 0.5.0 (2026-11-18)
 
 Contents: Branch/Tag, Create Patch, Apply Patch, Shelve, server checks at commit, locks by other users, conflict resolution by group, list of AI models from the provider, AI sign-in to redo with a button, model and cost in the generated message (option), Merge from folder, Merge applied one revision at a time.
 
-Installation: same as 0.2.0. Tested on Visual Studio 18 (2026). Visual Studio 2022 (17.x) is declared as supported but not tested (to be verified).
+Installation: same as 0.2.0. Tested on Visual Studio 18 (2026). Visual Studio 2022 (17.x) is declared as supported but not tested.
 
 ### New
 
@@ -82,7 +82,7 @@ Installation: same as 0.2.0. Tested on Visual Studio 18 (2026). Visual Studio 20
 - **Locks by other users.** In Changes a lock with "Locked by <user>" marks the files locked by others; the tooltip shows the date and the comment. It is updated by the periodic check for new revisions.
 - **Use mine for all / Use theirs for all.** Resolve the text conflicts together, with confirmation and a list of files. Tree and property conflicts are excluded.
 - **Use both.** In the resolution of a text conflict, merges the two versions: mine followed by theirs, or theirs followed by mine. Also available for all conflicts.
-- **Mark as resolved on the open file.** When a conflicted file is open in Visual Studio, a bar above the document offers Mark as resolved, Use mine, Use theirs, Use both and Open merge editor (to be verified).
+- **Mark as resolved on the open file.** When a conflicted file is open in Visual Studio, a bar above the document offers Mark as resolved, Use mine, Use theirs, Use both and Open merge editor.
 - **Right-click menu.** In the Conflicts panel of Changes and in the Log, right-click on the selected rows opens a menu of actions (also with Shift+F10 or the Menu key). For conflicts it includes Open file and Copy path. The Changes row menu also includes opening the file in File Explorer.
 - **AI models from the provider.** The model selection shows the list returned by the provider, without "recommended" entries.
   - **Refresh list** rereads the list; otherwise it is reread after 24 hours.
@@ -96,12 +96,12 @@ Installation: same as 0.2.0. Tested on Visual Studio 18 (2026). Visual Studio 20
   <img src="https://raw.githubusercontent.com/PignaBoyz/SVNAssist/main/docs/release-notes/img/0.5.0/en/03-modelli-ai.png" width="560" alt="Model step of the AI setup">
 
   *The Model step of the setup: the list comes from the provider.*
-  - Not tested with the real providers (to be verified).
+  - Not tested with the real providers.
 - **Merge from a folder.** SVN Merge... from a folder in Solution Explorer works only on that subtree. A verdict shows whether the folder is Compatible with the merge or whether the merge is not possible.
 - **Files of each revision.** In the selection of the revisions to merge, below the table a list of the files involved appears (A, M, D). A click on a file opens the diff of that revision.
 - **Merge preview by revision.** The preview is grouped by revision, with the files of each one. Files with a predicted conflict are marked with a red C and with the number of possible conflicts.
 - **Show Log: changed paths.** For the selected revision, the Log lists the changed paths with the counts by action. The option **Only affected paths** hides the paths outside the file or folder from which the Log was opened.
-- **Merge with pending changes.** The merge is no longer blocked by uncommitted changes. A warning appears with the number of changed items and the files in common with the merge. Before the merge the changes are copied to a safety folder. Undo merge restores the pending changes as well as undoing the merge. After the merge commit the copy is deleted (to be verified).
+- **Merge with pending changes.** The merge is no longer blocked by uncommitted changes. A warning appears with the number of changed items and the files in common with the merge. Before the merge the changes are copied to a safety folder. Undo merge restores the pending changes as well as undoing the merge. After the merge commit the copy is deleted.
 - **Merge applied one revision at a time.** The merge proceeds with the progress "revision N of TOT (rNNNNN)". If a revision conflicts, the merge stops.
   - The message states what has been applied, what remains and what to do: resolve the conflicts, mark them as resolved, choose Continue merge. The merge does not need to be redone.
   - **Continue merge** applies only the remaining revisions.
@@ -116,7 +116,7 @@ Installation: same as 0.2.0. Tested on Visual Studio 18 (2026). Visual Studio 20
 
 - **Update to revision.** The list shows only the revisions of the current branch.
 - **Mark as resolved.** If the file is identical to the base version (for example because the choice was removed in the merge editor), SVNAssist warns before proceeding.
-- **Merge.** Revisions are read without the list of files, in parallel and cached. The timing of each phase is written to the SVNAssist log. The effect on merge time has not been measured (to be verified).
+- **Merge.** Revisions are read without the list of files, in parallel and cached. The timing of each phase is written to the SVNAssist log. The effect on merge time has not been measured.
 
 ### Fixes
 
@@ -196,7 +196,7 @@ Installation: same as 0.2.0.
 
 Known limitations:
 
-- The Cancel button next to the diff blocks has not been verified in Visual Studio (to be verified).
+- The Cancel button next to the diff blocks has not been verified in Visual Studio.
 - A file open only as a panel of a diff, without its own editor window, is still rewritten on disk: Ctrl+Z does not undo it.
 - With unsaved changes, the "next / previous change" lines may move.
 
@@ -221,7 +221,7 @@ Installation: same as 0.2.0. If 0.2.0 is installed, it is updated. svn client 1.
 - **Conflicts.** The Conflicts panel in SVN Changes offers for each file: **Open merge editor** (Visual Studio 3-way editor), **Use mine**, **Use theirs**, **Mark as resolved**.
   - Tree conflicts are grouped, with **Mark all as resolved**.
   - The auxiliary files created by svn are placed under the conflicted file and not among the unversioned files.
-- **Cancel individual lines.** A Cancel button next to each diff block, or right-click > **SVN: Revert Selected Changes** on a selection. The button has not been verified in all Visual Studio diff views (to be verified).
+- **Cancel individual lines.** A Cancel button next to each diff block, or right-click > **SVN: Revert Selected Changes** on a selection. The button has not been verified in all Visual Studio diff views.
 - **Next / previous change in the diff.** Alt+F8 and Shift+Alt+F8. The shortcuts can be changed in the options.
 - **Revision indicator.** At the bottom of SVN Changes: green if the working copy is at the latest revision; orange, with "rN available — SVN Update", if others have committed. The check is read-only and runs every 5 minutes; the interval can be changed or disabled in Tools > Options.
 - **Recent.** Panel with search and preview of the last 25 commit messages per repository.
@@ -246,7 +246,7 @@ Known limitations:
 
 - Create branch/tag and a guided merge wizard are not present.
 - On very slow repositories Switch and Merge have no progress indicator.
-- Tested on Visual Studio 2026 (18.x); Visual Studio 2022 declared, not tested (to be verified).
+- Tested on Visual Studio 2026 (18.x); Visual Studio 2022 declared, not tested.
 
 ## 0.2.0 (2026-11-12)
 

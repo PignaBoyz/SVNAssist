@@ -18,7 +18,7 @@ Si cambia una voce: prima nei file `.user` (it e en), poi la stessa riga nel CHA
 - Versioni dalla più recente alla più vecchia, intestazione `## X.Y.Z (AAAA-MM-GG)`. Versione non ancora rilasciata: `## X.Y.Z (in preparazione)` / `(in preparation)`; la data si mette il giorno del tag.
 - Sotto l'intestazione: `Contenuti:` (una riga, elenco delle funzioni principali), `Installazione:` (una riga). Poi `### Novità`, `### Modifiche`, `### Correzioni` (solo quelle non vuote), nell'ordine fisso.
 - Una voce = un cambiamento visibile all'utente: `- **Titolo.** Cosa fa o cosa cambia.` Correzioni: `- **Titolo.** Prima: X. Ora: Y.` Sotto-punti come elenco annidato.
-- "(da verificare)" in coda alla voce se non provata in Visual Studio. Si toglie solo dopo la prova, non prima.
+- Mai "(da verificare)" / "(to be verified)" nelle note e nel CHANGELOG: i testi sono per gli utenti, che segnaleranno i bug. Cosa non è provato sta nella checklist `docs/verifica/X.Y.Z/`.
 - Versione non rilasciata a parte (es. 0.3.2): le sue voci passano alla versione che la include e la sezione dice "Include le modifiche della X.Y.Z, non rilasciata a parte". Nessuna sezione per una versione senza tag.
 - Una versione minore (X.Y.Z con Z > 0) ha solo Modifiche/Correzioni e nessuna immagine.
 - Nessuna voce interna: refactoring, test, strumenti e documenti stanno solo in "Dettagli tecnici".
@@ -26,7 +26,7 @@ Si cambia una voce: prima nei file `.user` (it e en), poi la stessa riga nel CHA
 ## 3. Prima di ogni release
 
 1. Elenco da `git log vA.B.C..HEAD --no-merges --format=%s`: ogni commit visibile all'utente ha la sua voce; ogni voce corrisponde ad almeno un commit.
-2. Le voci vengono dalla checklist `docs/verifica/X.Y.Z/` solo per ciò che è stato provato; il resto "(da verificare)".
+2. Le voci vengono dalla checklist `docs/verifica/X.Y.Z/` per ciò che è stato provato; il resto resta nella checklist, mai "(da verificare)" nei testi.
 3. Togliere "Versione in preparazione, in collaudo." da `vX.Y.Z.user.md` e `.user.en.md` e "(in preparazione)" dal CHANGELOG, con la data.
 4. Versione inglese uguale in struttura e numero di voci all'italiana; nomi dell'interfaccia identici a `Loc.cs` / `LocEn.cs` / `i18n.js` (non tradotti a memoria).
 5. Immagini della versione (solo principali) fatte DOPO il collaudo, con `node tools/screenshots-release.mjs --version X.Y.Z`.

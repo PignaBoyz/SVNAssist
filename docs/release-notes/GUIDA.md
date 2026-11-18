@@ -31,7 +31,7 @@ Le voci lunghe si dividono in elenchi annidati. Il blocco "Dettagli tecnici" pu�
 ## 4. Requisiti
 
 - Si scrive solo ciò che è stato verificato (versione di Visual Studio provata, client svn, runtime richiesto).
-- Ciò che è dichiarato ma non provato porta "(da verificare)".
+- Mai "(da verificare)" nei testi per gli utenti (decisione del 2026-11-18).
 - Si indica se la versione sostituisce la precedente e come installarla.
 
 ## 5. Come ricavare le voci
@@ -87,7 +87,7 @@ Prima l'italiano, validato dall'utente. Poi la traduzione inglese in `docs/relea
 - [ ] Nessun aggettivo di valutazione o di marketing, nessuno slogan nel titolo.
 - [ ] Nessun nome interno (file, classi, flag svn, JSON, RPC, WebView2, backend, SDK) fuori dai dettagli tecnici.
 - [ ] Correzioni nella forma "Prima: X. Ora: Y.".
-- [ ] Requisiti verificati; il resto marcato "(da verificare)".
+- [ ] Requisiti verificati; nessun "(da verificare)" nei testi.
 - [ ] Immagini presenti in `it` e `en` oppure segnaposto con nome file e descrizione.
 - [ ] Didascalie neutre sotto ogni immagine della UI vera; "Illustrazione:" / "Illustration:" sotto le ricostruzioni.
 - [ ] Link raw con il nome utente/repo e il percorso `img/<versione>/<lang>/` corretti (it nelle note italiane, en nelle inglesi).
