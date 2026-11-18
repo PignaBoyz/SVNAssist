@@ -70,6 +70,18 @@ public abstract class AiServiceBase : IAiService
     }
 
     /// <inheritdoc />
+    public Task<string> SummarizeIncomingAsync(string logText, string language, CancellationToken ct)
+    {
+        LastUsage = null;
+        var systemPrompt = "Sei un assistente per sviluppatori. Ti arriva l'elenco delle revisioni SVN che stanno per entrare nella working copy " +
+                           "(autore, messaggio e nomi dei file toccati; il contenuto dei file non c'è). Spiega a parole semplici, per chi non ha letto il log, " +
+                           "cosa sta cambiando (l'intento) e gli eventuali rischi (conflitti probabili con lavoro locale, file di configurazione o di build, " +
+                           "eliminazioni, modifiche molto ampie). Massimo 6 righe brevi, senza titoli, e non inventare nulla che non sia nel log." +
+                           GetLanguageInstruction(language);
+        return AskAsync(systemPrompt, logText, ct);
+    }
+
+    /// <inheritdoc />
     public async Task<string> ImproveCommitMessageAsync(string draft, string diff, string language, CancellationToken ct, string? projectInstructions = null, string? style = null)
     {
         var systemPrompt = "Sei un assistente per sviluppatori. Migliora questo messaggio di commit " +

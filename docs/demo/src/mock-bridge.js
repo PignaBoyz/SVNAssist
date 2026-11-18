@@ -254,6 +254,11 @@
   const C = {
     refresh: () => { S.vm.statusAuto = true; return vmRefresh(undefined, true); },
     update: () => vmUpdate(),
+    // Anteprima di SVN Update: e' dietro un'opzione spenta di default, la demo non la mostra (comandi presenti per il contratto).
+    incomingUpdate: () => vmUpdate(),
+    incomingCancel: () => render(),
+    incomingFixAuth: () => render(),
+    incomingFixModels: () => render(),
     updateToRevision: () => vmUpdateRev(),
     createPatch: () => { setStatus('Patch creata: C:\\Users\\demo\\changes.patch (demo: nessun file scritto).'); render(); },
     revealInExplorer: (a) => { setStatus('Esplora file: ' + a.key.slice(a.key.indexOf(':') + 1) + ' (demo).'); render(); },

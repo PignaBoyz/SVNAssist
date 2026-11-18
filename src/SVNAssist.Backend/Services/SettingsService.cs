@@ -39,6 +39,9 @@ internal static class SettingDefinitions
 
     /// <summary>true = il messaggio generato dall'AI scrive anche modello e costo (dove il provider lo dichiara). Spento di default.</summary>
     internal const string AiShowUsage = "aiShowUsage";
+
+    /// <summary>true = prima di SVN Update si vedono le revisioni in arrivo con il riassunto AI. Spento di default.</summary>
+    internal const string AiExplainIncoming = "aiExplainIncoming";
     internal const string WorkingCopyPath = "workingCopyPath";
     internal const string WindowTheme = "windowTheme";
 
@@ -66,6 +69,7 @@ internal static class SettingDefinitions
         [AiModel] = DefaultAiModel,
         [DefaultLanguage] = "auto",
         [AiShowUsage] = "false",
+        [AiExplainIncoming] = "false",
         [WorkingCopyPath] = "",
         [WindowTheme] = "auto",
         [RepoLayout] = SVNAssist.Models.RepoLayout.Default,
@@ -106,6 +110,9 @@ internal interface ISvnAssistSettings
 
     /// <summary>Se scrivere modello e costo nel messaggio generato dall'AI (default: no).</summary>
     Task<bool> GetAiShowUsageAsync(CancellationToken ct) => Task.FromResult(false);
+
+    /// <summary>Se SVN Update mostra prima le revisioni in arrivo con il riassunto AI (default: no).</summary>
+    Task<bool> GetAiExplainIncomingAsync(CancellationToken ct) => Task.FromResult(false);
 
     /// <summary>Percorso della working copy SVN (vuoto se auto-rilevato).</summary>
     Task<string> GetWorkingCopyPathAsync(CancellationToken ct);
@@ -187,6 +194,7 @@ internal sealed class HostSettings : ISvnAssistSettings
 
     public Task<string> GetAiProviderAsync(CancellationToken ct) => GetAsync(SettingDefinitions.AiProvider, ct);
     public async Task<bool> GetAiShowUsageAsync(CancellationToken ct) => string.Equals(await GetAsync(SettingDefinitions.AiShowUsage, ct), "true", StringComparison.OrdinalIgnoreCase);
+    public async Task<bool> GetAiExplainIncomingAsync(CancellationToken ct) => string.Equals(await GetAsync(SettingDefinitions.AiExplainIncoming, ct), "true", StringComparison.OrdinalIgnoreCase);
     public Task<string> GetClaudeModelAsync(CancellationToken ct) => GetAsync(SettingDefinitions.ClaudeModel, ct);
     public Task<string> GetAnthropicApiKeyAsync(CancellationToken ct) => GetAsync(SettingDefinitions.AnthropicApiKey, ct);
     public Task<string> GetCopilotModelAsync(CancellationToken ct) => GetAsync(SettingDefinitions.CopilotModel, ct);

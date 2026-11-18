@@ -348,7 +348,7 @@
     list.setAttribute('aria-busy', !!st.loading);
     U.setHTML(root.querySelector('#shl'), shelvedHTML(st));
     U.setHTML(root.querySelector('#foot'), foot(st));
-    const anyModal = !!(st.wizard && st.wizard.open) || !!(st.revPicker && st.revPicker.open) || !!(st.switchPicker && st.switchPicker.open) || !!(st.progress || st.switchWarn || st.cleanup || st.commitWarn || st.branchTag) || U.ops.hasShelve();
+    const anyModal = !!(st.wizard && st.wizard.open) || !!(st.revPicker && st.revPicker.open) || !!(st.switchPicker && st.switchPicker.open) || !!(st.progress || st.switchWarn || st.cleanup || st.commitWarn || st.incoming || st.branchTag) || U.ops.hasShelve();
     if (anyModal) rcClose(false); else rcRefresh();
     renderWizard(root, anyModal);
     renderRev(root, anyModal);

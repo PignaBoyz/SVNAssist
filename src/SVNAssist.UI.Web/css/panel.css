@@ -350,6 +350,16 @@ progress.obar::-webkit-progress-value{background:var(--acc2);border-radius:3px;t
 .ol .pt{overflow:hidden;text-overflow:ellipsis}
 .ol.c{background:var(--chip-fail-bg);color:var(--chip-fail-fg);font-weight:600}
 .ol.i{color:var(--fg3)}
+.wiz.inc{width:min(680px,100%)}
+.inc-ai{display:flex;flex-direction:column;gap:4px;padding:8px 10px;border-radius:6px;background:var(--acc-bg);border:1px solid var(--bd2)}
+.inc-ai.wiz-note{flex-direction:row;align-items:center;flex-wrap:wrap}
+.inc-sum{white-space:pre-wrap}
+.inc-list{list-style:none;margin:6px 0 0;padding:0;border:1px solid var(--bd2);border-radius:4px;background:var(--bg1);max-height:min(320px,45vh);overflow:auto}
+.inc-r{padding:6px 8px;border-bottom:1px solid var(--bd)}
+.inc-h{display:flex;align-items:baseline;gap:8px}
+.inc-m{margin:2px 0 4px;white-space:pre-wrap;word-break:break-word}
+.inc-f{list-style:none;margin:0;padding:0}
+.inc-more{padding:6px 8px}
 .osum{display:flex;gap:6px;align-items:center;padding:4px 8px;border-radius:4px;background:var(--chip-ok-bg);color:var(--chip-ok-fg);margin-top:4px}
 .rp-err.warnb{background:var(--warn-bg);color:var(--fg)}
 .ochips{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 6px}

@@ -147,7 +147,8 @@ internal sealed record ChangesState(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CleanupDialogDto? Cleanup = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CommitWarnDto? CommitWarn = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BranchTagDto? BranchTag = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ShelveDto>? Shelves = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ShelveDto>? Shelves = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IncomingDto? Incoming = null);
 
 /// <summary>Uno shelve (sezione "Shelved" di Changes): <c>Date</c> ISO locale, <c>Files</c> = file nella patch.</summary>
 internal sealed record ShelveDto(string Id, string Name, string Date, int Files);
@@ -225,6 +226,16 @@ internal sealed record SwitchWarnDto(string Target, DirtyCountsDto Counts, int T
 
 /// <summary>Domanda di "Commit All" con file non versionati: Count totali, Items i primi (max 10), More quanti non elencati.</summary>
 internal sealed record CommitWarnDto(int Count, IReadOnlyList<string> Items, int More);
+
+/// <summary>Anteprima di SVN Update: revisioni in arrivo (Items = le prime 50, More = non elencate, Count = totali) e riassunto AI.</summary>
+internal sealed record IncomingDto(string Branch, int Count, IReadOnlyList<IncomingRevDto> Items, int More, IncomingAiDto Ai);
+
+internal sealed record IncomingRevDto(long Rev, string Author, string Date, string Message, IReadOnlyList<IncomingFileDto> Files, int MoreFiles);
+
+internal sealed record IncomingFileDto(string Action, string Path);
+
+/// <summary>Riassunto AI: State = loading | none (AI non collegata) | done | error; Action = pulsante per l'errore riconoscibile.</summary>
+internal sealed record IncomingAiDto(string State, string Text, string Usage, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] StatusActionDto? Action);
 
 /// <summary>Finestra delle opzioni del Cleanup. <c>Extras</c> falso = svn &lt; 1.9: le opzioni oltre il cleanup semplice si disabilitano.</summary>
 internal sealed record CleanupDialogDto(bool Extras, string SvnVersion, string From);

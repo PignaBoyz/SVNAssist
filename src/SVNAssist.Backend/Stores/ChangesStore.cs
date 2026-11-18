@@ -126,6 +126,8 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             workingCopyPath: () => WorkingCopyPath,
             dialogs: dialogs);
         CommitMessage.Changed += NotifyChanged;
+        Incoming = new IncomingStore(svnService, aiServiceFactory);
+        Incoming.Changed += NotifyChanged;
         RevPicker = new RevisionPickerStore(svnService);
         RevPicker.Changed += NotifyChanged;
         Switch = new SwitchPickerStore(svnService, settingsService, recentTargetsFile);
@@ -185,6 +187,9 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
 
     /// <summary>Messaggio di commit e azioni AI.</summary>
     internal CommitStore CommitMessage { get; }
+
+    /// <summary>Anteprima delle revisioni in arrivo prima di "SVN Update".</summary>
+    internal IncomingStore Incoming { get; }
 
     /// <summary>Scelta guidata della revisione per "Update to revision".</summary>
     internal RevisionPickerStore RevPicker { get; }
@@ -587,7 +592,8 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                 _cleanupOpen ? new CleanupDialogDto(CleanupOptions.ExtrasSupported(SvnVersionParsed), _svnVersion ?? string.Empty, _cleanupReturn?.Name ?? string.Empty) : null,
                 _commitWarn ? BuildCommitWarn() : null,
                 BranchTag.GetSnapshot(Total(CountDirty(_entries.Where(e => !IsVsFolder(e)).Select(e => e.Status))) > 0),
-                _shelves.Count == 0 ? null : _shelves.Select(s => new ShelveDto(s.Id, s.Name, s.Date.ToString("yyyy-MM-ddTHH:mm:ss"), s.Files)).ToList());
+                _shelves.Count == 0 ? null : _shelves.Select(s => new ShelveDto(s.Id, s.Name, s.Date.ToString("yyyy-MM-ddTHH:mm:ss"), s.Files)).ToList(),
+                Incoming.GetSnapshot());
         }
     }
 
@@ -799,7 +805,21 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                     await RefreshAsync(ct, reloadBranch: true, showLoading: true);
                 break;
             case "update":
+                if (!await ShowIncomingAsync(ct))
+                    await RunExclusiveAsync(() => UpdateCoreAsync(ct));
+                break;
+            case "incomingUpdate":
+                Incoming.Close();
                 await RunExclusiveAsync(() => UpdateCoreAsync(ct));
+                break;
+            case "incomingCancel":
+                Incoming.Close();
+                break;
+            case "incomingFixAuth":
+            case "incomingFixModels":
+                var failed = Incoming.FailedProvider;
+                Incoming.Close();
+                await (name == "incomingFixAuth" ? Wizard.OpenAuthAsync(failed, ct) : Wizard.OpenModelsAsync(failed, ct));
                 break;
             case "updateToRevision":
                 await OpenRevisionPickerAsync([WorkingCopyPath], ct);
@@ -1990,6 +2010,31 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
         }
 
         return found.Values.OrderBy(e => e.FullPath.Length).ToList();
+    }
+
+    /// <summary>
+    /// Prima di SVN Update: se sul server ci sono revisioni nuove apre l'anteprima (elenco + riassunto AI) e ferma qui (<c>true</c>);
+    /// senza revisioni in arrivo, o se non si riesce a leggerle, <c>false</c>: l'Update parte come sempre.
+    /// </summary>
+    private async Task<bool> ShowIncomingAsync(CancellationToken ct)
+    {
+        var wc = WorkingCopyPath;
+        // Funzione facoltativa (Tools > Options), spenta di default: spenta = SVN Update come sempre, nessuna chiamata AI.
+        if (string.IsNullOrWhiteSpace(wc) || OperationRunning || !await _settingsService.GetAiExplainIncomingAsync(ct))
+            return false;
+        string label;
+        lock (_stateLock)
+            label = _branchName;
+        try
+        {
+            var info = await _svnService.GetInfoAsync(wc, ct);
+            return await Incoming.OpenAsync(info.Url, info.Revision, label, ct);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            BackendLog.Warn("Anteprima Update non disponibile: " + ex.Message);
+            return false;
+        }
     }
 
     private async Task UpdateCoreAsync(CancellationToken ct)
