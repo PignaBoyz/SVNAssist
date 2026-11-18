@@ -371,7 +371,8 @@ namespace SVNAssist.Host
 
         public Task RunInTerminalAsync(string command, string workingDir)
         {
-            var psi = new ProcessStartInfo("cmd.exe", "/k " + command) { UseShellExecute = true };
+            // La riga e' in sintassi PowerShell (ConsoleLauncher.ShellCommand: `& "percorso"`, `irm ... | iex`): in cmd /k un "&" iniziale e' un errore e la finestra si chiude.
+            var psi = new ProcessStartInfo("powershell.exe", "-NoExit -Command \"" + command.Replace("\"", "\\\"") + "\"") { UseShellExecute = true };
             if (!string.IsNullOrEmpty(workingDir) && Directory.Exists(workingDir)) psi.WorkingDirectory = workingDir;
             Process.Start(psi);
             return Task.CompletedTask;
