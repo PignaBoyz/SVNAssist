@@ -84,6 +84,23 @@
     U.btn('btn', t('No, solo i versionati'), null, 'commitWarnNo', null, t('Committa solo le modifiche dei file versionati; i non versionati restano fuori')) +
     U.btn('btn primary', t('Sì, aggiungi e committa'), 'check', 'commitWarnAdd', null, t('Esegue svn add sui file non versionati e li committa insieme al resto')) + `</div></div></div>`;
 
+  // Anteprima di SVN Update: revisioni in arrivo + riassunto AI (facoltativo). Update / Annulla sempre disponibili.
+  O.incomingHTML = s => {
+    const ai = s.ai || {}, n = s.count;
+    const aiBox = ai.state === 'loading' ? `<div class="inc-ai muted"><span class="spin"></span> ${esc(t('Riassunto AI in preparazione…'))}</div>`
+      : ai.state === 'done' ? `<div class="inc-ai"><b>${U.icon('spark')} ${esc(t('Riassunto AI'))}</b><div class="inc-sum">${esc(ai.text)}</div>${ai.usage ? `<small class="muted">${esc(ai.usage)}</small>` : ''}<small class="muted">${esc(t('All\'AI sono stati inviati solo messaggi di log e nomi dei file, mai il contenuto.'))}</small></div>`
+      : ai.state === 'error' ? `<div class="inc-ai wiz-note err" role="alert">${U.icon('warn')} <span class="inc-sum">${esc(ai.text)}</span>${ai.action ? ' ' + U.btn('btn sm', ai.action.label, null, ai.action.cmd, null, '') : ''}</div>`
+      : `<div class="inc-ai muted">${esc(t('L\'AI non è collegata: il riassunto non c\'è, ma l\'elenco qui sotto è completo.'))}</div>`;
+    const rev = r => `<li class="inc-r"><div class="inc-h"><b class="rv">r${r.rev}</b><span class="au">${esc(r.author)}</span><span class="dtm muted">${U.fmtDate(r.date)}</span></div>` +
+      `<div class="inc-m">${esc(r.message)}</div><ul class="inc-f">${r.files.map(f => `<li class="ol"><span class="st st-${esc(f.action)}">${esc(f.action)}</span><span class="pt" title="${esc(f.path)}">${esc(f.path)}</span></li>`).join('')}` +
+      `${r.moreFiles ? `<li class="ol i"><span class="st"></span><span class="pt muted">${esc(t('… e altri {0} file', r.moreFiles))}</span></li>` : ''}</ul></li>`;
+    return `<div class="wiz-scrim"><div class="wiz rp inc" role="dialog" aria-modal="true" aria-labelledby="ops-t"><div class="wiz-h"><h3 id="ops-t" tabindex="-1">SVN Update</h3><span class="fill"></span>${U.btn('ib', '', 'x', 'incomingCancel', null, t('Annulla (Esc)'))}</div><div class="wiz-b">` +
+      `<p>${esc(n === 1 ? t('Sul server c\'è 1 revisione nuova per {0}.', s.branch || 'questo ramo') : t('Sul server ci sono {0} revisioni nuove per {1}.', n, s.branch || 'questo ramo'))}</p>${aiBox}` +
+      `<ul class="inc-list">${s.items.map(rev).join('')}${s.more ? `<li class="inc-more muted">${esc(t('… e altre {0} revisioni più vecchie', s.more))}</li>` : ''}</ul>` +
+      `</div><div class="wiz-f">${U.btn('btn ghost', t('Annulla'), null, 'incomingCancel', null, t('Chiude senza aggiornare'))}<span class="fill"></span>` +
+      U.btn('btn primary', t('Aggiorna ora'), 'down', 'incomingUpdate', null, t('Esegue svn update')) + `</div></div></div>`;
+  };
+
   O.cleanupHTML = c => {
     const ck = (k, label, hint, o = {}) => {
       const on = o.mirror != null ? o.mirror : opt[k], off = o.mirror != null || (o.extra && !c.extras);
@@ -148,13 +165,13 @@
       if (was0 && box.__prev && box.__prev.isConnected) box.__prev.focus();
       return false;
     }
-    const open = !!(st.progress || st.switchWarn || st.cleanup || st.commitWarn || st.branchTag || sh), was = !!box.__open, a = document.activeElement;
-    const kind = st.progress ? 'p' : st.switchWarn ? 'w' : st.cleanup ? 'c' : st.commitWarn ? 'k' : st.branchTag ? 'b' : sh ? 's' : '';
+    const open = !!(st.progress || st.switchWarn || st.cleanup || st.commitWarn || st.incoming || st.branchTag || sh), was = !!box.__open, a = document.activeElement;
+    const kind = st.progress ? 'p' : st.switchWarn ? 'w' : st.cleanup ? 'c' : st.commitWarn ? 'k' : st.incoming ? 'i' : st.branchTag ? 'b' : sh ? 's' : '';
     if (open && (!was || box.__kind !== kind)) { if (kind === 'c') O.resetCleanup(); if (kind === 'b') O.btReset(st.branchTag); if (!was) box.__prev = a; }
     const btId = kind === 'b' && was && box.contains(a) ? a.id : '', btCaret = btId && 'selectionStart' in a ? a.selectionStart : 0;
     const lines = box.querySelector('#ops-lines'), stick = !lines || lines.scrollTop + lines.clientHeight >= lines.scrollHeight - 8, top = lines ? lines.scrollTop : 0;
     const focusKey = box.contains(a) ? (a.dataset && (a.dataset.ock || ('opsOk' in a.dataset ? 'ok' : ''))) : '';
-    const changed = U.setHTML(box, st.progress ? O.progressHTML(st.progress) : st.switchWarn ? O.warnHTML(st.switchWarn) : st.cleanup ? O.cleanupHTML(st.cleanup) : st.commitWarn ? O.commitWarnHTML(st.commitWarn) : st.branchTag ? O.branchTagHTML(st.branchTag) : sh ? O.shelveHTML() : '');
+    const changed = U.setHTML(box, st.progress ? O.progressHTML(st.progress) : st.switchWarn ? O.warnHTML(st.switchWarn) : st.cleanup ? O.cleanupHTML(st.cleanup) : st.commitWarn ? O.commitWarnHTML(st.commitWarn) : st.incoming ? O.incomingHTML(st.incoming) : st.branchTag ? O.branchTagHTML(st.branchTag) : sh ? O.shelveHTML() : '');
     const l2 = box.querySelector('#ops-lines'); if (l2) l2.scrollTop = stick ? l2.scrollHeight : top;
     if (open && changed && kind === 'b') {
       const f = box.querySelector(btId ? '#' + btId : '#bt-name');   // primo giro: il campo nome; poi il campo in cui si stava scrivendo
@@ -197,7 +214,7 @@
     box.addEventListener('pointerdown', e => { const b = e.target.closest('[data-cmd="opCancel"]'); if (b && !b.disabled && e.button === 0) U.bridge.send('opCancel'); });
     document.addEventListener('keydown', e => {
       if (!box.__open) return; const st = getState();
-      if (e.key === 'Escape') { if (sh) { e.preventDefault(); shClose(); } else if (st.cleanup && !st.progress) { e.preventDefault(); U.bridge.send('cleanupCancel'); } else if (st.switchWarn && !st.progress) { e.preventDefault(); U.bridge.send('switchWarnCancel'); } else if (st.commitWarn && !st.progress) { e.preventDefault(); U.bridge.send('commitWarnCancel'); } else if (st.branchTag && !st.progress) { e.preventDefault(); if (!st.branchTag.busy) U.bridge.send('branchTagCancel'); } else if (st.progress && !st.progress.running) { e.preventDefault(); U.bridge.send('progressClose', { conflicts: false }); } return; }
+      if (e.key === 'Escape') { if (sh) { e.preventDefault(); shClose(); } else if (st.cleanup && !st.progress) { e.preventDefault(); U.bridge.send('cleanupCancel'); } else if (st.switchWarn && !st.progress) { e.preventDefault(); U.bridge.send('switchWarnCancel'); } else if (st.commitWarn && !st.progress) { e.preventDefault(); U.bridge.send('commitWarnCancel'); } else if (st.incoming && !st.progress) { e.preventDefault(); U.bridge.send('incomingCancel'); } else if (st.branchTag && !st.progress) { e.preventDefault(); if (!st.branchTag.busy) U.bridge.send('branchTagCancel'); } else if (st.progress && !st.progress.running) { e.preventDefault(); U.bridge.send('progressClose', { conflicts: false }); } return; }
       if (e.key !== 'Tab') return;
       const f = [...box.querySelectorAll('button:not(:disabled),input:not(:disabled),textarea:not(:disabled),[tabindex="0"]')]; if (!f.length) return;
       const a = document.activeElement, first = f[0], last = f[f.length - 1];

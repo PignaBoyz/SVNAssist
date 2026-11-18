@@ -128,6 +128,10 @@ namespace SVNAssist.Host
         [LDescription("Dopo \"Genera con AI\" la riga di stato scrive il modello usato e il costo, solo se il provider lo dichiara (Copilot: richieste premium); altrimenti \"costo non disponibile\". Non finisce nel messaggio di commit.")]
         public bool AiShowUsage { get; set; }
 
+        [LCategory("Commit message AI"), LDisplayName("Spiega le revisioni in arrivo prima di SVN Update"), DefaultValue(false)]
+        [LDescription("Prima di SVN Update mostra le revisioni in arrivo (autore, messaggio, file) e un riassunto AI a parole semplici, con modello e consumo; poi chiede Aggiorna o Annulla. All'AI vanno solo messaggi di log e nomi dei file. Spento: SVN Update parte subito, senza AI.")]
+        public bool AiExplainIncoming { get; set; }
+
         [LCategory("Generale"), LDisplayName("Working Copy Path")]
         [LDescription("Se impostato ha la precedenza sull'auto-rilevamento dalla solution aperta.")]
         public string WorkingCopyPath { get; set; } = "";
@@ -228,6 +232,7 @@ namespace SVNAssist.Host
                 ["aiModel"] = Model(AiModel, "openai/gpt-4o-mini"),
                 ["defaultLanguage"] = Pick(DefaultLanguage, new LanguageConverter(), "auto"),
                 ["aiShowUsage"] = AiShowUsage ? "true" : "false",
+                ["aiExplainIncoming"] = AiExplainIncoming ? "true" : "false",
                 ["workingCopyPath"] = WorkingCopyPath ?? "",
                 ["repoLayout"] = string.IsNullOrWhiteSpace(RepoLayout) ? "trunk/branches/tags" : RepoLayout,
                 ["headCheckMinutes"] = Math.Max(0, Math.Min(24 * 60, HeadCheckMinutes)).ToString(System.Globalization.CultureInfo.InvariantCulture),
@@ -265,6 +270,7 @@ namespace SVNAssist.Host
                 case "aiApiKey": AiApiKey = value; break;
                 case "aiModel": AiModel = value; break;
                 case "defaultLanguage": DefaultLanguage = value; break;
+                case "aiExplainIncoming": AiExplainIncoming = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase); break;
                 case "aiShowUsage": AiShowUsage = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase); break;
                 case "workingCopyPath": WorkingCopyPath = value; break;
                 case "repoLayout": RepoLayout = value; break;

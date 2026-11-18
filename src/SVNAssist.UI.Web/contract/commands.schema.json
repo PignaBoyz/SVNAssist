@@ -2613,6 +2613,90 @@
       }
     },
     {
+      "title": "incomingUpdate",
+      "description": "Anteprima di SVN Update (opzione aiExplainIncoming): chiude l anteprima ed esegue l update.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "incomingUpdate"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "incomingCancel",
+      "description": "Anteprima di SVN Update: chiude senza aggiornare.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "incomingCancel"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "incomingFixAuth",
+      "description": "Anteprima di SVN Update: riassunto AI fallito per accesso scaduto, apre la procedura guidata di accesso.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "incomingFixAuth"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "incomingFixModels",
+      "description": "Anteprima di SVN Update: riassunto AI fallito per il modello, apre l elenco modelli.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "incomingFixModels"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
       "title": "branchTagOpen",
       "description": "SVN Branch/Tag: apre il dialogo (stato branchTag). kind = branch | tag (scelta iniziale).",
       "type": "object",

@@ -51,4 +51,7 @@ public interface IAiService
     /// <param name="style"><c>"shorter"</c> o <c>"detailed"</c> per accorciare/dettagliare il messaggio corrente; <c>null</c> = solo migliorare.</param>
     /// <returns>Il messaggio di commit migliorato.</returns>
     Task<string> ImproveCommitMessageAsync(string draft, string diff, string language, CancellationToken ct, string? projectInstructions = null, string? style = null);
+
+    /// <summary>Riassunto a parole semplici delle revisioni in arrivo con SVN Update (solo log e nomi file, mai contenuto): intento e rischi, breve.</summary>
+    Task<string> SummarizeIncomingAsync(string logText, string language, CancellationToken ct) => throw new NotSupportedException();
 }

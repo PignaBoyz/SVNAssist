@@ -211,6 +211,9 @@ internal sealed class FallbackAiService : IAiService
     public Task<string> ImproveCommitMessageAsync(string draft, string diff, string language, CancellationToken ct, string? projectInstructions = null, string? style = null)
         => TryEachAsync(s => s.ImproveCommitMessageAsync(draft, diff, language, ct, projectInstructions, style), ct);
 
+    public Task<string> SummarizeIncomingAsync(string logText, string language, CancellationToken ct)
+        => TryEachAsync(s => s.SummarizeIncomingAsync(logText, language, ct), ct);
+
     private async Task<string> TryEachAsync(Func<IAiService, Task<string>> call, CancellationToken ct)
     {
         var errors = new List<string>();

@@ -16,6 +16,8 @@ internal sealed class StubSettings : ISvnAssistSettings
     public string Theme { get; set; } = "auto";
     public string UiLanguage { get; set; } = "it";
     public bool ShowUsage { get; set; }
+    public bool ExplainIncoming { get; set; }
+    public Task<bool> GetAiExplainIncomingAsync(CancellationToken ct) => Task.FromResult(ExplainIncoming);
     public Task<bool> GetAiShowUsageAsync(CancellationToken ct) => Task.FromResult(ShowUsage);
 
     public Task<string> GetAiProviderAsync(CancellationToken ct) => Task.FromResult(Provider);
@@ -491,6 +493,16 @@ internal sealed class RecordingAi : IAiService
         Languages.Add(language);
         Styles.Add(style);
         return Task.FromResult("migliorato: " + draft);
+    }
+
+    /// <summary>Testi inviati da SVN Update (solo log e nomi file) ed errore da simulare.</summary>
+    public List<string> IncomingPrompts { get; } = [];
+    public string? IncomingError { get; set; }
+
+    public Task<string> SummarizeIncomingAsync(string logText, string language, CancellationToken ct)
+    {
+        IncomingPrompts.Add(logText);
+        return IncomingError is not null ? throw new InvalidOperationException(IncomingError) : Task.FromResult("Cambi nel modulo Core, rischio basso.");
     }
 }
 

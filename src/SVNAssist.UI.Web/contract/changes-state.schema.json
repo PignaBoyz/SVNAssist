@@ -1283,6 +1283,125 @@
           "type": "boolean"
         }
       }
+    },
+    "incoming": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Anteprima di SVN Update (solo con l opzione aiExplainIncoming accesa e revisioni in arrivo): elenco + riassunto AI facoltativo. Comandi: incomingUpdate / incomingCancel / incomingFixAuth / incomingFixModels. items = le prime 50 revisioni, more = non elencate, count = totali.",
+      "required": [
+        "branch",
+        "count",
+        "items",
+        "more",
+        "ai"
+      ],
+      "properties": {
+        "branch": {
+          "type": "string"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "more": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "rev",
+              "author",
+              "date",
+              "message",
+              "files",
+              "moreFiles"
+            ],
+            "properties": {
+              "rev": {
+                "type": "integer"
+              },
+              "author": {
+                "type": "string"
+              },
+              "date": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "moreFiles": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "files": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "action",
+                    "path"
+                  ],
+                  "properties": {
+                    "action": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "ai": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "state",
+            "text",
+            "usage"
+          ],
+          "description": "state: loading | none (AI non collegata) | done | error; usage = riga modello+token+costo; action = pulsante per errori AI riconoscibili.",
+          "properties": {
+            "state": {
+              "enum": [
+                "loading",
+                "none",
+                "done",
+                "error"
+              ]
+            },
+            "text": {
+              "type": "string"
+            },
+            "usage": {
+              "type": "string"
+            },
+            "action": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "label",
+                "cmd"
+              ],
+              "properties": {
+                "label": {
+                  "type": "string"
+                },
+                "cmd": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "$defs": {
