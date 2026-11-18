@@ -84,8 +84,28 @@ namespace SVNAssist.Host
     /// piu' windowTheme. VS le salva da solo nel registro (DialogPage).
     /// </summary>
     [Guid(Ids.OptionsPageGuid)]
-    public sealed class SvnAssistOptions : DialogPage
+    public sealed class SvnAssistOptions : UIElementDialogPage
     {
+        private WebViewHost _child;
+
+        // La pagina mostra la UI web moderna (vista "settings"), non la griglia delle proprieta': le proprieta' restano il modello dei dati (registro).
+        protected override System.Windows.UIElement Child => _child ?? (_child = new WebViewHost("settings", SVNAssistPackage.Instance.Host));
+
+        protected override void OnActivate(CancelEventArgs e)
+        {
+            base.OnActivate(e);
+            SVNAssistPackage.Instance?.Host?.PushSettingsState(); // valori aggiornati a ogni apertura (il menu Lingua o la procedura guidata possono averli cambiati)
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) { _child?.DisposeHost(); _child = null; }
+            base.Dispose(disposing);
+        }
+
+        /// <summary>Dopo una modifica dalla pagina web: stessa notifica di OK in Options.</summary>
+        internal static void RaiseChanged() => Changed?.Invoke();
+
         internal const string GitHubModelsEndpoint = "https://models.github.ai/inference/chat/completions";
         internal const string LegacyGitHubModelsEndpoint = "https://models.inference.ai.azure.com/chat/completions";
 
@@ -277,6 +297,9 @@ namespace SVNAssist.Host
                 case "headCheckMinutes": { int n; HeadCheckMinutes = int.TryParse(value, out n) ? n : 5; break; }
                 case "windowTheme": WindowTheme = value; break;
                 case "uiLanguage": UiLanguage = value; break;
+                case "showSccGlyphs": ShowSccGlyphs = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase); break;
+                case "nextChangeShortcut": NextChangeShortcut = value; break;
+                case "previousChangeShortcut": PreviousChangeShortcut = value; break;
                 default: return false;
             }
             return true;

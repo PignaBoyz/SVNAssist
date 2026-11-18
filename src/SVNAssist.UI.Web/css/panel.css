@@ -402,3 +402,17 @@ progress.obar::-webkit-progress-value{background:var(--acc2);border-radius:3px;t
 .mapl li{padding:1px 0}
 .mtag{display:inline-flex;align-items:center;gap:3px;padding:0 6px;margin-right:4px;border-radius:8px;border:1px solid var(--bd2);color:var(--ok-fg,var(--fg2));font-size:11px}
 .lr.mrem{box-shadow:inset 3px 0 0 var(--warn)}
+
+/* ---- Impostazioni (Tools > Options > SVNAssist) ---- */
+html[data-view=settings] body{background:var(--bg1)}
+.settings{height:100vh;overflow:auto;padding:0 18px 24px;max-width:860px;margin:0 auto}
+.set-h{display:flex;align-items:baseline;gap:12px;padding:14px 0 6px}
+.set-h h2{margin:0;font-size:1.3em}
+.set-card{background:var(--bg2);border:1px solid var(--bd2);border-radius:8px;padding:6px 14px 8px;margin:12px 0}
+.set-card h3{margin:8px 0 4px;font-size:1.02em;color:var(--acc2)}
+.set-r{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:9px 0;border-top:1px solid var(--bd)}
+.set-card h3+.set-r{border-top:0}
+.set-l{display:flex;flex-direction:column;gap:2px;flex:1 1 55%;min-width:0}
+.set-c{flex:1 1 45%;display:flex;align-items:center;gap:6px;min-width:0}
+.set-c select,.set-c input[type=text],.set-c input[type=number],.set-c input[type=password]{background:var(--bg1);border:1px solid var(--bd2);border-radius:4px;padding:5px 8px;width:100%;color:var(--fg)}
+.set-c input[type=checkbox]{width:18px;height:18px;accent-color:var(--acc)}

@@ -4,12 +4,13 @@ List of SVNAssist changes by version, from the most recent to the oldest. Button
 
 ## 0.6.1 (in preparation)
 
-Contents: summary of incoming revisions based on the real changes, Copilot AI credits. Installs over 0.6.0.
+Contents: Options with the modern interface, summary of incoming revisions based on the real changes, Copilot AI credits. Installs over 0.6.0.
 
 Installation: same as 0.2.0. Not tested in Visual Studio (to be verified).
 
 ### Changes
 
+- **Options with the modern interface.** Tools > Options > SVNAssist (and the **General** link of the new Visual Studio Settings) shows the same interface as Changes and Log, in sections: AI commit messages, Models and keys, General, Shortcuts. Changes apply right away, API keys included (encrypted, never read back into the page). It is not yet the native Settings registration: the "not migrated yet" notice in Settings stays (to be verified).
 - **The summary of incoming revisions explains what came in.** Before: it said that files had been modified. Now: it reads the real changes of each revision (`svn diff`) and says, naming the author, what changes in the behavior of the code, for example "Andrea removed the bottleneck from the message queue". No more lists of files. With many revisions the summary says how many it is based on (to be verified).
   - The AI now receives log messages and the changes (diff) of the revisions; for sensitive files (`.env`, keys, certificates) only the name. The text under the summary and the option description say so.
 - **GitHub Copilot AI credits.** With **Show model and cost in the generated message** the Copilot status line shows model, tokens and AI credits spent (the ones you see on GitHub), for example "gpt-6-luna · 1,200 tokens in / 300 out · 0.25 AI credits". If Copilot does not report them nothing is written, never zero; if it reports them only for some calls it writes "≥ … (partial)" (to be verified, including the credit conversion).

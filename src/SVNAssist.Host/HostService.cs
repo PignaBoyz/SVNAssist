@@ -62,6 +62,7 @@ namespace SVNAssist.Host
             try { var m = JObject.Parse(json); type = (string)m["type"]; id = m["id"]; }
             catch { return; }
             if (type != "ready" && type != "cmd") return;
+            if (view == "settings") { await HandleSettingsAsync(type, json).ConfigureAwait(false); return; } // vista dentro Tools > Options: la gestisce l'host, senza backend
 
             if (type == "ready")
             {
@@ -84,6 +85,47 @@ namespace SVNAssist.Host
                 else
                     await PushAsync(view, Event("toast", Loc.T("Servizio SVNAssist non disponibile: {0}", ex.Message))).ConfigureAwait(false);
             }
+        }
+
+        private static readonly string[] SecretKeys = { "anthropicApiKey", "aiApiKey" };
+
+        /// <summary>Stato della pagina Impostazioni: i valori (mai le API key, solo se sono impostate) e la lingua.</summary>
+        public void PushSettingsState()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            var o = _pkg.Options;
+            var d = o.ToDictionary();
+            d["showSccGlyphs"] = o.ShowSccGlyphs ? "true" : "false";
+            d["nextChangeShortcut"] = o.NextChangeShortcut ?? "";
+            d["previousChangeShortcut"] = o.PreviousChangeShortcut ?? "";
+            var values = new JObject();
+            foreach (var kv in d) if (!SecretKeys.Contains(kv.Key, StringComparer.OrdinalIgnoreCase)) values[kv.Key] = kv.Value;
+            var msg = new JObject
+            {
+                ["v"] = 1, ["type"] = "state", ["view"] = "settings", ["lang"] = o.EffectiveLanguage,
+                ["state"] = new JObject { ["values"] = values, ["hasAnthropicKey"] = !string.IsNullOrEmpty(o.AnthropicApiKey), ["hasAiKey"] = !string.IsNullOrEmpty(o.AiApiKey) },
+            };
+            Find("settings")?.Post(msg.ToString(Newtonsoft.Json.Formatting.None));
+        }
+
+        private async Task HandleSettingsAsync(string type, string json)
+        {
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            try
+            {
+                if (type == "cmd")
+                {
+                    var m = JObject.Parse(json);
+                    var name = (string)m["name"]; var a = m["args"] as JObject;
+                    var key = (string)a?["key"]; var value = (string)a?["value"] ?? "";
+                    var secret = key != null && SecretKeys.Contains(key);
+                    if (!((name == "settingsSet" && !secret) || (name == "settingsSecret" && secret)) || !_pkg.Options.TrySet(key, value)) { Log.Write("impostazione rifiutata: " + name + " " + key); return; }
+                    _pkg.Options.SaveSettingsToStorage();
+                    SvnAssistOptions.RaiseChanged(); // lingua, tema, scorciatoie, glifi e backend leggono i nuovi valori
+                }
+                PushSettingsState();
+            }
+            catch (Exception ex) { Log.Write("settings view: " + ex.Message); }
         }
 
         /// <summary>

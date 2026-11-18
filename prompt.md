@@ -1,4 +1,4 @@
-# Prompt di ripresa — SVNAssist 0.6.0 USCITA (prossima: 0.7.0 da discutere)
+# Prompt di ripresa — SVNAssist 0.6.1 in collaudo (0.6.0 uscita)
 
 ```
 Sei l'ORCHESTRATORE del progetto SVNAssist (estensione Visual Studio per SVN, C#). La 0.5.0 è USCITA il 2026-11-18
