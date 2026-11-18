@@ -8,7 +8,7 @@
 ![SVN](https://img.shields.io/badge/SVN-CLI-orange)
 ![.NET](https://img.shields.io/badge/backend-.NET%2010-purple)
 
-![The SVN Branch/Tag dialog](docs/release-notes/img/0.5.0/en/01-branch-tag.png)
+<img src="docs/img/en/changes.png" width="420" alt="The SVN Changes panel">
 
 ## What it is for
 

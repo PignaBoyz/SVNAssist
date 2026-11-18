@@ -8,7 +8,7 @@ Italiano · [English](README.en.md)
 ![SVN](https://img.shields.io/badge/SVN-CLI-orange)
 ![.NET](https://img.shields.io/badge/backend-.NET%2010-purple)
 
-![Il dialogo SVN Branch/Tag](docs/release-notes/img/0.5.0/it/01-branch-tag.png)
+<img src="docs/img/it/changes.png" width="420" alt="Il pannello SVN Changes">
 
 ## A cosa serve
 

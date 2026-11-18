@@ -5,6 +5,15 @@ import { boxOf, collapseConflicts, menuItem } from './_common.mjs';
 
 export const scenes = [
   {
+    id: 'readme-changes', file: 'changes.png', kind: 'ui',
+    desc: 'Pannello SVN Changes generico per il README (non fa parte delle immagini della versione)',
+    async run({ ui, page, shot }) {
+      await ui.openChanges();
+      await collapseConflicts(ui, page);
+      return shot(await ui.box('#dock', 0, 0, 0, 640));
+    },
+  },
+  {
     id: 'branch-tag', file: '01-branch-tag.png', kind: 'ui',
     desc: 'SVN Branch/Tag...: dialogo con Branch o Tag, nome, origine, messaggio di log e Passa subito al nuovo branch',
     async run({ ui, page, shot, T }) {
