@@ -596,6 +596,8 @@ namespace SVNAssist
             ["Nessuna modifica nelle righe selezionate."] = "No changes in the selected lines.",
             ["Annullate {0} righe"] = "Reverted {0} lines",
             ["Annulla questa modifica (riporta a BASE)"] = "Revert this change (back to BASE)",
+            ["Annullare questa modifica (righe {0}-{1})? Il blocco torna alla versione BASE."] = "Revert this change (lines {0}-{1})? The block goes back to the BASE version.",
+            ["Annulla modifica"] = "Revert change",
             ["Nessun file aperto nell'editor."] = "No file is open in the editor.",
             ["Impossibile salvare il file prima di annullare le righe."] = "Cannot save the file before reverting the lines.",
             ["Mostra lo stato SVN in Solution Explorer"] = "Show SVN status in Solution Explorer",

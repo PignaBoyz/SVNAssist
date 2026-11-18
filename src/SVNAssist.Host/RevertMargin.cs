@@ -132,6 +132,8 @@ namespace SVNAssist.Host
             var buf = _buffer?.BaseRightBuffer ?? _buffer?.RightBuffer;
             if (pkg == null || buf == null || !_p.Documents.TryGetTextDocument(buf, out var doc)) return;
             var file = doc.FilePath;
+            // conferma come in Git: l'annulla riscrive il file su disco e non c'e' Ctrl+Z
+            if (PromptDialog.Show(Loc.T("Annullare questa modifica (righe {0}-{1})? Il blocco torna alla versione BASE.", from, to), new[] { Loc.T("Annulla modifica"), Loc.T("Annulla") }) != 0) return;
             var adapter = _p.Adapters.GetBufferAdapter(buf) as IVsPersistDocData;
             pkg.JoinableTaskFactory.RunAsync(() => pkg.RevertRangeAsync(file, from, to, adapter)).FileAndForget("SVNAssist/revertGlyph");
         }
