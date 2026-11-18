@@ -1,12 +1,12 @@
 # Changelog
 
-Elenco delle modifiche di SVNAssist per versione, dalla più recente alla più vecchia. I nomi di pulsanti, menu e finestre sono quelli dell'interfaccia, in inglese. Le voci con "" sono dichiarate ma non ancora provate in Visual Studio.
+Elenco delle modifiche di SVNAssist per versione, dalla più recente alla più vecchia. I nomi di pulsanti, menu e finestre sono quelli dell'interfaccia, in inglese.
 
 ## 0.6.1 (2026-11-18)
 
 Contenuti: Options con l'interfaccia moderna, riassunto delle revisioni in arrivo basato sulle modifiche vere, crediti AI di Copilot. Si installa sopra la 0.6.0.
 
-Installazione: come la 0.2.0. Non provata in Visual Studio.
+Installazione: come la 0.2.0.
 
 ### Modifiche
 
@@ -23,7 +23,7 @@ Installazione: come la 0.2.0. Non provata in Visual Studio.
 
 Contenuti: spiegazione AI delle revisioni in arrivo prima di SVN Update (opzione), modello e consumo dell'AI in una riga leggibile, Gemini come provider AI, Apri file di questa revisione nell'editor, Copia percorso nel repository, conferma sul pulsante Annulla del diff.
 
-Installazione: come la 0.2.0. Non provata in Visual Studio prima del rilascio.
+Installazione: come la 0.2.0.
 
 ### Novità
 
@@ -96,7 +96,6 @@ Installazione: come la 0.2.0. Provata su Visual Studio 18 (2026). Visual Studio 
   <img src="https://raw.githubusercontent.com/PignaBoyz/SVNAssist/main/docs/release-notes/img/0.5.0/it/03-modelli-ai.png" width="560" alt="Passo Model della procedura AI">
 
   *Il passo Model della procedura guidata: l'elenco viene dal provider.*
-  - Non provato con i provider reali.
 - **Merge da una cartella.** SVN Merge... da una cartella di Solution Explorer lavora solo su quel sottoalbero. Un verdetto indica se la cartella è Compatibile con il merge o se il merge non è possibile.
 - **File di ogni revisione.** Nella selezione delle revisioni da unire, sotto la tabella compare l'elenco dei file coinvolti (A, M, D). Un click su un file apre il diff di quella revisione.
 - **Anteprima del merge per revisione.** L'anteprima è raggruppata per revisione, con i file di ciascuna. I file con un conflitto previsto sono indicati con una C rossa e dal numero di possibili conflitti.
@@ -196,7 +195,6 @@ Installazione: come la 0.2.0.
 
 Limiti noti:
 
-- Il pulsante Annulla accanto ai blocchi del diff non è verificato in Visual Studio.
 - Un file aperto solo come pannello di un diff, senza finestra editor propria, viene ancora riscritto su disco: Ctrl+Z non lo annulla.
 - Con modifiche non salvate, le righe di "modifica successiva/precedente" possono spostarsi.
 
@@ -221,7 +219,7 @@ Installazione: come la 0.2.0. Se è installata la 0.2.0, viene aggiornata. Clien
 - **Conflitti.** Il riquadro Conflitti in SVN Changes offre per ogni file: **Apri editor di merge** (editor a 3 vie di Visual Studio), **Usa la mia**, **Usa la loro**, **Segna come risolto**.
   - I conflitti ad albero sono raggruppati, con **Segna tutti come risolti**.
   - I file di appoggio creati da svn stanno sotto il file in conflitto e non tra i non versionati.
-- **Annulla le singole righe.** Un pulsante Annulla accanto a ogni blocco del diff, oppure tasto destro > **SVN: Revert Selected Changes** su una selezione. Il pulsante non è stato verificato in tutte le viste diff di Visual Studio.
+- **Annulla le singole righe.** Un pulsante Annulla accanto a ogni blocco del diff, oppure tasto destro > **SVN: Revert Selected Changes** su una selezione.
 - **Modifica successiva / precedente nel diff.** Alt+F8 e Shift+Alt+F8. Le scorciatoie si cambiano nelle opzioni.
 - **Indicatore della revisione.** In basso in SVN Changes: verde se la working copy è all'ultima revisione; arancione, con "disponibile rN — SVN Update", se altri hanno committato. Il controllo è di sola lettura, ogni 5 minuti; l'intervallo si cambia o si disattiva in Tools > Options.
 - **Recenti.** Pannello con ricerca e anteprima degli ultimi 25 messaggi di commit per repository.
