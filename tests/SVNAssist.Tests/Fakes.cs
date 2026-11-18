@@ -15,6 +15,8 @@ internal sealed class StubSettings : ISvnAssistSettings
     public string WorkingCopy { get; set; } = string.Empty;
     public string Theme { get; set; } = "auto";
     public string UiLanguage { get; set; } = "it";
+    public bool ShowUsage { get; set; }
+    public Task<bool> GetAiShowUsageAsync(CancellationToken ct) => Task.FromResult(ShowUsage);
 
     public Task<string> GetAiProviderAsync(CancellationToken ct) => Task.FromResult(Provider);
     public string ClaudeModelSaved { get; set; } = "claude";

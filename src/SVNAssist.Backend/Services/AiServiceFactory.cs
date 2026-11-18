@@ -181,6 +181,9 @@ internal sealed class FallbackAiService : IAiService
 
     private IAiService? _lastService;
 
+    /// <summary>Servizio che ha risposto all'ultima richiesta riuscita.</summary>
+    internal IAiService? LastService => _lastService;
+
     public Task<string> GenerateCommitMessageAsync(string diff, string language, CancellationToken ct, string? projectInstructions = null)
         => TryEachAsync(s => s.GenerateCommitMessageAsync(diff, language, ct, projectInstructions), ct);
 

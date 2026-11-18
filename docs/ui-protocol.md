@@ -334,6 +334,7 @@ L'host le espone in Tools > Options > SVNAssist (categoria "SVNAssist") e le res
 | `defaultLanguage` | enum | `auto` | `auto`, `italiano`, `english` |
 | `workingCopyPath` | string | `` | se valorizzato vince sull'auto-rilevamento dalla solution |
 | `repoLayout` | string | `trunk/branches/tags` | nomi delle cartelle tronco/branch/tag separati da `/` (o `,` `;`); se non sono tre nomi ricade sul default. Funziona anche con il progetto alla radice (base vuota) o sotto un sottopercorso (`^/progetto/trunk` -> branch in `^/progetto/branches`) |
+| `aiShowUsage` | bool | `false` | `true` = dopo "Genera con AI" la riga di stato scrive modello usato e costo (Copilot: richieste premium dall'elenco modelli; altrimenti "costo non disponibile"); spento: solo il modello di Copilot, come in 0.4.0 |
 | `headCheckMinutes` | int | `5` | ogni quanti minuti chiedere al server l'ultima revisione del ramo (`svn info --show-item last-changed-revision --non-interactive <URL>`, sola lettura) per l'indicatore della revisione; `0` = spento; massimo 1440 |
 | `windowTheme` | enum | `auto` | `auto`, `light`, `dark`, `blue` (scritta dal backend con `SetSettingAsync`) |
 | `uiLanguage` | enum | `auto` | `auto`, `it`, `en` — lingua dell'interfaccia (vedi "Lingua dell'interfaccia"); l'host aggiunge `uiLanguageEffective` (`it`/`en`, già risolta, non è un'impostazione) |

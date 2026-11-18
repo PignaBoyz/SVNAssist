@@ -327,6 +327,26 @@ public class AiModelCatalogTests : IDisposable
     }
 
     [Fact]
+    public async Task GeneraConAi_OpzioneModelloECosto_CostoNonDisponibileSeIlProviderNonLoDichiara()
+    {
+        var ai = new FakeAiFactory { Custom = new ModelReportingAi() };
+        var path = Path.Combine(_dir, "a.cs");
+        var vm = new CommitStore(new StubSettings { ShowUsage = true }, new FakeSvnService(), ai, new NoopAiPrompt(), () => [path], () => _dir);
+        await vm.GenerateAsync(Ct);
+        Assert.Contains("modello gpt-5.6", vm.AiStatus);
+        Assert.Contains("costo non disponibile", vm.AiStatus);
+    }
+
+    [Fact]
+    public async Task GeneraConAi_SenzaOpzione_NienteCosto()
+    {
+        var (vm, ai) = CreateVm();
+        ai.Custom = new ModelReportingAi();
+        await vm.GenerateAsync(Ct);
+        Assert.DoesNotContain("costo", vm.AiStatus);
+    }
+
+    [Fact]
     public async Task GeneraConAi_ErroreDiAccesso_PulsanteRifaiLAccesso()
     {
         var (vm, ai) = CreateVm();

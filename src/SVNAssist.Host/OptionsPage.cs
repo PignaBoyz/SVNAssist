@@ -91,7 +91,7 @@ namespace SVNAssist.Host
 
         // chiave del setting (come in SettingsService, camelCase) -> proprieta'
         internal static readonly string[] Keys =
-            { "aiProvider", "claudeModel", "anthropicApiKey", "copilotModel", "aiEndpoint", "aiApiKey", "aiModel", "defaultLanguage", "workingCopyPath", "repoLayout", "headCheckMinutes", "windowTheme", "uiLanguage" };
+            { "aiProvider", "claudeModel", "anthropicApiKey", "copilotModel", "aiEndpoint", "aiApiKey", "aiModel", "defaultLanguage", "aiShowUsage", "workingCopyPath", "repoLayout", "headCheckMinutes", "windowTheme", "uiLanguage" };
 
         [LCategory("Commit message AI"), LDisplayName("Provider AI per i commit message"), DefaultValue("auto"), TypeConverter(typeof(AiProviderConverter))]
         [LDescription("Automatico prova Copilot, Claude Code, Claude API e OpenAI-compatibile in quest'ordine.")]
@@ -123,6 +123,10 @@ namespace SVNAssist.Host
 
         [LCategory("Commit message AI"), LDisplayName("Lingua dei commit message"), DefaultValue("auto"), TypeConverter(typeof(LanguageConverter))]
         public string DefaultLanguage { get; set; } = "auto";
+
+        [LCategory("Commit message AI"), LDisplayName("Mostra modello e costo nel messaggio generato"), DefaultValue(false)]
+        [LDescription("Dopo \"Genera con AI\" la riga di stato scrive il modello usato e il costo, solo se il provider lo dichiara (Copilot: richieste premium); altrimenti \"costo non disponibile\". Non finisce nel messaggio di commit.")]
+        public bool AiShowUsage { get; set; }
 
         [LCategory("Generale"), LDisplayName("Working Copy Path")]
         [LDescription("Se impostato ha la precedenza sull'auto-rilevamento dalla solution aperta.")]
@@ -223,6 +227,7 @@ namespace SVNAssist.Host
                 ["aiApiKey"] = AiApiKey ?? "",
                 ["aiModel"] = Model(AiModel, "openai/gpt-4o-mini"),
                 ["defaultLanguage"] = Pick(DefaultLanguage, new LanguageConverter(), "auto"),
+                ["aiShowUsage"] = AiShowUsage ? "true" : "false",
                 ["workingCopyPath"] = WorkingCopyPath ?? "",
                 ["repoLayout"] = string.IsNullOrWhiteSpace(RepoLayout) ? "trunk/branches/tags" : RepoLayout,
                 ["headCheckMinutes"] = Math.Max(0, Math.Min(24 * 60, HeadCheckMinutes)).ToString(System.Globalization.CultureInfo.InvariantCulture),
@@ -260,6 +265,7 @@ namespace SVNAssist.Host
                 case "aiApiKey": AiApiKey = value; break;
                 case "aiModel": AiModel = value; break;
                 case "defaultLanguage": DefaultLanguage = value; break;
+                case "aiShowUsage": AiShowUsage = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase); break;
                 case "workingCopyPath": WorkingCopyPath = value; break;
                 case "repoLayout": RepoLayout = value; break;
                 case "headCheckMinutes": { int n; HeadCheckMinutes = int.TryParse(value, out n) ? n : 5; break; }

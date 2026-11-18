@@ -358,10 +358,46 @@ internal sealed class CommitStore
         SetTrace(chainNames, provider, finished: true);
         var done = improve ? Loc.T("Messaggio migliorato") : Loc.T("Messaggio generato con AI");
         var usedModel = ai switch { FallbackAiService f => f.LastUsedModel, IReportsModel r => r.LastModelUsed, _ => null };
-        var detail = string.Join(", ", new[] { provider, usedModel is null ? null : Loc.T("modello {0}", usedModel) }.Where(x => x is not null));
+        var showUsage = await _settings.GetAiShowUsageAsync(ct);
+        var last = ai is FallbackAiService fl ? fl.LastService : ai;
+        var isCopilot = last is CopilotAiService;
+        if (!showUsage && last is ClaudeCodeAiService or AnthropicAiService or AiService)
+            usedModel = null; // il modello configurato (non quello che il provider dichiara) si scrive solo con l'opzione
+        var detail = string.Join(", ", new[]
+        {
+            provider,
+            usedModel is null ? null : Loc.T("modello {0}", usedModel),
+            showUsage ? await UsageCostAsync(isCopilot, usedModel, ct) : null,
+        }.Where(x => x is not null));
         AiStatus = detail.Length == 0 ? $"{done}." : $"{done} ({detail}).";
         if (rules is not null)
             AiStatus += Loc.T(" Regole di commit del progetto applicate.");
+    }
+
+    /// <summary>Elenco modelli da cui leggere il costo dichiarato dal provider (null = nessun costo disponibile).</summary>
+    internal IAiModelCatalog? ModelCatalog { get; set; }
+
+    /// <summary>
+    /// Costo dichiarato dal provider per il modello usato (oggi solo Copilot: richieste premium dall'elenco modelli). Mai stimato: se manca,
+    /// e' strano (vuoto, a capo, troppo lungo) o l'elenco non risponde, si scrive che non e' disponibile.
+    /// </summary>
+    private async Task<string> UsageCostAsync(bool isCopilot, string? model, CancellationToken ct)
+    {
+        var cost = string.Empty;
+        if (isCopilot && model is not null && ModelCatalog is not null)
+        {
+            try
+            {
+                var list = await ModelCatalog.GetAsync("copilot", false, ct);
+                cost = list.Models.FirstOrDefault(m => string.Equals(m.Id, model, StringComparison.OrdinalIgnoreCase))?.Cost?.Trim() ?? string.Empty;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                BackendLog.Warn("Costo del modello non disponibile: " + ex.Message);
+            }
+        }
+
+        return cost.Length is > 0 and <= 80 && !cost.Contains('\n') ? Loc.T("costo: {0}", cost) : Loc.T("costo non disponibile");
     }
 
     /// <summary>

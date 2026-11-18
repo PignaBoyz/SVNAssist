@@ -117,7 +117,8 @@ internal sealed class BackendServer : IBackend, IDisposable
             EnableWatcher = services.EnableWatcher,
             Recent = services.EnableWatcher ? new RecentMessages() : null, // come il watcher: spento nei test, che non devono scrivere in %LOCALAPPDATA%
         };
-        Changes.CommitMessage.OpenAiWizard = ct => Changes.Wizard.OpenAsync(fromGenerate: true, ct);
+        Changes.CommitMessage.ModelCatalog = _modelCatalog;
+        Changes.CommitMessage.OpenAiWizard =ct => Changes.Wizard.OpenAsync(fromGenerate: true, ct);
         Log = new LogStore(services.Svn, services.Settings, host, Changes.TempRoot, Changes);
         Changes.StartMerge = Log.StartMergeAsync;
         Changes.ContinueMerge = (origin, ct) => Log.Merge?.ResumeAsync(origin, ct) ?? Task.CompletedTask;
