@@ -148,6 +148,6 @@ test('menu del log: Apri file di questa revisione nell\'editor (un file) e menu 
   s.entries.find(e => e.rev === 123).paths = [{ a: 'M', p: '/trunk/a.cs' }];
   const it = U.logRowMenu(s, 123).find(i => i.label === "Apri file di questa revisione nell'editor");
   assert.equal(it.cmd + JSON.stringify(it.args), 'logOpenRevFile{"rev":123,"i":0}');
-  assert.deepEqual(U.logPathMenu(123, 2).map(i => i.cmd), ['logOpenFile', 'logOpenRevFile']);
+  assert.equal(U.logPathMenu(123, 2).map(i => i.cmd).join(), 'logOpenFile,logOpenRevFile');
   valid({ name: 'logOpenRevFile', args: { rev: 123, i: 0 } });
 });
