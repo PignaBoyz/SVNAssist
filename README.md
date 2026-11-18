@@ -1,115 +1,99 @@
 # SVNAssist
 
-Estensione per **Visual Studio** che porta **Subversion (SVN)** nell'IDE: pannello delle modifiche in stile Git Changes, log, switch, merge, conflitti, branch/tag, patch e messaggi di commit scritti da un'AI.
+**Subversion dentro Visual Studio.** Vedi cosa hai modificato, scrivi il messaggio (anche con l'AI), committi, unisci i rami e risolvi i conflitti senza lasciare l'IDE.
+
+Italiano · [English](README.en.md)
 
 ![Visual Studio](https://img.shields.io/badge/Visual%20Studio-2026%20(18.x)-blue)
 ![SVN](https://img.shields.io/badge/SVN-CLI-orange)
 ![.NET](https://img.shields.io/badge/backend-.NET%2010-purple)
 
-**Versione attuale: 0.5.0.** Scarica `SVNAssist.vsix` dalla [pagina delle Release](https://github.com/PignaBoyz/SVNAssist/releases). Elenco delle modifiche in [CHANGELOG.md](CHANGELOG.md) ([English](CHANGELOG.en.md)). Prova l'interfaccia nel browser con la demo (zip nella Release).
+![Il dialogo SVN Branch/Tag](docs/release-notes/img/0.5.0/it/01-branch-tag.png)
 
----
+## A cosa serve
 
-## A chi serve
+Se il tuo progetto sta in un repository SVN e lavori con Visual Studio, di solito alterni IDE, TortoiseSVN e riga di comando. SVNAssist mette le operazioni di ogni giorno in un pannello accanto al codice, con il comportamento di `svn.exe` e la comodità di Git Changes. Non sostituisce SVN: lo usa e lo guida.
 
-A chi lavora con SVN (anche con accesso integrato di Windows) e vuole restare in Visual Studio: vedere cosa è cambiato, committare, unire rami e risolvere conflitti senza passare da riga di comando o da TortoiseSVN. SVNAssist usa `svn.exe`: non sostituisce SVN, lo guida.
+## Come si usa
 
-## Cosa fa
+1. Apri una solution che sta in una working copy SVN.
+2. **Extensions > SVNAssist > SVN Changes**: le modifiche compaiono raggruppate per cartella.
+3. Spunta ciò che vuoi committare, scrivi il messaggio (o premi **Genera con AI**) e premi **Commit**.
 
-**Changes** (finestra dockabile, stile Git Changes)
-- Branch corrente, SVN Update, Show Log, Refresh; indicatore della revisione che avvisa se altri hanno committato.
-- Sezioni Conflitti, Modifiche, Non versionati e Shelved, in vista Albero o Lista. Ciò che spunti è ciò che viene committato.
-- **Commit All** (nessun file in Staged: tutte le modifiche dei file versionati) o **Commit Staged (n)**. Prima del commit controlla se sul server ci sono revisioni di altri e se un file contiene marcatori di conflitto.
-- Lucchetto sui file bloccati da altri ("Bloccato da utente"); SVN Lock / Unlock.
-- Diff nativo di Visual Studio, con Alt+F8 / Shift+Alt+F8 tra le modifiche e **SVN: Revert Selected Changes** per annullare una riga o un blocco.
-- Menu del tasto destro su file, cartelle, sezioni e righe selezionate: Add, Revert, Delete, Ignore, Diff, Lock...
+Il resto sta a un click di distanza:
 
-**Branch, tag, patch, shelve**
-- **SVN Branch/Tag...** da HEAD, da una revisione o dalla working copy; **Switch** con elenco dei rami, usati di recente e filtri.
-- **Create Patch / Apply Patch** (con anteprima) e **Shelve / Unshelve** per mettere da parte le modifiche.
-- Backup automatico prima di Revert di tutto e Annulla merge, con **Ripristina modifiche**.
+| Voglio... | Dove |
+|-----------|------|
+| aggiornare, vedere la cronologia | **SVN Update**, **Show Log** in alto nel pannello |
+| cambiare ramo | il nome del ramo in alto: **Switch** con elenco, recenti e filtri |
+| creare un branch o un tag | menu **...** > **SVN Branch/Tag...** |
+| unire un ramo | **Show Log** > selezione delle revisioni > **SVN Merge...**, oppure tasto destro su una cartella |
+| risolvere un conflitto | riquadro **Conflitti** del pannello (mia, loro, entrambe, editor a 3 vie) |
+| mettere da parte il lavoro | tasto destro > **Shelve...**; si riprende da **Shelved** |
+| scambiare modifiche senza committare | **Create Patch...** e **Apply Patch...** |
+| annullare una riga di un diff | **SVN: Revert Selected Changes** nel diff di Visual Studio |
 
-**Merge e conflitti**
-- **SVN Merge...** dal Log o da una cartella di Solution Explorer: anteprima per revisione con i conflitti previsti, Merge tutto o Merge selezionate (cherry-pick), applicazione una revisione alla volta con **Continua merge** se si ferma, **Annulla merge**.
-- Riquadro Conflitti: Usa la mia / la loro / entrambe (anche per tutti), editor di merge a 3 vie di Visual Studio, tree conflict in blocco, barra sul file aperto in conflitto.
+SVNAssist avvisa prima dei guai: revisioni di altri non ancora scaricate, file con marcatori di conflitto, modifiche locali che un revert o un merge porterebbe via (le salva in un backup).
 
-**Log**
-- Cronologia come documento nell'area editor: filtri per autore, testo, percorso e date; file di ogni revisione con diff; confronto tra due revisioni; revisioni unite; percorsi modificati.
+## Messaggi di commit con l'AI
 
-**Messaggi di commit con AI**
-- **Genera con AI** scrive il messaggio dal diff dei file che stai per committare; **Migliora** rifinisce una bozza; lingua Italiano, English o Auto.
-- Provider: GitHub Copilot, Claude Code (abbonamento), Claude API, qualsiasi endpoint compatibile OpenAI (GitHub Models, OpenAI, Azure, Ollama, Gemini). Con `auto` prova i provider in ordine e passa al successivo se uno fallisce.
-- L'elenco dei modelli viene sempre dal provider collegato: nessun elenco scritto a mano. Se l'accesso è scaduto compare **Rifai l'accesso**.
-- Segue le regole di commit del progetto (`.github/copilot-instructions.md`) e dell'utente.
-- Prima del primo invio chiede conferma: il diff dei file in commit lascia il computer.
-
-**Interfaccia**: italiano e inglese (automatico dalla lingua di Visual Studio), temi chiaro, scuro e blu, checklist dei prerequisiti con installazione guidata.
-
-![Branch/Tag](docs/release-notes/img/0.5.0/it/01-branch-tag.png)
-
-## Requisiti
-
-| Cosa | Note |
-|------|------|
-| Visual Studio 2026 (18.x) | provato. Visual Studio 2022 (17.x) è dichiarato ma non provato |
-| `svn.exe` nel PATH | da TortoiseSVN (con command line tools), SlikSVN o CollabNet; la checklist propone l'installazione |
-| Runtime .NET 10 | non è nel VSIX; se manca, SVNAssist propone di installarlo (winget) |
-| WebView2 Runtime | già presente con Visual Studio e Windows 11 |
-| Un provider AI | solo per i messaggi con AI, vedi sotto |
-
-## Installazione
-
-1. Scarica `SVNAssist.vsix` dalla [Release](https://github.com/PignaBoyz/SVNAssist/releases).
-2. Doppio click sul file e riavvia Visual Studio.
-3. Apri una solution che sta in una working copy SVN e vai in **Extensions > SVNAssist > SVN Changes**. La working copy viene riconosciuta da sola.
-
-Se manca qualcosa (svn, .NET, provider AI) il pulsante **Prerequisiti** in basso nel pannello diventa rosso e apre la procedura per sistemarlo.
-
-## Usare l'AI
-
-La procedura guidata si apre da **Genera con AI** quando manca un provider, o da **Extensions > SVNAssist > Change AI Provider...**. Ha quattro passi: provider, prerequisiti, accesso, modello.
+**Genera con AI** legge il diff dei file che stai per committare e scrive il messaggio; **Migliora** rifinisce una bozza tua. Il progetto può imporre le sue regole in `.github/copilot-instructions.md`.
 
 | Provider | Cosa serve |
 |----------|-----------|
-| GitHub Copilot | abbonamento Copilot e `gh auth login`; al primo uso scarica il runtime Copilot (circa 100 MB) |
-| Claude Code | Claude Code installato e con login fatto (abbonamento) |
-| Claude API | API key Anthropic (impostazione o `ANTHROPIC_API_KEY`) |
-| OpenAI-compatibile | endpoint e API key; di default GitHub Models, con il token di `gh` rilevato da solo |
+| GitHub Copilot | abbonamento Copilot e `gh auth login` |
+| Claude Code | Claude Code installato, con login (abbonamento) |
+| Claude API | API key Anthropic |
+| Compatibile OpenAI | endpoint e API key: GitHub Models (di default), OpenAI, Azure, Ollama, Gemini |
 
-Endpoint compatibili, da configurare a mano in Options (non tutti provati dall'autore): OpenAI (`https://api.openai.com/v1/chat/completions`), Azure OpenAI, Ollama in locale (`http://localhost:11434/v1/chat/completions`), Google Gemini (`https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`, API key di Google AI Studio). Ogni credenziale va solo al proprio servizio. Le API key sono cifrate con DPAPI.
+Con `auto` prova i provider in ordine e passa al successivo se uno fallisce. L'elenco dei modelli viene dal provider collegato. Una procedura guidata ti accompagna nella scelta (**Extensions > SVNAssist > Change AI Provider...**), e se l'accesso scade compare **Rifai l'accesso**.
+
+Per privacy, il diff lascia il computer solo dopo la tua conferma, e ogni credenziale va solo al proprio servizio.
+
+## Installazione
+
+Servono:
+- **Visual Studio 2026 (18.x)**. Visual Studio 2022 è dichiarato supportato ma non provato.
+- **`svn.exe`** nel PATH (da TortoiseSVN con i command line tools, SlikSVN o CollabNet).
+- **Runtime .NET 10** (se manca, SVNAssist propone l'installazione).
+
+Poi scarica **`SVNAssist.vsix`** dalla [pagina delle Release](https://github.com/PignaBoyz/SVNAssist/releases), doppio click e riavvia Visual Studio. Se manca un requisito, il pulsante **Prerequisiti** in fondo al pannello diventa rosso e guida la sistemazione.
+
+Ogni Release contiene anche una demo dell'interfaccia che si apre nel browser.
 
 ## Impostazioni
 
-**Tools > Options > SVNAssist**. Le principali:
+**Tools > Options > SVNAssist**. Di solito non serve toccarle: la working copy è rilevata dalla solution e l'AI si configura dalla procedura guidata.
 
-| Impostazione | Default | A cosa serve |
-|--------------|---------|--------------|
+| Impostazione | Predefinito | Note |
+|--------------|-------------|------|
 | AI Provider | `auto` | `auto`, `copilot`, `claudecode`, `claude`, `openai` |
-| Modelli (Claude, Copilot, OpenAI-compatibile) | predefiniti | testo libero; l'elenco vero è nella procedura guidata |
+| Mostra modello e costo nel messaggio generato | spento | il costo è quello dichiarato dal provider; se manca, "costo non disponibile" |
 | Lingua dei commit message | `auto` | `auto`, `italiano`, `english` |
-| Mostra modello e costo nel messaggio generato | spento | scrive modello e costo dichiarato dal provider (Copilot: richieste premium), altrimenti "costo non disponibile" |
-| Repo layout | `trunk/branches/tags` | nomi delle cartelle per Switch, Merge e Branch/Tag; se non corrisponde viene rilevato |
-| New revision check (minutes) | 5 | ogni quanti minuti controllare se altri hanno committato (0 = spento) |
-| Working Copy Path | vuoto | ha la precedenza sul rilevamento dalla solution |
-| Lingua / tema | automatici | interfaccia e finestre |
+| Repo layout | `trunk/branches/tags` | se l'URL non corrisponde viene rilevato |
+| New revision check (minutes) | 5 | controllo di nuove revisioni sul ramo; 0 = spento |
+| Working Copy Path | vuoto | ha la precedenza sul rilevamento |
 
-L'elenco completo con i valori è in [docs/ui-protocol.md](docs/ui-protocol.md).
+Lingua dell'interfaccia (italiano o inglese) e tema sono nel menu **Extensions > SVNAssist**. Elenco completo: [docs/ui-protocol.md](docs/ui-protocol.md).
 
 ## Limiti noti
 
 - Visual Studio 2022 non è stato provato.
-- I glifi di stato in Solution Explorer sono le icone standard di Visual Studio.
-- Elenchi dei modelli con tutti i provider reali non ancora verificati.
+- In Solution Explorer restano le icone di stato standard di Visual Studio.
+- Gli elenchi dei modelli non sono ancora verificati con tutti i provider reali.
 
-## Come è fatto
+## Documentazione
 
-- **Host** (`src/SVNAssist.Host`, net472): pacchetto Visual Studio, comandi, Options, finestre con WebView2.
-- **Backend** (`src/SVNAssist.Backend`, .NET 10): logica SVN (`svn.exe`) e AI; parla con l'Host via StreamJsonRpc.
-- **UI web** (`src/SVNAssist.UI.Web`): HTML/CSS/JS condivisi con la demo (`docs/demo`).
+| Per... | Leggi |
+|--------|-------|
+| le modifiche di ogni versione | [CHANGELOG.md](CHANGELOG.md) · [English](CHANGELOG.en.md) |
+| le funzioni nel dettaglio | [docs/FUNZIONALITA.md](docs/FUNZIONALITA.md) |
+| l'architettura | [DESIGN.md](DESIGN.md), [docs/host.md](docs/host.md) |
+| i prossimi passi | [docs/ROADMAP.md](docs/ROADMAP.md) |
 
-Approfondimenti: [DESIGN.md](DESIGN.md), [docs/host.md](docs/host.md), [docs/ui-protocol.md](docs/ui-protocol.md), [docs/FUNZIONALITA.md](docs/FUNZIONALITA.md), [docs/ROADMAP.md](docs/ROADMAP.md).
+## Per chi sviluppa
 
-## Sviluppo
+L'**Host** (`src/SVNAssist.Host`, net472) è il pacchetto Visual Studio con le finestre in WebView2. Il **backend** (`src/SVNAssist.Backend`, .NET 10) esegue `svn.exe` e parla con i provider AI, collegato all'Host con StreamJsonRpc. L'interfaccia (`src/SVNAssist.UI.Web`) è la stessa della demo.
 
 ```bash
 dotnet test tests/SVNAssist.Tests/SVNAssist.Tests.csproj
@@ -117,7 +101,7 @@ node --test tests/ui-web/*.test.mjs
 node tools/build-demo.mjs
 ```
 
-I test di integrazione richiedono `svn.exe` nel PATH (repository temporanei `file://`). Il VSIX si compila come descritto in [docs/host.md](docs/host.md). Per provarlo in un'istanza sperimentale e con una simulazione di repository: `tools/collaudo-mirato.ps1`. Regole per note di rilascio e changelog: [docs/release-notes/GUIDA.md](docs/release-notes/GUIDA.md).
+I test di integrazione richiedono `svn.exe` nel PATH. Il VSIX si compila come in [docs/host.md](docs/host.md); `tools/collaudo-mirato.ps1` lo installa in un'istanza sperimentale con un repository di prova. Come si scrivono note di rilascio e changelog: [docs/release-notes/GUIDA.md](docs/release-notes/GUIDA.md).
 
 ## Licenza
 
