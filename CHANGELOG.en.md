@@ -2,6 +2,31 @@
 
 List of SVNAssist changes by version, from the most recent to the oldest. Button, menu and window names are those of the interface, in English. Entries marked "(to be verified)" are declared but not yet tested in Visual Studio.
 
+## 0.6.0 (2026-11-18)
+
+Contents: AI explanation of incoming revisions before SVN Update (option), AI model and usage in one readable line, Gemini as an AI provider, Open this revision's file in the editor, Copy repository path, confirmation on the diff Undo button.
+
+Installation: same as 0.2.0. Not tested in Visual Studio before release (to be verified).
+
+### New
+
+- **Explanation of incoming revisions before SVN Update.** With the option **Explain incoming revisions before SVN Update** (Tools > Options > Commit message AI, off by default) SVN Update first shows the revisions about to come in: author, date, message and touched files (A/M/D). Then you can choose **Update now** or **Cancel**.
+  - The **Generate AI summary** button (then **Regenerate**) asks the AI to explain in plain words what changes and what the risks are. It runs only on click: if you don't press it, the AI is never called.
+  - The summary uses the commit message language chosen in Changes.
+  - Under the summary you see the model used (the commit one) and how much it consumed.
+  - Only log messages and file names are sent to the AI, never file contents. With many revisions the summary says how many it is based on.
+  - **Update now** and **Cancel** stay enabled while the summary is being prepared and stop it.
+  - With the option off, SVN Update starts right away as before. It applies to the Changes command, not to Update from Solution Explorer or to merge (to be verified).
+- **Gemini as an AI provider.** Chosen in the wizard and in Tools > Options, with a Google AI Studio key. The model list comes from Google. "Automatic" never picks it by itself, so the shared key doesn't go to Google by mistake (to be verified).
+- **Open this revision's file in the editor.** In the Log, from the revision menu (if it touches a single file) or from the right-click on the file row, opens the file as it was in that revision, read-only and with language colors. If the file is deleted it opens the previous version. Binary files don't open and a message says so (to be verified).
+- **Copy repository path.** In the Log menu, copies `path@rN` of the revision's files, one per line.
+
+### Changes
+
+- **AI model and usage in one readable line.** With **Show model and cost in the generated message** the status line reads for example "Sonnet 5.5 · 1,240 tokens in / 310 out · ≈ $0.04". With Claude Code the cost is shown too; with Claude API and OpenAI-compatible only tokens (to be verified with real providers).
+- **Undo in the diff asks for confirmation.** The Undo button next to a diff block asks for confirmation before restoring the block to the BASE version (to be verified).
+- **MessagePack security warnings fixed.** The backend uses an updated version.
+
 ## 0.5.0 (2026-11-18)
 
 Contents: Branch/Tag, Create Patch, Apply Patch, Shelve, server checks at commit, locks by other users, conflict resolution by group, list of AI models from the provider, AI sign-in to redo with a button, model and cost in the generated message (option), Merge from folder, Merge applied one revision at a time.

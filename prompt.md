@@ -1,4 +1,4 @@
-# Prompt di ripresa — SVNAssist 0.6.0 (DA DISCUTERE con l'utente)
+# Prompt di ripresa — SVNAssist 0.6.0 USCITA (prossima: 0.7.0 da discutere)
 
 ```
 Sei l'ORCHESTRATORE del progetto SVNAssist (estensione Visual Studio per SVN, C#). La 0.5.0 è USCITA il 2026-11-18
@@ -50,7 +50,9 @@ DECISIONI DELL'UTENTE (non rimetterle in discussione):
 docs/verifica/0.5.0/checklist.md) e release pubblicata. Non provato in VS dopo l'ultima ricompilazione: correzione Create Patch con file
 bloccato (.vs), banner conflitti del merge, terminale di login (ora PowerShell -NoExit), pulsante "Rifai l'accesso", opzione modello e costo.
 
-DA DISCUTERE per la 0.6.0 (proposte, stime indicative; l'utente sceglie i numeri):
+0.6.0 USCITA il 2026-11-18 (voci 1-4, 8, 9, 10, 11; 5 scartata: resta Shelve; 6 e 7 non fatte). Nessuna prova in VS prima del rilascio: checklist docs/verifica/0.6.0/checklist.md da fare; se emergono bug, 0.6.1. Voci 4 e 8 in forma ridotta (revert: solo conferma; Apri su: Apri file revisione + Copia percorso).
+
+VECCHIO ELENCO 0.6.0 (storico) (proposte, stime indicative; l'utente sceglie i numeri):
 1. Costo e consumo per Claude Code (output json: modello reale, token, costo sessione) - 1 giorno.
 2. Token usati per Claude API e OpenAI-compatibile, senza prezzi scritti a mano - mezza giornata.
 3. Gemini come provider (endpoint OpenAI-compatibile generativelanguage.googleapis.com/v1beta/openai, API key, elenco /models) - 1 giorno.

@@ -2,6 +2,31 @@
 
 Elenco delle modifiche di SVNAssist per versione, dalla più recente alla più vecchia. I nomi di pulsanti, menu e finestre sono quelli dell'interfaccia, in inglese. Le voci con "(da verificare)" sono dichiarate ma non ancora provate in Visual Studio.
 
+## 0.6.0 (2026-11-18)
+
+Contenuti: spiegazione AI delle revisioni in arrivo prima di SVN Update (opzione), modello e consumo dell'AI in una riga leggibile, Gemini come provider AI, Apri file di questa revisione nell'editor, Copia percorso nel repository, conferma sul pulsante Annulla del diff.
+
+Installazione: come la 0.2.0. Non provata in Visual Studio prima del rilascio (da verificare).
+
+### Novità
+
+- **Spiegazione delle revisioni in arrivo prima di SVN Update.** Con l'opzione **Spiega le revisioni in arrivo prima di SVN Update** (Tools > Options > Commit message AI, spenta di default) SVN Update mostra prima le revisioni che stanno per entrare: autore, data, messaggio e file toccati (A/M/D). Poi puoi scegliere **Update now** o **Cancel**.
+  - Il pulsante **Genera riassunto AI** (poi **Rigenera**) chiede all'AI di spiegare a parole semplici cosa cambia e quali sono i rischi. Parte solo con il click: se non lo premi, l'AI non viene mai chiamata.
+  - Il riassunto usa la lingua dei commit message scelta in Changes.
+  - Sotto il riassunto si vede il modello usato (quello dei commit) e quanto ha consumato.
+  - All'AI vanno solo messaggi di log e nomi dei file, mai il contenuto. Con molte revisioni il riassunto dice su quante si basa.
+  - **Update now** e **Cancel** restano attivi anche mentre il riassunto è in preparazione e lo interrompono.
+  - Con l'opzione spenta SVN Update parte subito come prima. Vale per il comando di Changes, non per Update da Solution Explorer né per il merge (da verificare).
+- **Gemini come provider AI.** Si sceglie nella procedura guidata e in Tools > Options, con la chiave di Google AI Studio. L'elenco dei modelli viene da Google. Con "Automatico" non viene scelto da solo, così la chiave condivisa non va a Google per errore (da verificare).
+- **Apri file di questa revisione nell'editor.** Nel Log, dal menu della revisione (se tocca un solo file) o dal tasto destro sulla riga file, apre il file com'era in quella revisione, in sola lettura e con i colori del linguaggio. Se il file è cancellato apre la versione precedente. I file binari non si aprono e lo dice un messaggio (da verificare).
+- **Copia percorso nel repository.** Nel menu del Log copia `percorso@rN` dei file della revisione, uno per riga.
+
+### Modifiche
+
+- **Modello e consumo dell'AI in una riga leggibile.** Con **Mostra modello e costo nel messaggio generato** la riga di stato dice per esempio "Sonnet 5.5 · 1.240 token in / 310 out · ≈ 0,04 $". Con Claude Code si vedono anche il costo, con Claude API e OpenAI-compatibile solo i token (da verificare con provider reali).
+- **Annulla nel diff chiede conferma.** Il pulsante Annulla accanto a un blocco del diff chiede conferma prima di riportare il blocco alla versione BASE (da verificare).
+- **Avvisi di sicurezza di MessagePack risolti.** Il backend usa una versione aggiornata.
+
 ## 0.5.0 (2026-11-18)
 
 Contenuti: Branch/Tag, Create Patch, Apply Patch, Shelve, controlli sul server al commit, lock di altri utenti, risoluzione dei conflitti per gruppo, elenco dei modelli AI dal provider, accesso AI da rifare con un pulsante, modello e costo nel messaggio generato (opzione), Merge da cartella, Merge applicato una revisione alla volta.
