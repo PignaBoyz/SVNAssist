@@ -157,12 +157,14 @@ internal sealed partial class ChangesStore
         var loose = entries.Where(e => e.Status == SvnStatusKind.Unversioned)
             .SelectMany(e => Directory.Exists(e.FullPath)
                 ? Directory.EnumerateFiles(e.FullPath, "*", SearchOption.AllDirectories)
-                    .Where(f => !f.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Any(g => g is ".svn" or PatchBackup.FolderName))
+                    .Where(f => !f.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Any(g => g is ".svn" or ".vs" or PatchBackup.FolderName))
                 : [e.FullPath])
             .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToList();
         foreach (var f in loose)
         {
-            var section = SvnService.BuildNewFileDiff(f, Path.GetRelativePath(wc, f).Replace('\\', '/'), complete: true);
+            string section;
+            try { section = SvnService.BuildNewFileDiff(f, Path.GetRelativePath(wc, f).Replace('\\', '/'), complete: true); }
+            catch (IOException) { section = string.Empty; } // file aperto in esclusiva da un altro programma: va tra gli esclusi, non blocca la patch
             if (section.Length == 0)
             {
                 if (File.Exists(f))

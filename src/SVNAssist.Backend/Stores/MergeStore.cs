@@ -72,6 +72,7 @@ internal sealed class MergeStore
     {
         var pending = _changes.MergePending; // prima del lock: prende il lock di ChangesStore
         var interrupted = _changes.BuildPendingMerge();
+        var openConflicts = _changes.UnresolvedConflicts;
         lock (_lock)
         {
             if (!_active || _source is null)
@@ -79,7 +80,9 @@ internal sealed class MergeStore
             // Merge interrotto: quali revisioni sono gia' state applicate (autore e messaggio dalla cache; se mancano arrivano a breve da svn log).
             var applied = interrupted is null ? null
                 : interrupted.AppliedRevs.Take(MaxAppliedInfo).Select(r => _logCache.TryGetValue(r, out var d) ? new MergeAppliedDto(r, d.Author, (d.Msg ?? string.Empty).Split('\n')[0]) : new MergeAppliedDto(r, string.Empty, string.Empty)).ToList();
-            return new MergeDto(_source.Name, Title(_source), _loading, _busy, _error, _blocked, _selected.Order().ToList(), _entries.Count, _result, pending, SvnErrors.SuggestsUpdate(_error), _filesDto, _pending.Count, interrupted, applied);
+            return new MergeDto(_source.Name, Title(_source), _loading, _busy, _error, _blocked, _selected.Order().ToList(), _entries.Count,
+                // il banner "in conflitto" segue lo stato reale: risolti i conflitti in Changes sparisce (il conteggio del merge e' uno snapshot)
+                _result is { Mode: "merge" } r && r.Counts.Conflicted > openConflicts ? r with { Counts = r.Counts with { Conflicted = openConflicts } } : _result, pending, SvnErrors.SuggestsUpdate(_error), _filesDto, _pending.Count, interrupted, applied);
         }
     }
 
