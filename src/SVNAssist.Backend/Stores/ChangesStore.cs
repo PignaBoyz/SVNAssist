@@ -1101,6 +1101,9 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             case "wizardOpenModels":
                 await Wizard.OpenModelsAsync(CommitMessage.FailedProvider, ct);
                 break;
+            case "wizardOpenAuth":
+                await Wizard.OpenAuthAsync(CommitMessage.FailedProvider, ct);
+                break;
             case "wizardModelsRefresh":
                 await Wizard.RefreshModelsAsync(ct);
                 break;

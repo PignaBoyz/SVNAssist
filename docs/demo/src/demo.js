@@ -1687,6 +1687,7 @@ const WIZ = {
   wizardRecheck: () => { wizApplyPending(); render(); },
   wizardModelsRefresh: () => { const W = S.wiz; if (W.step !== 4) return; W.refreshes++; W.upd = new Date().toISOString(); if (!wizModels(W).some(m => m[0] === W.model)) W.model = wizModels(W)[0][0]; render(); },
   wizardOpenModels: () => { const p = (S.settings.aiprovider || '').toLowerCase(); wizOpen(true); const W = S.wiz; W.provider = WIZ_INSTALL[p] ? p : 'copilot'; W.step = 4; W.model = wizModels(W)[0][0]; W.upd = new Date().toISOString(); render(); },
+  wizardOpenAuth: () => { const p = (S.settings.aiprovider || '').toLowerCase(); wizOpen(true); const W = S.wiz; W.provider = WIZ_INSTALL[p] ? p : 'copilot'; W.step = 3; render(); },
   wizardRun: async a => {
     const W = S.wiz, it = wizCompute().items.find(x => x.id === a.id); if (!it || W.busy) return;
     if (a.id === 'ai') { wizOpen(false); return; }

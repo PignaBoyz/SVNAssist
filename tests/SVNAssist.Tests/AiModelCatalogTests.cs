@@ -256,6 +256,13 @@ public class AiModelCatalogTests : IDisposable
 
     [Theory]
     [InlineData("AI API error 401 Unauthorized: bad key")]
+    [InlineData("Claude Code failed (exit code 1): Failed to authenticate: OAuth session expired and could not be refreshed")]
+    [InlineData("GitHub Copilot: Copilot non è collegato: accedi a GitHub (gh auth login)")]
+    [InlineData("invalid x-api-key")]
+    public void Classify_AccessoScadutoOMancante(string message)
+        => Assert.Equal(AiErrorKind.Auth, AiErrors.Classify(message));
+
+    [Theory]
     [InlineData("Il provider AI non ha risposto entro 3 minuti: richiesta interrotta.")]
     [InlineData("rate limit exceeded")]
     [InlineData("")]
@@ -320,14 +327,26 @@ public class AiModelCatalogTests : IDisposable
     }
 
     [Fact]
-    public async Task GeneraConAi_ErroreQualsiasi_NienteAzione_MessaggioDelProvider()
+    public async Task GeneraConAi_ErroreDiAccesso_PulsanteRifaiLAccesso()
     {
         var (vm, ai) = CreateVm();
         ai.Custom = new ThrowingAi(new HttpRequestException("AI API error 401 Unauthorized: bad key"));
         await vm.GenerateAsync(Ct);
 
         var snap = vm.GetSnapshot(null);
-        Assert.Equal("Errore AI: AI API error 401 Unauthorized: bad key", snap.AiStatus);
+        Assert.Contains("bad key", snap.AiStatus);
+        Assert.Equal("wizardOpenAuth", snap.AiAction?.Cmd);
+    }
+
+    [Fact]
+    public async Task GeneraConAi_ErroreQualsiasi_NienteAzione_MessaggioDelProvider()
+    {
+        var (vm, ai) = CreateVm();
+        ai.Custom = new ThrowingAi(new HttpRequestException("rate limit exceeded"));
+        await vm.GenerateAsync(Ct);
+
+        var snap = vm.GetSnapshot(null);
+        Assert.Equal("Errore AI: rate limit exceeded", snap.AiStatus);
         Assert.Null(snap.AiAction);
         Assert.DoesNotContain("aiAction", UiJson.Serialize(snap));
     }

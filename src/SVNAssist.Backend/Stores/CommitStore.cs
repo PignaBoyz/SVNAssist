@@ -96,6 +96,19 @@ internal sealed class CommitStore
         }
 
         FailedProvider = AiErrors.ProviderOf(detail) ?? _aiProviderHint;
+        if (kind == AiErrorKind.Auth)
+        {
+            lock (_lock)
+            {
+                _aiStatus = Loc.T("Errore AI: accesso al provider scaduto o non valido. Rifai l'accesso e premi di nuovo \"Genera con AI\".\nDettaglio: {0}", detail);
+                _aiAction = new StatusActionDto(Loc.T("Rifai l'accesso"), "wizardOpenAuth");
+                _aiSeq++;
+            }
+
+            Changed?.Invoke();
+            return;
+        }
+
         var msg = kind == AiErrorKind.ModelUnavailable
             ? Loc.T("Errore AI: il modello scelto non è più disponibile presso il provider (ritirato, rinominato o non abilitato per il tuo account). Aggiorna l'elenco dei modelli e scegline un altro.\nDettaglio: {0}", detail)
             : Loc.T("Errore AI: {0}\nPotrebbe dipendere dal modello scelto: aggiorna l'elenco dei modelli e provane un altro.", detail);

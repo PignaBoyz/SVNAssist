@@ -2459,6 +2459,27 @@
       }
     },
     {
+      "title": "wizardOpenAuth",
+      "description": "Dopo un errore AI di accesso: apre la procedura sul passo Accesso del provider (Copilot e Claude Code aprono subito il login nel terminale).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "wizardOpenAuth"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
       "title": "wizardModelsRefresh",
       "description": "Passo Modello: richiede di nuovo l'elenco dei modelli al provider (ignora la copia salvata).",
       "type": "object",

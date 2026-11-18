@@ -421,6 +421,7 @@
     "Chiede di nuovo i modelli al provider (anche se la copia salvata è recente)": "Asks the provider for the models again (even if the saved copy is recent)",
     "In uso adesso": "In use now",
     "Il costo è il moltiplicatore di richieste premium dichiarato da Copilot per ogni richiesta: un commit ne usa una (di più se il diff è grande).": "The cost is the premium-request multiplier Copilot declares for each request: a commit uses one (more if the diff is large).",
+    "Apre la procedura sul passo Accesso: rifai il login o incolla una nuova chiave, poi rigenera il messaggio": "Opens the setup on the Sign-in step: sign in again or paste a new key, then regenerate the message",
     "Chiede al provider i modelli disponibili ora e ti lascia sceglierne un altro": "Asks the provider for the models available now and lets you pick another one",
     "Con Fine salvo le impostazioni e genero subito il messaggio.": "With Finish I save the settings and generate the message right away.",
     "Con Fine salvo provider e modello (le stesse impostazioni di Tools > Options).": "With Finish I save provider and model (the same settings as Tools > Options).",

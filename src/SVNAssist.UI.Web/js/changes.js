@@ -36,7 +36,7 @@
     // Ogni messaggio ha colore e icona per gravita' (aviso/errore/esito); data-seq cambia a ogni messaggio, cosi' anche uno ripetuto si ridisegna e lampeggia.
     const lv = c.aiLevel || 'info', ic = lv === 'busy' ? '<span class="spin"></span>' : lv === 'ok' ? U.icon('check') : lv === 'warn' ? U.icon('warn') : lv === 'err' ? U.icon('x') : '';
     let h = c.aiStatus ? `<div class="ai-s lv-${lv}" role="${lv === 'warn' || lv === 'err' ? 'alert' : 'status'}" data-seq="${+c.aiSeq || 0}">${ic}<span>${esc(c.aiStatus).replace(/\n/g, '<br>')}</span></div>` : '';
-    if (c.aiStatus && c.aiAction) h += `<div class="ai-act">${U.btn('btn sm', c.aiAction.label, 'refresh', c.aiAction.cmd, null, t('Chiede al provider i modelli disponibili ora e ti lascia sceglierne un altro'))}</div>`;
+    if (c.aiStatus && c.aiAction) h += `<div class="ai-act">${U.btn('btn sm', c.aiAction.label, 'refresh', c.aiAction.cmd, null, c.aiAction.cmd === 'wizardOpenAuth' ? t('Apre la procedura sul passo Accesso: rifai il login o incolla una nuova chiave, poi rigenera il messaggio') : t('Chiede al provider i modelli disponibili ora e ti lascia sceglierne un altro'))}</div>`;
     if (c.download) h += `<div class="dl"><b>${t('GitHub Copilot: primo utilizzo')}</b> <span class="muted">${t('(runtime ~100 MB, una sola volta)')}</span><progress max="100" value="${+c.download.pct || 0}"></progress>${esc(c.download.label)}</div>`;
     if (c.trace && c.trace.length) h += `<div class="trace">` + c.trace.map((x, i) => {
       const lab = x.state === 'ok' ? t('{0}: OK', x.name) : x.state === 'fail' ? t('{0}: errore', x.name) : x.state === 'skip' ? t('{0}: saltato', x.name) : x.state === 'run' ? `<span class="spin"></span>${esc(x.name)}…` : esc(x.name);

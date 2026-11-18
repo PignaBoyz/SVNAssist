@@ -235,6 +235,39 @@ internal sealed class WizardStore
         await RefreshAsync(ct); // per "Indietro": stato di prerequisiti e accesso
     }
 
+    /// <summary>
+    /// Da "Rifai l'accesso" dopo un errore di autenticazione: apre la procedura sul passo Accesso del provider che ha fallito e, per i provider
+    /// con login (Copilot, Claude Code), apre subito il terminale con il login. Con una API key resta il campo per incollarne una nuova.
+    /// </summary>
+    internal async Task OpenAuthAsync(string? provider, CancellationToken ct)
+    {
+        var id = AiProviderGuide.Normalize(provider ?? string.Empty);
+        if (!ProviderIds.Contains(id))
+            id = AiProviderGuide.Normalize(await _settings.GetAiProviderAsync(ct));
+        if (!ProviderIds.Contains(id))
+        {
+            await OpenAsync(fromGenerate: true, ct);
+            return;
+        }
+
+        lock (_lock)
+        {
+            _open = true;
+            _mode = ModeAi;
+            _step = 3;
+            _fromGenerate = true;
+            _provider = id;
+            _items = [];
+            ResetModelsLocked();
+        }
+
+        _prereq.Feedback = string.Empty;
+        Changed?.Invoke();
+        await RefreshAsync(ct);
+        if (id is "copilot" or "claudecode")
+            await LoginAsync(ct);
+    }
+
     /// <summary>Pulsante "Aggiorna elenco": chiede di nuovo i modelli al provider, ignorando la copia salvata.</summary>
     internal async Task RefreshModelsAsync(CancellationToken ct)
     {

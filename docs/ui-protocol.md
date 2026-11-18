@@ -115,6 +115,7 @@ Stato e logica nel backend (`WizardStore`); la UI mostra `wizard` e invia solo q
 | `wizardSetAuth` | `endpoint`, `key` | salva la chiave (Claude API / OpenAI-compatibile) e l'endpoint (https, o http su localhost); vuoto = non cambiare. La chiave non torna mai nello snapshot |
 | `wizardFinish` | `model` | salva `aiProvider` + modello con le chiavi di Tools > Options e chiude; se la procedura veniva da "Genera con AI", genera. `model` e' qualsiasi id valido (lettere, cifre, `. _ : / @ + -`, niente spazi): dall'elenco del provider o scritto in "Altro..." |
 | `wizardModelsRefresh` | – | passo Modello: richiede di nuovo l'elenco dei modelli al provider ignorando la copia salvata (pulsante "Aggiorna elenco"); ignorato fuori dal passo 4 |
+| `wizardOpenAuth` | – | dopo un errore AI di accesso (sessione scaduta, chiave non valida): apre la procedura sul passo Accesso del provider; Copilot e Claude Code aprono subito il login nel terminale. E' il comando di `commit.aiAction` per gli errori di autenticazione |
 | `wizardOpenModels` | – | apre la procedura direttamente sul passo Modello del provider dell'ultimo errore AI (o di quello configurato; se non noto parte dal passo 1), con elenco riletto; con Fine rigenera il messaggio. E' il comando di `commit.aiAction` |
 | `openOptions` | – | "Faccio io": chiude la procedura e apre Tools > Options > SVNAssist (`IHost.OpenSettingsAsync`) |
 

@@ -183,7 +183,25 @@ internal sealed partial class ChangesStore
     }
 
     private static string ExcludedNote(string wc, IEnumerable<string> excluded)
-        => string.Join(", ", excluded.Take(5).Select(f => Path.GetRelativePath(wc, f)));
+        => string.Join(", ", excluded.Take(5).Select(f => Path.GetRelativePath(wc, f) + ExcludedReason(f)));
+
+    /// <summary>Perche' un file non sta nella patch: i file vuoti non hanno righe da mettere in un diff, i binari non sono testo, quelli aperti in esclusiva non si leggono.</summary>
+    private static string ExcludedReason(string file)
+    {
+        try
+        {
+            if (!File.Exists(file))
+                return string.Empty;
+            if (new FileInfo(file).Length == 0)
+                return " " + Loc.T("(vuoto)");
+            using (File.Open(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) { }
+            return " " + Loc.T("(binario)");
+        }
+        catch (IOException)
+        {
+            return " " + Loc.T("(aperto da un altro programma)");
+        }
+    }
 
     /// <summary>"Create Patch...": <c>svn diff</c> dei file indicati (nessuna chiave = tutte le modifiche) nel file scelto dall'utente; i non versionati come file nuovi.</summary>
     private async Task CreatePatchAsync(IReadOnlyList<string> keys, CancellationToken ct)
