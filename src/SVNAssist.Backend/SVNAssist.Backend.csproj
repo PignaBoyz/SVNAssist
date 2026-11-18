@@ -34,6 +34,8 @@
     <PackageReference Include="Anthropic" Version="13.8.0" />
     <PackageReference Include="GitHub.Copilot.SDK" Version="1.0.31" />
     <PackageReference Include="StreamJsonRpc" Version="2.22.23" />
+    <!-- MessagePack arriva transitivo da StreamJsonRpc (2.5.192, con advisory NU1902/NU1903): versione patchata fissata. -->
+    <PackageReference Include="MessagePack" Version="2.5.307" />
   </ItemGroup>
 
   <!-- Contratto RPC condiviso con l'host (stesso file, compilato da entrambi). -->
