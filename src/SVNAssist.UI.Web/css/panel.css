@@ -350,11 +350,12 @@ progress.obar::-webkit-progress-value{background:var(--acc2);border-radius:3px;t
 .ol .pt{overflow:hidden;text-overflow:ellipsis}
 .ol.c{background:var(--chip-fail-bg);color:var(--chip-fail-fg);font-weight:600}
 .ol.i{color:var(--fg3)}
-.wiz.inc{width:min(680px,100%)}
+.wiz.inc{width:min(680px,100%);max-height:80vh}   /* si adatta al contenuto, al massimo l'80% della finestra */
+.wiz.inc .wiz-b{min-height:0;overflow:hidden}   /* a scorrere sono il riassunto e l'elenco, non il corpo: i pulsanti restano visibili */
 .inc-ai{display:flex;flex-direction:column;gap:4px;padding:8px 10px;border-radius:6px;background:var(--acc-bg);border:1px solid var(--bd2)}
 .inc-ai.wiz-note{flex-direction:row;align-items:center;flex-wrap:wrap}
-.inc-sum{white-space:pre-wrap}
-.inc-list{list-style:none;margin:6px 0 0;padding:0;border:1px solid var(--bd2);border-radius:4px;background:var(--bg1);max-height:min(320px,45vh);overflow:auto}
+.inc-sum{white-space:pre-wrap;max-height:calc(12 * 1.4em);overflow:auto}   /* oltre ~12 righe scorre da solo */
+.inc-list{list-style:none;margin:6px 0 0;padding:0;border:1px solid var(--bd2);border-radius:4px;background:var(--bg1);min-height:4em;flex:1 1 auto;overflow:auto}
 .inc-r{padding:6px 8px;border-bottom:1px solid var(--bd)}
 .inc-h{display:flex;align-items:baseline;gap:8px}
 .inc-m{margin:2px 0 4px;white-space:pre-wrap;word-break:break-word}

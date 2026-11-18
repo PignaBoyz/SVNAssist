@@ -37,12 +37,16 @@ Serve la wc indietro: da un secondo PowerShell `.\tools\collaudo-mirato.ps1 -Col
 | # | Passo | Atteso | Esito |
 |---|-------|--------|-------|
 | 10 | Flag **spento**. Changes > **SVN Update**. | Parte subito, nessun dialogo, nessuna chiamata AI. | |
-| 11 | Rifai `-Collega`, flag **acceso**, **SVN Update**. | Dialogo "Sul server ci sono N revisioni nuove": elenco (autore, data, messaggio, file A/M/D) e riassunto AI in parole semplici. Sotto la riga **modello · token · costo**, anche con "Mostra modello e costo" spento. | |
+| 11 | Rifai `-Collega`, flag **acceso**, **SVN Update**. | Dialogo "Sul server ci sono N revisioni nuove": l'elenco (autore, data, messaggio, file A/M/D) c'è subito; il riassunto NON parte da solo (nessuna chiamata AI nel log) e c'è il pulsante **Genera riassunto AI**. | |
 | 12 | **Annulla** (o Esc). | Non cambia nulla. | |
 | 13 | **Aggiorna ora**. | Parte l'Update con la barra di avanzamento. | |
 | 14 | Provider scollegato o accesso scaduto, di nuovo `-Collega`. | Elenco visibile; avviso o pulsante **Rifai l'accesso**; Update funziona comunque. | |
 | 15 | Wc già aggiornata, oppure rete spenta. | Update parte come prima, senza dialogo. | |
 | 16 | Controlla `logs\backend-*.log`. | All'AI sono arrivati solo messaggi e nomi file, mai diff. | |
+| 11a | Click su **Genera riassunto AI**. | "Riassunto AI in preparazione…", poi il riassunto in parole semplici, sotto la riga **modello · token · costo**. Con log enorme la prima riga dice "sulle prime N revisioni di M". Compare **Rigenera**. | |
+| 11b | Nel pannello Changes cambia la lingua dei commit message (italiano/English), poi in SVN Update click su **Rigenera**. | Il nuovo riassunto è nella lingua scelta nel pannello (con auto, quella dell'interfaccia). | |
+| 11c | Wc indietro di molte revisioni (50 o più), **Genera riassunto AI**. | Il dialogo cresce col contenuto fino a circa l'80% della finestra; il riassunto oltre ~12 righe ha la sua scrollbar; l'elenco revisioni ha la sua scrollbar; **Annulla** e **Aggiorna ora** restano sempre visibili. | |
+| 11d | Click su **Aggiorna ora** mentre il riassunto è in preparazione. | Aggiorna ora è attivo, l'Update parte e la chiamata AI viene annullata (nessun errore, nessun riassunto tardivo). **Annulla** durante il riassunto: chiude e annulla l'AI. | |
 | 17 | Tema chiaro/scuro e finestra stretta. | Il dialogo scorre, i pulsanti restano visibili. | |
 
 ## Parte D — Log (voce 8)

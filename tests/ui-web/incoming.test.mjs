@@ -14,6 +14,14 @@ test('incoming: elenco, Update e Annulla sempre presenti; riassunto con riga di 
   assert.ok(h.includes('altri 3 file'));
 });
 
+test('incoming: idle = pulsante Genera (mai da solo); done = Rigenera; loading = Update/Annulla attivi', () => {
+  const idle = html({ state: 'idle', text: '', usage: '' });
+  assert.ok(idle.includes('data-cmd="incomingSummarize"') && idle.includes('data-cmd="incomingUpdate"'));
+  assert.ok(html({ state: 'done', text: 'x', usage: '' }).includes('data-cmd="incomingSummarize"'));
+  const l = html({ state: 'loading', text: '', usage: '' });
+  assert.ok(!l.includes('incomingSummarize') && l.includes('data-cmd="incomingUpdate"'));
+});
+
 test('incoming: AI non collegata o in errore, l\'elenco e Update restano; errore riconoscibile = pulsante', () => {
   for (const ai of [{ state: 'none', text: '', usage: '' }, { state: 'loading', text: '', usage: '' }]) {
     const h = html(ai); assert.ok(h.includes('bruno') && h.includes('data-cmd="incomingUpdate"'));

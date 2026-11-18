@@ -126,7 +126,11 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             workingCopyPath: () => WorkingCopyPath,
             dialogs: dialogs);
         CommitMessage.Changed += NotifyChanged;
-        Incoming = new IncomingStore(svnService, aiServiceFactory, settingsService);
+        Incoming = new IncomingStore(svnService, aiServiceFactory, async ct =>
+        {
+            await CommitMessage.InitializeAsync(ct);
+            return CommitMessage.Language;
+        });
         Incoming.Changed += NotifyChanged;
         RevPicker = new RevisionPickerStore(svnService);
         RevPicker.Changed += NotifyChanged;
@@ -811,6 +815,9 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             case "incomingUpdate":
                 Incoming.Close();
                 await RunExclusiveAsync(() => UpdateCoreAsync(ct));
+                break;
+            case "incomingSummarize":
+                Incoming.Summarize();
                 break;
             case "incomingCancel":
                 Incoming.Close();

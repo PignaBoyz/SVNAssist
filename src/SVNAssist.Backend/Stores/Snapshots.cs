@@ -234,7 +234,7 @@ internal sealed record IncomingRevDto(long Rev, string Author, string Date, stri
 
 internal sealed record IncomingFileDto(string Action, string Path);
 
-/// <summary>Riassunto AI: State = loading | none (AI non collegata) | done | error; Action = pulsante per l'errore riconoscibile.</summary>
+/// <summary>Riassunto AI: State = idle (riassunto non ancora chiesto) | loading | none (AI non collegata) | done | error; Action = pulsante per l'errore riconoscibile.</summary>
 internal sealed record IncomingAiDto(string State, string Text, string Usage, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] StatusActionDto? Action);
 
 /// <summary>Finestra delle opzioni del Cleanup. <c>Extras</c> falso = svn &lt; 1.9: le opzioni oltre il cleanup semplice si disabilitano.</summary>

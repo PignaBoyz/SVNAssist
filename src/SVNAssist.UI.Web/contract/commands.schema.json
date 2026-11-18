@@ -2669,6 +2669,27 @@
       }
     },
     {
+      "title": "incomingSummarize",
+      "description": "Anteprima di SVN Update: genera (o rigenera) il riassunto AI. Non parte mai da solo; un riassunto in corso viene annullato e rifatto.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "incomingSummarize"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
       "title": "incomingCancel",
       "description": "Anteprima di SVN Update: chiude senza aggiornare.",
       "type": "object",

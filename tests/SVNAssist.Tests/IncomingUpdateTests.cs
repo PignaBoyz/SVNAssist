@@ -18,7 +18,7 @@ public class IncomingUpdateTests
         public StubSettings Settings { get; } = new();
         public ChangesStore Store { get; }
 
-        public Fixture(bool explain, long wcRev = 7, long head = 9)
+        public Fixture(bool explain, long wcRev = 7, long head = 9, int revisions = 2)
         {
             Settings.ExplainIncoming = explain;
             Svn.InfoRevision = wcRev;
@@ -28,13 +28,15 @@ public class IncomingUpdateTests
                 new SvnLogEntry(8, "anna", DateTimeOffset.Now, "Corretto il calcolo IVA", [new SvnLogPath("M", "/trunk/Core/Iva.cs")]),
                 new SvnLogEntry(9, "bruno", DateTimeOffset.Now, "Nuova pagina ordini", [new SvnLogPath("A", "/trunk/Web/Ordini.cs"), new SvnLogPath("M", "/trunk/Web/web.config")]),
             ];
+            if (revisions > 2)
+                Svn.RangeLog = [.. Enumerable.Range(1, revisions).Select(i => new SvnLogEntry(100 + i, "anna", DateTimeOffset.Now, "Modifica " + i, [new SvnLogPath("M", "/trunk/f" + i + ".cs")]))];
             Store = new ChangesStore(Settings, Svn, Ai, new NoopAiPrompt(), new FakeDialogs(), new FakeHost(),
                 new PrereqStore(new PrerequisitesService(Settings, new PrerequisiteProbes())), recentTargetsFile: Path.GetTempFileName())
             { WorkingCopyPath = Wc, TempRoot = Path.Combine(Path.GetTempPath(), "SVNAssist_Inc_" + Guid.NewGuid().ToString("N")[..8]) };
         }
 
         public ChangesState Snap => (ChangesState)Store.GetSnapshot();
-        public Task Cmd(string name) => Store.DispatchAsync(name, JsonSerializer.SerializeToElement(new { }), CancellationToken.None);
+        public Task Cmd(string name, object? args = null) => Store.DispatchAsync(name, JsonSerializer.SerializeToElement(args ?? new { }), CancellationToken.None);
         public Task AiDone() => Store.Incoming.AiTask ?? Task.CompletedTask;
         public void Dispose() => Store.Dispose();
     }
@@ -56,6 +58,7 @@ public class IncomingUpdateTests
     {
         using var f = new Fixture(explain: true);
         await f.Cmd("update");
+        await f.Cmd("incomingSummarize");
         await f.AiDone();
 
         Assert.Equal(0, f.Svn.Updates);   // nessun update finche' l'utente non sceglie
@@ -76,6 +79,7 @@ public class IncomingUpdateTests
     {
         using var f = new Fixture(explain: true);
         await f.Cmd("update");
+        await f.Cmd("incomingSummarize");
         await f.AiDone();
         await f.Cmd("incomingCancel");
 
@@ -88,6 +92,7 @@ public class IncomingUpdateTests
     {
         using var f = new Fixture(explain: true);
         await f.Cmd("update");
+        await f.Cmd("incomingSummarize");
         await f.AiDone();
 
         var sent = Assert.Single(f.Ai.Service.IncomingPrompts);
@@ -123,6 +128,7 @@ public class IncomingUpdateTests
         using var f = new Fixture(explain: true);
         f.Ai.Available = false;
         await f.Cmd("update");
+        await f.Cmd("incomingSummarize");
         await f.AiDone();
 
         Assert.Equal("none", f.Snap.Incoming!.Ai.State);
@@ -137,6 +143,7 @@ public class IncomingUpdateTests
         using var f = new Fixture(explain: true);
         f.Ai.Service.IncomingError = "Claude Code: Failed to authenticate. API Error: 401";
         await f.Cmd("update");
+        await f.Cmd("incomingSummarize");
         await f.AiDone();
 
         var ai = f.Snap.Incoming!.Ai;
@@ -152,10 +159,81 @@ public class IncomingUpdateTests
         using var f = new Fixture(explain: true);
         f.Ai.Service.IncomingError = "rete assente";
         await f.Cmd("update");
+        await f.Cmd("incomingSummarize");
         await f.AiDone();
 
         Assert.Equal("error", f.Snap.Incoming!.Ai.State);
         Assert.Null(f.Snap.Incoming.Ai.Action);
+    }
+
+    [Fact]
+    public async Task IlRiassuntoNonParteMaiDaSolo_PoiGeneraERigenera()
+    {
+        using var f = new Fixture(explain: true, head: 200, revisions: 5);
+        await f.Cmd("update");
+
+        Assert.Equal("idle", f.Snap.Incoming!.Ai.State);
+        Assert.Equal(5, f.Snap.Incoming.Count);
+        Assert.Empty(f.Ai.Service.IncomingPrompts);
+
+        await f.Cmd("incomingSummarize");
+        await f.AiDone();
+        Assert.Equal("done", f.Snap.Incoming!.Ai.State);
+        Assert.Single(f.Ai.Service.IncomingPrompts);
+
+        await f.Cmd("incomingSummarize");   // Rigenera
+        await f.AiDone();
+        Assert.Equal(2, f.Ai.Service.IncomingPrompts.Count);
+    }
+
+    [Fact]
+    public async Task Lingua_QuellaScelta_InChanges_ConAutoLaLinguaDellInterfaccia()
+    {
+        using var f = new Fixture(explain: true);
+        f.Settings.Language = "english";   // default delle Options
+        await f.Cmd("update");
+        await f.Cmd("setLanguage", new { lang = "italiano" });
+        await f.Cmd("incomingSummarize");
+        await f.AiDone();
+        Assert.Equal(["italiano"], f.Ai.Service.IncomingLanguages);
+
+        await f.Cmd("setLanguage", new { lang = "english" });
+        await f.Cmd("incomingSummarize");
+        await f.AiDone();
+        Assert.Equal("english", f.Ai.Service.IncomingLanguages[1]);
+    }
+
+    [Fact]
+    public async Task AggiornaOraDuranteIlRiassunto_AnnullaLAiEFaPartireLUpdate()
+    {
+        using var f = new Fixture(explain: true);
+        f.Ai.Service.IncomingHangs = true;
+        await f.Cmd("update");
+        await f.Cmd("incomingSummarize");
+        Assert.Equal("loading", f.Snap.Incoming!.Ai.State);
+
+        var ai = f.AiDone();
+        await f.Cmd("incomingUpdate");
+        await ai;
+
+        Assert.True(f.Ai.Service.IncomingCancelled);
+        Assert.Equal(1, f.Svn.Updates);
+        Assert.Null(f.Snap.Incoming);
+    }
+
+    [Fact]
+    public async Task AnnullaDuranteIlRiassunto_AnnullaLAi()
+    {
+        using var f = new Fixture(explain: true);
+        f.Ai.Service.IncomingHangs = true;
+        await f.Cmd("update");
+        await f.Cmd("incomingSummarize");
+        var ai = f.AiDone();
+        await f.Cmd("incomingCancel");
+        await ai;
+
+        Assert.True(f.Ai.Service.IncomingCancelled);
+        Assert.Equal(0, f.Svn.Updates);
     }
 
     [Fact]

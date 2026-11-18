@@ -24,11 +24,13 @@ internal sealed class IncomingStore
     private readonly object _lock = new();
     private IncomingDto? _state;
     private CancellationTokenSource? _aiCts;
+    private IReadOnlyList<SvnLogEntry> _log = [];
 
-    private readonly ISvnAssistSettings? _settings;
+    private readonly Func<CancellationToken, Task<string>> _commitLanguage;
 
-    public IncomingStore(ISvnService svn, IAiServiceFactory aiFactory, ISvnAssistSettings? settings = null)
-        => (_svn, _aiFactory, _settings) = (svn, aiFactory, settings);
+    /// <param name="commitLanguage">Lingua scelta per i commit message nel pannello Changes (auto / italiano / english).</param>
+    public IncomingStore(ISvnService svn, IAiServiceFactory aiFactory, Func<CancellationToken, Task<string>> commitLanguage)
+        => (_svn, _aiFactory, _commitLanguage) = (svn, aiFactory, commitLanguage);
 
     public event Action? Changed;
 
@@ -43,7 +45,7 @@ internal sealed class IncomingStore
     /// <summary>
     /// Legge le revisioni in arrivo. <c>false</c> = niente da mostrare (nessuna revisione nuova, oppure server non raggiungibile:
     /// in quel caso l'Update parte come sempre e svn dara' l'errore vero): il chiamante fa l'update direttamente.
-    /// <c>true</c> = il dialogo e' aperto e il riassunto AI e' partito in background.
+    /// <c>true</c> = il dialogo e' aperto (elenco subito; il riassunto AI lo chiede l'utente).
     /// </summary>
     internal async Task<bool> OpenAsync(string branchUrl, long wcRevision, string branchLabel, CancellationToken ct)
     {
@@ -74,13 +76,34 @@ internal sealed class IncomingStore
         {
             _aiCts?.Cancel();
             _aiCts = cts;
+            _log = log;
             FailedProvider = null;
-            _state = new IncomingDto(branchLabel, log.Count, items, Math.Max(0, log.Count - items.Count), new IncomingAiDto("loading", string.Empty, string.Empty, null));
+            AiTask = null;
+            _state = new IncomingDto(branchLabel, log.Count, items, Math.Max(0, log.Count - items.Count), new IncomingAiDto("idle", string.Empty, string.Empty, null)); // il riassunto parte solo con "incomingSummarize"
         }
 
         Changed?.Invoke();
-        AiTask = SummarizeAsync(log, cts.Token); // in background: l'elenco e i pulsanti restano subito utilizzabili
         return true;
+    }
+
+    /// <summary>"Genera riassunto AI" / "Rigenera": annulla l'eventuale chiamata in corso e ne fa partire una nuova.</summary>
+    internal void Summarize()
+    {
+        var cts = new CancellationTokenSource();
+        IReadOnlyList<SvnLogEntry> log;
+        lock (_lock)
+        {
+            if (_state is null)
+                return;
+            _aiCts?.Cancel();
+            _aiCts = cts;
+            log = _log;
+            FailedProvider = null;
+            _state = _state with { Ai = new IncomingAiDto("loading", string.Empty, string.Empty, null) };
+        }
+
+        Changed?.Invoke();
+        AiTask = SummarizeAsync(log, cts.Token);
     }
 
     internal void Close()
@@ -95,10 +118,10 @@ internal sealed class IncomingStore
         Changed?.Invoke();
     }
 
-    // Lingua del riassunto = "Lingua dei commit message" delle Options; con "auto" segue la lingua dell'interfaccia.
+    // Lingua del riassunto = quella dei commit message scelta in Changes (default dalle Options); con "auto" segue la lingua dell'interfaccia.
     private async Task<string> ResolveLanguageAsync(CancellationToken ct)
     {
-        var stored = _settings is null ? "auto" : (await _settings.GetDefaultLanguageAsync(ct)).Trim().ToLowerInvariant();
+        var stored = (await _commitLanguage(ct)).Trim().ToLowerInvariant();
         return stored is "italiano" or "english" ? stored : Loc.Lang == "en" ? "english" : "italiano";
     }
 
@@ -112,7 +135,10 @@ internal sealed class IncomingStore
                 result = new IncomingAiDto("none", string.Empty, string.Empty, null); // AI non collegata: solo l'elenco
             else
             {
-                var text = await ai.SummarizeIncomingAsync(BuildPrompt(log), await ResolveLanguageAsync(ct), ct);
+                var prompt = BuildPrompt(log, out var included);
+                var text = await ai.SummarizeIncomingAsync(prompt, await ResolveLanguageAsync(ct), ct);
+                if (included < log.Count)
+                    text = Loc.T("Riassunto sulle prime {0} revisioni di {1} (il resto non entrava nel limite dell'AI).", included, log.Count) + "\n" + text;
                 var last = ai is FallbackAiService fl ? fl.LastService : ai;
                 // Sempre la riga di consumo (con il flag acceso): modello dei commit + token/costo se il provider li riporta.
                 var usage = last is IReportsModel { LastUsage: { } u } ? AiUsageText.Format(u) : last is IReportsModel { LastModelUsed: { } m } ? AiUsageText.ShortModel(m) : string.Empty;
@@ -153,8 +179,11 @@ internal sealed class IncomingStore
     }
 
     /// <summary>Solo autore, messaggio e nomi dei file (mai contenuto), entro il limite del provider piu' stretto.</summary>
-    internal static string BuildPrompt(IReadOnlyList<SvnLogEntry> log)
+    internal static string BuildPrompt(IReadOnlyList<SvnLogEntry> log) => BuildPrompt(log, out _);
+
+    internal static string BuildPrompt(IReadOnlyList<SvnLogEntry> log, out int included)
     {
+        included = 0;
         var sb = new StringBuilder();
         foreach (var e in log.OrderBy(x => x.Revision))
         {
@@ -172,6 +201,7 @@ internal sealed class IncomingStore
             }
 
             sb.Append(block);
+            included++;
         }
 
         return sb.ToString();

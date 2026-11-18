@@ -256,6 +256,7 @@
     update: () => vmUpdate(),
     // Anteprima di SVN Update: e' dietro un'opzione spenta di default, la demo non la mostra (comandi presenti per il contratto).
     incomingUpdate: () => vmUpdate(),
+    incomingSummarize: () => render(),
     incomingCancel: () => render(),
     incomingFixAuth: () => render(),
     incomingFixModels: () => render(),

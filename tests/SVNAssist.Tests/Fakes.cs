@@ -499,12 +499,23 @@ internal sealed class RecordingAi : IAiService
 
     /// <summary>Testi inviati da SVN Update (solo log e nomi file) ed errore da simulare.</summary>
     public List<string> IncomingPrompts { get; } = [];
+    public List<string> IncomingLanguages { get; } = [];
     public string? IncomingError { get; set; }
+    /// <summary>Se vero, il riassunto resta in attesa finche' non viene annullato (lo si vede in <see cref="IncomingCancelled"/>).</summary>
+    public bool IncomingHangs { get; set; }
+    public bool IncomingCancelled { get; private set; }
 
-    public Task<string> SummarizeIncomingAsync(string logText, string language, CancellationToken ct)
+    public async Task<string> SummarizeIncomingAsync(string logText, string language, CancellationToken ct)
     {
         IncomingPrompts.Add(logText);
-        return IncomingError is not null ? throw new InvalidOperationException(IncomingError) : Task.FromResult("Cambi nel modulo Core, rischio basso.");
+        IncomingLanguages.Add(language);
+        if (IncomingHangs)
+        {
+            try { await Task.Delay(Timeout.Infinite, ct); }
+            catch (OperationCanceledException) { IncomingCancelled = true; throw; }
+        }
+
+        return IncomingError is not null ? throw new InvalidOperationException(IncomingError) : "Cambi nel modulo Core, rischio basso.";
     }
 }
 
