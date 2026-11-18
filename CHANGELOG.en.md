@@ -2,7 +2,7 @@
 
 List of SVNAssist changes by version, from the most recent to the oldest. Button, menu and window names are those of the interface, in English. Entries marked "(to be verified)" are declared but not yet tested in Visual Studio.
 
-## 0.6.1 (in preparation)
+## 0.6.1 (2026-11-18)
 
 Contents: Options with the modern interface, summary of incoming revisions based on the real changes, Copilot AI credits. Installs over 0.6.0.
 
