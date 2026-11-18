@@ -295,6 +295,22 @@ public class MergeResumeRealTests
         Assert.Equal("", e.Eligible());
     }
 
+    [Fact]
+    public async Task SvnVero_ConflittoSuRevisioniSelezionateNonAdiacenti_ChangesMostraIlConflitto_NonNessunaModifica()
+    {
+        using var e = new Env();
+        MergeStore.FilesDebounce = TimeSpan.Zero;
+        await e.OpenMergeAsync();
+        await e.LogCmd("mergeToggle", new { rev = e.FeatRevs[2] });
+        await e.LogCmd("mergeToggle", new { rev = e.FeatRevs[3] });
+        await e.LogCmd("mergeSelected");
+        await e.Changes.RefreshAsync(Ct);   // come il refresh del pannello
+        var snap = e.ChangesSnap;
+        Assert.NotEmpty(snap.Conflicts ?? []);
+        Assert.NotEmpty(snap.Sections);
+        Assert.DoesNotContain("Nessuna modifica", snap.Status.Msg);
+    }
+
     private static string TreeOf(string wc)
     {
         var sb = new System.Text.StringBuilder();
