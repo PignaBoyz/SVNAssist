@@ -22,3 +22,8 @@ test('le API key sono solo "impostata o no": mai lette dai valori, mai inviate a
   assert.match(host, /name == "settingsSecret" && secret/); // le chiavi solo col comando dedicato
   assert.match(host, /name == "settingsSet" && !secret/);
 });
+
+test('settings.js e\' JavaScript valido', async () => {
+  const { Script } = await import('node:vm');
+  assert.doesNotThrow(() => new Script(js, { filename: 'settings.js' }));
+});
