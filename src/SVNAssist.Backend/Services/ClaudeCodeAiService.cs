@@ -11,11 +11,14 @@ namespace SVNAssist.Services;
 /// Il processo gira senza strumenti, senza MCP e senza salvare la sessione: deve solo
 /// rispondere con il testo del commit, mai toccare file.
 /// </remarks>
-internal sealed class ClaudeCodeAiService : AiServiceBase
+internal sealed class ClaudeCodeAiService : AiServiceBase, IReportsModel
 {
     private readonly IProcessRunner _processRunner;
     private readonly string _claudeExePath;
     private readonly string _model;
+
+    /// <summary>Modello configurato (vuoto = il predefinito del provider, non noto): la UI lo scrive accanto al messaggio generato.</summary>
+    public string? LastModelUsed => string.IsNullOrWhiteSpace(_model) ? null : _model;
 
     public ClaudeCodeAiService(IProcessRunner processRunner, string claudeExePath, string model)
     {

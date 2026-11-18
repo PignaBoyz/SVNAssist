@@ -20,11 +20,14 @@ namespace SVNAssist.Services;
 /// <b>per singola richiesta</b>, non sui <c>DefaultRequestHeaders</c> del client condiviso,
 /// così più istanze non si sovrascrivono a vicenda.
 /// </remarks>
-public class AiService : AiServiceBase
+public class AiService : AiServiceBase, IReportsModel
 {
     private readonly HttpClient _httpClient;
     private readonly string _endpoint;
     private readonly string _model;
+
+    /// <summary>Modello configurato (vuoto = il predefinito del provider, non noto): la UI lo scrive accanto al messaggio generato.</summary>
+    public string? LastModelUsed => string.IsNullOrWhiteSpace(_model) ? null : _model;
     private readonly string _apiKey;
 
     /// <summary>Crea il provider OpenAI-compatibile.</summary>

@@ -7,7 +7,7 @@ namespace SVNAssist.Services;
 /// Provider AI che chiama la <b>Claude API</b> di Anthropic con l'SDK ufficiale (<c>Anthropic</c>).
 /// Richiede una API key Anthropic (impostazione o variabile <c>ANTHROPIC_API_KEY</c>).
 /// </summary>
-internal sealed class AnthropicAiService : AiServiceBase
+internal sealed class AnthropicAiService : AiServiceBase, IReportsModel
 {
     // I modelli per cui è disponibile il fallback lato server in caso di rifiuto.
     private static readonly string[] FallbackModels =
@@ -15,6 +15,9 @@ internal sealed class AnthropicAiService : AiServiceBase
 
     private readonly AnthropicClient _client;
     private readonly string _model;
+
+    /// <summary>Modello configurato (vuoto = il predefinito del provider, non noto): la UI lo scrive accanto al messaggio generato.</summary>
+    public string? LastModelUsed => string.IsNullOrWhiteSpace(_model) ? null : _model;
 
     /// <param name="apiKey">API key; se vuota l'SDK usa le credenziali di ambiente.</param>
     /// <param name="model">Modello Claude (default <c>claude-sonnet-5-5</c>).</param>
