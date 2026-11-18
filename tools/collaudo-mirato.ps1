@@ -62,10 +62,10 @@ if (Get-Process devenv -ErrorAction SilentlyContinue) { throw 'Chiudi Visual Stu
 function Install-Vsix {
     Write-Host '[..] Installazione VSIX in SvnHost...'
     # stessa versione gia' installata = errore 1001 anche con /force: prima si disinstalla (codice ignorato se assente)
-    Start-Process "$ideVSIXInstaller.exe" -ArgumentList '/rootSuffix:SvnHost', '/quiet', '/u:SVNAssist' -Wait
-    $p = Start-Process "$ideVSIXInstaller.exe" -ArgumentList '/rootSuffix:SvnHost', '/quiet', '/force', "`"$((Resolve-Path $vsix).Path)`"" -Wait -PassThru
+    Start-Process "$ide\VSIXInstaller.exe" -ArgumentList '/rootSuffix:SvnHost', '/quiet', '/u:SVNAssist' -Wait
+    $p = Start-Process "$ide\VSIXInstaller.exe" -ArgumentList '/rootSuffix:SvnHost', '/quiet', '/force', "`"$((Resolve-Path $vsix).Path)`"" -Wait -PassThru
     if ($p.ExitCode) { throw "VSIXInstaller: codice $($p.ExitCode)" }
-    Start-Process "$idedevenv.exe" -ArgumentList '/rootsuffix', 'SvnHost', '/updateconfiguration' -Wait
+    Start-Process "$ide\devenv.exe" -ArgumentList '/rootsuffix', 'SvnHost', '/updateconfiguration' -Wait
 }
 if ($SoloVsix) { Install-Vsix; Write-Host '[ok] VSIX installato in SvnHost. Simulazione e dati non toccati.'; return }
 
