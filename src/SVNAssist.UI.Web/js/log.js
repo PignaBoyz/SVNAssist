@@ -39,7 +39,9 @@
       files.length === 1 ? { label: t('Diff con la precedente'), cmd: 'logOpenFile', args: { rev, i: e.paths.indexOf(files[0]) }, hint: t('Apre il diff di r{0} contro la precedente in Visual Studio', rev) }
         : { label: t('Diff con la precedente'), cmd: 'logSelect', args: { rev }, hint: t('Mostra il diff della revisione sotto la tabella') }];
     if (s.sel != null && s.sel !== rev) items.push({ label: t('Confronta con r{0}', s.sel), cmd: 'logCompare', args: { a: s.sel, b: rev }, hint: t('Elenca i file cambiati tra le due revisioni') });
-    return [...items, { sep: true }, ...tail];
+    // l'URL del repository non e' noto alla UI (ne' dove si veda nel browser): si copia percorso@revisione, usabile in svn e nel Repository browser
+    const repoPaths = files.map(f => f.p + '@' + rev).join('\n');
+    return [...items, { sep: true }, { label: t('Copia percorso nel repository'), run: copy(repoPaths, t('percorso')), disabled: !files.length, hint: t('Copia percorso@revisione dei file della revisione (uno per riga)') }, ...tail];
   };
   // Merge interrotto nel Log: lo stesso blocco di Changes (una volta sola: l'errore non si ripete) + le revisioni gia' applicate "in questo merge"
   const O_pending = (p, m) => U.ops.pendingMergeHTML(p, { extra: U.btn('btn sm', t('Vai a Changes'), 'diff', 'mergeResolve', null, t('Apre Changes, sezione Conflitti, con le azioni per ogni file')) }) +

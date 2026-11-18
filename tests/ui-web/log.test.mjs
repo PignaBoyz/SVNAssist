@@ -134,3 +134,11 @@ test('revisioni unite: riga indentata (classe mg/d1) e merge inverso segnalato; 
   assert.match(h, /merge inverso/);
   assert.match(h, /aria-level="2"/);
 });
+
+test('menu del log: Copia percorso nel repository, disabilitata senza file', () => {
+  const s = fx();
+  const it = U.logRowMenu(s, 123).find(i => i.label === 'Copia percorso nel repository');
+  assert.ok(it && !it.disabled && typeof it.run === 'function');
+  s.entries.find(e => e.rev === 123).paths = [];
+  assert.ok(U.logRowMenu(s, 123).find(i => i.label === 'Copia percorso nel repository').disabled);
+});
