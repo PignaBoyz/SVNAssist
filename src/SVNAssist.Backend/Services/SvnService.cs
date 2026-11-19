@@ -429,7 +429,7 @@ public class SvnService : ISvnService
         if (options.UsesExtras && !CleanupOptions.ExtrasSupported(await GetSvnVersionAsync(ct)))
             throw new InvalidOperationException(Loc.T("Queste opzioni del Cleanup richiedono svn 1.9 o successivo."));
         if (options.RunsCleanup)
-            await RunSvnAsync(options.ToArgs(), dir, ct, applyTimeout: false);
+            await RunCleanupRetryingAsync(options.ToArgs(), dir, ct);
         var report = new CleanupReport(0, 0);
         if (options.RemoveUnversioned || options.RemoveIgnored)
         {
@@ -441,6 +441,34 @@ public class SvnService : ISvnService
         if (options.RevertAll)
             await RevertAsync([dir], ct, recursive: true);
         return report;
+    }
+
+    /// <summary>
+    /// Cleanup che non "esplode" se un file e' tenuto aperto (tipico con Visual Studio aperto): si riprova qualche volta (spesso VS lo rilascia da solo
+    /// dopo un istante), poi si spiega quale file e' in uso, da chi, e cosa fare.
+    /// </summary>
+    private async Task RunCleanupRetryingAsync(IReadOnlyList<string> args, string dir, CancellationToken ct)
+    {
+        const int attempts = 3;
+        for (var i = 1; ; i++)
+        {
+            try
+            {
+                await RunSvnAsync(args, dir, ct, applyTimeout: false);
+                return;
+            }
+            catch (InvalidOperationException ex) when (FileInUse.TryParse(ex.Message, out var file))
+            {
+                if (i < attempts)
+                {
+                    BackendLog.Warn($"Cleanup: file in uso ({file}), tentativo {i}/{attempts}.");
+                    await Task.Delay(TimeSpan.FromSeconds(2), ct);
+                    continue;
+                }
+
+                throw new InvalidOperationException(FileInUse.Explain(file, ex.Message), ex);
+            }
+        }
     }
 
     /// <inheritdoc />
