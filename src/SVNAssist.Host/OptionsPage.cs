@@ -89,7 +89,7 @@ namespace SVNAssist.Host
         private WebViewHost _child;
 
         // La pagina mostra la UI web moderna (vista "settings"), non la griglia delle proprieta': le proprieta' restano il modello dei dati (registro).
-        protected override System.Windows.UIElement Child => _child ?? (_child = new WebViewHost("settings", SVNAssistPackage.Instance.Host));
+        protected override System.Windows.UIElement Child => (_child != null && !_child.IsDisposed) ? _child : (_child = new WebViewHost("settings", SVNAssistPackage.Instance.Host));
 
         protected override void OnActivate(CancelEventArgs e)
         {
@@ -99,7 +99,7 @@ namespace SVNAssist.Host
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) { _child?.DisposeHost(); _child = null; }
+            if (disposing) { var c = _child; _child = null; c?.DisposeHost(); }
             base.Dispose(disposing);
         }
 

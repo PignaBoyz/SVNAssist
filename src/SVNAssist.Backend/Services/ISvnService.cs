@@ -221,6 +221,10 @@ public interface ISvnService
     /// <summary>Lock tenuti da altri utenti (<c>svn status -u --xml</c>, tocca la rete): mai interattiva, in caso di errore lancia.</summary>
     Task<IReadOnlyList<SvnRemoteLock>> GetRemoteLocksAsync(string workingCopyPath, CancellationToken ct);
 
+    /// <summary>Come sopra ma solo per i percorsi dati (<c>--depth empty</c>): non scorre tutta la working copy. Predefinito: la versione completa.</summary>
+    Task<IReadOnlyList<SvnRemoteLock>> GetRemoteLocksAsync(string workingCopyPath, IReadOnlyList<string> paths, CancellationToken ct)
+        => GetRemoteLocksAsync(workingCopyPath, ct);
+
     /// <summary>Versione di svn (<c>svn --version --quiet</c>); <c>null</c> se non si riesce a leggerla. Le funzioni che richiedono svn &lt; 1.8 si nascondono.</summary>
     Task<Version?> GetSvnVersionAsync(CancellationToken ct);
 

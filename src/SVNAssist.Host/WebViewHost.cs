@@ -167,7 +167,10 @@ namespace SVNAssist.Host
             {
                 var src = PresentationSource.FromVisual(this) as System.Windows.Interop.HwndSource;
                 var root = src == null ? IntPtr.Zero : GetAncestor(src.Handle, 2 /* GA_ROOT */);
-                if (root != IntPtr.Zero) PostMessage(root, 0x0010 /* WM_CLOSE */, IntPtr.Zero, IntPtr.Zero);
+                // In VS 18 Options e' una scheda nella finestra principale, non un dialogo modale: la finestra radice e' quella di VS e
+                // WM_CLOSE la chiuderebbe (era la causa della chiusura automatica). Si chiude solo un vero dialogo separato.
+                var main = Process.GetCurrentProcess().MainWindowHandle;
+                if (root != IntPtr.Zero && root != main) PostMessage(root, 0x0010 /* WM_CLOSE */, IntPtr.Zero, IntPtr.Zero);
             }
             catch (Exception ex) { Log.Write("CloseParentDialog: " + ex.Message); }
         }
@@ -201,11 +204,17 @@ namespace SVNAssist.Host
         private static void Themed(TextBlock tb) =>
             tb.SetResourceReference(TextBlock.ForegroundProperty, Microsoft.VisualStudio.PlatformUI.EnvironmentColors.ToolWindowTextBrushKey);
 
+        internal bool IsDisposed => _disposed;
+
         public void DisposeHost()
         {
+            if (_disposed) return;
             _disposed = true;
             _host.Unregister(_view, this);
-            try { _web.Dispose(); } catch { }
+            // Le Impostazioni di VS 18 spostano il controllo tra finestre mentre la pagina si chiude (ReparentController): si distrugge
+            // dopo, a UI inattiva, e un errore qui non deve mai arrivare come eccezione non gestita.
+            Dispatcher.BeginInvoke(new Action(() => { try { Content = null; _web.Dispose(); } catch (Exception ex) { Log.Write("WebView dispose: " + ex.Message); } }),
+                System.Windows.Threading.DispatcherPriority.ApplicationIdle);
         }
     }
 }

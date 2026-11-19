@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Microsoft.VisualStudio;
@@ -68,6 +69,9 @@ namespace SVNAssist.Host
         /// <summary>Nuovo stato dal backend (qualsiasi thread): aggiorna la cache e ridisegna i glifi di tutti i progetti.</summary>
         internal void SetStates(Dictionary<string, string> states)
         {
+            // Stato identico al precedente (refresh senza cambiamenti): niente ridisegno dei glifi di tutta la solution sul thread UI.
+            var old = _states;
+            if (old.Count == states.Count && states.All(kv => old.TryGetValue(kv.Key, out var v) && v == kv.Value)) return;
             _states = new Dictionary<string, string>(states, StringComparer.OrdinalIgnoreCase);
             _pkg.JoinableTaskFactory.RunAsync(async () =>
             {

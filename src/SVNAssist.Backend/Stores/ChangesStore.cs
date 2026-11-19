@@ -177,7 +177,11 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             return;
         try
         {
-            var locks = (await _svnService.GetRemoteLocksAsync(wc, ct))
+            // Solo i file gia' nell'albero (i lock altrui si mostrano solo li'): niente "svn status -u" su tutta la working copy.
+            List<string> paths;
+            lock (_stateLock)
+                paths = _entries.Where(e => e.Status != SvnStatusKind.Unversioned).Select(e => e.FullPath).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var locks = (await _svnService.GetRemoteLocksAsync(wc, paths, ct))
                 .ToDictionary(l => NormalizeStatusPath(l.Path, wc), StringComparer.OrdinalIgnoreCase);
             lock (_stateLock)
                 _remoteLocks = locks;
@@ -3490,6 +3494,7 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             watcher.Renamed += OnFsChanged;
             // Overflow del buffer (molti file cambiati insieme): gli eventi persi si recuperano con un refresh completo.
             watcher.Error += (_, _) => _debouncer.Request();
+            watcher.InternalBufferSize = 64 * 1024; // il default (8 KB) va in overflow con build e checkout grandi
             watcher.EnableRaisingEvents = true;
             _watcher = watcher;
         }

@@ -145,6 +145,7 @@ namespace SVNAssist
             ["svn {0} fallito (exit code {1}): {2}"] = "svn {0} failed (exit code {1}): {2}",
             ["Impossibile collegarsi al server SVN: controlla la rete/VPN e l'indirizzo del repository."] = "Cannot connect to the SVN server: check the network/VPN and the repository address.",
             ["Autenticazione SVN mancante o rifiutata: riprova e inserisci utente e password quando richiesto."] = "SVN authentication missing or rejected: try again and enter user and password when asked.",
+            ["Windows rifiuta lo spostamento di un file perché è in uso (di solito è aperto in Visual Studio): chiudi il file o la solution e riprova; se la working copy resta bloccata, esegui SVN Cleanup."] = "Windows refuses to move a file because it is in use (usually it is open in Visual Studio): close the file or the solution and try again; if the working copy stays locked, run SVN Cleanup.",
             ["La working copy è bloccata da un'operazione interrotta: esegui SVN Cleanup e riprova."] = "The working copy is locked by an interrupted operation: run SVN Cleanup and try again.",
             ["Alcuni file sono più recenti sul server: fai prima Update, poi riprova il commit."] = "Some files are newer on the server: run Update first, then retry the commit.",
             ["Non è una working copy SVN"] = "Not an SVN working copy",

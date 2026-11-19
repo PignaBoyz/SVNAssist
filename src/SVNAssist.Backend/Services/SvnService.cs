@@ -90,6 +90,21 @@ public class SvnService : ISvnService
         => ParseStatusXml(await RunSvnAsync(["status", "-q", "--xml"], workingCopyPath, ct));
 
     /// <inheritdoc />
+    public async Task<IReadOnlyList<SvnRemoteLock>> GetRemoteLocksAsync(string workingCopyPath, IReadOnlyList<string> paths, CancellationToken ct)
+    {
+        // Pochi percorsi: status -u solo su di loro, senza visitare tutta la working copy. Troppi: versione completa.
+        if (paths.Count == 0)
+            return [];
+        if (paths.Count > 150)
+            return await GetRemoteLocksAsync(workingCopyPath, ct);
+        List<string> args = ["status", "-u", "--xml", "--depth", "empty", .. paths.Select(Peg)];
+        var r = await RunSvnOnceAsync(args, workingCopyPath, ct, true, null);
+        if (r.ExitCode != 0)
+            throw new InvalidOperationException(BuildErrorMessage("status -u", r.ExitCode, r.StandardError));
+        return ParseRemoteLocks(r.StandardOutput);
+    }
+
+    /// <inheritdoc />
     public async Task<IReadOnlyList<SvnRemoteLock>> GetRemoteLocksAsync(string workingCopyPath, CancellationToken ct)
     {
         // RunSvnOnceAsync: controllo in background, mai il dialogo di login.
@@ -1506,6 +1521,9 @@ public class SvnService : ISvnService
 
         if (stderr.Contains("E215004", StringComparison.Ordinal) || stderr.Contains("E170001", StringComparison.Ordinal))
             return Loc.T("Autenticazione SVN mancante o rifiutata: riprova e inserisci utente e password quando richiesto.");
+
+        if (stderr.Contains("E720005", StringComparison.Ordinal) || (stderr.Contains("E155009", StringComparison.Ordinal) && stderr.Contains("Access is denied", StringComparison.OrdinalIgnoreCase)))
+            return Loc.T("Windows rifiuta lo spostamento di un file perché è in uso (di solito è aperto in Visual Studio): chiudi il file o la solution e riprova; se la working copy resta bloccata, esegui SVN Cleanup.");
 
         if (stderr.Contains("E155004", StringComparison.Ordinal))
             return Loc.T("La working copy è bloccata da un'operazione interrotta: esegui SVN Cleanup e riprova.");

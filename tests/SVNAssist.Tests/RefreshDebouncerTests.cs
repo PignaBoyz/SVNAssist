@@ -89,6 +89,10 @@ public class RefreshDebouncerTests
     [InlineData(@"C:\wc\.vs\slnx.sqlite", true)]
     [InlineData(@"C:\wc\src\binary.txt", false)]
     [InlineData(@"C:\wc\objects\a.cs", false)]
+    [InlineData(@"C:\wc\proj\x64\Debug\a.obj", true)]
+    [InlineData(@"C:\wc\src\Foo.cs~", true)]
+    [InlineData(@"C:\wc\src\~Foo.cs", true)]
+    [InlineData(@"C:\wc\src\a.tmp", true)]
     public void IsNoise_IgnoraBinObjVsESvn(string path, bool noise)
         => Assert.Equal(noise, WorkingCopyPathFilter.IsNoise(@"C:\wc", path));
 

@@ -81,7 +81,14 @@ internal static class WorkingCopyPathFilter
     private static readonly HashSet<string> NoiseFolders = new(StringComparer.OrdinalIgnoreCase)
     {
         ".svn", ".vs", ".svn-assist", "bin", "obj", "node_modules",
+        // Uscite di build C++ e cache degli strumenti: cambiano a ogni compilazione senza toccare lo stato SVN.
+        "x64", "x86", "ipch", "packages", ".git", "TestResults",
     };
+
+    /// <summary>File temporanei (salvataggio con temp + rename, backup degli editor): non sono modifiche vere.</summary>
+    private static bool IsTempFile(string name)
+        => name.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase) || name.EndsWith("~", StringComparison.Ordinal)
+           || name.StartsWith("~", StringComparison.Ordinal);
 
     /// <summary><c>true</c> se l'evento su <paramref name="fullPath"/> va ignorato.</summary>
     /// <param name="workingCopyRoot">Root della working copy (solo i segmenti sotto la root contano).</param>
@@ -92,7 +99,7 @@ internal static class WorkingCopyPathFilter
             ? fullPath[workingCopyRoot.Length..]
             : fullPath;
 
-        return relative.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries)
-            .Any(NoiseFolders.Contains);
+        var parts = relative.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries);
+        return parts.Any(NoiseFolders.Contains) || (parts.Length > 0 && IsTempFile(parts[^1]));
     }
 }

@@ -51,7 +51,8 @@ namespace SVNAssist.Host
         private readonly IWpfTextView _view;
         private readonly RevertMarginProvider _p;
         private IDifferenceBuffer _buffer;
-        private bool _disposed;
+        private bool _disposed, _notDiff;
+        private int _misses;
 
         public RevertMargin(IWpfTextView view, RevertMarginProvider p)
         {
@@ -75,16 +76,18 @@ namespace SVNAssist.Host
         private void Refresh()
         {
             if (_disposed) return;
-            Children.Clear();
+            if (_notDiff) return; // editor normale: deciso una volta, niente lavoro a ogni scroll o battitura
             IDifferenceViewer viewer;
             try { viewer = _p.Viewers.TryGetViewerForTextView(_view); } catch (Exception ex) { LogOnce("TryGetViewerForTextView: " + ex.Message); return; }
             // solo il pannello destro (in modalita' inline non c'e' una vista "destra" da annullare riga per riga)
-            var roles = string.Join(",", _view.Roles);
             if (viewer == null || viewer.RightView != _view || viewer.DifferenceBuffer == null)
             {
-                LogOnce("nessun pulsante: viewer " + (viewer == null ? "NON trovato" : "trovato ma questa non e' la vista destra (destra=" + (viewer.RightView == _view) + ", buffer=" + (viewer.DifferenceBuffer != null) + ")") + "; ruoli: " + roles);
+                // Il viewer del diff si registra dopo la creazione delle viste: si riprova solo per i primi layout, poi la vista e' un editor normale.
+                if (++_misses >= 20 && viewer == null) { _notDiff = true; _view.LayoutChanged -= OnLayout; }
                 Visibility = Visibility.Collapsed; return;
             }
+            Children.Clear();
+            var roles = string.Join(",", _view.Roles);
             Visibility = Visibility.Visible;
             if (_buffer != viewer.DifferenceBuffer)
             {
