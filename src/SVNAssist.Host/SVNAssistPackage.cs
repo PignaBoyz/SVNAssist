@@ -22,7 +22,7 @@ using Task = System.Threading.Tasks.Task;
 namespace SVNAssist.Host
 {
     [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
-    [InstalledProductRegistration("SVNAssist", "SVN integration with AI commit messages", "0.5.0")]
+    [InstalledProductRegistration("SVNAssist", "SVN integration with AI commit messages", "0.7.0")]
     [Guid(Ids.PackageGuid)]
     [ProvideMenuResource("Menus.ctmenu", 1)]
     [ProvideToolWindow(typeof(ChangesToolWindow), Style = VsDockStyle.Tabbed, Window = ToolWindowGuids80.SolutionExplorer, Orientation = ToolWindowOrientation.Left)]
@@ -40,9 +40,25 @@ namespace SVNAssist.Host
         internal SvnSccService Scc { get; private set; }
         private SvnAssistOptions _options;
         private ConflictInfoBars _conflictBars; // InfoBar sui documenti in conflitto
+        private IdeActivityTracker _activity;
+        private string _cachedSolutionWcRoot;
+        private readonly Dictionary<string, bool> _externalWcCache = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>Impostazioni (Tools > Options). Solo thread UI.</summary>
         internal SvnAssistOptions Options => _options ?? (_options = (SvnAssistOptions)GetDialogPage(typeof(SvnAssistOptions)));
+
+        internal bool IsSolutionLoading => _activity?.IsSolutionLoading ?? false;
+
+        internal void OnSolutionLoadComplete()
+        {
+            if (Scc != null && Scc.Active)
+                Host.StartSccAsync().FileAndForget("SVNAssist/scc");
+        }
+
+        private void OnSccOptionsChanged() => Scc.Reevaluate(null);
+        private void OnAfterSolutionChanged(object sender, EventArgs e) => NotifySolution();
+        private void OnAppActivated(object sender, EventArgs e) => Host.OnIdeActiveAsync(true).FileAndForget("SVNAssist/ideActive");
+        private void OnAppDeactivated(object sender, EventArgs e) => Host.OnIdeActiveAsync(false).FileAndForget("SVNAssist/ideActive");
 
         protected override async Task InitializeAsync(CancellationToken ct, IProgress<ServiceProgressData> progress)
         {
@@ -54,19 +70,22 @@ namespace SVNAssist.Host
             Host = new HostService(this);
             Scc = new SvnSccService(this);
             AddService(typeof(SvnSccService), (c, t, type) => Task.FromResult<object>(Scc), true);
-            SvnAssistOptions.Changed += () => Scc.Reevaluate(null);
+            SvnAssistOptions.Changed += OnSccOptionsChanged;
 
             if (await GetServiceAsync(typeof(IMenuCommandService)) is OleMenuCommandService mcs)
                 RegisterCommands(mcs);
 
-            Microsoft.VisualStudio.Shell.Events.SolutionEvents.OnAfterOpenSolution += (s, e) => NotifySolution();
-            Microsoft.VisualStudio.Shell.Events.SolutionEvents.OnAfterCloseSolution += (s, e) => NotifySolution();
+            try { _activity = new IdeActivityTracker(this, await GetServiceAsync(typeof(SVsSolutionBuildManager)) as IVsSolutionBuildManager2); }
+            catch (Exception ex) { Log.Write("activity tracker: " + ex.Message); }
+
+            Microsoft.VisualStudio.Shell.Events.SolutionEvents.OnAfterOpenSolution += OnAfterSolutionChanged;
+            Microsoft.VisualStudio.Shell.Events.SolutionEvents.OnAfterCloseSolution += OnAfterSolutionChanged;
             NotifySolution();
             // il controllo delle nuove revisioni lavora solo con VS in primo piano
             if (System.Windows.Application.Current is System.Windows.Application app)
             {
-                app.Activated += (s, e) => Host.OnIdeActiveAsync(true).FileAndForget("SVNAssist/ideActive");
-                app.Deactivated += (s, e) => Host.OnIdeActiveAsync(false).FileAndForget("SVNAssist/ideActive");
+                app.Activated += OnAppActivated;
+                app.Deactivated += OnAppDeactivated;
             }
             SvnAssistOptions.Changed += ApplyShortcuts;
             ApplyShortcuts();
@@ -90,27 +109,57 @@ namespace SVNAssist.Host
                 ThreadHelper.ThrowIfNotOnUIThread();
                 var dte = GetService(typeof(EnvDTE.DTE)) as EnvDTE.DTE;
                 if (dte == null) { Log.Write("scorciatoie: DTE non disponibile"); return; }
-                SetBinding(dte, "SVNAssist.NextChange", Options.NextChangeShortcut);
-                SetBinding(dte, "SVNAssist.PreviousChange", Options.PreviousChangeShortcut);
+                SetBinding(dte, Ids.CmdNextChange, "SVNAssist.NextChange", Options.NextChangeShortcut);
+                SetBinding(dte, Ids.CmdPrevChange, "SVNAssist.PreviousChange", Options.PreviousChangeShortcut);
             }
             catch (Exception ex) { Log.Write("scorciatoie: " + ex.Message); }
         }
 
-        private static void SetBinding(EnvDTE.DTE dte, string command, string keys)
+        private static void SetBinding(EnvDTE.DTE dte, int cmdId, string commandName, string keys)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             try
             {
                 keys = (keys ?? "").Trim();
-                var cmd = dte.Commands.Item(command);
-                if (keys.Length == 0) { cmd.Bindings = new object[0]; return; }
-                // un solo tasto/accordo; formato DTE "Scope::Keys"
-                var binding = "Global::" + keys;
-                var current = cmd.Bindings as object[];
-                if (current != null && current.Length == 1 && string.Equals(current[0] as string, binding, StringComparison.OrdinalIgnoreCase)) return;
-                cmd.Bindings = new object[] { binding };
+                EnvDTE.Command cmd;
+                try { cmd = dte.Commands.Item(Ids.CmdSet.ToString("B"), cmdId); }
+                catch { cmd = dte.Commands.Item(commandName); }
+
+                var current = (cmd.Bindings as object[])?.OfType<string>().ToArray() ?? Array.Empty<string>();
+                if (keys.Length == 0)
+                {
+                    if (current.Length > 0) cmd.Bindings = Array.Empty<object>();
+                    return;
+                }
+
+                // I default dichiarati in SVNAssist.vsct sono gia' applicati da VS: evita riscritture inutili (e potenziali E_INVALIDARG sullo scope).
+                if (ShortcutBinding.MatchesAny(current, keys)) return;
+
+                var scopePrefix = ShortcutBinding.ExtractScopePrefix(current);
+                if (current.Length == 0)
+                {
+                    try
+                    {
+                        var saveAll = dte.Commands.Item("{5EFC7975-14BC-11CF-9B2B-00AA00573819}", 224);
+                        var saveBindings = (saveAll?.Bindings as object[])?.OfType<string>();
+                        scopePrefix = ShortcutBinding.ExtractScopePrefix(saveBindings);
+                    }
+                    catch { /* fallback su Global:: */ }
+                }
+
+                var binding = ShortcutBinding.WithScope(scopePrefix, keys);
+                try
+                {
+                    cmd.Bindings = new object[] { binding };
+                }
+                catch (ArgumentException)
+                {
+                    var canonical = ShortcutBinding.WithScope(scopePrefix, ShortcutBinding.Canonicalize(keys));
+                    if (string.Equals(canonical, binding, StringComparison.OrdinalIgnoreCase)) throw;
+                    cmd.Bindings = new object[] { canonical };
+                }
             }
-            catch (Exception ex) { Log.Write("scorciatoia non valida '" + keys + "' per " + command + ": " + ex.Message); }
+            catch (Exception ex) { Log.Write("scorciatoia non valida '" + keys + "' per " + commandName + ": " + ex.Message); }
         }
 
         // ---- solution ----
@@ -125,6 +174,8 @@ namespace SVNAssist.Host
                     dir = d.TrimEnd('\\', '/');
             }
             catch (Exception ex) { Log.Write("solution info: " + ex.Message); }
+            _cachedSolutionWcRoot = string.IsNullOrEmpty(dir) ? null : SvnSccService.FindWorkingCopyRoot(dir);
+            _externalWcCache.Clear();
             Host.OnSolutionChangedAsync(dir).FileAndForget("SVNAssist/solution");
             Scc.Reevaluate(dir ?? "");
         }
@@ -183,7 +234,11 @@ namespace SVNAssist.Host
                 await JoinableTaskFactory.SwitchToMainThreadAsync();
                 if (SelectedPath() is string p) await Host.RunPathCommandAsync("log", new[] { p });
             }), new CommandID(Ids.CmdSet, Ids.CmdSeLog));
-            seLog.BeforeQueryStatus += (s, e) => ((OleMenuCommand)s).Visible = InWorkingCopy(SelectedPath());
+            seLog.BeforeQueryStatus += (s, e) =>
+            {
+                var p = SelectedPathWithKind(out var isFolder);
+                ((OleMenuCommand)s).Visible = InWorkingCopy(p, isFolder);
+            };
             mcs.AddCommand(seLog);
 
             // Solution Explorer > SVN Add: solo se TUTTI gli elementi selezionati sono non versionati (stato dalla cache SCC; provider spento = nascosto).
@@ -209,8 +264,8 @@ namespace SVNAssist.Host
             }), new CommandID(Ids.CmdSet, Ids.CmdSeDiff));
             seDiff.BeforeQueryStatus += (s, e) =>
             {
-                var ps = SelectedPaths();
-                ((OleMenuCommand)s).Visible = ps.Count == 1 && System.IO.File.Exists(ps[0]) && Scc.IsModified(ps[0]);
+                var ps = SelectedPathsWithKind();
+                ((OleMenuCommand)s).Visible = ps.Count == 1 && !ps[0].IsFolder && Scc.IsModified(ps[0].Path);
             };
             mcs.AddCommand(seDiff);
 
@@ -223,8 +278,8 @@ namespace SVNAssist.Host
             }), new CommandID(Ids.CmdSet, Ids.CmdSeMerge));
             seMerge.BeforeQueryStatus += (s, e) =>
             {
-                var p = SelectedPath();
-                ((OleMenuCommand)s).Visible = p != null && System.IO.Directory.Exists(p) && InWorkingCopy(p);
+                var p = SelectedPathWithKind(out var isFolder);
+                ((OleMenuCommand)s).Visible = p != null && isFolder && InWorkingCopy(p, isKnownFolder: true);
             };
             mcs.AddCommand(seMerge);
 
@@ -241,10 +296,20 @@ namespace SVNAssist.Host
 
         }
 
-        /// <summary>Percorso dell'unico elemento selezionato in Solution Explorer (file, progetto, cartella); null se multiplo o assente.</summary>
-        private string SelectedPath()
+        private static bool IsPhysicalFolder(IVsHierarchy hier, uint itemId)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
+            return hier.GetProperty(itemId, (int)__VSHPROPID.VSHPROPID_TypeGuid, out var v) == VSConstants.S_OK
+                && v is Guid g && g == VSConstants.GUID_ItemType_PhysicalFolder;
+        }
+
+        private string SelectedPath() => SelectedPathWithKind(out _);
+
+        /// <summary>Percorso e tipo dell'unico elemento selezionato in Solution Explorer senza I/O su disco.</summary>
+        private string SelectedPathWithKind(out bool isFolder)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            isFolder = false;
             IntPtr hierPtr = IntPtr.Zero, contPtr = IntPtr.Zero;
             try
             {
@@ -252,7 +317,9 @@ namespace SVNAssist.Host
                 sel.GetCurrentSelection(out hierPtr, out uint itemId, out _, out contPtr);
                 if (hierPtr == IntPtr.Zero || itemId == VSConstants.VSITEMID_SELECTION) return null;
                 var hier = (IVsHierarchy)Marshal.GetObjectForIUnknown(hierPtr);
-                return hier.GetCanonicalName(itemId, out var name) == VSConstants.S_OK && !string.IsNullOrWhiteSpace(name) ? name : null;
+                if (hier.GetCanonicalName(itemId, out var name) != VSConstants.S_OK || string.IsNullOrWhiteSpace(name)) return null;
+                isFolder = IsPhysicalFolder(hier, itemId);
+                return name;
             }
             catch (Exception ex) { Log.Write("selezione SE: " + ex.Message); return null; }
             finally
@@ -263,10 +330,12 @@ namespace SVNAssist.Host
         }
 
         /// <summary>Percorsi di tutti gli elementi selezionati in Solution Explorer (selezione multipla inclusa); vuoto se nessuno.</summary>
-        private List<string> SelectedPaths()
+        private List<string> SelectedPaths() => SelectedPathsWithKind().Select(x => x.Path).ToList();
+
+        private List<(string Path, bool IsFolder)> SelectedPathsWithKind()
         {
             ThreadHelper.ThrowIfNotOnUIThread();
-            var res = new List<string>();
+            var res = new List<(string, bool)>();
             IntPtr hierPtr = IntPtr.Zero, contPtr = IntPtr.Zero;
             try
             {
@@ -278,12 +347,14 @@ namespace SVNAssist.Host
                     var items = new VSITEMSELECTION[n];
                     if (multi.GetSelectedItems(0, n, items) != VSConstants.S_OK) return res;
                     foreach (var it in items)
-                        if (it.pHier != null && it.pHier.GetCanonicalName(it.itemid, out var name) == VSConstants.S_OK && !string.IsNullOrWhiteSpace(name)) res.Add(name);
+                        if (it.pHier != null && it.pHier.GetCanonicalName(it.itemid, out var name) == VSConstants.S_OK && !string.IsNullOrWhiteSpace(name))
+                            res.Add((name, IsPhysicalFolder(it.pHier, it.itemid)));
                 }
                 else if (hierPtr != IntPtr.Zero)
                 {
                     var hier = (IVsHierarchy)Marshal.GetObjectForIUnknown(hierPtr);
-                    if (hier.GetCanonicalName(itemId, out var name) == VSConstants.S_OK && !string.IsNullOrWhiteSpace(name)) res.Add(name);
+                    if (hier.GetCanonicalName(itemId, out var name) == VSConstants.S_OK && !string.IsNullOrWhiteSpace(name))
+                        res.Add((name, IsPhysicalFolder(hier, itemId)));
                 }
             }
             catch (Exception ex) { Log.Write("selezione SE: " + ex.Message); res.Clear(); }
@@ -295,13 +366,31 @@ namespace SVNAssist.Host
             return res;
         }
 
-        // shortcut: cerca ".svn" risalendo le cartelle (come SvnService.FindSvnRoot) senza chiedere al backend; upgrade se servono working copy esterne.
-        private static bool InWorkingCopy(string path)
+        private static bool IsUnderPrefix(string root, string path)
+        {
+            if (string.IsNullOrEmpty(root) || string.IsNullOrEmpty(path)) return false;
+            var r = root.TrimEnd('\\', '/');
+            var p = path.TrimEnd('\\', '/');
+            return p.StartsWith(r, StringComparison.OrdinalIgnoreCase) && (p.Length == r.Length || p[r.Length] == '\\' || p[r.Length] == '/');
+        }
+
+        private bool InWorkingCopy(string path, bool isKnownFolder = false)
         {
             if (string.IsNullOrEmpty(path)) return false;
-            for (var d = new System.IO.DirectoryInfo(path); d != null; d = d.Parent)
-                if (System.IO.Directory.Exists(System.IO.Path.Combine(d.FullName, ".svn"))) return true;
-            return false;
+            if (Scc != null && !string.IsNullOrEmpty(Scc.Root) && Scc.IsUnderWorkingCopyRoot(path))
+                return true;
+            if (IsUnderPrefix(_cachedSolutionWcRoot, path))
+                return true;
+
+            var trimmed = path.TrimEnd('\\', '/');
+            var dir = isKnownFolder ? trimmed : (System.IO.Path.GetDirectoryName(trimmed) ?? trimmed);
+            if (string.IsNullOrEmpty(dir)) return false;
+            if (_externalWcCache.TryGetValue(dir, out var inWc)) return inWc;
+
+            inWc = SvnSccService.FindWorkingCopyRoot(dir) != null;
+            if (_externalWcCache.Count >= 256) _externalWcCache.Clear();
+            _externalWcCache[dir] = inWc;
+            return inWc;
         }
 
         /// <summary>
@@ -348,8 +437,8 @@ namespace SVNAssist.Host
         {
             await JoinableTaskFactory.SwitchToMainThreadAsync();
             if (!(await GetServiceAsync(typeof(SVsTextManager)) is IVsTextManager tm) || tm.GetActiveView(1, null, out var vsView) != VSConstants.S_OK || vsView == null) return;
-            var cm = (IComponentModel)await GetServiceAsync(typeof(SComponentModel));
-            var view = cm.GetService<IVsEditorAdaptersFactoryService>().GetWpfTextView(vsView);
+            if (!(await GetServiceAsync(typeof(SComponentModel)) is IComponentModel cm)) return;
+            var view = cm.GetService<IVsEditorAdaptersFactoryService>()?.GetWpfTextView(vsView);
             if (view == null) return;
 
             bool moved;
@@ -398,8 +487,89 @@ namespace SVNAssist.Host
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) Host?.Dispose();
+            if (disposing)
+            {
+                SvnAssistOptions.Changed -= OnSccOptionsChanged;
+                SvnAssistOptions.Changed -= ApplyShortcuts;
+                Microsoft.VisualStudio.Shell.Events.SolutionEvents.OnAfterOpenSolution -= OnAfterSolutionChanged;
+                Microsoft.VisualStudio.Shell.Events.SolutionEvents.OnAfterCloseSolution -= OnAfterSolutionChanged;
+                try
+                {
+                    if (System.Windows.Application.Current is System.Windows.Application app)
+                    {
+                        app.Activated -= OnAppActivated;
+                        app.Deactivated -= OnAppDeactivated;
+                    }
+                }
+                catch { }
+                _conflictBars?.Dispose();
+                _activity?.Dispose();
+                Host?.Dispose();
+            }
             base.Dispose(disposing);
+        }
+
+        private sealed class IdeActivityTracker : IVsUpdateSolutionEvents2, IDisposable
+        {
+            private readonly SVNAssistPackage _pkg;
+            private readonly IVsSolutionBuildManager2 _buildMgr;
+            private readonly uint _buildCookie;
+            private readonly UIContext _solOpening = KnownUIContexts.SolutionOpeningContext;
+            private readonly UIContext _solLoaded = KnownUIContexts.SolutionExistsAndFullyLoadedContext;
+            private bool _isBuilding;
+            private bool _isSolutionLoading;
+            private bool _lastPaused;
+
+            public IdeActivityTracker(SVNAssistPackage pkg, IVsSolutionBuildManager2 buildMgr)
+            {
+                ThreadHelper.ThrowIfNotOnUIThread();
+                _pkg = pkg;
+                _buildMgr = buildMgr;
+                _isSolutionLoading = _solOpening.IsActive;
+                if (_buildMgr != null) _buildMgr.AdviseUpdateSolutionEvents(this, out _buildCookie);
+                _solOpening.UIContextChanged += OnSolutionOpeningChanged;
+                _solLoaded.UIContextChanged += OnSolutionLoadedChanged;
+                UpdatePaused();
+            }
+
+            public bool IsSolutionLoading => _isSolutionLoading;
+
+            private void OnSolutionOpeningChanged(object sender, UIContextChangedEventArgs e)
+            {
+                _isSolutionLoading = e.Activated;
+                UpdatePaused();
+            }
+
+            private void OnSolutionLoadedChanged(object sender, UIContextChangedEventArgs e)
+            {
+                if (!e.Activated) return;
+                _isSolutionLoading = false;
+                UpdatePaused();
+                _pkg.OnSolutionLoadComplete();
+            }
+
+            private void UpdatePaused()
+            {
+                var paused = _isBuilding || _isSolutionLoading;
+                if (paused == _lastPaused) return;
+                _lastPaused = paused;
+                _pkg.Host.SetAutoRefreshPausedAsync(paused).FileAndForget("SVNAssist/pause");
+            }
+
+            public int UpdateSolution_Begin(ref int pfCancelUpdate) { _isBuilding = true; UpdatePaused(); return VSConstants.S_OK; }
+            public int UpdateSolution_Done(int fSucceeded, int fModified, int fCancelCommand) { _isBuilding = false; UpdatePaused(); return VSConstants.S_OK; }
+            public int UpdateSolution_StartUpdate(ref int pfCancelUpdate) => VSConstants.S_OK;
+            public int UpdateSolution_Cancel() { _isBuilding = false; UpdatePaused(); return VSConstants.S_OK; }
+            public int OnActiveProjectCfgChange(IVsHierarchy pIVsHierarchy) => VSConstants.S_OK;
+            public int UpdateProjectCfg_Begin(IVsHierarchy pHierProj, IVsCfg pCfgProj, IVsCfg pCfgSln, uint dwAction, ref int pfCancel) => VSConstants.S_OK;
+            public int UpdateProjectCfg_Done(IVsHierarchy pHierProj, IVsCfg pCfgProj, IVsCfg pCfgSln, uint dwAction, int fSuccess, int fCancel) => VSConstants.S_OK;
+
+            public void Dispose()
+            {
+                _solOpening.UIContextChanged -= OnSolutionOpeningChanged;
+                _solLoaded.UIContextChanged -= OnSolutionLoadedChanged;
+                try { if (_buildCookie != 0 && _buildMgr != null && ThreadHelper.CheckAccess()) _buildMgr.UnadviseUpdateSolutionEvents(_buildCookie); } catch { }
+            }
         }
     }
 }

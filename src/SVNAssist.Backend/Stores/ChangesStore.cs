@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.IO;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using SVNAssist.Models;
@@ -25,7 +27,9 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
     private const int MaxListedInConfirmation = 8;
 
     /// <summary>Quiete richiesta dopo l'ultimo evento del file system prima di rileggere lo stato.</summary>
-    internal static readonly TimeSpan RefreshQuietPeriod = TimeSpan.FromMilliseconds(800);
+    internal static readonly TimeSpan RefreshQuietPeriod = TimeSpan.FromMilliseconds(1500);
+    private static readonly TimeSpan MaxAdaptiveQuietPeriod = TimeSpan.FromSeconds(10);
+    internal static readonly TimeSpan LightweightFocusCooldown = TimeSpan.FromSeconds(5);
 
     private static readonly ChangeSection[] SectionOrder = [ChangeSection.Staged, ChangeSection.Changes, ChangeSection.Unversioned];
 
@@ -35,6 +39,7 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
     private readonly IHost _host;
     private readonly SemaphoreSlim _autoDetectLock = new(1, 1);
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
+    private readonly SemaphoreSlim _sccInitLock = new(1, 1);
     private readonly CancellationTokenSource _lifetime = new();
     private readonly RefreshDebouncer _debouncer;
 
@@ -46,7 +51,15 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
     // automatico non gira mentre svn tiene il lock della working copy.
     private int _operationRunning;
     private readonly PendingSwitch _pendingSwitch;
-    private int _started;
+    private int _sccStarted;
+    private int _uiStarted;
+    private bool _sccInitialized;
+    private volatile bool _lightweightMode;
+    private long _lastStatusMs;
+    private long _lastFocusRefreshTicks;
+    private int _rowsVersion;
+    private (int Version, string Lang, List<SectionDto> Sections)? _sectionsCache;
+    private readonly Dictionary<string, (byte[] Hash, bool HadMarkers)> _activeMerges = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Merge di piu' revisioni fermo o interrotto, per working copy (su disco: sopravvive alla chiusura di VS). Nei test (senza file dei recenti) solo in memoria.</summary>
     internal PendingMerge PendingMerges { get; set; }
@@ -92,6 +105,8 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
     private FileSystemWatcher? _watcher;
     private string _watchedRoot = string.Empty;
     private readonly object _watcherLock = new();
+    private readonly List<string> _tempDirs = [];
+    private int _disposed;
 
     /// <summary>Elementi in Staged e gia' visti per una working copy (i nuovi ricevono la selezione di default).</summary>
     private sealed class WorkingCopyState
@@ -143,8 +158,47 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
         _pendingSwitch = new PendingSwitch(recentTargetsFile is null ? null : recentTargetsFile + ".pending-switch.json");
         PendingMerges = new PendingMerge(recentTargetsFile is null ? null : recentTargetsFile + ".pending-merge.json");
         Switch.PendingUrl = wc => _pendingSwitch.Get(wc)?.Url;
-        _debouncer = new RefreshDebouncer(RefreshQuietPeriod, AutoRefreshAsync);
-        HeadCheck = new HeadWatcher(FetchHeadAsync, () => OperationRunning, settingsService.GetHeadCheckMinutesAsync, NotifyChanged);
+        _debouncer = new RefreshDebouncer(RefreshQuietPeriod, AutoRefreshAsync, AdaptiveQuietPeriod);
+        HeadCheck = new HeadWatcher(FetchHeadAsync, () => OperationRunning, EffectiveHeadCheckMinutesAsync, NotifyChanged);
+    }
+
+    private TimeSpan AdaptiveQuietPeriod()
+    {
+        var lastMs = Volatile.Read(ref _lastStatusMs);
+        var ms = Math.Clamp(Math.Max(RefreshQuietPeriod.TotalMilliseconds, lastMs * 2.0),
+            RefreshQuietPeriod.TotalMilliseconds, MaxAdaptiveQuietPeriod.TotalMilliseconds);
+        return TimeSpan.FromMilliseconds(ms);
+    }
+
+    private async Task<int> EffectiveHeadCheckMinutesAsync(CancellationToken ct)
+        => await _settingsService.GetLightweightModeAsync(ct) ? 0 : await _settingsService.GetHeadCheckMinutesAsync(ct);
+
+    /// <summary>Metto in pausa o riprendo il watcher debounced (es. build in VS).</summary>
+    internal void SetAutoRefreshPaused(bool paused) => _debouncer.SetPaused(paused);
+
+    /// <summary>Salvataggio di un documento in VS: aggiorna anche quando la modalita' leggera spegne il FileSystemWatcher.</summary>
+    internal void OnDocumentSaved(string filePath)
+    {
+        var wc = WorkingCopyPath;
+        if (string.IsNullOrWhiteSpace(wc) || string.IsNullOrWhiteSpace(filePath) || OperationRunning)
+            return;
+        if (!IsUnder(filePath, wc) || WorkingCopyPathFilter.IsNoise(wc, filePath))
+            return;
+        _debouncer.Request();
+    }
+
+    /// <summary>Rientro del focus su VS in modalita' leggera: refresh una-tantum con cooldown per intercettare modifiche fatte fuori da VS.</summary>
+    internal void OnIdeActiveChanged(bool active)
+    {
+        if (!active || !_lightweightMode || OperationRunning || string.IsNullOrWhiteSpace(WorkingCopyPath))
+            return;
+        var now = DateTime.UtcNow.Ticks;
+        var prev = Volatile.Read(ref _lastFocusRefreshTicks);
+        if (now - prev < LightweightFocusCooldown.Ticks)
+            return;
+        if (Interlocked.CompareExchange(ref _lastFocusRefreshTicks, now, prev) != prev)
+            return;
+        _debouncer.Request();
     }
 
     /// <summary>Controllo periodico "altri hanno committato?" (indicatore della revisione nella barra di stato).</summary>
@@ -167,20 +221,43 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
     /// <summary>Lock di altri utenti per percorso completo. Si rileggono solo nel ciclo del controllo remoto (HEAD), mai a ogni refresh.</summary>
     private Dictionary<string, SvnRemoteLock> _remoteLocks = new(StringComparer.OrdinalIgnoreCase);
 
-    // shortcut: i lock di altri si mostrano solo sui file gia' nell'albero (modificati); quelli su file non toccati non si elencano. Un errore qui non rompe il controllo HEAD.
+    // shortcut: i lock di altri si mostrano solo sui file gia' nell'albero (modificati); quelli su file non toccati non si elencano.
+    // Query mirata con --depth empty sui soli file modificati/versionati: zero scansioni dell'intero repo se la WC e' pulita.
     private async Task FetchRemoteLocksAsync(CancellationToken ct)
     {
         string wc;
+        List<string> targets;
         lock (_stateLock)
+        {
             wc = _workingCopyPath;
+            targets = _entries
+                .Where(e => e.Status != SvnStatusKind.Unversioned && !e.IsDirectory)
+                .Select(e => e.FullPath)
+                .ToList();
+        }
         if (string.IsNullOrWhiteSpace(wc))
             return;
+        if (targets.Count == 0)
+        {
+            lock (_stateLock)
+            {
+                if (_remoteLocks.Count > 0)
+                {
+                    _remoteLocks = new Dictionary<string, SvnRemoteLock>(StringComparer.OrdinalIgnoreCase);
+                    _rowsVersion++;
+                }
+            }
+            return;
+        }
         try
         {
-            var locks = (await _svnService.GetRemoteLocksAsync(wc, ct))
+            var locks = (await _svnService.GetRemoteLocksAsync(wc, targets, ct))
                 .ToDictionary(l => NormalizeStatusPath(l.Path, wc), StringComparer.OrdinalIgnoreCase);
             lock (_stateLock)
+            {
                 _remoteLocks = locks;
+                _rowsVersion++;
+            }
         }
         catch (Exception ex) when (!ct.IsCancellationRequested) { BackendLog.Warn("Lock di altri non letti: " + ex.Message); }
     }
@@ -536,6 +613,7 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                     _preMerge = null;    // e la sua copia di sicurezza non va mai usata su questa (i file restano su disco)
                     _pendingIncompatible = null;
                     _mergeScope = _mergeSub = null;
+                    _rowsVersion++;
                 }
                 _workingCopyPath = value;
             }
@@ -564,13 +642,7 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
     {
         lock (_stateLock)
         {
-            var sections = SectionOrder.Select(section =>
-            {
-                var items = _entries.Where(e => SectionOf(e) == section).ToList();
-                var id = ChangesTreeBuilder.SectionId(section);
-                return new SectionDto(id, ChangesTreeBuilder.SectionTitle(section), items.Count,
-                    !_collapsed.Contains(SectionCollapseKey(id)), BuildRows(section, items));
-            }).ToList();
+            var sections = GetSectionsCachedLocked();
 
             var download = Prerequisites.Download;
             var mode = _themeMode;
@@ -719,6 +791,23 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
         return entry.Status == SvnStatusKind.Unversioned ? ChangeSection.Unversioned : ChangeSection.Changes;
     }
 
+    private List<SectionDto> GetSectionsCachedLocked()
+    {
+        var lang = Loc.Lang;
+        if (_sectionsCache is { } cached && cached.Version == _rowsVersion && cached.Lang == lang)
+            return cached.Sections;
+
+        var sections = SectionOrder.Select(section =>
+        {
+            var items = _entries.Where(e => SectionOf(e) == section).ToList();
+            var id = ChangesTreeBuilder.SectionId(section);
+            return new SectionDto(id, ChangesTreeBuilder.SectionTitle(section), items.Count,
+                !_collapsed.Contains(SectionCollapseKey(id)), BuildRows(section, items));
+        }).ToList();
+        _sectionsCache = (_rowsVersion, lang, sections);
+        return sections;
+    }
+
     private List<RowDto> BuildRows(ChangeSection section, List<ChangeEntry> items)
     {
         var rows = new List<RowDto>();
@@ -735,7 +824,7 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             {
                 var expanded = !_collapsed.Contains(node.Key);
                 rows.Add(new RowDto(node.Key, "folder", depth, node.Label, Detail: string.Empty, Dir: null, Expanded: expanded,
-                    Count: node.Count, Status: null, StatusText: string.Empty, Can: FolderCan(section, node.Entries().ToList()),
+                    Count: node.Count, Status: null, StatusText: string.Empty, Can: FolderCan(section, node.Caps),
                     Tooltip: node.FolderPath));
                 if (expanded)
                     AddNodes(rows, node.Children, section, depth + 1);
@@ -785,15 +874,15 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
 
     private static bool CanDeleteFile(ChangeEntry e) => e.Status != SvnStatusKind.Deleted && e.RelativePath != "."; // mai la radice della working copy
 
-    private static CanDto FolderCan(ChangeSection section, List<ChangeEntry> entries) => new(
-        Diff: entries.Any(CanDiff),
-        Stage: section != ChangeSection.Staged && entries.Any(e => e.Status is not (SvnStatusKind.Conflicted or SvnStatusKind.Normal)),
+    private static CanDto FolderCan(ChangeSection section, ChangeNodeCaps caps) => new(
+        Diff: (caps & ChangeNodeCaps.Diff) != 0,
+        Stage: section != ChangeSection.Staged && (caps & ChangeNodeCaps.Stage) != 0,
         Unstage: section == ChangeSection.Staged,
-        Add: entries.Any(e => e.Status == SvnStatusKind.Unversioned),
-        Ignore: entries.Any(e => e.Status == SvnStatusKind.Unversioned),
-        Revert: entries.Any(e => StatusPresentation.IsRevertable(e.Status)),
+        Add: (caps & ChangeNodeCaps.Add) != 0,
+        Ignore: (caps & ChangeNodeCaps.Ignore) != 0,
+        Revert: (caps & ChangeNodeCaps.Revert) != 0,
         Resolve: false,
-        DeleteFile: entries.Any(CanDeleteFile));
+        DeleteFile: (caps & ChangeNodeCaps.DeleteFile) != 0);
 
     // ── Comandi ──────────────────────────────────────────────────────
 
@@ -1079,7 +1168,10 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                 break;
             case "setView":
                 lock (_stateLock)
+                {
                     _isTreeView = Args.OneOf(args, "view", "tree", "list") == "tree";
+                    _rowsVersion++;
+                }
                 NotifyChanged();
                 break;
             case "showDiff":
@@ -1147,7 +1239,9 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                 await Wizard.SetAuthAsync(Args.Str(args, "endpoint"), Args.Str(args, "key"), ct);
                 break;
             case "wizardFinish":
-                if (await Wizard.FinishAsync(Args.Str(args, "model"), ct))
+                var shouldGenerate = await Wizard.FinishAsync(Args.Str(args, "model"), ct);
+                await CommitMessage.RefreshProviderLabelAsync(ct);
+                if (shouldGenerate)
                     await CommitMessage.GenerateAsync(ct);
                 break;
             default:
@@ -1179,26 +1273,69 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
 
     // ── Avvio e auto-detect ──────────────────────────────────────────
 
+    /// <summary>Avvia il solo monitoraggio SCC per i glifi di Solution Explorer, senza sondare AI o WebView UI.</summary>
+    internal Task EnsureSccStartedAsync()
+    {
+        if (Interlocked.Exchange(ref _sccStarted, 1) == 0)
+            _ = Task.Run(() => StartSccAsync(_lifetime.Token));
+        return Task.CompletedTask;
+    }
+
+    private async Task StartSccAsync(CancellationToken ct)
+    {
+        try
+        {
+            await EnsureSccInitializedAsync(ct);
+        }
+        catch (OperationCanceledException)
+        {
+            // chiusura
+        }
+        catch (Exception ex)
+        {
+            BackendLog.Error("Avvio monitoraggio SCC", ex);
+            ReportInitializationError(ex.Message);
+        }
+    }
+
+    private async Task EnsureSccInitializedAsync(CancellationToken ct)
+    {
+        await _sccInitLock.WaitAsync(ct);
+        try
+        {
+            if (_sccInitialized)
+                return;
+            _sccInitialized = true;
+            _lightweightMode = await _settingsService.GetLightweightModeAsync(ct);
+            _ = _debouncer.RunAsync(ct);
+            await ApplyAutoDetectedWorkingCopyAsync(SolutionRootOrNull(), ct);
+        }
+        finally
+        {
+            _sccInitLock.Release();
+        }
+    }
+
     /// <inheritdoc />
     internal override Task OnReadyAsync(CancellationToken ct)
     {
         // Primo ready: l'UI mostra subito "Caricamento in corso..."; sonda dei prerequisiti e primo svn status
         // (lenti su working copy grandi o rete lenta) girano in background e aggiornano lo snapshot.
-        if (Interlocked.Exchange(ref _started, 1) == 0)
-            _ = Task.Run(() => StartAsync(_lifetime.Token));
+        if (Interlocked.Exchange(ref _uiStarted, 1) == 0)
+            _ = Task.Run(() => StartUiAsync(_lifetime.Token));
         return Task.CompletedTask;
     }
 
-    private async Task StartAsync(CancellationToken ct)
+    private async Task StartUiAsync(CancellationToken ct)
     {
         try
         {
-            _ = _debouncer.RunAsync(ct);
+            Interlocked.Exchange(ref _sccStarted, 1);
             await InitializeAsync(ct);
+            await EnsureSccInitializedAsync(ct);
             // Il controllo delle nuove revisioni parte con la finestra (prima apertura) e non blocca il resto.
             if (EnableWatcher)
                 _ = Task.Run(() => HeadCheck.RunAsync(ct), ct);
-            await ApplyAutoDetectedWorkingCopyAsync(SolutionRootOrNull(), ct);
         }
         catch (OperationCanceledException)
         {
@@ -1241,11 +1378,15 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
     internal async Task OnSettingsChangedAsync(CancellationToken ct)
     {
         var theme = (await _settingsService.GetWindowThemeAsync(ct)).Trim().ToLowerInvariant();
+        var light = await _settingsService.GetLightweightModeAsync(ct);
         lock (_stateLock)
             _themeMode = theme is "light" or "dark" or "blue" ? theme : "auto";
+        _lightweightMode = light;
+        ConfigureWatcher(WorkingCopyPath);
 
         HeadCheck.Nudge(); // intervallo cambiato (o acceso/spento): rilegge subito l'impostazione
-        if (Volatile.Read(ref _started) == 1)
+        await CommitMessage.RefreshProviderLabelAsync(ct);
+        if (Volatile.Read(ref _uiStarted) == 1)
         {
             // Rilegge anche i testi che dipendono dalla lingua dell'interfaccia (checklist, procedura guidata, riepilogo).
             await Prerequisites.RefreshAsync(ct);
@@ -1254,6 +1395,10 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             await ApplyAutoDetectedWorkingCopyAsync(SolutionRootOrNull(), ct);
             if (_statusIsAuto)
                 SetStatusAuto(BuildSummary());
+        }
+        else if (Volatile.Read(ref _sccStarted) == 1)
+        {
+            await ApplyAutoDetectedWorkingCopyAsync(SolutionRootOrNull(), ct);
         }
 
         NotifyChanged();
@@ -1278,8 +1423,8 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
         lock (_stateLock)
             _solutionRoot = root;
 
-        // Prima del primo ready non si carica nulla: ci pensa StartAsync (con il valore appena salvato).
-        if (Volatile.Read(ref _started) == 1)
+        // Prima del primo avviamento (SCC o UI) non si carica nulla: ci pensa StartSccAsync/StartUiAsync.
+        if (Volatile.Read(ref _sccStarted) == 1 || Volatile.Read(ref _uiStarted) == 1)
             await ApplyAutoDetectedWorkingCopyAsync(root, ct);
     }
 
@@ -1307,6 +1452,7 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                         _branchLoadedFor = null;
                         _entries = [];
                         _showWorkingCopyInput = true;
+                        _rowsVersion++;
                     }
                 }
 
@@ -1393,6 +1539,7 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             _branchLoadedFor = null;
             _workingCopyPath = full;
             _showWorkingCopyInput = true;
+            _rowsVersion++;
         }
 
         ConfigureWatcher(full);
@@ -1436,10 +1583,13 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
 
             var needBranch = reloadBranch || !string.Equals(_branchLoadedFor, path, StringComparison.OrdinalIgnoreCase);
 
+            var sw = Stopwatch.StartNew();
             var statusTask = _svnService.GetStatusAsync(path, ct);
             var branchTask = needBranch ? LoadBranchAsync(path, ct) : null;
 
             var statuses = await statusTask;
+            sw.Stop();
+            Volatile.Write(ref _lastStatusMs, sw.ElapsedMilliseconds);
             BranchInfo? branch = null;
             if (branchTask is not null)
                 branch = await branchTask;
@@ -1488,6 +1638,7 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                 // Una working copy digitata a mano resta modificabile; una rilevata dalla solution nasconde il campo.
                 _showWorkingCopyInput = !_autoDetected;
                 UpdateStagedAfterRefresh();
+                _rowsVersion++;
             }
 
             await RestorePendingMergeAsync(path, ct);
@@ -1749,6 +1900,7 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                 else if (entry.Status is not (SvnStatusKind.Conflicted or SvnStatusKind.Normal))
                     staging.Add(entry.FullPath);
             }
+            _rowsVersion++;
         }
 
         NotifyChanged();
@@ -1783,6 +1935,7 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
         {
             if (!_collapsed.Remove(key))
                 _collapsed.Add(key);
+            _rowsVersion++;
         }
 
         NotifyChanged();
@@ -1795,6 +1948,7 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             _collapsed.Clear();
             if (!expanded)
                 _collapsed.UnionWith(AllFolderKeys());
+            _rowsVersion++;
         }
 
         NotifyChanged();
@@ -2690,6 +2844,7 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             {
                 foreach (var entry in affected)
                     Wc.Staged.Add(entry.FullPath);
+                _rowsVersion++;
             }
 
             await RefreshAsync(ct, reloadBranch: false, Loc.T("Aggiunti a SVN: {0} elementi.", affected.Count));
@@ -3183,15 +3338,94 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
         SvnConflictInfo? info;
         lock (_stateLock)
             _conflictInfo.TryGetValue(entry.FullPath, out info);
-        if (info is { Type: "text", Base: { } b, Mine: { } m, Theirs: { } t } && MergeEditorLauncher(new MergeEditorFiles(b, m, t, entry.FullPath)) is { } editor)
+        if (info is { Type: "text", Base: { } b, Mine: { } m, Theirs: { } t })
         {
-            SetStatus(Loc.T("Editor di merge aperto ({0}): salva il risultato, poi premi \"Segna come risolto\".", editor));
-            return;
+            var initialHash = ComputeFileHash(entry.FullPath);
+            var hadMarkers = ConflictMarkers.HasMarkers(entry.FullPath);
+            if (await _host.OpenMergeAsync(t, m, b, entry.FullPath,
+                Loc.T("In arrivo (Theirs)"), Loc.T("Tuo (Mine)"), Loc.T("Base"), Path.GetFileName(entry.FullPath)))
+            {
+                if (initialHash is not null)
+                {
+                    lock (_stateLock)
+                        _activeMerges[entry.FullPath] = (initialHash, hadMarkers);
+                }
+                SetStatus(Loc.T("Editor di merge aperto in questa istanza di VS: accetta e salva il risultato per completare."));
+                return;
+            }
+
+            if (MergeEditorLauncher(new MergeEditorFiles(b, m, t, entry.FullPath)) is { } editor)
+            {
+                SetStatus(Loc.T("Editor di merge aperto ({0}): salva il risultato, poi premi \"Segna come risolto\".", editor));
+                return;
+            }
         }
 
         // Nessun editor a 3 vie (o conflitto senza dati): il file con i marcatori nell'editor di VS.
         await _host.OpenFileAsync(entry.FullPath);
         SetStatus(Loc.T("Nessun editor di merge a 3 vie disponibile: aperto il file con i marcatori di conflitto (<<<<<<<, =======, >>>>>>>). Sistemalo e rimuovili, poi premi \"Segna come risolto\"."));
+    }
+
+    /// <summary>L'editor di merge in-process di Visual Studio per <paramref name="filePath"/> è stato chiuso: verifica se segnare il conflitto come risolto.</summary>
+    internal async Task OnMergeEditorClosedAsync(string filePath, int state, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+            return;
+
+        (byte[] Hash, bool HadMarkers) before;
+        ChangeEntry? entry;
+        lock (_stateLock)
+        {
+            if (!_activeMerges.TryGetValue(filePath, out before))
+                return;
+            _activeMerges.Remove(filePath);
+            entry = _entries.FirstOrDefault(e => string.Equals(e.FullPath, filePath, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (entry is null || entry.Status != SvnStatusKind.Conflicted || !File.Exists(filePath))
+            return;
+
+        var afterHash = ComputeFileHash(filePath);
+        if (afterHash is null)
+            return;
+
+        var changed = !before.Hash.AsSpan().SequenceEqual(afterHash);
+        if (ConflictMarkers.HasMarkers(filePath))
+        {
+            SetStatus(Loc.T("Nel file rimangono marcatori di conflitto (<<<<<<<, =======, >>>>>>>): rimuovili e premi \"Segna come risolto\"."));
+            return;
+        }
+
+        if (!changed && state == 0)
+            return;
+
+        if (SameAsBase(entry))
+        {
+            SetStatus(Loc.T("\"{0}\" è identico alla versione di partenza: controlla le modifiche prima di premere \"Segna come risolto\".", entry.RelativePath));
+            return;
+        }
+
+        try
+        {
+            await _svnService.ResolveAsync(entry.FullPath, SvnConflictChoice.Working, ct);
+            await RefreshAsync(ct, reloadBranch: false, Loc.T("Conflitto risolto: {0}", entry.RelativePath));
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            SetStatus(Loc.T("Errore resolve: {0}", ex.Message));
+        }
+    }
+
+    private static byte[]? ComputeFileHash(string path)
+    {
+        try
+        {
+            using var sha = SHA256.Create();
+            using var stream = File.OpenRead(path);
+            return sha.ComputeHash(stream);
+        }
+        catch (IOException) { return null; }
+        catch (UnauthorizedAccessException) { return null; }
     }
 
     /// <summary>
@@ -3410,6 +3644,8 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
     {
         var dir = Path.Combine(TempRoot, Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
+        lock (_tempDirs)
+            _tempDirs.Add(dir);
         return dir;
     }
 
@@ -3444,8 +3680,16 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
 
     private void ConfigureWatcher(string? workingCopyPath)
     {
-        if (!EnableWatcher)
+        if (!EnableWatcher || _lightweightMode)
+        {
+            lock (_watcherLock)
+            {
+                _watcher?.Dispose();
+                _watcher = null;
+                _watchedRoot = string.Empty;
+            }
             return;
+        }
 
         string normalized;
         try
@@ -3477,11 +3721,10 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             var watcher = new FileSystemWatcher(normalized)
             {
                 IncludeSubdirectories = true,
+                InternalBufferSize = 65536, // 64 KB: riduce gli overflow di buffer durante build o NuGet restore
                 NotifyFilter = NotifyFilters.FileName
                                | NotifyFilters.DirectoryName
-                               | NotifyFilters.LastWrite
-                               | NotifyFilters.CreationTime
-                               | NotifyFilters.Size,
+                               | NotifyFilters.LastWrite,
             };
 
             watcher.Changed += OnFsChanged;
@@ -3546,7 +3789,27 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
 
     public void Dispose()
     {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            return;
         DiscardBackup();
+        List<string> dirs;
+        lock (_tempDirs)
+        {
+            dirs = [.. _tempDirs];
+            _tempDirs.Clear();
+        }
+        foreach (var d in dirs)
+        {
+            try
+            {
+                if (Directory.Exists(d))
+                    DiffOpener.DeleteTree(d);
+            }
+            catch
+            {
+                // best effort: file ancora aperto in VS, lo toglie CleanTemp al prossimo avvio
+            }
+        }
         _lifetime.Cancel();
         lock (_watcherLock)
         {

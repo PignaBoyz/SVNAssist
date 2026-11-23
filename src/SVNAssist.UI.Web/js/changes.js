@@ -6,17 +6,25 @@
   const LANGS = () => [['auto', t('Auto (lingua del codice)')], ['italiano', 'Italiano'], ['english', 'English']];
   const THEMES = () => [['auto', t('Auto (segue Visual Studio)')], ['light', t('Chiaro')], ['dark', t('Scuro')], ['blue', t('Blu')]];
   let st = null, forceInput = false, timer = 0, filter = '';
+  const expandedCaps = new Set();
 
   function header(s) {
-    const wc = s.workingCopy;
-    return `<button type="button" class="branch" ${U.cmd('switchOpen')} title="${esc(t('SVN Switch…: cambia branch o tag (ramo attuale: {0})', wc.branch || '—'))}" aria-label="${esc(t('SVN Switch…: cambia branch o tag (ramo attuale: {0})', wc.branch || '—'))}">${U.icon('branch')}<b>${esc(wc.branch || '—')}</b>${U.icon('chev-d')}</button><span class="fill"></span>` +
+    const wc = s.workingCopy, hasWc = !!(wc && wc.path);
+    return `<button type="button" class="branch" ${U.cmd('switchOpen')} title="${esc(t('SVN Switch…: cambia branch o tag (ramo attuale: {0})', wc.branch || '—'))}" aria-label="${esc(t('SVN Switch…: cambia branch o tag (ramo attuale: {0})', wc.branch || '—'))}">${U.icon('branch')}<b>${esc(wc.branch || '—')}</b>${U.icon('chev-d')}</button>` +
+      U.btn('btn sm', 'Merge', 'branch', 'mergeOpen', null, t('Unisce nella working copy le modifiche di un altro branch (svn merge)'), !hasWc || s.loading ? 'disabled' : '') +
+      `<span class="fill"></span>` +
       U.btn('btn', 'SVN Update', 'down', 'update', null, t('Scarica le modifiche dal server (svn update)')) +
       U.btn('btn', 'Show Log', 'file', 'showLog', null, t('Apre il Log della working copy (cronologia delle revisioni)')) +
       U.btn('ib', '', 'refresh', 'refresh', null, t("Ricarica l'elenco delle modifiche (svn status)")) +
       `<button type="button" class="ib" data-menu="more" title="${esc(t('Altre azioni: vista, tema, prerequisiti'))}" aria-label="${esc(t('Altre azioni'))}" aria-haspopup="menu">${U.icon('more')}</button>`;
   }
   function wcForm(s) {
-    return (s.workingCopy.showInput || forceInput) ? `<form class="wc" id="wcform"><label for="wcp">Working copy</label><input id="wcp" type="text" value="${esc(s.workingCopy.path)}" placeholder="${esc(t('C:\\percorso\\della\\working copy'))}" spellcheck="false"><button class="btn sm" type="submit" title="${esc(t('Carica questa working copy'))}">${t('Apri')}</button></form>` : '';
+    if (s.workingCopy.showInput || forceInput) {
+      return `<form class="wc" id="wcform"><label for="wcp">Working copy</label><input id="wcp" type="text" value="${esc(s.workingCopy.path)}" placeholder="${esc(t('C:\\percorso\\della\\working copy'))}" spellcheck="false"><button class="btn sm" type="submit" title="${esc(t('Carica questa working copy'))}">${t('Apri')}</button></form>`;
+    }
+    return s.workingCopy.path
+      ? `<div class="wc-bar"><button type="button" class="wc-btn" data-wc-edit title="${esc(t('Working copy corrente: clic per cambiare cartella'))}">${U.icon('folder')}<span class="wc-path">${esc(s.workingCopy.path)}</span></button></div>`
+      : '';
   }
   function commitBar(s) {
     // Come Git: con Staged vuoto "Commit All" prende tutte le modifiche dei file versionati; con file in Staged "Commit Staged (n)".
@@ -27,8 +35,12 @@
       : !n ? t('Nessuna modifica da committare')
       : all ? t('Staged è vuoto: committa tutte le {0} modifiche dei file versionati; se ci sono file non versionati ti chiede se aggiungerli (Ctrl+Invio)', n)
         : t('Committa i {0} file in Staged (Ctrl+Invio)', n);
+    const aiTag = c.aiProviderLabel
+      ? `<button type="button" class="chip ai-tag" ${U.cmd('wizardOpen')} title="${esc(t('Provider AI attivo: {0}. Clic per cambiare provider o modello', c.aiProviderLabel))}">${esc(c.aiProviderLabel)}</button>`
+      : '';
     return `<button type="button" class="btn primary" ${U.cmd('commit')} ${(n || onlyNew) && !busy ? '' : 'disabled'} title="${esc(why)}">${U.icon('check')}<span>${all || !n ? 'Commit All' : 'Commit Staged'}</span>${n ? `<span class="pill">${n}</span>` : ''}</button><span class="fill"></span>` +
       `<button type="button" class="btn sm" data-recent title="${esc(t('Messaggi recenti: riusa un messaggio già committato in questo repository'))}" aria-haspopup="dialog">${U.icon('chev-d')}<span>${t('Recenti')}</span></button>` +
+      aiTag +
       `<button type="button" class="btn ai" ${U.cmd('genAi')} ${c.busy ? 'disabled aria-busy="true"' : ''} title="${esc(t('Scrive il messaggio dal diff dei file da committare'))}">${c.busy ? '<span class="spin"></span>' : U.icon('spark')}<span>${c.busy ? t('Generazione in corso…') : t('Genera con AI')}</span></button>` +
       `<button type="button" class="ib" data-menu="ai" ${c.busy ? 'disabled' : ''} title="${esc(t('Migliora il messaggio, lingua'))}" aria-label="${esc(t('Altre opzioni AI'))}" aria-haspopup="menu">${U.icon('chev-d')}</button>`;
   }
@@ -96,6 +108,29 @@
   // i file di appoggio di svn (da svn info: .mine, .rNN, .merge-left/right, .working), che non compaiono tra i non versionati.
   // Stato solo-UI: riquadro aperto/chiuso e, dentro, l'elenco dei conflitti ad albero (chiuso: di solito si risolvono tutti insieme).
   let cflOpen = true, cflTreeOpen = false;
+  function conflictResolveMenu(key, kind) {
+    const O = (op, label, hint) => ({ label, cmd: 'conflictOp', args: { op, key }, hint });
+    const items = [
+      O('mine', t('Usa la mia'), t('Tiene la tua versione dell\'intero file e scarta le modifiche del server (resolve --accept mine-full)')),
+      O('theirs', t('Usa la loro'), t('Prende la versione del server dell\'intero file e scarta le tue modifiche (resolve --accept theirs-full)')),
+    ];
+    if (kind === 'text') {
+      items.push(
+        O('bothMT', t('Usa entrambe (mia poi loro)'), t('Tiene entrambi i lati di ogni blocco in conflitto, prima il tuo poi quello del server, e segna come risolto (resolve --accept working). Il resto del file resta invariato: controllalo prima di committare')),
+        O('bothTM', t('Usa entrambe (loro poi mia)'), t('Tiene entrambi i lati di ogni blocco in conflitto, prima quello del server poi il tuo, e segna come risolto (resolve --accept working). Il resto del file resta invariato: controllalo prima di committare'))
+      );
+    }
+    return items;
+  }
+  function conflictBulkMenu() {
+    const B = (op, label, hint) => ({ label, cmd: 'resolveAllConflicts', args: { op }, hint });
+    return [
+      B('mine', t('Usa la mia per tutti'), t('Tiene la tua versione in tutti i conflitti di testo, con conferma (resolve --accept mine-full); ad albero e proprietà esclusi')),
+      B('theirs', t('Usa la loro per tutti'), t('Prende la versione del server in tutti i conflitti di testo, con conferma (resolve --accept theirs-full); ad albero e proprietà esclusi')),
+      B('bothMT', t('Usa entrambe per tutti (mia poi loro)'), t('In tutti i conflitti di testo tiene entrambi i lati, prima il tuo poi quello del server, con conferma; i file senza marcatori ben formati restano com\'è; ad albero e proprietà esclusi')),
+      B('bothTM', t('Usa entrambe per tutti (loro poi mia)'), t('In tutti i conflitti di testo tiene entrambi i lati, prima quello del server poi il tuo, con conferma; i file senza marcatori ben formati restano com\'è; ad albero e proprietà esclusi')),
+    ];
+  }
   function conflictsHTML(s, ui) {
     const c = s.conflicts || []; if (!c.length) return '';
     const u = Object.assign({ open: cflOpen, treeOpen: cflTreeOpen }, ui), off = s.loading ? 'disabled' : '';
@@ -103,14 +138,12 @@
       const A = (cls, label, icon, op, tip) => U.btn('btn' + cls, label, icon, 'conflictOp', { op, key: f.key }, tip, off);
       const tree = f.kind === 'tree', text = f.kind === 'text';
       const kind = tree ? t('Conflitto ad albero') : f.kind === 'property' ? t('Conflitto sulle proprietà') : t('Conflitto di testo');
+      const resolvePick = tree ? '' : `<button type="button" class="btn" data-cf-resolve="${esc(f.key)}" data-cf-kind="${esc(f.kind)}" aria-haspopup="menu" title="${esc(t('Scegli la strategia di risoluzione…'))}" ${off}><span>${esc(t('Risolvi come'))}</span>${U.icon('chev-d')}</button>`;
       return `<li class="cf" tabindex="0" data-cfkey="${esc(f.key)}"><div class="cf-t">${U.icon('warn')}<b class="cf-n" title="${esc(f.path)}">${esc(f.name)}</b><span class="chip">${esc(kind)}</span>${f.path !== f.name ? `<span class="muted small cf-p" title="${esc(f.path)}">${esc(f.path)}</span>` : ''}</div>` +
         (tree ? `<p class="muted">${t('Rinomina o cancellazione in conflitto: non ci sono versioni da scegliere. Sistema la struttura a mano, poi segna il conflitto come risolto.')}</p>` : '') +
         `<div class="cf-a">` +
         (text ? A(' primary', t('Apri editor di merge'), 'diff', 'edit', t('Apre un editor a 3 vie (base, mia, loro) con il risultato; salva, poi segna come risolto')) : '') +
-        (tree ? '' : A('', t('Usa la mia'), null, 'mine', t('Tiene la tua versione dell\'intero file e scarta le modifiche del server (resolve --accept mine-full)')) +
-          A('', t('Usa la loro'), null, 'theirs', t('Prende la versione del server dell\'intero file e scarta le tue modifiche (resolve --accept theirs-full)'))) +
-        (text ? A('', t('Usa entrambe (mia poi loro)'), null, 'bothMT', t('Tiene entrambi i lati di ogni blocco in conflitto, prima il tuo poi quello del server, e segna come risolto (resolve --accept working). Il resto del file resta invariato: controllalo prima di committare')) +
-          A('', t('Usa entrambe (loro poi mia)'), null, 'bothTM', t('Tiene entrambi i lati di ogni blocco in conflitto, prima quello del server poi il tuo, e segna come risolto (resolve --accept working). Il resto del file resta invariato: controllalo prima di committare')) : '') +
+        resolvePick +
         A('', t('Segna come risolto'), 'check', 'resolved', tree ? t('Conferma di aver sistemato la struttura (resolve)') : t('Dopo aver sistemato il file a mano: segna il conflitto come risolto (resolve --accept working)')) + `</div>` +
         (f.files && f.files.length ? `<p class="cf-f muted small">${t('File di appoggio di svn (spariscono dopo il resolve):')} ${f.files.map(x => `<code>${esc(x)}</code>`).join(' ')}</p>` : '') + `</li>`;
     };
@@ -122,21 +155,18 @@
       `<div class="cf-a">${U.btn('btn primary', t('Segna tutti come risolti'), 'check', 'resolveTreeConflicts', null, t('Conferma con l\'elenco, poi resolve --accept working su ognuno; un errore su uno non ferma gli altri'), off)}</div>` +
       (u.treeOpen ? `<ul class="cfl-l cf-sub">${trees.map(f => `<li class="cf-s"><b class="cf-n" title="${esc(f.path)}">${esc(f.name)}</b>${f.path !== f.name ? `<span class="muted small cf-p" title="${esc(f.path)}">${esc(f.path)}</span>` : ''}<span class="fill"></span>${U.btn('btn sm', t('Segna come risolto'), 'check', 'conflictOp', { op: 'resolved', key: f.key }, t('Conferma di aver sistemato la struttura (resolve)'), off)}</li>`).join('')}</ul>` : '') + `</li>`;
     const texts = c.filter(f => f.kind === 'text').length;
-    const bulk = texts < 2 ? '' : `<li class="cf cf-g"><div class="cf-t">${U.icon('warn')}<b>${t('Tutti i conflitti di testo ({0})', texts)}</b></div><div class="cf-a">` +
-      U.btn('btn', t('Usa la mia per tutti'), null, 'resolveAllConflicts', { op: 'mine' }, t('Tiene la tua versione in tutti i conflitti di testo, con conferma (resolve --accept mine-full); ad albero e proprietà esclusi'), off) +
-      U.btn('btn', t('Usa la loro per tutti'), null, 'resolveAllConflicts', { op: 'theirs' }, t('Prende la versione del server in tutti i conflitti di testo, con conferma (resolve --accept theirs-full); ad albero e proprietà esclusi'), off) +
-      U.btn('btn', t('Usa entrambe per tutti (mia poi loro)'), null, 'resolveAllConflicts', { op: 'bothMT' }, t('In tutti i conflitti di testo tiene entrambi i lati, prima il tuo poi quello del server, con conferma; i file senza marcatori ben formati restano com\'è; ad albero e proprietà esclusi'), off) +
-      U.btn('btn', t('Usa entrambe per tutti (loro poi mia)'), null, 'resolveAllConflicts', { op: 'bothTM' }, t('In tutti i conflitti di testo tiene entrambi i lati, prima quello del server poi il tuo, con conferma; i file senza marcatori ben formati restano com\'è; ad albero e proprietà esclusi'), off) + `</div></li>`;
+    const bulk = texts < 2 ? '' : `<li class="cf cf-g"><div class="cf-t">${U.icon('warn')}<b>${t('Tutti i conflitti di testo ({0})', texts)}</b><span class="fill"></span>` +
+      `<button type="button" class="btn sm" data-cf-bulk aria-haspopup="menu" title="${esc(t('Scegli la strategia per tutti i conflitti di testo…'))}" ${off}><span>${esc(t('Risolvi tutti come'))}</span>${U.icon('chev-d')}</button></div></li>`;
     return `<section class="cfl" aria-label="${esc(t('Conflitti'))}"><div class="cfl-h"><button type="button" class="ib" data-cfl-toggle aria-expanded="${!!u.open}" title="${esc(u.open ? t('Comprimi il riquadro dei conflitti') : t('Espandi il riquadro dei conflitti'))}" aria-label="${esc(u.open ? t('Comprimi il riquadro dei conflitti') : t('Espandi il riquadro dei conflitti'))}">${U.icon(u.open ? 'chev-d' : 'chev-r')}</button>${U.icon('warn')}<b>${t('Conflitti')}</b><span class="pill">${c.length}</span><span class="muted cfl-n">${t('Svn non committa file in conflitto: risolvili qui.')}</span></div>` +
       (u.open ? `<ul class="cfl-l">${bulk}${others.map(one).join('')}${group}</ul>` : '') + `</section>`;
   }
-  // Sezione "Shelved (n)" sotto l'elenco: chiusa di default, solo se ci sono shelve; tasto destro su una riga = Unshelve, Applica e tieni, Salva come .patch, Elimina.
+  // Sezione "Shelved (n)" sotto l'elenco: chiusa di default, solo se ci sono shelve; azioni inline (Unshelve / Elimina) + tasto destro completo.
   let shlOpen = false;
   function shelvedHTML(s, open) {
     const l = s.shelves || []; if (!l.length) return '';
     const o = open == null ? shlOpen : open;
-    return `<section class="shl" aria-label="Shelved"><div class="shl-h"><button type="button" class="ib" data-shl-toggle aria-expanded="${!!o}" title="${esc(o ? t('Comprimi gli shelve') : t('Espandi gli shelve'))}" aria-label="${esc(o ? t('Comprimi gli shelve') : t('Espandi gli shelve'))}">${U.icon(o ? 'chev-d' : 'chev-r')}</button><b>Shelved</b><span class="pill">${l.length}</span><span class="muted small">${esc(t('Tasto destro su una riga per Unshelve'))}</span></div>` +
-      (o ? `<ul class="shl-l">${l.map(x => `<li class="shl-r" tabindex="0" data-shelve="${esc(x.id)}" title="${esc(x.name)}"><b class="shl-n">${esc(x.name)}</b><span class="fill"></span><span class="muted small">${esc(U.fmtDate(x.date))}</span><span class="muted small">${esc(t('{0} file', x.files))}</span></li>`).join('')}</ul>` : '') + `</section>`;
+    return `<section class="shl" aria-label="Shelved"><div class="shl-h"><button type="button" class="ib" data-shl-toggle aria-expanded="${!!o}" title="${esc(o ? t('Comprimi gli shelve') : t('Espandi gli shelve'))}" aria-label="${esc(o ? t('Comprimi gli shelve') : t('Espandi gli shelve'))}">${U.icon(o ? 'chev-d' : 'chev-r')}</button><b>Shelved</b><span class="pill">${l.length}</span><span class="muted small">${esc(t('Usa le icone o tasto destro per altre opzioni'))}</span></div>` +
+      (o ? `<ul class="shl-l">${l.map(x => `<li class="shl-r" tabindex="0" data-shelve="${esc(x.id)}" title="${esc(x.name)}"><b class="shl-n">${esc(x.name)}</b><span class="fill"></span><span class="muted small">${esc(U.fmtDate(x.date))}</span><span class="muted small">${esc(t('{0} file', x.files))}</span><span class="shl-acts">${U.btn('ib', '', 'undo', 'unshelve', { id: x.id }, t('Applica lo shelve alla working copy (svn patch) e, se tutto va bene, lo elimina'))}${U.btn('ib', '', 'x', 'shelveDelete', { id: x.id }, t('Cancella lo shelve, dopo conferma'))}</span></li>`).join('')}</ul>` : '') + `</section>`;
   }
   const shelveMenu = id => [
     { label: 'Unshelve', cmd: 'unshelve', args: { id }, hint: t('Applica lo shelve alla working copy (svn patch) e, se tutto va bene, lo elimina') },
@@ -321,7 +351,7 @@
   // Come Git Changes: prima le sezioni (Staged c'e' sempre), lo stato vuoto sta sotto.
   function listHTML(s, cursor, flt) {
     const empty = isEmpty(s) && !s.loading ? `<div class="empty-state">${U.icon('check', 'big')}<b>${t('Nessuna modifica')}</b><span class="muted">${t('La working copy è pulita.')}</span></div>` : '';
-    return U.treeHTML(s.sections.filter(x => x.id === 'staged' || x.count), cursor, flt) + empty;
+    return U.treeHTML(s.sections.filter(x => x.id === 'staged' || x.count), cursor, flt, null, expandedCaps) + empty;
   }
 
   function render() {
@@ -343,7 +373,7 @@
     const remap = U.syncSel(list, keys), cursor = keys.includes(remap(cur)) ? remap(cur) : keys[0];   // la selezione sopravvive allo snapshot
     // Come Git Changes: prima le sezioni (Staged c'e' sempre), lo stato vuoto sta sotto.
     const html = isEmpty(st) && !st.loading ? `<div class="empty-state">${U.icon('check', 'big')}<b>${t('Nessuna modifica')}</b><span class="muted">${t('La working copy è pulita.')}</span></div>` : '';
-    const changed = U.setHTML(list, U.treeHTML(st.sections.filter(s => s.id === 'staged' || s.count), cursor, filter, list.__sel) + html);
+    const changed = U.setHTML(list, U.treeHTML(st.sections.filter(s => s.id === 'staged' || s.count), cursor, filter, list.__sel, expandedCaps) + html);
     if (changed) { list.scrollTop = top; if (had) { const r = list.querySelector(`.tr[data-key="${CSS.escape(cursor)}"]`); if (r) r.focus(); } }
     list.setAttribute('aria-busy', !!st.loading);
     U.setHTML(root.querySelector('#shl'), shelvedHTML(st));
@@ -592,7 +622,7 @@
     else if (!e.shiftKey && (a === last || !box.contains(a))) { e.preventDefault(); first.focus(); }
   }
 
-  U.changesHTML = { aiStat, conflictMenu, fullPathOf, sectionMenu, multiMenu, header, commitBar, foot, revHTML, switchHTML, mergeBanner, conflictsHTML, shelvedHTML, revIndicator, statusKind, OK_TTL, recentHTML, recentChoose, msgSync, trackStatus, listHTML };   // parti pure, provate senza DOM (tests/ui-web)
+  U.changesHTML = { aiStat, conflictMenu, conflictResolveMenu, conflictBulkMenu, fullPathOf, sectionMenu, multiMenu, header, wcForm, commitBar, foot, revHTML, switchHTML, mergeBanner, conflictsHTML, shelvedHTML, revIndicator, statusKind, OK_TTL, recentHTML, recentChoose, msgSync, trackStatus, listHTML };   // parti pure, provate senza DOM (tests/ui-web)
 
   U.views.changes = {
     mount(root) {
@@ -624,6 +654,7 @@
         render(); const b = root.querySelector('[' + k + ']'); if (b) b.focus();   // il riquadro e' stato ridisegnato: il focus resta sul pulsante
       });
       root.addEventListener('click', e => { if (e.target.closest('[data-shl-toggle]')) { shlOpen = !shlOpen; render(); const b = root.querySelector('[data-shl-toggle]'); if (b) b.focus(); } });
+      root.addEventListener('click', e => { const m = e.target.closest('[data-more-sec]'); if (m) { expandedCaps.add(m.dataset.moreSec); render(); } });
       const cflMenu = (li, x, y) => U.menu.open(x, y, conflictMenu(li.dataset.cfkey, (st.conflicts || []).find(f => f.key === li.dataset.cfkey)?.kind || 'text'), li);
       root.addEventListener('contextmenu', e => { const li = e.target.closest('li.cf[data-cfkey]'); if (li) { e.preventDefault(); cflMenu(li, e.clientX, e.clientY); } });
       root.addEventListener('keydown', e => {   // tasto Menu / Maiusc+F10 sul blocco di un conflitto
@@ -673,6 +704,31 @@
         if (e.target.id !== 'wiz-form') return;
         e.preventDefault(); const ep = e.target.querySelector('#wiz-ep'), k = e.target.querySelector('#wiz-key');
         U.bridge.send('wizardSetAuth', { endpoint: ep ? ep.value : '', key: k ? k.value : '' }); if (k) k.value = '';
+      });
+      root.addEventListener('click', e => {
+        const cfBtn = e.target.closest('[data-cf-resolve]');
+        if (cfBtn && !cfBtn.disabled) {
+          const r = cfBtn.getBoundingClientRect();
+          U.menu.open(r.left, r.bottom + 2, conflictResolveMenu(cfBtn.dataset.cfResolve, cfBtn.dataset.cfKind || 'text'), cfBtn);
+          return;
+        }
+        const bulkBtn = e.target.closest('[data-cf-bulk]');
+        if (bulkBtn && !bulkBtn.disabled) {
+          const r = bulkBtn.getBoundingClientRect();
+          U.menu.open(Math.max(0, r.right - 230), r.bottom + 2, conflictBulkMenu(), bulkBtn);
+          return;
+        }
+        const wcEdit = e.target.closest('[data-wc-edit]');
+        if (wcEdit) {
+          forceInput = true; render();
+          const i = root.querySelector('#wcp'); if (i) { i.focus(); i.select(); }
+          return;
+        }
+      });
+      root.addEventListener('keydown', e => {
+        if (e.target && e.target.id === 'wcp' && e.key === 'Escape' && forceInput && st && !st.workingCopy.showInput) {
+          e.preventDefault(); forceInput = false; render();
+        }
       });
       root.addEventListener('submit', e => { if (e.target.id === 'wcform') { e.preventDefault(); forceInput = false; U.bridge.send('setWorkingCopy', { path: e.target.querySelector('input').value }); } });
       root.addEventListener('click', e => {

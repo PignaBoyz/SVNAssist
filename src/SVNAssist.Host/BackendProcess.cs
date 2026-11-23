@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -111,8 +112,14 @@ namespace SVNAssist.Host
                     { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
                     using (var pr = Process.Start(psi))
                     {
+                        pr.BeginErrorReadLine();
                         var output = pr.StandardOutput.ReadToEnd();
-                        pr.WaitForExit(10000);
+                        if (!pr.WaitForExit(10000))
+                        {
+                            try { pr.Kill(); } catch { }
+                            Log.Write("dotnet --list-runtimes (" + exe + "): timeout");
+                            continue;
+                        }
                         if (pr.ExitCode != 0) _dotnetBroken = true;
                         var root = DotnetRuntime.FindRoot(output);
                         if (root != null) return root;
@@ -177,6 +184,7 @@ namespace SVNAssist.Host
         private void OnGone(Process p)
         {
             bool restart;
+            bool tooMany = false;
             lock (_gate)
             {
                 if (_proc != p) return; // gia' gestito
@@ -184,18 +192,22 @@ namespace SVNAssist.Host
                 try { _rpc?.Dispose(); } catch { }
                 _rpc = null;
                 restart = !_disposed;
+                if (restart)
+                {
+                    if ((DateTime.UtcNow - _windowStart).TotalSeconds > 60) { _windowStart = DateTime.UtcNow; _restarts = 0; }
+                    tooMany = ++_restarts > MaxRestartsPerMinute;
+                }
             }
             try { if (!p.HasExited) p.Kill(); } catch { }
             if (!restart) return;
             Log.Write("backend terminato, riavvio");
 
-            if ((DateTime.UtcNow - _windowStart).TotalSeconds > 60) { _windowStart = DateTime.UtcNow; _restarts = 0; }
-            if (++_restarts > MaxRestartsPerMinute)
+            if (tooMany)
             {
                 Failed?.Invoke(Loc.T("Il servizio SVNAssist si è chiuso troppe volte. Riavvia Visual Studio o consulta il log."));
                 return;
             }
-            Task.Run(async () =>
+            _ = Task.Run(async () =>
             {
                 try { await GetAsync().ConfigureAwait(false); Restarted?.Invoke(); }
                 catch (Exception ex) { Failed?.Invoke(Loc.T("Impossibile riavviare il servizio SVNAssist: {0}", ex.Message)); }
@@ -213,32 +225,58 @@ namespace SVNAssist.Host
 
     internal static class Log
     {
-        private static readonly object Gate = new object();
+        private const int MaxQueueSize = 2048;
+        private static readonly ConcurrentQueue<string> Queue = new ConcurrentQueue<string>();
+        private static readonly AutoResetEvent Signal = new AutoResetEvent(false);
+        private static readonly System.Text.UTF8Encoding Utf8NoBom = new System.Text.UTF8Encoding(false);
+        private static int _queuedCount;
+        private static readonly int Pid = Process.GetCurrentProcess().Id;
+
         /// <summary>Un file al giorno in logs\host-aaaammgg.log, come il backend. Nome e pid: piu' istanze di VS (normale + Exp) scrivono nello stesso file.</summary>
         public static string Path => System.IO.Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SVNAssist", "logs", "host-" + DateTime.Now.ToString("yyyyMMdd") + ".log");
 
-        private static readonly int Pid = Process.GetCurrentProcess().Id;
+        static Log()
+        {
+            var worker = new Thread(DrainLoop) { IsBackground = true, Priority = ThreadPriority.BelowNormal, Name = "SVNAssist.Host.Log" };
+            worker.Start();
+        }
 
         public static void Write(string msg)
         {
             Debug.WriteLine("[SVNAssist] " + msg);
-            try
+            if (Volatile.Read(ref _queuedCount) >= MaxQueueSize) return;
+            var line = DateTime.Now.ToString("HH:mm:ss.fff ") + "[" + Pid + "] " + msg + Environment.NewLine;
+            Queue.Enqueue(line);
+            Interlocked.Increment(ref _queuedCount);
+            Signal.Set();
+        }
+
+        private static void DrainLoop()
+        {
+            var sb = new System.Text.StringBuilder(4096);
+            while (true)
             {
-                lock (Gate)
+                Signal.WaitOne();
+                sb.Clear();
+                while (Queue.TryDequeue(out var line))
+                {
+                    Interlocked.Decrement(ref _queuedCount);
+                    sb.Append(line);
+                }
+                if (sb.Length == 0) continue;
+                try
                 {
                     var path = Path;
                     Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path));
-                    // Causa del log "fermo": File.AppendAllText apre con FileShare.Read, quindi se un'altra istanza di VS (o un lettore) tiene
-                    // il file aperto la scrittura falliva e l'eccezione era inghiottita. Qui si condivide in lettura E scrittura.
                     using (var fs = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete))
                     {
-                        var bytes = new System.Text.UTF8Encoding(false).GetBytes(DateTime.Now.ToString("HH:mm:ss.fff ") + "[" + Pid + "] " + msg + Environment.NewLine);
+                        var bytes = Utf8NoBom.GetBytes(sb.ToString());
                         fs.Write(bytes, 0, bytes.Length);
                     }
                 }
+                catch (Exception ex) { Debug.WriteLine("[SVNAssist] scrittura log host non riuscita: " + ex.Message); }
             }
-            catch (Exception ex) { Debug.WriteLine("[SVNAssist] scrittura log host non riuscita: " + ex.Message); }
         }
     }
 

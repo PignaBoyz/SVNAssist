@@ -387,7 +387,7 @@ public class ConflictsTests
         await f.Store.RefreshAsync(Ct);
         f.LaunchResult = "vsDiffMerge";
         await f.Cmd("conflictOp", new { op = "edit", key = "changes:README.txt" });
-        Assert.Empty(f.Launched.Where(l => l.Base.Length == 0));
+        Assert.DoesNotContain(f.Launched, l => l.Base.Length == 0);
         Assert.Equal(2, f.Host.OpenedFiles.Count);
     }
 
@@ -764,6 +764,8 @@ public class ConflictsTests
             Assert.EndsWith("x.txt.r2", info.Base);
             Assert.EndsWith("x.txt.mine", info.Mine);
             Assert.EndsWith("x.txt.r3", info.Theirs);
+            Assert.NotNull(info.Mine);
+            Assert.NotNull(info.Theirs);
             Assert.Equal("a\nLOCALE\nc\n", File.ReadAllText(info.Mine).Replace("\r\n", "\n"));
             Assert.Equal("a\nSERVER\nc\n", File.ReadAllText(info.Theirs).Replace("\r\n", "\n"));
 
@@ -784,6 +786,87 @@ public class ConflictsTests
             try { Directory.Delete(root, recursive: true); }
             catch (IOException) { /* best effort */ }
             catch (UnauthorizedAccessException) { /* idem */ }
+        }
+    }
+
+    [Fact]
+    public void MergeEditor_TryLaunch_PreferisceTortoiseESaltaVsDiffMergeConPiuVs()
+    {
+        var launched = new List<string>();
+        Assert.Equal("TortoiseMerge", MergeEditor.TryLaunch(Files,
+            () => @"C:\Program Files\TortoiseSVN\bin\TortoiseMerge.exe",
+            () => @"C:\Program Files\VS\vsDiffMerge.exe",
+            (psi, _) => { launched.Add(psi.FileName); return true; },
+            () => 1));
+        Assert.Equal([@"C:\Program Files\TortoiseSVN\bin\TortoiseMerge.exe"], launched);
+
+        launched.Clear();
+        Assert.Null(MergeEditor.TryLaunch(Files,
+            () => null,
+            () => @"C:\Program Files\VS\vsDiffMerge.exe",
+            (psi, _) => { launched.Add(psi.FileName); return true; },
+            () => 2));
+        Assert.Empty(launched);
+
+        Assert.Equal("vsDiffMerge", MergeEditor.TryLaunch(Files,
+            () => null,
+            () => @"C:\Program Files\VS\vsDiffMerge.exe",
+            (psi, _) => { launched.Add(psi.FileName); return true; },
+            () => 1));
+        Assert.Equal([@"C:\Program Files\VS\vsDiffMerge.exe"], launched);
+    }
+
+    [Fact]
+    public async Task MergeInProcess_RisolveQuandoChiusoSenzaMarcatori_EBloccaSeUgualeABaseOMarcatoriRimasti()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "SVNAssist_InProcMerge_" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var merged = Path.Combine(dir, "x.txt");
+            var baseFile = Path.Combine(dir, "x.txt.r2");
+            var mineFile = Path.Combine(dir, "x.txt.mine");
+            var theirsFile = Path.Combine(dir, "x.txt.r3");
+            File.WriteAllText(baseFile, "a\nb\nc\n");
+            File.WriteAllText(mineFile, "a\nLOCALE\nc\n");
+            File.WriteAllText(theirsFile, "a\nSERVER\nc\n");
+            File.WriteAllText(merged, "<<<<<<< .mine\nLOCALE\n=======\nSERVER\n>>>>>>> .r3\n");
+
+            var svn = new FakeSvnService();
+            svn.Statuses.Add(new SvnFileStatus("x.txt", SvnStatusKind.Conflicted));
+            svn.ConflictInfos[merged] = new SvnConflictInfo("text", baseFile, mineFile, theirsFile, null);
+            var settings = new StubSettings();
+            var host = new FakeHost { OpenMergeResult = true };
+            var launched = new List<MergeEditorFiles>();
+            using var store = new ChangesStore(settings, svn, new FakeAiFactory(), new NoopAiPrompt(), new FakeDialogs(), host,
+                new PrereqStore(new PrerequisitesService(settings, new PrerequisiteProbes())), recentTargetsFile: Path.Combine(dir, "recent.json"))
+            { WorkingCopyPath = dir, TempRoot = Path.Combine(dir, "tmp"), MergeEditorLauncher = f => { launched.Add(f); return "ext"; } };
+            await store.RefreshAsync(Ct);
+
+            await store.DispatchAsync("conflictOp", JsonSerializer.SerializeToElement(new { op = "edit", key = "changes:x.txt" }), Ct);
+            var call = Assert.Single(host.Merges);
+            Assert.Equal((theirsFile, mineFile, baseFile, merged), (call.Left, call.Right, call.Base, call.Result));
+            Assert.Empty(launched);
+
+            // Chiusura con marcatori ancora presenti -> non risolve
+            await store.OnMergeEditorClosedAsync(merged, state: 1, Ct);
+            Assert.Empty(svn.Resolved);
+
+            // Riapertura + salvataggio uguale alla base -> non risolve
+            await store.DispatchAsync("conflictOp", JsonSerializer.SerializeToElement(new { op = "edit", key = "changes:x.txt" }), Ct);
+            File.WriteAllText(merged, "a\nb\nc\n");
+            await store.OnMergeEditorClosedAsync(merged, state: 1, Ct);
+            Assert.Empty(svn.Resolved);
+
+            // Riapertura + salvataggio valido -> auto-resolve working
+            await store.DispatchAsync("conflictOp", JsonSerializer.SerializeToElement(new { op = "edit", key = "changes:x.txt" }), Ct);
+            File.WriteAllText(merged, "a\nLOCALE+SERVER\nc\n");
+            await store.OnMergeEditorClosedAsync(merged, state: 1, Ct);
+            Assert.Equal([(merged, SvnConflictChoice.Working)], svn.Resolved);
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
         }
     }
 }

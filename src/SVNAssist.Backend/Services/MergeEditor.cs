@@ -61,14 +61,28 @@ internal static class MergeEditor
         => $"/base:\"{f.Base}\" /theirs:\"{f.Theirs}\" /mine:\"{f.Mine}\" /merged:\"{f.Merged}\" " +
            $"/basename:\"{Path.GetFileName(f.Base)}\" /theirsname:\"{Path.GetFileName(f.Theirs)}\" /minename:\"{Path.GetFileName(f.Mine)}\" /mergedname:\"{Path.GetFileName(f.Merged)}\"";
 
-    /// <summary>Avvia l'editor trovato; ritorna il suo nome (<c>vsDiffMerge</c> | <c>TortoiseMerge</c>) o <c>null</c> se nessuno e' disponibile o non parte.</summary>
+    /// <summary>Avvia l'editor di fallback; preferisce TortoiseMerge (processo autonomo), usa vsDiffMerge solo con al piu' una istanza VS aperta (altrimenti il ROT aggancia l'altra istanza).</summary>
     internal static string? TryLaunch(MergeEditorFiles f)
+        => TryLaunch(f, FindTortoiseMerge, () => FindVsDiffMerge(), Start, CountDevenvProcesses);
+
+    internal static string? TryLaunch(
+        MergeEditorFiles f,
+        Func<string?> findTortoise,
+        Func<string?> findVsDiffMerge,
+        Func<ProcessStartInfo, IReadOnlyList<string>?, bool> start,
+        Func<int> devenvCount)
     {
-        if (FindVsDiffMerge() is { } vs && Start(new ProcessStartInfo(vs), VsArguments(f)))
-            return "vsDiffMerge";
-        if (FindTortoiseMerge() is { } tm && Start(new ProcessStartInfo(tm) { Arguments = TortoiseArguments(f) }, null))
+        if (findTortoise() is { } tm && start(new ProcessStartInfo(tm) { Arguments = TortoiseArguments(f) }, null))
             return "TortoiseMerge";
+        if (devenvCount() <= 1 && findVsDiffMerge() is { } vs && start(new ProcessStartInfo(vs), VsArguments(f)))
+            return "vsDiffMerge";
         return null;
+    }
+
+    private static int CountDevenvProcesses()
+    {
+        try { return Process.GetProcessesByName("devenv").Length; }
+        catch { return 2; } // prudenza: nel dubbio non rischiare ROT cross-istanza
     }
 
     private static bool Start(ProcessStartInfo psi, IReadOnlyList<string>? args)

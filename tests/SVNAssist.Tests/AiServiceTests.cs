@@ -315,4 +315,75 @@ public class AiServiceTests
         Assert.NotNull(capturedBody);
         Assert.Contains($"\"{TestModel}\"", capturedBody);
     }
+
+    [Fact]
+    public async Task GenerateCommitMessageAsync_Http429_RiprovaConAttesaECompleta()
+    {
+        var mockHttp = new MockHttpMessageHandler();
+        var calls = 0;
+        var delays = new List<TimeSpan>();
+        mockHttp
+            .When(TestEndpoint)
+            .Respond(_ =>
+            {
+                calls++;
+                if (calls == 1)
+                {
+                    var resp = new HttpResponseMessage((HttpStatusCode)429);
+                    resp.Headers.TryAddWithoutValidation("Retry-After", "1");
+                    return resp;
+                }
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(MakeChatResponse("fix: retry ok"), System.Text.Encoding.UTF8, "application/json"),
+                };
+            });
+
+        var sut = new AiService(mockHttp.ToHttpClient(), TestEndpoint, TestModel, TestApiKey)
+        {
+            DelayAsync = (d, _) => { delays.Add(d); return Task.CompletedTask; },
+        };
+
+        var msg = await sut.GenerateCommitMessageAsync("diff", "auto", CancellationToken.None);
+
+        Assert.Equal("fix: retry ok", msg);
+        Assert.Equal(2, calls);
+        Assert.Single(delays);
+        Assert.Equal(TimeSpan.FromSeconds(1), delays[0]);
+    }
+
+    [Fact]
+    public async Task GenerateCommitMessageAsync_ErroreGoogleTokenLimit_RiduceEDaRisposta()
+    {
+        var mockHttp = new MockHttpMessageHandler();
+        var bodies = new List<string>();
+        mockHttp
+            .When(AiServiceFactory.GeminiEndpoint)
+            .Respond(async req =>
+            {
+                var body = await req.Content!.ReadAsStringAsync();
+                bodies.Add(body);
+                if (bodies.Count == 1)
+                {
+                    return new HttpResponseMessage(HttpStatusCode.BadRequest)
+                    {
+                        Content = new StringContent("""{"error":{"message":"The input token count exceeds the maximum number of tokens allowed"}}""",
+                            System.Text.Encoding.UTF8, "application/json"),
+                    };
+                }
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(MakeChatResponse("fix: trimmed"), System.Text.Encoding.UTF8, "application/json"),
+                };
+            });
+
+        var sut = new AiService(mockHttp.ToHttpClient(), AiServiceFactory.GeminiEndpoint, "gemini-2.5-flash", "AIza-test");
+        var largeDiff = new string('x', 8000);
+
+        var msg = await sut.GenerateCommitMessageAsync(largeDiff, "auto", CancellationToken.None);
+
+        Assert.Equal("fix: trimmed", msg);
+        Assert.Equal(2, bodies.Count);
+        Assert.True(bodies[1].Length < bodies[0].Length);
+    }
 }

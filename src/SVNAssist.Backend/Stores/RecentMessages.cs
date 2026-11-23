@@ -15,6 +15,9 @@ internal sealed class RecentMessages
 
     private readonly string _file;
     private readonly object _lock = new();
+    private Dictionary<string, List<string>>? _cache;
+    private DateTime _cacheStampUtc;
+    private long _cacheLen = -1;
 
     public RecentMessages(string? file = null)
         => _file = file ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SVNAssist", "recent-messages.json");
@@ -23,7 +26,7 @@ internal sealed class RecentMessages
     internal IReadOnlyList<string> Get(string repo)
     {
         lock (_lock)
-            return Read().TryGetValue(repo, out var list) ? Normalize(list) : [];
+            return AllCached().TryGetValue(repo, out var list) ? Normalize(list) : [];
     }
 
     /// <summary>Ricorda un messaggio committato (testo tagliato ai bordi; vuoto = ignorato).</summary>
@@ -36,15 +39,49 @@ internal sealed class RecentMessages
         {
             try
             {
-                var all = Read();
-                all[repo] = Normalize(all.TryGetValue(repo, out var cur) ? cur : []).Where(m => m != message).Prepend(message).Take(Max).ToList();
-                Directory.CreateDirectory(Path.GetDirectoryName(_file)!);
-                File.WriteAllText(_file, JsonSerializer.Serialize(all));
+                AtomicJsonFile.WithFileLock(_file, () =>
+                {
+                    var all = Read();
+                    all[repo] = Normalize(all.TryGetValue(repo, out var cur) ? cur : []).Where(m => m != message).Prepend(message).Take(Max).ToList();
+                    AtomicJsonFile.WriteAllTextAtomic(_file, JsonSerializer.Serialize(all));
+                    _cache = all;
+                    if (File.Exists(_file))
+                    {
+                        var fi = new FileInfo(_file);
+                        _cacheStampUtc = fi.LastWriteTimeUtc;
+                        _cacheLen = fi.Length;
+                    }
+                });
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 BackendLog.Warn("Messaggi recenti non salvati: " + ex.Message);
             }
+        }
+    }
+
+    private Dictionary<string, List<string>> AllCached()
+    {
+        try
+        {
+            if (!File.Exists(_file))
+            {
+                _cacheStampUtc = default;
+                _cacheLen = -1;
+                return _cache = [];
+            }
+
+            var fi = new FileInfo(_file);
+            if (_cache is not null && fi.LastWriteTimeUtc == _cacheStampUtc && fi.Length == _cacheLen)
+                return _cache;
+
+            _cacheStampUtc = fi.LastWriteTimeUtc;
+            _cacheLen = fi.Length;
+            return _cache = Read();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return _cache ??= [];
         }
     }
 
@@ -56,7 +93,8 @@ internal sealed class RecentMessages
     {
         try
         {
-            return File.Exists(_file) ? JsonSerializer.Deserialize<Dictionary<string, List<string>>>(File.ReadAllText(_file)) ?? [] : [];
+            var json = AtomicJsonFile.TryReadAllText(_file);
+            return json is null ? [] : JsonSerializer.Deserialize<Dictionary<string, List<string>>>(json) ?? [];
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {

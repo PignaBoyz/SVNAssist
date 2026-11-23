@@ -1179,4 +1179,179 @@ public class ChangesStoreTests
 
         Assert.Empty(errors);
     }
+
+    [Fact]
+    public async Task EnsureSccStartedAsync_CaricaStatoPerGlifiSenzaAvviarePrerequisitiUi()
+    {
+        using var f = new Fixture("");
+        f.Settings.WorkingCopy = Wc;
+        f.Svn.Statuses.Add(new SvnFileStatus("a.cs", SvnStatusKind.Modified));
+        var entriesReady = new TaskCompletionSource();
+        f.Store.EntriesChanged += () => entriesReady.TrySetResult();
+
+        await f.Store.EnsureSccStartedAsync();
+        await entriesReady.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var scc = f.Store.SccStates();
+        Assert.Equal("Modified", scc[Path.Combine(Wc, "a.cs")]);
+        Assert.False(f.Store.Prerequisites.GetSnapshot().Open);
+    }
+
+    [Fact]
+    public async Task OnDocumentSaved_IgnoraRumore_EAggiornaFileRealiInLightweightMode()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "SVNAssist_DocSave_" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(dir);
+        Directory.CreateDirectory(Path.Combine(dir, ".svn"));
+        try
+        {
+            using var f = new Fixture("");
+            f.Settings.WorkingCopy = dir;
+            f.Settings.LightweightModeSaved = true;
+            f.Store.EnableWatcher = true;
+            f.Svn.Statuses.Add(new SvnFileStatus("src/a.cs", SvnStatusKind.Modified));
+
+            await f.Store.EnsureSccStartedAsync();
+            // Attende il primo caricamento da EnsureSccStartedAsync
+            for (var i = 0; i < 50 && f.Svn.StatusCalls == 0; i++)
+                await Task.Delay(50);
+            var baseline = f.Svn.StatusCalls;
+            Assert.True(baseline >= 1);
+
+            // File di build/binario sotto .svn/bin/obj: ignorato, non incrementa StatusCalls
+            f.Store.OnDocumentSaved(Path.Combine(dir, "src", "bin", "Debug", "x.dll"));
+            await Task.Delay(250);
+            Assert.Equal(baseline, f.Svn.StatusCalls);
+
+            // Salvataggio reale sotto WC: triggera refresh anche in modalita' leggera
+            var nextRefresh = new TaskCompletionSource();
+            f.Store.EntriesChanged += () => { if (f.Svn.StatusCalls > baseline) nextRefresh.TrySetResult(); };
+            f.Store.OnDocumentSaved(Path.Combine(dir, "src", "a.cs"));
+            await nextRefresh.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.True(f.Svn.StatusCalls > baseline);
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task FetchRemoteLocks_InterrogaSoloFileVersionatiModificati()
+    {
+        using var f = new Fixture();
+        f.Store.IsDirectory = p => p.EndsWith("dir", StringComparison.OrdinalIgnoreCase);
+        f.Svn.Statuses.AddRange([
+            new SvnFileStatus("a.cs", SvnStatusKind.Modified),
+            new SvnFileStatus("unver.txt", SvnStatusKind.Unversioned),
+            new SvnFileStatus("dir", SvnStatusKind.Modified),
+        ]);
+        await f.RefreshOnly();
+
+        await f.Store.HeadCheck.CheckAsync(Ct);
+
+        var requested = Assert.Single(f.Svn.RemoteLockRequests);
+        Assert.Equal([Path.Combine(Wc, "a.cs")], requested);
+    }
+
+    [Fact]
+    public async Task FolderCan_UsaChangeNodeCapsConStesseAzioniDeiFigli()
+    {
+        using var f = new Fixture().With(
+            ("src/mod.cs", SvnStatusKind.Modified),
+            ("src/new.txt", SvnStatusKind.Unversioned));
+
+        await f.RefreshOnly();
+
+        var changesFolder = f.Section("changes").Rows.Single(r => r.Kind == "folder" && r.Name == "src");
+        Assert.True(changesFolder.Can.Diff);
+        Assert.True(changesFolder.Can.Stage);
+        Assert.True(changesFolder.Can.Revert);
+        Assert.True(changesFolder.Can.DeleteFile);
+        Assert.False(changesFolder.Can.Unstage);
+        Assert.False(changesFolder.Can.Add);
+        Assert.False(changesFolder.Can.Resolve);
+
+        var unvFolder = f.Section("unversioned").Rows.Single(r => r.Kind == "folder" && r.Name == "src");
+        Assert.True(unvFolder.Can.Add);
+        Assert.True(unvFolder.Can.Ignore);
+        Assert.False(unvFolder.Can.Diff);
+    }
+
+    [Fact]
+    public async Task Dispose_CancellaLeCartelleTemporaneeDeiDiff()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), "SVNAssist_DiffClean_" + Guid.NewGuid().ToString("N")[..8]);
+        using var f = new Fixture();
+        f.Store.TempRoot = tempRoot;
+        f.With(("a.cs", SvnStatusKind.Modified));
+        await f.RefreshOnly();
+
+        await f.Cmd("showDiff", new { key = "changes:a.cs" });
+        Assert.True(Directory.Exists(tempRoot));
+        Assert.NotEmpty(Directory.GetDirectories(tempRoot));
+
+        f.Store.Dispose();
+        Assert.Empty(Directory.GetDirectories(tempRoot));
+        try { Directory.Delete(tempRoot, recursive: true); } catch { }
+    }
+
+    [Fact]
+    public async Task LightweightMode_OnIdeActiveChanged_RichiedeRefreshSoloAlRientroConCooldown()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "SVNAssist_LightFocus_" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(Path.Combine(dir, ".svn"));
+        try
+        {
+            using var f = new Fixture("");
+            f.Settings.WorkingCopy = dir;
+            f.Settings.LightweightModeSaved = true;
+            f.Store.EnableWatcher = true;
+            f.Svn.Statuses.Add(new SvnFileStatus("src/a.cs", SvnStatusKind.Modified));
+
+            await f.Store.EnsureSccStartedAsync();
+            for (var i = 0; i < 50 && f.Svn.StatusCalls == 0; i++)
+                await Task.Delay(50);
+            var baseline = f.Svn.StatusCalls;
+            Assert.True(baseline >= 1);
+
+            // Perdita focus: nessun refresh
+            f.Store.OnIdeActiveChanged(false);
+            await Task.Delay(150);
+            Assert.Equal(baseline, f.Svn.StatusCalls);
+
+            // Ritorno focus in modalita' leggera: triggera un refresh e poi il cooldown blocca raffiche immediate
+            var refreshed = new TaskCompletionSource();
+            f.Store.EntriesChanged += () => { if (f.Svn.StatusCalls > baseline) refreshed.TrySetResult(); };
+            f.Store.OnIdeActiveChanged(true);
+            await refreshed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var afterFirstFocus = f.Svn.StatusCalls;
+            Assert.True(afterFirstFocus > baseline);
+
+            f.Store.OnIdeActiveChanged(true);
+            await Task.Delay(200);
+            Assert.Equal(afterFirstFocus, f.Svn.StatusCalls);
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task CommitMessage_EsponeAiProviderLabelNelloSnapshot()
+    {
+        using var f = new Fixture();
+        f.Settings.Provider = "gemini";
+        f.Settings.GeminiModelSaved = "models/gemini-2.5-flash";
+
+        await f.Store.InitializeAsync(Ct);
+        var snap = ((ChangesState)f.Store.GetSnapshot()).Commit;
+        Assert.Equal("Gemini · gemini-2.5-flash", snap.AiProviderLabel);
+
+        f.Settings.Provider = "auto";
+        await f.Store.OnSettingsChangedAsync(Ct);
+        snap = ((ChangesState)f.Store.GetSnapshot()).Commit;
+        Assert.Equal("Auto", snap.AiProviderLabel);
+    }
 }

@@ -358,7 +358,7 @@ public class MergeResumeRealTests
         try { await e.LogCmd("mergeAll"); }
         finally { MergeRunner.ChunkSize = MergeRunner.DefaultChunkSize; }
 
-        Assert.Equal(1, e.Spy.Merges(real: true).Count);
+        Assert.Single(e.Spy.Merges(real: true));
         var pending = e.ChangesSnap.Merge!.Pending!;
         Assert.Equal((10, 30, 20), (pending.Applied, pending.Total, pending.Remaining));
         Assert.Equal("", pending.Warning);                                         // nulla a meta': il passaggio e' finito

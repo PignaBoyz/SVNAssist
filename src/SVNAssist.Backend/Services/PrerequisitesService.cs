@@ -13,6 +13,7 @@ internal static class PrerequisiteIds
     public const string AnthropicKey = "anthropic-key";
     public const string CopilotRuntime = "copilot-runtime";
     public const string OpenAiKey = "openai-key";
+    public const string GeminiKey = "gemini-key";
 }
 
 /// <summary>
@@ -46,7 +47,7 @@ internal static class AiProviderGuide
         "gemini" => Loc.T("Gemini: serve una API key di Google AI Studio; l'uso ha un livello gratuito limitato, oltre è a consumo."),
         "openai" => Loc.T("OpenAI-compatibile: con GitHub Models (default) basta il login GitHub (gh auth login) o un token, gratis entro i limiti; " +
                           "con altri endpoint serve la loro API key (a pagamento, tranne Ollama in locale)."),
-        _ => Loc.T("Automatico: prova in ordine Copilot, Claude Code, Claude API, OpenAI-compatibile; ne basta uno configurato."),
+        _ => Loc.T("Automatico: prova in ordine Copilot, Claude Code, Claude API, OpenAI-compatibile e Gemini; ne basta uno configurato."),
     };
 
     /// <summary>Pagina utile per configurare il provider scelto.</summary>
@@ -86,7 +87,7 @@ internal static class AiProviderGuide
         "copilot" => Loc.T("GitHub Copilot non è utilizzabile.\n\n{0}\n\nVuoi aprire la pagina di GitHub Copilot?", Requirements("copilot")),
         "claudecode" => Loc.T("Claude Code non è utilizzabile.\n\n{0}\n\nVuoi aprire la documentazione di Claude Code?", Requirements("claudecode")),
         "claude" => Loc.T("Claude API non è utilizzabile.\n\n{0}\nInserisci la chiave in Tools > Options > SVNAssist > Anthropic API Key.\n\nVuoi aprire la pagina per creare la API key Anthropic?", Requirements("claude")),
-        "gemini" => Loc.T("Gemini non è utilizzabile.\n\n{0}\nIncolla la chiave in Tools > Options > SVNAssist > AI API Key.\n\nVuoi aprire la pagina per creare la API key di Google AI Studio?", Requirements("gemini")),
+        "gemini" => Loc.T("Gemini non è utilizzabile.\n\n{0}\nIncolla la chiave in Tools > Options > SVNAssist > API key Gemini.\n\nVuoi aprire la pagina per creare la API key di Google AI Studio?", Requirements("gemini")),
         "openai" => Loc.T("Il provider OpenAI-compatibile non è utilizzabile.\n\n{0}\nIncolla la chiave in Tools > Options > SVNAssist > AI API Key.\n\nVuoi aprire la pagina per creare il token GitHub gratuito?", Requirements("openai")),
         _ => Loc.T("Nessun provider AI trovato per generare i commit. Basta UNA di queste opzioni:\n\n" +
                    "• GitHub Copilot o GitHub CLI: esegui 'gh auth login'\n" +
@@ -228,17 +229,44 @@ internal sealed class PrerequisitesService
     public async Task<PrerequisitesSnapshot> CheckAsync(CancellationToken ct, string? providerOverride = null)
     {
         var provider = AiProviderGuide.Normalize(providerOverride ?? await _settings.GetAiProviderAsync(ct));
+        bool Use(string name) => provider == name || provider == "auto";
+        var needGh = provider is "auto" or "copilot" or "openai";
+        var needClaude = provider is "auto" or "claudecode";
+        var needCopilotRuntime = provider is "auto" or "copilot";
 
-        var svn = _probes.FindSvn();
-        var svnBroken = svn is not null && !await _probes.Runs(svn, ct);
-        var tortoise = _probes.FindTortoise();
-        var gh = _probes.FindGitHubCli();
-        var claude = _probes.FindClaude();
-        var claudeBroken = claude is not null && !await _probes.Runs(claude, ct);
-        var ghBroken = gh is not null && !await _probes.Runs(gh, ct);
-        var ghLoggedIn = gh is not null && !ghBroken && await _probes.IsGitHubCliLoggedIn(gh, ct);
-        var token = await _probes.ResolveGitHubToken(ct);
-        var copilotInstalled = _probes.CopilotRuntimeInstalled();
+        string? svn = _probes.FindSvn(), tortoise = _probes.FindTortoise();
+        string? gh = null, claude = null, token = null;
+        bool svnBroken = false, claudeBroken = false, ghBroken = false, ghLoggedIn = false;
+        var copilotInstalled = needCopilotRuntime && _probes.CopilotRuntimeInstalled();
+
+        var svnTask = Task.Run(async () =>
+        {
+            svnBroken = svn is not null && !await _probes.Runs(svn, ct);
+        }, ct);
+
+        var claudeTask = needClaude
+            ? Task.Run(async () =>
+            {
+                claude = _probes.FindClaude();
+                claudeBroken = claude is not null && !await _probes.Runs(claude, ct);
+            }, ct)
+            : Task.CompletedTask;
+
+        var ghTask = needGh
+            ? Task.Run(async () =>
+            {
+                gh = _probes.FindGitHubCli();
+                var runsTask = gh is not null ? _probes.Runs(gh, ct) : Task.FromResult(false);
+                var tokenTask = _probes.ResolveGitHubToken(ct);
+                await Task.WhenAll(runsTask, tokenTask);
+                ghBroken = gh is not null && !runsTask.Result;
+                token = tokenTask.Result;
+                if (gh is not null && !ghBroken)
+                    ghLoggedIn = await _probes.IsGitHubCliLoggedIn(gh, ct);
+            }, ct)
+            : Task.CompletedTask;
+
+        await Task.WhenAll(svnTask, claudeTask, ghTask);
 
         var settingsKey = await _settings.GetAnthropicApiKeyAsync(ct);
         var envKey = _probes.ReadEnvironment("ANTHROPIC_API_KEY");
@@ -248,8 +276,13 @@ internal sealed class PrerequisitesService
         var apiKey = await _settings.GetAiApiKeyAsync(ct);
         var endpoint = await _settings.GetAiEndpointAsync(ct);
 
+        var geminiSettingsKey = await _settings.GetGeminiApiKeyAsync(ct);
+        var geminiEnvKey = _probes.ReadEnvironment("GEMINI_API_KEY") ?? _probes.ReadEnvironment("GOOGLE_API_KEY");
+        var geminiKeySource = !string.IsNullOrWhiteSpace(geminiSettingsKey) ? "Tools > Options"
+            : !string.IsNullOrWhiteSpace(geminiEnvKey) ? Loc.T("variabile GEMINI_API_KEY")
+            : provider == "gemini" && !string.IsNullOrWhiteSpace(apiKey) ? "Tools > Options" : null;
+
         var usable = new List<string>();
-        bool Use(string name) => provider == name || provider == "auto";
         // Copilot serve il login GitHub (token): senza, non è utilizzabile nemmeno se scelto esplicitamente.
         if (token is not null && (provider == "copilot" || (Use("copilot") && copilotInstalled)))
             usable.Add("GitHub Copilot");
@@ -260,8 +293,7 @@ internal sealed class PrerequisitesService
         var openAiKeyOk = !string.IsNullOrWhiteSpace(apiKey) || (AiServiceFactory.IsGitHubModelsEndpoint(endpoint) && token is not null);
         if (Use("openai") && openAiKeyOk)
             usable.Add(Loc.T("OpenAI-compatibile"));
-        var geminiKeyOk = !string.IsNullOrWhiteSpace(apiKey);
-        if (provider == "gemini" && geminiKeyOk)
+        if (Use("gemini") && geminiKeySource is not null)
             usable.Add("Gemini");
 
         var items = new List<PrerequisiteItem>
@@ -310,12 +342,16 @@ internal sealed class PrerequisitesService
                       "Richiede anche il login a GitHub (gh auth login)."),
                 copilotInstalled ? null : Loc.T("Scarica ora (~100 MB)")),
 
-            new(PrerequisiteIds.OpenAiKey, GroupAi, provider == "gemini" ? Loc.T("API key Gemini") : Loc.T("API key / token (OpenAI-compatibile)"),
-                provider == "gemini" ? geminiKeyOk : openAiKeyOk,
+            new(PrerequisiteIds.OpenAiKey, GroupAi, Loc.T("API key / token (OpenAI-compatibile)"), openAiKeyOk,
                 !string.IsNullOrWhiteSpace(apiKey) ? Loc.T("chiave in Tools > Options")
                     : openAiKeyOk ? Loc.T("token GitHub rilevato (GitHub Models)") : Loc.T("nessuna chiave né token GitHub."),
                 Loc.T("Con GitHub Models (default) basta il login GitHub (gh auth login) oppure un token da incollare in\n" +
                       "Tools > Options > SVNAssist > AI API Key. Per OpenAI/Azure incolla la loro API key (a pagamento).")),
+
+            new(PrerequisiteIds.GeminiKey, GroupAi, Loc.T("API key Gemini"), geminiKeySource is not null,
+                geminiKeySource is null ? Loc.T("nessuna chiave") : Loc.T("chiave disponibile ({0})", geminiKeySource),
+                Loc.T("Incolla la chiave in Tools > Options > SVNAssist > API key Gemini,\n" +
+                      "oppure imposta la variabile d'ambiente GEMINI_API_KEY e riavvia Visual Studio.")),
         };
 
         // Con un provider fisso mostra solo i prerequisiti AI che lo riguardano (in auto, tutti).
@@ -335,7 +371,7 @@ internal sealed class PrerequisitesService
         "claudecode" => [PrerequisiteIds.ClaudeCode],
         "claude" => [PrerequisiteIds.AnthropicKey],
         "openai" => [PrerequisiteIds.GitHubCli, PrerequisiteIds.GitHubLogin, PrerequisiteIds.OpenAiKey],
-        "gemini" => [PrerequisiteIds.OpenAiKey],
+        "gemini" => [PrerequisiteIds.GeminiKey],
         _ => null,
     };
 }

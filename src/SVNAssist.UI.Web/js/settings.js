@@ -1,6 +1,6 @@
 'use strict';
 /* Vista "Impostazioni" (dentro Tools > Options > SVNAssist). Gestita solo dall'host, senza backend.
-   state: {values:{chiave:stringa}, hasAnthropicKey, hasAiKey}. Ogni modifica si applica subito (settingsSet / settingsSecret). */
+   state: {values:{chiave:stringa}, hasAnthropicKey, hasAiKey, hasGeminiKey}. Ogni modifica si applica subito (settingsSet / settingsSecret). */
 (function (w) {
   const U = w.SVNUI, esc = U.esc, t = U.t;
   let st = null;
@@ -15,7 +15,12 @@
   const txt = (k, label, desc, ph) => row(`<input type="text" data-k="${k}" value="${esc(st.values[k])}" aria-label="${esc(label)}"${ph ? ` placeholder="${esc(ph)}"` : ''}>`, label, desc);
   const num = (k, label, desc) => row(`<input type="number" min="0" max="1440" data-k="${k}" value="${esc(st.values[k])}" aria-label="${esc(label)}">`, label, desc);
   const chk = (k, label, desc) => row(`<input type="checkbox" data-k="${k}"${st.values[k] === 'true' ? ' checked' : ''} aria-label="${esc(label)}">`, label, desc);
-  const key = (k, has, label, desc) => row(`<span class="chip ${has ? 'ok' : 'skip'}">${esc(has ? t('Impostata') : t('Non impostata'))}</span> <input type="password" data-secret="${k}" autocomplete="off" placeholder="${esc(t('Incolla la chiave'))}" aria-label="${esc(label)}"> ${U.btn('btn sm', t('Salva'), 'check', null, null, t('Salva la chiave (cifrata, solo per il tuo utente Windows)'), `data-save="${k}"`)}${has ? ' ' + U.btn('btn sm ghost warn', t('Cancella'), 'x', null, null, t('Cancella la chiave'), `data-clear="${k}"`) : ''}`, label, desc);
+  const key = (k, has, label, desc, provider) => {
+    const tr = st.testResult && st.testResult.provider === provider ? st.testResult : null;
+    const busy = tr && tr.busy;
+    const status = tr ? `<div class="set-test ${busy ? 'busy' : tr.ok ? 'ok' : 'err'}" role="status">${busy ? '<span class="spin"></span> ' : ''}${esc(tr.msg || '')}</div>` : '';
+    return row(`<span class="chip ${has ? 'ok' : 'skip'}">${esc(has ? t('Impostata') : t('Non impostata'))}</span> <input type="password" data-secret="${k}" autocomplete="off" placeholder="${esc(t('Incolla la chiave'))}" aria-label="${esc(label)}"> ${U.btn('btn sm', t('Salva'), 'check', null, null, t('Salva la chiave (cifrata, solo per il tuo utente Windows)'), `data-save="${k}"`)}${provider ? ' ' + U.btn('btn sm', t('Testa chiave'), 'spark', null, null, t('Salva e verifica la chiave con il provider'), `data-test="${provider}"${busy ? ' disabled' : ''}`) : ''}${has ? ' ' + U.btn('btn sm ghost warn', t('Cancella'), 'x', null, null, t('Cancella la chiave'), `data-clear="${k}"`) : ''}`, label, desc) + status;
+  };
   const card = (title, body) => `<section class="set-card"><h3>${esc(title)}</h3>${body}</section>`;
 
   // Solo i campi del provider scelto: ne si configura uno alla volta, gli altri sarebbero fuorvianti. Senza provider (Automatico) un pulsante porta alla procedura guidata.
@@ -24,12 +29,14 @@
     const claudeModel = txt('claudeModel', t('Modello Claude (solo Claude Code e Claude API)'), t("Un id modello. L'elenco aggiornato è nella procedura guidata (Extensions > SVNAssist > Cambia provider AI)."));
     const f = { copilot: txt('copilotModel', t('Modello Copilot (solo Copilot)'), t("Serve un abbonamento Copilot e 'gh auth login'. 'default' = il modello che sceglie Copilot.")),
       claudecode: claudeModel,
-      claude: claudeModel + key('anthropicApiKey', st.hasAnthropicKey, t('API key Anthropic (solo Claude API)'), t("Vuota = variabile d'ambiente ANTHROPIC_API_KEY. Salvata cifrata (DPAPI, solo per il tuo utente Windows).")),
-      openai: '', gemini: '' }[p];
+      claude: claudeModel + key('anthropicApiKey', st.hasAnthropicKey, t('API key Anthropic (solo Claude API)'), t("Vuota = variabile d'ambiente ANTHROPIC_API_KEY. Salvata cifrata (DPAPI, solo per il tuo utente Windows)."), 'claude'),
+      gemini: key('geminiApiKey', st.hasGeminiKey, t('API key Gemini (solo Gemini)'), t("Vuota = variabile d'ambiente GEMINI_API_KEY o GOOGLE_API_KEY. Salvata cifrata (DPAPI, solo per il tuo utente Windows)."), 'gemini') +
+        txt('geminiModel', t('Modello Gemini (solo Gemini)'), t("Un id modello Gemini (es. gemini-2.5-flash). L'elenco aggiornato è nella procedura guidata.")),
+      openai: '' }[p];
     const oa = txt('aiEndpoint', t('URL endpoint (solo OpenAI-compatibile)'), t('Endpoint Chat Completions compatibile OpenAI. Default: GitHub Models.')) +
-      key('aiApiKey', st.hasAiKey, t('API key o GitHub PAT (solo OpenAI-compatibile)'), t('Salvata cifrata (DPAPI, solo per il tuo utente Windows).')) +
+      key('aiApiKey', st.hasAiKey, t('API key o GitHub PAT (solo OpenAI-compatibile)'), t('Salvata cifrata (DPAPI, solo per il tuo utente Windows).'), 'openai') +
       txt('aiModel', t('Modello (solo OpenAI-compatibile / GitHub Models)'), t("Un id modello. L'elenco aggiornato è nella procedura guidata."));
-    const body = p === 'openai' || p === 'gemini' ? oa : f;
+    const body = p === 'openai' ? oa : f;
     const none = row(wiz, t('Nessun provider scelto'), t('Con Automatico SVNAssist prova i provider in ordine. Scegline uno per vedere qui modello e chiave.'));
     return card(t('Provider collegato'), body ? body + row(wiz, t('Cambia provider'), t('Chiude le Options e apre la procedura guidata: provider, accesso, modello.')) : none);
   }
@@ -39,7 +46,7 @@
     const keep = document.activeElement && document.activeElement.dataset && (document.activeElement.dataset.k || document.activeElement.dataset.secret);
     const html =
       card(t('Commit message AI'),
-        sel('aiProvider', t('Provider AI per i commit message'), t("Automatico prova Copilot, Claude Code, Claude API e OpenAI-compatibile in quest'ordine.")) +
+        sel('aiProvider', t('Provider AI per i commit message'), t("Automatico prova Copilot, Claude Code, Claude API, OpenAI-compatibile e Gemini (se impostata una chiave) in quest'ordine.")) +
         sel('defaultLanguage', t('Lingua dei commit message')) +
         chk('aiShowUsage', t('Mostra modello e costo nel messaggio generato'), t('Dopo "Genera con AI" la riga di stato scrive modello, token e costo o crediti AI, solo se il provider li dichiara. Non finisce nel messaggio di commit.')) +
         chk('aiExplainIncoming', t('Spiega le revisioni in arrivo prima di SVN Update'), t('Elenca le revisioni in arrivo e, a richiesta, chiede all\'AI cosa è entrato. All\'AI vanno messaggi di log e modifiche (diff); dei file sensibili solo il nome.'))) +
@@ -48,6 +55,7 @@
         txt('workingCopyPath', t('Working Copy Path'), t("Se impostato ha la precedenza sull'auto-rilevamento dalla solution aperta.")) +
         txt('repoLayout', t('Layout del repository'), t('Nomi delle cartelle del tronco, dei branch e dei tag, separati da / (default trunk/branches/tags). Servono a SVN Switch.')) +
         num('headCheckMinutes', t('Controllo nuove revisioni (minuti)'), t('Ogni quanti minuti SVNAssist chiede al server l\'ultima revisione del ramo (sola lettura). 0 = spento.')) +
+        chk('lightweightMode', t('Modalità leggera (PC poco potenti)'), t('Disattiva il watcher continuo e i controlli automatici sul server: aggiorna al salvataggio in VS, al rientro del focus e con Refresh manuale.')) +
         sel('windowTheme', t('Tema delle finestre SVNAssist')) +
         sel('uiLanguage', t("Lingua dell'interfaccia"), t('Si applica subito a finestre e messaggi; la lingua dei commit message AI è un\'impostazione separata.')) +
         chk('showSccGlyphs', t('Mostra lo stato SVN in Solution Explorer'), t('Icone accanto ai file (modificato, aggiunto, non versionato, in conflitto). SVNAssist si registra come provider di source control: spegni se ne usi un altro.'))) +
@@ -65,6 +73,16 @@
         U.bridge.send('settingsSet', { key: k, value: e.target.type === 'checkbox' ? String(e.target.checked) : e.target.value });
       });
       root.addEventListener('click', e => {
+        const tbtn = e.target.closest('[data-test]');
+        if (tbtn && !tbtn.disabled) {
+          const rowEl = tbtn.closest('.set-r'), inp = rowEl && rowEl.querySelector('[data-secret]');
+          if (inp && inp.value.trim()) {
+            U.bridge.send('settingsSecret', { key: inp.dataset.secret, value: inp.value });
+            inp.value = '';
+          }
+          U.bridge.send('settingsTestKey', { provider: tbtn.dataset.test });
+          return;
+        }
         const b = e.target.closest('[data-save],[data-clear]'); if (!b) return;
         const k = b.dataset.save || b.dataset.clear, inp = root.querySelector(`[data-secret="${k}"]`);
         U.bridge.send('settingsSecret', { key: k, value: b.dataset.save && inp ? inp.value : '' });

@@ -69,6 +69,14 @@ public class AiModelCatalogTests : IDisposable
     }
 
     [Fact]
+    public void ParseOpenAi_FiltraModelliNonChatDiGoogle()
+    {
+        var models = AiModelCatalog.ParseOpenAiModels(
+            """{"data":[{"id":"models/gemini-2.5-flash"},{"id":"models/imagen-3.0-generate-002"},{"id":"models/veo-2.0"},{"id":"models/lyria-realtime"},{"id":"models/aqa"},{"id":"models/gemini-2.5-flash-native-audio-dialog"},{"id":"models/gemini-2.5-flash-image"},{"id":"models/gemini-2.5-pro"}]}""");
+        Assert.Equal(["gemini-2.5-flash", "gemini-2.5-pro"], models.Select(m => m.Id));
+    }
+
+    [Fact]
     public void CopilotModels_PredefinitoInTesta_NonAbilitatiVisibiliConIlMotivo_CostoDalMoltiplicatore()
     {
         var models = AiModelCatalog.BuildCopilotModels(
@@ -259,6 +267,7 @@ public class AiModelCatalogTests : IDisposable
     [InlineData("Claude Code failed (exit code 1): Failed to authenticate: OAuth session expired and could not be refreshed")]
     [InlineData("GitHub Copilot: Copilot non è collegato: accedi a GitHub (gh auth login)")]
     [InlineData("invalid x-api-key")]
+    [InlineData("Gemini: API_KEY_INVALID")]
     public void Classify_AccessoScadutoOMancante(string message)
         => Assert.Equal(AiErrorKind.Auth, AiErrors.Classify(message));
 
@@ -274,6 +283,7 @@ public class AiModelCatalogTests : IDisposable
     {
         const string msg = "Nessun provider AI ha risposto.\nClaude Code: processo terminato\nGitHub Copilot: Model \"x\" is not available";
         Assert.Equal("copilot", AiErrors.ProviderOf(msg));
+        Assert.Equal("gemini", AiErrors.ProviderOf("Nessun provider AI ha risposto.\nGemini: API key not valid"));
         Assert.Null(AiErrors.ProviderOf("errore senza nome"));
     }
 

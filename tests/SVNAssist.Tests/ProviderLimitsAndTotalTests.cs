@@ -17,8 +17,10 @@ public class ProviderLimitsAndTotalTests
         Assert.Same(AiLimits.ClaudeCode, new ClaudeCodeAiService(new ProcessRunner(), "claude.exe", "m").Limits);
         Assert.Same(AiLimits.Copilot, new CopilotAiService(http, null, "").Limits);
         Assert.Same(AiLimits.GitHubModels, new AiService(http, "https://models.github.ai/inference/chat/completions", "m", "k").Limits);
+        Assert.Same(AiLimits.Gemini, new AiService(http, AiServiceFactory.GeminiEndpoint, "gemini-2.5-flash", "k").Limits);
         Assert.Same(AiLimits.OpenAiCompatible, new AiService(http, "http://localhost:11434/v1/chat/completions", "m", "").Limits);
         Assert.True(AiLimits.Anthropic.DiffMaxTotalChars > AiLimits.GitHubModels.DiffMaxTotalChars);
+        Assert.True(AiLimits.Gemini.DiffMaxTotalChars > AiLimits.GitHubModels.DiffMaxTotalChars);
         Assert.True(AiLimits.Copilot.MaxUserChars < AiLimits.Anthropic.MaxUserChars);
     }
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Microsoft.VisualStudio;
@@ -20,10 +21,28 @@ namespace SVNAssist.Host
     {
         private readonly SVNAssistPackage _pkg;
         private volatile Dictionary<string, string> _states = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        private string _dir, _root;
+        private string _dir, _root, _paintedRoot;
         private bool _active;
+        private int _glyphGen;
 
         internal SvnSccService(SVNAssistPackage pkg) { _pkg = pkg; }
+
+        /// <summary>Radice della working copy associata alla solution corrente (puo' essere null).</summary>
+        internal string Root => _root;
+
+        /// <summary>Lo stato SCC in cache e' stato aggiornato dal backend.</summary>
+        internal event Action StatesUpdated;
+
+        private static bool IsUnderPath(string root, string path)
+        {
+            if (string.IsNullOrEmpty(root) || string.IsNullOrEmpty(path)) return false;
+            var r = root.TrimEnd('\\', '/');
+            var p = path.TrimEnd('\\', '/');
+            if (!p.StartsWith(r, StringComparison.OrdinalIgnoreCase)) return false;
+            return p.Length == r.Length || p[r.Length] == '\\' || p[r.Length] == '/';
+        }
+
+        internal bool IsUnderWorkingCopyRoot(string path) => IsUnderPath(_root, path);
 
         // ---- attivazione (thread UI) ----
 
@@ -40,7 +59,10 @@ namespace SVNAssist.Host
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             if (solutionDir != null) _dir = solutionDir;
-            _root = _pkg.Options.ShowSccGlyphs ? FindWorkingCopyRoot(_dir) : null;
+            var newRoot = _pkg.Options.ShowSccGlyphs ? FindWorkingCopyRoot(_dir) : null;
+            if (!string.Equals(_root, newRoot, StringComparison.OrdinalIgnoreCase))
+                _paintedRoot = null;
+            _root = newRoot;
             try
             {
                 var reg = ((IServiceProvider)_pkg).GetService(typeof(IVsRegisterScciProvider)) as IVsRegisterScciProvider;
@@ -54,32 +76,61 @@ namespace SVNAssist.Host
         public int SetActive()
         {
             _active = true;
+            _paintedRoot = null;
             Log.Write("scc: provider attivo, radice " + _root);
-            _pkg.Host.StartSccAsync().FileAndForget("SVNAssist/scc");
+            if (!_pkg.IsSolutionLoading)
+                _pkg.Host.StartSccAsync().FileAndForget("SVNAssist/scc");
             return VSConstants.S_OK;
         }
 
-        public int SetInactive() { _active = false; Log.Write("scc: provider disattivato"); return VSConstants.S_OK; }
+        public int SetInactive() { _active = false; _paintedRoot = null; Log.Write("scc: provider disattivato"); return VSConstants.S_OK; }
 
         public int AnyItemsUnderSourceControl(out int pfResult) { pfResult = _active && _root != null ? 1 : 0; return VSConstants.S_OK; }
 
         // ---- stato (cache) ----
 
-        /// <summary>Nuovo stato dal backend (qualsiasi thread): aggiorna la cache e ridisegna i glifi di tutti i progetti.</summary>
+        /// <summary>Nuovo stato dal backend (qualsiasi thread): aggiorna la cache differenziale e ridisegna i glifi a batch.</summary>
         internal void SetStates(Dictionary<string, string> states)
         {
-            _states = new Dictionary<string, string>(states, StringComparer.OrdinalIgnoreCase);
+            var next = new Dictionary<string, string>(states, StringComparer.OrdinalIgnoreCase);
+            var prev = _states;
+            var root = _root;
+            bool same = string.Equals(_paintedRoot, root, StringComparison.OrdinalIgnoreCase)
+                && prev.Count == next.Count
+                && prev.All(kv => next.TryGetValue(kv.Key, out var v) && string.Equals(v, kv.Value, StringComparison.Ordinal));
+
+            _states = next;
+            try { StatesUpdated?.Invoke(); } catch (Exception ex) { Log.Write("scc updated event: " + ex.Message); }
+            if (same) return;
+
+            var gen = System.Threading.Interlocked.Increment(ref _glyphGen);
+            _paintedRoot = root;
             _pkg.JoinableTaskFactory.RunAsync(async () =>
             {
                 await _pkg.JoinableTaskFactory.SwitchToMainThreadAsync();
+                if (gen != System.Threading.Volatile.Read(ref _glyphGen)) return;
                 // I progetti SDK-style non si registrano da soli dopo l'attivazione: si scorrono quelli caricati.
                 var sol = ((IServiceProvider)_pkg).GetService(typeof(SVsSolution)) as IVsSolution;
                 var none = Guid.Empty;
                 if (sol == null || sol.GetProjectEnum((uint)__VSENUMPROJFLAGS.EPF_LOADEDINSOLUTION, ref none, out var en) != VSConstants.S_OK) return;
+                var projects = new List<IVsSccProject2>();
                 var h = new IVsHierarchy[1];
                 while (en.Next(1, h, out var n) == VSConstants.S_OK && n == 1)
                 {
-                    try { (h[0] as IVsSccProject2)?.SccGlyphChanged(0, null, null, null); } catch (Exception ex) { Log.Write("scc glyph: " + ex.Message); }
+                    if (!(h[0] is IVsSccProject2 sccProj)) continue;
+                    if (!string.IsNullOrEmpty(root) && h[0] is IVsProject p && p.GetMkDocument(VSConstants.VSITEMID_ROOT, out var doc) == VSConstants.S_OK
+                        && !string.IsNullOrEmpty(doc) && Path.IsPathRooted(doc) && !IsUnderPath(root, doc))
+                        continue;
+                    projects.Add(sccProj);
+                }
+
+                const int BatchSize = 8;
+                for (int i = 0; i < projects.Count; i++)
+                {
+                    if (gen != System.Threading.Volatile.Read(ref _glyphGen)) return;
+                    try { projects[i].SccGlyphChanged(0, null, null, null); } catch (Exception ex) { Log.Write("scc glyph: " + ex.Message); }
+                    if ((i + 1) % BatchSize == 0)
+                        await System.Threading.Tasks.Task.Yield();
                 }
             }).FileAndForget("SVNAssist/sccglyphs");
         }
@@ -104,7 +155,7 @@ namespace SVNAssist.Host
             var r = _root;
             if (r == null || string.IsNullOrEmpty(path)) return SccGlyph.None;
             path = path.TrimEnd('\\', '/');
-            if (!path.StartsWith(r, StringComparison.OrdinalIgnoreCase)) return SccGlyph.None;
+            if (!IsUnderPath(r, path)) return SccGlyph.None;
             return _states.TryGetValue(path, out var s) ? SccGlyphMap.For(s) : SccGlyph.Normal; // assente = nessuna modifica
         }
 

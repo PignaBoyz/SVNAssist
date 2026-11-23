@@ -27,6 +27,9 @@ internal static class SettingDefinitions
     /// <summary>Modello di default per GitHub Models: l'endpoint richiede l'id con prefisso del publisher.</summary>
     internal const string DefaultAiModel = "openai/gpt-4o-mini";
 
+    /// <summary>Modello Gemini di default.</summary>
+    internal const string DefaultGeminiModel = "gemini-2.5-flash";
+
     // Chiavi (camelCase; il backend le legge senza distinguere maiuscole/minuscole).
     internal const string AiProvider = "aiProvider";
     internal const string ClaudeModel = "claudeModel";
@@ -35,6 +38,8 @@ internal static class SettingDefinitions
     internal const string AiEndpoint = "aiEndpoint";
     internal const string AiApiKey = "aiApiKey";
     internal const string AiModel = "aiModel";
+    internal const string GeminiApiKey = "geminiApiKey";
+    internal const string GeminiModel = "geminiModel";
     internal const string DefaultLanguage = "defaultLanguage";
 
     /// <summary>true = il messaggio generato dall'AI scrive anche modello e costo (dove il provider lo dichiara). Spento di default.</summary>
@@ -57,6 +62,9 @@ internal static class SettingDefinitions
     internal const string UiLanguage = "uiLanguage";
     internal const string UiLanguageEffective = "uiLanguageEffective";
 
+    /// <summary>Modalita' leggera: disattiva FileSystemWatcher continuo e polling HEAD periodico per PC datati / solution grandi.</summary>
+    internal const string LightweightMode = "lightweightMode";
+
     /// <summary>Tutte le chiavi con il loro valore di default (usato quando l'host non ne fornisce una).</summary>
     internal static readonly IReadOnlyDictionary<string, string> Defaults = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
@@ -67,6 +75,8 @@ internal static class SettingDefinitions
         [AiEndpoint] = GitHubModelsEndpoint,
         [AiApiKey] = "",
         [AiModel] = DefaultAiModel,
+        [GeminiApiKey] = "",
+        [GeminiModel] = DefaultGeminiModel,
         [DefaultLanguage] = "auto",
         [AiShowUsage] = "false",
         [AiExplainIncoming] = "false",
@@ -74,6 +84,7 @@ internal static class SettingDefinitions
         [WindowTheme] = "auto",
         [RepoLayout] = SVNAssist.Models.RepoLayout.Default,
         [HeadCheckMinutes] = DefaultHeadCheckMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        [LightweightMode] = "false",
         // UiLanguage non ha default qui: senza il valore dell'host (es. nei test) l'interfaccia resta in italiano.
     };
 }
@@ -104,6 +115,15 @@ internal interface ISvnAssistSettings
 
     /// <summary>Nome del modello AI.</summary>
     Task<string> GetAiModelAsync(CancellationToken ct);
+
+    /// <summary>API key dedicata a Gemini (Google AI Studio).</summary>
+    Task<string> GetGeminiApiKeyAsync(CancellationToken ct) => Task.FromResult(string.Empty);
+
+    /// <summary>Nome del modello Gemini.</summary>
+    Task<string> GetGeminiModelAsync(CancellationToken ct) => Task.FromResult(SettingDefinitions.DefaultGeminiModel);
+
+    /// <summary>Se disattivare watcher ricorsivo e controlli periodici per PC datati / solution grandi (default: no).</summary>
+    Task<bool> GetLightweightModeAsync(CancellationToken ct) => Task.FromResult(false);
 
     /// <summary>Lingua predefinita per i commit message (auto/italiano/english).</summary>
     Task<string> GetDefaultLanguageAsync(CancellationToken ct);
@@ -140,7 +160,7 @@ internal interface ISvnAssistSettings
 /// Impostazioni lette dall'host (<see cref="IHost.GetSettingsAsync"/>) e tenute in cache fino a
 /// <see cref="Invalidate"/> (chiamato da <c>IBackend.SettingsChangedAsync</c>).
 /// </summary>
-internal sealed class HostSettings : ISvnAssistSettings
+internal sealed class HostSettings : ISvnAssistSettings, IDisposable
 {
     private readonly IHost _host;
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -200,6 +220,9 @@ internal sealed class HostSettings : ISvnAssistSettings
     public Task<string> GetCopilotModelAsync(CancellationToken ct) => GetAsync(SettingDefinitions.CopilotModel, ct);
     public Task<string> GetAiApiKeyAsync(CancellationToken ct) => GetAsync(SettingDefinitions.AiApiKey, ct);
     public Task<string> GetAiModelAsync(CancellationToken ct) => GetAsync(SettingDefinitions.AiModel, ct);
+    public Task<string> GetGeminiApiKeyAsync(CancellationToken ct) => GetAsync(SettingDefinitions.GeminiApiKey, ct);
+    public Task<string> GetGeminiModelAsync(CancellationToken ct) => GetAsync(SettingDefinitions.GeminiModel, ct);
+    public async Task<bool> GetLightweightModeAsync(CancellationToken ct) => string.Equals(await GetAsync(SettingDefinitions.LightweightMode, ct), "true", StringComparison.OrdinalIgnoreCase);
     public Task<string> GetDefaultLanguageAsync(CancellationToken ct) => GetAsync(SettingDefinitions.DefaultLanguage, ct);
     public Task<string> GetWorkingCopyPathAsync(CancellationToken ct) => GetAsync(SettingDefinitions.WorkingCopyPath, ct);
     public Task<string> GetWindowThemeAsync(CancellationToken ct) => GetAsync(SettingDefinitions.WindowTheme, ct);
@@ -239,4 +262,6 @@ internal sealed class HostSettings : ISvnAssistSettings
         await _host.SetSettingAsync(key, value);
         Invalidate();
     }
+
+    public void Dispose() => _gate.Dispose();
 }

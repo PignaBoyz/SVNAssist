@@ -4,7 +4,7 @@ namespace SVNAssist.Stores;
 
 /// <summary>
 /// Raggruppa una raffica di richieste di refresh (eventi del FileSystemWatcher) in un'unica
-/// esecuzione, lanciata quando sono passati <c>quietPeriod</c> senza nuovi eventi.
+/// esecuzione, lanciata quando sono passati <c>quietPeriod</c> senza nuovi eventi (e quando non in pausa).
 /// </summary>
 /// <remarks>
 /// Sostituisce i tre timer separati di prima: un solo ciclo, che dorme finché non arriva
@@ -13,23 +13,55 @@ namespace SVNAssist.Stores;
 internal sealed class RefreshDebouncer
 {
     private readonly TimeSpan _quietPeriod;
+    private readonly Func<TimeSpan>? _getQuietPeriod;
     private readonly Func<CancellationToken, Task> _refresh;
     private readonly SemaphoreSlim _wake = new(0);
+    private readonly object _gate = new();
     private long _lastRequestTicks;
-    private int _pending;
+    private bool _pending;
+    private bool _wakePending;
+    private bool _paused;
 
-    public RefreshDebouncer(TimeSpan quietPeriod, Func<CancellationToken, Task> refresh)
+    public RefreshDebouncer(TimeSpan quietPeriod, Func<CancellationToken, Task> refresh, Func<TimeSpan>? getQuietPeriod = null)
     {
         _quietPeriod = quietPeriod;
         _refresh = refresh;
+        _getQuietPeriod = getQuietPeriod;
     }
 
     /// <summary>Segnala che qualcosa è cambiato. Thread-safe e non bloccante.</summary>
     public void Request()
     {
-        Interlocked.Exchange(ref _lastRequestTicks, DateTime.UtcNow.Ticks);
-        if (Interlocked.Exchange(ref _pending, 1) == 0)
-            _wake.Release();
+        lock (_gate)
+        {
+            _lastRequestTicks = DateTime.UtcNow.Ticks;
+            _pending = true;
+            if (!_paused && !_wakePending)
+            {
+                _wakePending = true;
+                _wake.Release();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Mette in pausa (<c>true</c>) o riprende (<c>false</c>) i refresh automatici (es. build o caricamento solution).
+    /// Gli eventi accumulati in pausa si consolidano in un solo refresh alla ripresa.
+    /// </summary>
+    public void SetPaused(bool paused)
+    {
+        lock (_gate)
+        {
+            if (_paused == paused)
+                return;
+            _paused = paused;
+            if (!paused && _pending && !_wakePending)
+            {
+                _lastRequestTicks = DateTime.UtcNow.Ticks;
+                _wakePending = true;
+                _wake.Release();
+            }
+        }
     }
 
     /// <summary>Ciclo di servizio: termina quando <paramref name="ct"/> viene annullato.</summary>
@@ -41,19 +73,37 @@ internal sealed class RefreshDebouncer
             {
                 await _wake.WaitAsync(ct);
 
-                // Attende che gli eventi si calmino: ogni nuovo evento sposta in avanti la scadenza.
+                var shouldRun = false;
                 while (true)
                 {
-                    var last = new DateTime(Interlocked.Read(ref _lastRequestTicks), DateTimeKind.Utc);
-                    var remaining = _quietPeriod - (DateTime.UtcNow - last);
-                    if (remaining <= TimeSpan.Zero)
-                        break;
+                    TimeSpan remaining;
+                    lock (_gate)
+                    {
+                        if (_paused)
+                        {
+                            _wakePending = false;
+                            shouldRun = false;
+                            break;
+                        }
+
+                        var quiet = _getQuietPeriod?.Invoke() ?? _quietPeriod;
+                        var last = new DateTime(_lastRequestTicks, DateTimeKind.Utc);
+                        remaining = quiet - (DateTime.UtcNow - last);
+                        if (remaining <= TimeSpan.Zero)
+                        {
+                            // Azzerato prima del refresh: gli eventi che arrivano mentre gira ne innescano un altro.
+                            _pending = false;
+                            _wakePending = false;
+                            shouldRun = true;
+                            break;
+                        }
+                    }
 
                     await Task.Delay(remaining, ct);
                 }
 
-                // Azzerato prima del refresh: gli eventi che arrivano mentre gira ne innescano un altro.
-                Interlocked.Exchange(ref _pending, 0);
+                if (!shouldRun)
+                    continue;
 
                 try
                 {
@@ -73,14 +123,21 @@ internal sealed class RefreshDebouncer
 }
 
 /// <summary>
-/// Decide quali eventi del file system ignorare: cartelle di build e metadati che cambiano di continuo
+/// Decide quali eventi del file system ignorare: cartelle di build e file temporanei/metadati che cambiano di continuo
 /// senza modificare lo stato SVN.
 /// </summary>
 internal static class WorkingCopyPathFilter
 {
     private static readonly HashSet<string> NoiseFolders = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".svn", ".vs", ".svn-assist", "bin", "obj", "node_modules",
+        ".svn", ".vs", ".svn-assist", ".git", "bin", "obj", "node_modules",
+        "packages", "TestResults", "artifacts", "Debug", "Release", "x64", "x86", ".idea", ".vscode",
+    };
+
+    private static readonly HashSet<string> NoiseExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".tmp", ".user", ".suo", ".cache", ".db-wal", ".db-shm", ".log",
+        ".pdb", ".ilk", ".tlog", ".lastbuildstate", ".up2date",
     };
 
     /// <summary><c>true</c> se l'evento su <paramref name="fullPath"/> va ignorato.</summary>
@@ -92,7 +149,19 @@ internal static class WorkingCopyPathFilter
             ? fullPath[workingCopyRoot.Length..]
             : fullPath;
 
-        return relative.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries)
-            .Any(NoiseFolders.Contains);
+        var segments = relative.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Any(NoiseFolders.Contains))
+            return true;
+
+        var fileName = segments.Length > 0 ? segments[^1] : string.Empty;
+        if (fileName.Length == 0)
+            return false;
+        if (fileName.StartsWith("~$", StringComparison.Ordinal) || fileName.EndsWith("~", StringComparison.Ordinal))
+            return true;
+        if (fileName.EndsWith(".FileListAbsolute.txt", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var ext = Path.GetExtension(fileName);
+        return ext.Length > 0 && NoiseExtensions.Contains(ext);
     }
 }

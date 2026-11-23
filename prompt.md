@@ -1,4 +1,4 @@
-# Prompt di ripresa — SVNAssist 0.6.1 in collaudo (0.6.0 uscita)
+# Prompt di ripresa — SVNAssist 0.7.0 rilasciata (2026-11-23)
 
 ```
 Sei l'ORCHESTRATORE del progetto SVNAssist (estensione Visual Studio per SVN, C#). La 0.5.0 è USCITA il 2026-11-18
@@ -51,6 +51,8 @@ docs/verifica/0.5.0/checklist.md) e release pubblicata. Non provato in VS dopo l
 bloccato (.vs), banner conflitti del merge, terminale di login (ora PowerShell -NoExit), pulsante "Rifai l'accesso", opzione modello e costo.
 
 0.6.0 USCITA il 2026-11-18 (voci 1-4, 8, 9, 10, 11; 5 scartata: resta Shelve; 6 e 7 non fatte). Nessuna prova in VS prima del rilascio: checklist docs/verifica/0.6.0/checklist.md da fare; se emergono bug, 0.6.1. Voci 4 e 8 in forma ridotta (revert: solo conferma; Apri su: Apri file revisione + Copia percorso).
+
+0.7.0 RILASCIATA il 2026-11-23 (tag `v0.7.0` su `main`, branch `develop` e `main` allineati): Modalità leggera + pausa su build/load + cap 300 righe + cache snapshot + sospensione WebView2 + batch glifi SCC + bugfix multi-VS merge in-process + fix E_INVALIDARG scorciatoie + Gemini in Automatico se configurata una chiave + 5 migliorie UI/UX (Conflitti Risolvi come, WC apribile con click, Shelved inline, Merge in header/Log compatto, badge AI e Testa chiave) + 0 warning. Note in `docs/release-notes/v0.7.0.user(.en).md` e screenshot IT/EN in `docs/release-notes/img/0.7.0/`. Prossima pianificazione da discutere con l'utente.
 
 VECCHIO ELENCO 0.6.0 (storico) (proposte, stime indicative; l'utente sceglie i numeri):
 1. Costo e consumo per Claude Code (output json: modello reale, token, costo sessione) - 1 giorno.

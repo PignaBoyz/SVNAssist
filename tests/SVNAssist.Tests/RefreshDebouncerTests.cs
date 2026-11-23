@@ -87,6 +87,12 @@ public class RefreshDebouncerTests
     [InlineData(@"C:\wc\src\bin\Debug\x.dll", true)]
     [InlineData(@"C:\wc\proj\obj\project.assets.json", true)]
     [InlineData(@"C:\wc\.vs\slnx.sqlite", true)]
+    [InlineData(@"C:\wc\.git\HEAD", true)]
+    [InlineData(@"C:\wc\packages\Foo\lib\a.dll", true)]
+    [InlineData(@"C:\wc\artifacts\out\app.exe", true)]
+    [InlineData(@"C:\wc\src\~$doc.docx", true)]
+    [InlineData(@"C:\wc\src\app.log", true)]
+    [InlineData(@"C:\wc\src\ReleaseNotes.cs", false)]
     [InlineData(@"C:\wc\src\binary.txt", false)]
     [InlineData(@"C:\wc\objects\a.cs", false)]
     public void IsNoise_IgnoraBinObjVsESvn(string path, bool noise)
@@ -95,4 +101,50 @@ public class RefreshDebouncerTests
     [Fact]
     public void IsNoise_ContaSoloISegmentiSottoLaRoot()
         => Assert.False(WorkingCopyPathFilter.IsNoise(@"C:\bin\wc", @"C:\bin\wc\src\a.cs"));
+
+    [Fact]
+    public async Task SetPaused_DiferisceIlRefreshFinoAllaRipresa()
+    {
+        var count = 0;
+        var ran = new TaskCompletionSource();
+        var debouncer = new RefreshDebouncer(TimeSpan.FromMilliseconds(20), _ =>
+        {
+            Interlocked.Increment(ref count);
+            ran.TrySetResult();
+            return Task.CompletedTask;
+        });
+        using var cts = new CancellationTokenSource();
+        var loop = debouncer.RunAsync(cts.Token);
+
+        debouncer.SetPaused(true);
+        debouncer.Request();
+        await Task.Delay(120);
+        Assert.Equal(0, count);
+
+        debouncer.SetPaused(false);
+        await ran.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await cts.CancelAsync();
+        await loop;
+
+        Assert.Equal(1, count);
+    }
+
+    [Fact]
+    public async Task QuietPeriodAdattiva_VieneUsataPerIlDebounce()
+    {
+        var adaptive = TimeSpan.FromMilliseconds(80);
+        var ran = new TaskCompletionSource();
+        var debouncer = new RefreshDebouncer(TimeSpan.FromMilliseconds(10), _ =>
+        {
+            ran.TrySetResult();
+            return Task.CompletedTask;
+        }, () => adaptive);
+        using var cts = new CancellationTokenSource();
+        var loop = debouncer.RunAsync(cts.Token);
+
+        debouncer.Request();
+        await ran.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await cts.CancelAsync();
+        await loop;
+    }
 }

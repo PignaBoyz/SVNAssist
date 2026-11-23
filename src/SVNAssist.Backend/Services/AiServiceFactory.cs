@@ -36,8 +36,9 @@ internal sealed class AiServiceFactory : IAiServiceFactory
     /// <summary>
     /// HttpClient singleton condiviso — non va ricreato ad ogni chiamata (socket exhaustion).
     /// L'autenticazione è impostata per-richiesta dentro <see cref="AiService"/>.
+    /// Timeout leggermente sopra <see cref="AiServiceBase.CallTimeout"/> (3 min) per non troncare richieste ampie.
     /// </summary>
-    private static readonly HttpClient SharedHttpClient = new();
+    internal static readonly HttpClient SharedHttpClient = new() { Timeout = TimeSpan.FromMinutes(4) };
 
     private readonly ISvnAssistSettings _settings;
     private readonly IGitHubTokenResolver _tokenResolver;
@@ -94,14 +95,10 @@ internal sealed class AiServiceFactory : IAiServiceFactory
         if (Use("openai") && await CreateOpenAiCompatibleAsync(ct) is { } openAi)
             candidates.Add((Loc.T("OpenAI-compatibile"), openAi));
 
-        // Gemini solo se scelto: riusa il percorso OpenAI-compatibile e la chiave "AI API Key", ma l'endpoint e' quello di Google
-        // (in "auto" la chiave condivisa andrebbe all'endpoint sbagliato).
-        if (provider == "gemini")
-        {
-            var key = await _settings.GetAiApiKeyAsync(ct);
-            if (!string.IsNullOrWhiteSpace(key))
-                candidates.Add(("Gemini", new AiService(SharedHttpClient, GeminiEndpoint + "/chat/completions", NormalizeGeminiModel(await _settings.GetAiModelAsync(ct)), key)));
-        }
+        // Gemini in "auto" usa SOLO la propria chiave dedicata o variabile GEMINI_API_KEY/GOOGLE_API_KEY
+        // (mai la chiave condivisa aiApiKey, per non mandare un PAT GitHub/OpenAI a Google).
+        if (Use("gemini") && await CreateGeminiAsync(provider == "gemini", ct) is { } gemini)
+            candidates.Add(("Gemini", gemini));
 
         return candidates.Count switch
         {
@@ -109,6 +106,32 @@ internal sealed class AiServiceFactory : IAiServiceFactory
             1 => candidates[0].Service,
             _ => new FallbackAiService(candidates),
         };
+    }
+
+    private async Task<IAiService?> CreateGeminiAsync(bool allowLegacySharedKey, CancellationToken ct)
+    {
+        var dedicated = (await _settings.GetGeminiApiKeyAsync(ct)).Trim();
+        var envKey = (_environmentReader("GEMINI_API_KEY") ?? _environmentReader("GOOGLE_API_KEY") ?? string.Empty).Trim();
+        var key = dedicated.Length > 0 ? dedicated : envKey;
+        var usedLegacy = false;
+        if (key.Length == 0 && allowLegacySharedKey)
+        {
+            key = (await _settings.GetAiApiKeyAsync(ct)).Trim();
+            usedLegacy = key.Length > 0;
+        }
+
+        if (key.Length == 0)
+            return null;
+
+        var model = await _settings.GetGeminiModelAsync(ct);
+        if (usedLegacy)
+        {
+            var legacyModel = AiModelIds.StripModelsPrefix((await _settings.GetAiModelAsync(ct))?.Trim());
+            if (!string.IsNullOrWhiteSpace(legacyModel) && legacyModel.StartsWith("gemini", StringComparison.OrdinalIgnoreCase))
+                model = legacyModel;
+        }
+
+        return new AiService(SharedHttpClient, GeminiEndpoint + "/chat/completions", NormalizeGeminiModel(model), key);
     }
 
     private async Task<IAiService?> CreateOpenAiCompatibleAsync(CancellationToken ct)
@@ -165,9 +188,12 @@ internal sealed class AiServiceFactory : IAiServiceFactory
         && uri.Scheme == Uri.UriSchemeHttps
         && string.Equals(uri.Host, "generativelanguage.googleapis.com", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>Gli id di Gemini arrivano come <c>models/gemini-...</c>; le chiamate vogliono l'id nudo.</summary>
+    /// <summary>Gli id di Gemini arrivano come <c>models/gemini-...</c>; le chiamate vogliono l'id nudo (fallback al default se vuoto/invalido).</summary>
     internal static string NormalizeGeminiModel(string? model)
-        => AiModelIds.StripModelsPrefix(model?.Trim()) ?? string.Empty;
+    {
+        var clean = AiModelIds.StripModelsPrefix(model?.Trim());
+        return AiModelIds.IsPlausible(clean) && !clean!.Contains('/') ? clean.Trim() : SettingDefinitions.DefaultGeminiModel;
+    }
 
     internal static bool IsGitHubModelsEndpoint(string endpoint) =>
         Uri.TryCreate(endpoint, UriKind.Absolute, out var uri)

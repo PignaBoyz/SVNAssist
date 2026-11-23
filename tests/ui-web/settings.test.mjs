@@ -7,7 +7,7 @@ const js = read('src/SVNAssist.UI.Web/js/settings.js');
 const opts = read('src/SVNAssist.Host/OptionsPage.cs');
 const host = read('src/SVNAssist.Host/HostService.cs');
 const viewKeys = [...js.matchAll(/(?:sel|txt|num|chk|key)\('(\w+)'/g)].map(m => m[1]);
-const secrets = ['anthropicApiKey', 'aiApiKey'];
+const secrets = ['anthropicApiKey', 'aiApiKey', 'geminiApiKey'];
 
 test('ogni chiave della vista esiste in TrySet', () => {
   assert.ok(viewKeys.length >= 15, 'estrazione fallita: ' + viewKeys.length);
@@ -23,7 +23,10 @@ test('le API key sono solo "impostata o no": mai lette dai valori, mai inviate a
   assert.match(host, /name == "settingsSet" && !secret/);
 });
 
-test('settings.js e\' JavaScript valido', async () => {
+test('settings.js espone il pulsante Testa chiave e gestisce settingsTestKey', async () => {
+  assert.match(js, /data-test="/);
+  assert.match(js, /settingsTestKey/);
+  assert.match(host, /name == "settingsTestKey"/);
   const { Script } = await import('node:vm');
   assert.doesNotThrow(() => new Script(js, { filename: 'settings.js' }));
 });

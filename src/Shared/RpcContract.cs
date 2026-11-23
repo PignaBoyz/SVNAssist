@@ -42,11 +42,20 @@ namespace SVNAssist.Rpc
         Task<Dictionary<string, string>> GetSccStatesAsync();
 
         /// <summary>
-        /// Modelli AI realmente disponibili per un provider (copilot | claudecode | claude | openai), come JSON
+        /// Modelli AI realmente disponibili per un provider (copilot | claudecode | claude | openai | gemini), come JSON
         /// <c>{provider, source: live|cache|fallback, updated, account, error, models:[{id,label,cost}]}</c>. Cache datata di 24 ore:
         /// forceRefresh la ignora. La UI web non lo usa (passa dai comandi wizard*): serve all'host, ad esempio per le Options.
         /// </summary>
         Task<string> ListAiModelsAsync(string provider, bool forceRefresh);
+
+        /// <summary>Metto in pausa o riprendo il refresh automatico del file system (es. durante Build o caricamento solution in VS).</summary>
+        Task SetAutoRefreshPausedAsync(bool paused);
+
+        /// <summary>Notifica dal salvataggio documento in VS: triggera un refresh debounced anche in modalità leggera.</summary>
+        Task OnDocumentSavedAsync(string filePath);
+
+        /// <summary>L'editor di merge in-process di VS per <paramref name="filePath"/> è stato chiuso: verifica se il conflitto è stato risolto.</summary>
+        Task OnMergeEditorClosedAsync(string filePath, int state);
     }
 
     /// <summary>Metodi esposti dall'HOST, chiamati dal backend.</summary>
@@ -69,6 +78,12 @@ namespace SVNAssist.Rpc
 
         /// <summary>Apre il diff nell'editor di VS (IVsDifferenceService), come Git Changes.</summary>
         Task OpenDiffAsync(string leftPath, string rightPath, string leftLabel, string rightLabel, string caption);
+
+        /// <summary>
+        /// Apre l'editor di merge a 3 vie nativo dentro QUESTA istanza di Visual Studio (<c>SVsFileMergeService</c>).
+        /// Ritorna <c>true</c> se aperto in-process; <c>false</c> se non disponibile (fallback esterno).
+        /// </summary>
+        Task<bool> OpenMergeAsync(string leftPath, string rightPath, string basePath, string resultPath, string leftLabel, string rightLabel, string baseLabel, string resultLabel);
 
         /// <summary>Mostra la finestra SVN Log con l'elenco dei file modificati di una cartella (clic = diff nativo, "Apri come patch" = .diff unico).</summary>
         Task ShowFolderDiffAsync(string path);

@@ -199,6 +199,10 @@
               "type": "string"
             }
           }
+        },
+        "aiProviderLabel": {
+          "type": "string",
+          "description": "Provider/modello AI attivo mostrato accanto a Genera con AI."
         }
       }
     },

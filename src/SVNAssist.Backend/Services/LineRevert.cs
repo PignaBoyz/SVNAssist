@@ -89,8 +89,15 @@ internal static class LineRevert
                 // cancellazione pura: tra la riga NewStart e NewStart+1; toccata se la selezione la sfiora
                 if (!(from <= h.NewStart + 1 && to >= h.NewStart)) continue;
                 CopyUntil(h.NewStart + 1);
-                for (int i = 0; i < h.OldCount; i++) output.Add(b[h.OldStart - 1 + i]);
-                count += h.OldCount;
+                for (int i = 0; i < h.OldCount; i++)
+                {
+                    int idx = h.OldStart - 1 + i;
+                    if (idx >= 0 && idx < b.Count)
+                    {
+                        output.Add(b[idx]);
+                        count++;
+                    }
+                }
                 continue;
             }
 
@@ -100,11 +107,20 @@ internal static class LineRevert
             for (int i = 0; i < h.NewCount; i++)
             {
                 int line = ns + i;
-                if (line < from || line > to) { output.Add(w[line - 1]); continue; }
+                if (line < from || line > to)
+                {
+                    if (line - 1 >= 0 && line - 1 < w.Count) output.Add(w[line - 1]);
+                    continue;
+                }
                 count++;
-                if (i < h.OldCount) output.Add(b[h.OldStart - 1 + i]);
+                int idx = h.OldStart - 1 + i;
+                if (i < h.OldCount && idx >= 0 && idx < b.Count) output.Add(b[idx]);
                 if (i == h.NewCount - 1)
-                    for (int k = h.NewCount; k < h.OldCount; k++) output.Add(b[h.OldStart - 1 + k]); // vecchie righe in piu': agganciate all'ultima
+                    for (int k = h.NewCount; k < h.OldCount; k++)
+                    {
+                        int extraIdx = h.OldStart - 1 + k;
+                        if (extraIdx >= 0 && extraIdx < b.Count) output.Add(b[extraIdx]); // vecchie righe in piu': agganciate all'ultima
+                    }
             }
             pos = ne + 1;
         }

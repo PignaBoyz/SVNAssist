@@ -44,9 +44,25 @@ internal sealed record ChangeEntry(
     }
 }
 
+/// <summary>Flag delle azioni ammesse su un nodo/cartella (aggregate dal basso in O(N)).</summary>
+[Flags]
+internal enum ChangeNodeCaps
+{
+    None = 0,
+    Diff = 1 << 0,
+    Stage = 1 << 1,
+    Unstage = 1 << 2,
+    Add = 1 << 3,
+    Ignore = 1 << 4,
+    Revert = 1 << 5,
+    DeleteFile = 1 << 6,
+}
+
 /// <summary>Nodo dell'albero: una cartella (eventualmente compattata, es. "Core/Services") o un file.</summary>
 internal sealed class ChangeNode
 {
+    private Dictionary<string, ChangeNode>? _folderMap;
+
     private ChangeNode(string key, string label, string folderPath, ChangeEntry? entry)
     {
         Key = key;
@@ -82,6 +98,9 @@ internal sealed class ChangeNode
     /// <summary>Numero di elementi modificati contenuti (1 per un file).</summary>
     public int Count { get; private set; }
 
+    /// <summary>Azioni ammesse aggregate ricorsivamente in un solo passaggio.</summary>
+    public ChangeNodeCaps Caps { get; private set; }
+
     /// <summary>Tutti gli elementi contenuti nel nodo (se stesso se e' un file).</summary>
     public IEnumerable<ChangeEntry> Entries()
     {
@@ -102,25 +121,46 @@ internal sealed class ChangeNode
     internal static ChangeNode Root() => new(string.Empty, string.Empty, string.Empty, null);
 
     internal static ChangeNode Leaf(ChangeSection section, ChangeEntry entry, string label)
-        => new($"{ChangesTreeBuilder.SectionId(section)}:{entry.RelativePath}", label, string.Empty, entry) { Count = 1 };
+        => new($"{ChangesTreeBuilder.SectionId(section)}:{entry.RelativePath}", label, string.Empty, entry)
+        {
+            Count = 1,
+            Caps = CapsFor(section, entry),
+        };
+
+    internal static ChangeNodeCaps CapsFor(ChangeSection section, ChangeEntry e)
+    {
+        var c = section == ChangeSection.Staged ? ChangeNodeCaps.Unstage : ChangeNodeCaps.None;
+        if (e.Status is not (SvnStatusKind.Unversioned or SvnStatusKind.Normal) && !e.IsDirectory)
+            c |= ChangeNodeCaps.Diff;
+        if (section != ChangeSection.Staged && e.Status is not (SvnStatusKind.Conflicted or SvnStatusKind.Normal))
+            c |= ChangeNodeCaps.Stage;
+        if (e.Status == SvnStatusKind.Unversioned)
+            c |= ChangeNodeCaps.Add | ChangeNodeCaps.Ignore;
+        if (StatusPresentation.IsRevertable(e.Status))
+            c |= ChangeNodeCaps.Revert;
+        if (e.Status != SvnStatusKind.Deleted && e.RelativePath != ".")
+            c |= ChangeNodeCaps.DeleteFile;
+        return c;
+    }
 
     internal ChangeNode GetOrAddFolder(string name)
     {
-        var existing = Children.FirstOrDefault(c => c.IsFolder && string.Equals(c.Label, name, StringComparison.OrdinalIgnoreCase));
-        if (existing is not null)
+        if (_folderMap is not null && _folderMap.TryGetValue(name, out var existing))
             return existing;
 
         var path = FolderPath.Length == 0 ? name : FolderPath + "/" + name;
         var folder = new ChangeNode(string.Empty, name, path, null);
+        (_folderMap ??= new Dictionary<string, ChangeNode>(StringComparer.OrdinalIgnoreCase))[name] = folder;
         Children.Add(folder);
         return folder;
     }
 
     internal void SetSelf(ChangeEntry entry) => Self = entry;
 
-    /// <summary>Compatta le catene di cartelle con un solo figlio-cartella, ordina e calcola chiavi e conteggi.</summary>
+    /// <summary>Compatta le catene di cartelle con un solo figlio-cartella, ordina e calcola chiavi, conteggi e azioni.</summary>
     internal void Finish(ChangeSection section)
     {
+        _folderMap = null;
         foreach (var child in Children.Where(c => c.IsFolder))
         {
             // Come Git: A -> B -> file diventa "A/B" -> file; si compatta solo con un unico figlio che e' una cartella
@@ -146,7 +186,16 @@ internal sealed class ChangeNode
         if (IsFolder)
         {
             Key = $"{ChangesTreeBuilder.SectionId(section)}:{FolderPath}";
-            Count = Children.Sum(c => c.Count) + (Self is null ? 0 : 1);
+            var count = Self is null ? 0 : 1;
+            var caps = Self is null ? ChangeNodeCaps.None : CapsFor(section, Self);
+            foreach (var c in Children)
+            {
+                count += c.Count;
+                caps |= c.Caps;
+            }
+
+            Count = count;
+            Caps = caps;
         }
     }
 }

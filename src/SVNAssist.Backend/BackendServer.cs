@@ -36,7 +36,7 @@ internal sealed class BackendServices
             // Se svn.exe manca all'avvio, ReloadableSvnService lo ritrova appena viene installato.
             Svn = new ReloadableSvnService(credentials: new HostCredentialPrompt(host)),
             Ai = new AiServiceFactory(settings, tokenResolver, processRunner),
-            ModelCatalog = new AiModelCatalog(new AiModelSource(new System.Net.Http.HttpClient(), settings, tokenResolver), AiModelCatalog.DefaultCacheFile),
+            ModelCatalog = new AiModelCatalog(new AiModelSource(AiServiceFactory.SharedHttpClient, settings, tokenResolver), AiModelCatalog.DefaultCacheFile),
             AiSetupPrompt = new HostAiSetupPrompt(host, settings),
             Dialogs = new HostDialogs(host),
             Probes = PrerequisiteProbes.CreateDefault(processRunner, tokenResolver),
@@ -83,6 +83,7 @@ internal sealed class BackendServer : IBackend, IDisposable
     private readonly IHost _host;
     private readonly CancellationTokenSource _lifetime = new();
     private readonly Dictionary<string, Channel> _channels;
+    private int _disposed;
 
     internal ChangesStore Changes { get; }
     internal LogStore Log { get; }
@@ -316,6 +317,7 @@ internal sealed class BackendServer : IBackend, IDisposable
     public Task IdeActiveChangedAsync(bool active)
     {
         Changes.HeadCheck.SetActive(active);
+        Changes.OnIdeActiveChanged(active);
         return Task.CompletedTask;
     }
 
@@ -335,9 +337,24 @@ internal sealed class BackendServer : IBackend, IDisposable
 
     public async Task<Dictionary<string, string>> GetSccStatesAsync()
     {
-        await Changes.OnReadyAsync(_lifetime.Token); // avvia il caricamento anche senza finestre aperte (idempotente)
+        await Changes.EnsureSccStartedAsync(); // avvia solo il monitoraggio WC per i glifi, senza sondare AI o WebView
         return Changes.SccStates();
     }
+
+    public Task SetAutoRefreshPausedAsync(bool paused)
+    {
+        Changes.SetAutoRefreshPaused(paused);
+        return Task.CompletedTask;
+    }
+
+    public Task OnDocumentSavedAsync(string filePath)
+    {
+        Changes.OnDocumentSaved(filePath);
+        return Task.CompletedTask;
+    }
+
+    public Task OnMergeEditorClosedAsync(string filePath, int state)
+        => Changes.OnMergeEditorClosedAsync(filePath, state, _lifetime.Token);
 
     public async Task<int[]> GetChangedBlocksAsync(string file)
     {
@@ -382,12 +399,21 @@ internal sealed class BackendServer : IBackend, IDisposable
     /// <summary>Calcola lo snapshot e lo invia se e' cambiato rispetto all'ultimo inviato.</summary>
     private async Task FlushAsync(Channel channel)
     {
-        if (!channel.Ready)
+        if (!channel.Ready || _lifetime.IsCancellationRequested)
             return;
 
-        await channel.Gate.WaitAsync();
         try
         {
+            await channel.Gate.WaitAsync(_lifetime.Token);
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException)
+        {
+            return;
+        }
+        try
+        {
+            if (_lifetime.IsCancellationRequested)
+                return;
             var lang = Loc.Lang;
             var stateJson = UiJson.Serialize(channel.Store.GetSnapshot());
             var signature = lang + stateJson; // un cambio di lingua rimanda lo stato anche se il resto e' uguale
@@ -423,7 +449,10 @@ internal sealed class BackendServer : IBackend, IDisposable
 
     public void Dispose()
     {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            return;
         _lifetime.Cancel();
+        _hostSettings?.Dispose();
         Log.CleanTemp();
         _pathCommands.CleanTemp();
         Changes.Dispose();

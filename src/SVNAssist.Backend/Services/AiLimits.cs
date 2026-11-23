@@ -23,4 +23,7 @@ public sealed record AiLimits(int MaxUserChars, int MaxResponseTokens, int DiffM
 
     /// <summary>Copilot: prompt oltre ~60k caratteri danno "No response was returned"; risposta gestita dal runtime.</summary>
     public static readonly AiLimits Copilot = new(60_000, 0, 180_000, 30_000);
+
+    /// <summary>Gemini (Google AI Studio): contesto ampio; margine token per modelli con ragionamento (2.5/3).</summary>
+    public static readonly AiLimits Gemini = new(100_000, 8_192, 300_000, 40_000);
 }

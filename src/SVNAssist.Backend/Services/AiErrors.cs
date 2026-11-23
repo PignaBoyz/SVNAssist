@@ -34,7 +34,7 @@ internal static class AiErrors
 
     private static readonly Regex AuthFailed = new(
         @"failed to authenticate|authentication[_ ](error|failed|required)|not (logged|signed) in|log ?in required|please (log|sign) ?in|/login\b|session (has )?expired|token (has )?expired|expired token" +
-        @"|invalid[ _-](x-)?api[ _-]key|incorrect api key|bad credentials|unauthori[sz]ed|\b401\b|invalid[ _]token|not authenticated|copilot non è collegato",
+        @"|invalid[ _-](x-)?api[ _-]key|incorrect api key|api_key_invalid|api key not valid|bad credentials|unauthori[sz]ed|\b401\b|invalid[ _]token|not authenticated|copilot non è collegato",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     internal static AiErrorKind Classify(string? message)
@@ -68,6 +68,7 @@ internal static class AiErrors
                 var l when l.StartsWith("Claude Code:", StringComparison.Ordinal) => "claudecode",
                 var l when l.StartsWith("Claude API:", StringComparison.Ordinal) => "claude",
                 var l when l.StartsWith(Loc.T("OpenAI-compatibile") + ":", StringComparison.Ordinal) => "openai",
+                var l when l.StartsWith("Gemini:", StringComparison.Ordinal) => "gemini",
                 _ => null,
             };
             if (id is null)

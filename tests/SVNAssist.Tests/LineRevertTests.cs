@@ -137,4 +137,18 @@ public class LineRevertTests
         Assert.Equal("cà", t2);
         Assert.Equal(latin, bom2.Concat(enc2.GetBytes(t2)).ToArray());
     }
+
+    [Fact]
+    public void Apply_HunkFuoriLimitiDaFileModificato_NonLancia()
+    {
+        var staleHunks = new List<LineRevert.Hunk>
+        {
+            new(OldStart: 50, OldCount: 3, NewStart: 40, NewCount: 0), // cancellazione oltre fine BASE
+            new(OldStart: 60, OldCount: 5, NewStart: 2, NewCount: 2),  // modifica oltre fine BASE/work
+        };
+
+        var (text, count) = LineRevert.Apply("a\n", "base\n", staleHunks, 1, 100);
+        Assert.NotNull(text);
+        Assert.True(count >= 0);
+    }
 }

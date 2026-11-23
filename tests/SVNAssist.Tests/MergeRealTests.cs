@@ -239,7 +239,7 @@ public class MergeRealTests
         Assert.False(Directory.Exists(snapshotDir));                // ripristino verificato: la copia non serve piu'
         Assert.Contains("ripristinate", ((ChangesState)e.Changes.GetSnapshot()).Status.Msg);
         Assert.Null(((ChangesState)e.Changes.GetSnapshot()).Merge);
-        Assert.Empty(Directory.GetFiles(e.Wc).Where(f => Path.GetFileName(f).StartsWith("a.txt.", StringComparison.Ordinal)));
+        Assert.DoesNotContain(Directory.GetFiles(e.Wc), f => Path.GetFileName(f).StartsWith("a.txt.", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -261,7 +261,7 @@ public class MergeRealTests
         await e.Cmd("mergeUndo");
 
         Assert.Equal(before, Fingerprint(e));
-        Assert.Empty(Directory.GetFiles(e.Wc).Where(f => Path.GetFileName(f).StartsWith("a.txt.", StringComparison.Ordinal)));    // niente file di appoggio del conflitto
+        Assert.DoesNotContain(Directory.GetFiles(e.Wc), f => Path.GetFileName(f).StartsWith("a.txt.", StringComparison.Ordinal));    // niente file di appoggio del conflitto
         Assert.Contains("MIA", e.Read("a.txt"));
     }
 

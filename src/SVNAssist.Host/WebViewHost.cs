@@ -3,13 +3,16 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
+using Microsoft.VisualStudio.Shell;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
+using Task = System.Threading.Tasks.Task;
 
 namespace SVNAssist.Host
 {
@@ -32,6 +35,9 @@ namespace SVNAssist.Host
         private readonly WebView2 _web = new WebView2();
         private readonly List<string> _queue = new List<string>(); // messaggi arrivati prima del "ready" della pagina
         private bool _pageReady, _started, _disposed;
+        private bool _visible = true;
+        private string _deferredStateJson;
+        private CancellationTokenSource _suspendCts;
 
         public WebViewHost(string view, HostService host)
         {
@@ -123,13 +129,89 @@ namespace SVNAssist.Host
         {
             if (_disposed || _web.CoreWebView2 == null) return;
             if (!_pageReady) { if (_queue.Count < 50) _queue.Add(json); return; }
+            if ((!_visible || _web.CoreWebView2.IsSuspended) && json.IndexOf("\"type\":\"state\"", StringComparison.Ordinal) >= 0)
+            {
+                _deferredStateJson = json;
+                return;
+            }
             _web.CoreWebView2.PostWebMessageAsJson(json);
+        }
+
+        /// <summary>Mostra o nasconde l'host: sospende WebView2 dopo 5 s di invisibilita' e coalesca gli snapshot finche' nascosto.</summary>
+        public void SetHostVisible(bool visible)
+        {
+            if (!ThreadHelper.CheckAccess())
+            {
+                if (SVNAssistPackage.Instance is SVNAssistPackage pkg)
+                {
+                    pkg.JoinableTaskFactory.RunAsync(async () =>
+                    {
+                        await pkg.JoinableTaskFactory.SwitchToMainThreadAsync();
+                        SetHostVisible(visible);
+                    }).FileAndForget("SVNAssist/WebView/SetHostVisible");
+                }
+                return;
+            }
+            if (_disposed) return;
+            _visible = visible;
+            CancelSuspendTimer();
+            if (!visible)
+            {
+                var cts = _suspendCts = new CancellationTokenSource();
+                _ = SuspendAfterDelayAsync(cts.Token);
+                return;
+            }
+            EnsureResumedAndFlush();
+        }
+
+        private void CancelSuspendTimer()
+        {
+            if (_suspendCts == null) return;
+            try { _suspendCts.Cancel(); } catch { }
+            try { _suspendCts.Dispose(); } catch { }
+            _suspendCts = null;
+        }
+
+        private async Task SuspendAfterDelayAsync(CancellationToken ct)
+        {
+            try
+            {
+                await Task.Delay(5000, ct);
+                if (_disposed || _visible || _web.CoreWebView2 == null || _web.CoreWebView2.IsSuspended) return;
+                await _web.CoreWebView2.TrySuspendAsync();
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { Log.Write("WebView2 TrySuspendAsync: " + ex.Message); }
+        }
+
+        private void EnsureResumedAndFlush()
+        {
+            if (_disposed || _web.CoreWebView2 == null) return;
+            try { if (_web.CoreWebView2.IsSuspended) _web.CoreWebView2.Resume(); }
+            catch (Exception ex) { Log.Write("WebView2 Resume: " + ex.Message); }
+            if (_pageReady && _deferredStateJson != null)
+            {
+                var deferred = _deferredStateJson;
+                _deferredStateJson = null;
+                _web.CoreWebView2.PostWebMessageAsJson(deferred);
+            }
         }
 
         /// <summary>Rimanda il tema (cambio tema di VS, di windowTheme, alto contrasto).</summary>
         public void RefreshTheme()
         {
-            if (!Dispatcher.CheckAccess()) { Dispatcher.BeginInvoke(new Action(RefreshTheme)); return; }
+            if (!ThreadHelper.CheckAccess())
+            {
+                if (SVNAssistPackage.Instance is SVNAssistPackage pkg)
+                {
+                    pkg.JoinableTaskFactory.RunAsync(async () =>
+                    {
+                        await pkg.JoinableTaskFactory.SwitchToMainThreadAsync();
+                        RefreshTheme();
+                    }).FileAndForget("SVNAssist/WebView/RefreshTheme");
+                }
+                return;
+            }
             if (_disposed) return;
             var theme = CurrentTheme();
             _web.DefaultBackgroundColor = ThemeBridge.WindowBackground(theme);
@@ -204,6 +286,7 @@ namespace SVNAssist.Host
         public void DisposeHost()
         {
             _disposed = true;
+            CancelSuspendTimer();
             _host.Unregister(_view, this);
             try { _web.Dispose(); } catch { }
         }

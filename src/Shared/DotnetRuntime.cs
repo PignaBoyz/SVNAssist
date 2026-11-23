@@ -11,9 +11,9 @@ namespace SVNAssist.Rpc
         /// Da un output di <c>dotnet --list-runtimes</c> ("Microsoft.NETCore.App 10.0.1 [C:\Program Files\dotnet\shared\Microsoft.NETCore.App]")
         /// ritorna la radice dotnet (da usare come DOTNET_ROOT) del runtime 10.x piu' recente, o null se manca.
         /// </summary>
-        public static string FindRoot(string listRuntimesOutput)
+        public static string? FindRoot(string? listRuntimesOutput)
         {
-            string root = null; Version best = null;
+            string? root = null; Version? best = null;
             foreach (var raw in (listRuntimesOutput ?? "").Split('\n'))
             {
                 var line = raw.Trim();
@@ -25,8 +25,7 @@ namespace SVNAssist.Rpc
                 var verText = rest.Substring(0, sp);
                 int dash = verText.IndexOf('-'); // 10.0.0-preview.1
                 if (dash >= 0) verText = verText.Substring(0, dash);
-                Version v;
-                if (!Version.TryParse(verText, out v) || v.Major != RequiredMajor) continue;
+                if (!Version.TryParse(verText, out var v) || v.Major != RequiredMajor) continue;
                 int o = rest.IndexOf('['), c = rest.LastIndexOf(']');
                 if (o < 0 || c <= o) continue;
                 // [.../dotnet/shared/Microsoft.NETCore.App] -> .../dotnet

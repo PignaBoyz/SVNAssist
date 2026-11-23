@@ -38,4 +38,28 @@ public class DiffNavTests
         Assert.Equal(7, DiffNav.Next([7], 7));
         Assert.Equal(7, DiffNav.Previous([7], 7));
     }
+
+    [Theory]
+    [InlineData("Global::Alt+F8", "alt+f8")]
+    [InlineData("Globale::Shift+Alt+F8", "shift+alt+f8")]
+    [InlineData("Alt+Shift+F8", "shift+alt+f8")]
+    [InlineData("Control + Alt + K", "ctrl+alt+k")]
+    [InlineData("  ", "")]
+    public void ShortcutBinding_NormalizzaCombinazioniIndipendentementeDalloScope(string input, string expected)
+        => Assert.Equal(expected, ShortcutBinding.NormalizeKeyCombo(input));
+
+    [Fact]
+    public void ShortcutBinding_ConfrontoEScopeFunzionanoAncheLocalizzati()
+    {
+        Assert.True(ShortcutBinding.MatchesAny(["Global::Alt+Shift+F8"], "Shift+Alt+F8"));
+        Assert.True(ShortcutBinding.MatchesAny(["Text Editor::Ctrl+K", "Globale::Alt+F8"], "Alt+F8"));
+        Assert.False(ShortcutBinding.MatchesAny(["Global::Alt+F8"], "Ctrl+F8"));
+
+        Assert.Equal("Globale::", ShortcutBinding.ExtractScopePrefix(["Globale::Ctrl+Shift+S"]));
+        Assert.Equal("Global::", ShortcutBinding.ExtractScopePrefix([]));
+
+        Assert.Equal("Globale::Alt+F8", ShortcutBinding.WithScope("Globale::", "Alt+F8"));
+        Assert.Equal("Editor di testo::Ctrl+K", ShortcutBinding.WithScope("Global::", "Editor di testo::Ctrl+K"));
+        Assert.Equal("Shift+Alt+F8", ShortcutBinding.Canonicalize("Alt+Shift+F8"));
+    }
 }

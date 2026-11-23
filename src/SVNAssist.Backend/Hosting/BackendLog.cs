@@ -11,6 +11,8 @@ namespace SVNAssist;
 internal static class BackendLog
 {
     private static readonly object Gate = new();
+    private static readonly Encoding Utf8NoBom = new UTF8Encoding(false);
+    private static readonly int Pid = Environment.ProcessId;
     private static string? _directory;
 
     /// <summary>Cartella dei log (sovrascrivibile dai test).</summary>
@@ -35,7 +37,9 @@ internal static class BackendLog
             {
                 Directory.CreateDirectory(LogDirectory);
                 var file = Path.Combine(LogDirectory, $"backend-{DateTime.Now:yyyyMMdd}.log");
-                File.AppendAllText(file, $"{DateTime.Now:HH:mm:ss.fff} [{level}] {message}{Environment.NewLine}", Encoding.UTF8);
+                using var fs = new FileStream(file, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
+                var bytes = Utf8NoBom.GetBytes($"{DateTime.Now:HH:mm:ss.fff} [{Pid}] [{level}] {message}{Environment.NewLine}");
+                fs.Write(bytes, 0, bytes.Length);
             }
         }
         catch

@@ -1,6 +1,8 @@
 using System;
 using System.ComponentModel.Composition;
+using System.Threading.Tasks;
 using System.Windows;
+using Task = System.Threading.Tasks.Task;
 using System.Windows.Controls;
 using System.Windows.Media;
 using Microsoft.VisualStudio.Imaging;
@@ -28,13 +30,11 @@ namespace SVNAssist.Host
     [Name(RevertMargin.MarginName)]
     [Order(After = PredefinedMarginNames.Glyph)]
     [MarginContainer(PredefinedMarginNames.Left)]
+    // Solo viste diff: evita di istanziare il margine per ogni editor di codice aperto in VS.
     [TextViewRole(DifferenceViewerRoles.RightViewTextViewRole)]
     [TextViewRole(DifferenceViewerRoles.UbiquitousRightViewTextViewRole)]
-    // Ruoli larghi di proposito (quelli del diff di VS non sono verificabili senza prova): il filtro vero e' in Refresh (solo RightView di un diff).
     [TextViewRole(DifferenceViewerRoles.DiffTextViewRole)]
     [TextViewRole(DifferenceViewerRoles.UbiquitousDiffTextViewRole)]
-    [TextViewRole(PredefinedTextViewRoles.Document)]
-    [TextViewRole(PredefinedTextViewRoles.Editable)]
     internal sealed class RevertMarginProvider : IWpfTextViewMarginProvider
     {
         [Import] internal IWpfDifferenceViewerFactoryService Viewers { get; set; }
@@ -48,9 +48,15 @@ namespace SVNAssist.Host
     {
         internal const string MarginName = "SVNAssist.RevertMargin";
         private const double Size = 18;
+        private static readonly bool LogMargin = string.Equals(Environment.GetEnvironmentVariable("SVNASSIST_LOG_MARGIN"), "1", StringComparison.Ordinal);
         private readonly IWpfTextView _view;
         private readonly RevertMarginProvider _p;
+        private IDifferenceViewer _viewer;
         private IDifferenceBuffer _buffer;
+        private double _lastViewportTop = double.NaN;
+        private double _lastViewportHeight = double.NaN;
+        private int _lastSnapshotVer = -1;
+        private ISnapshotDifference _lastDiff;
         private bool _disposed;
 
         public RevertMargin(IWpfTextView view, RevertMarginProvider p)
@@ -59,44 +65,86 @@ namespace SVNAssist.Host
             Width = Size; ClipToBounds = true;
             Background = Brushes.Transparent;
             Visibility = Visibility.Collapsed; // visibile solo se la vista e' il pannello destro di un diff
-            _view.LayoutChanged += OnLayout;
-            // il viewer si registra nel servizio DOPO la creazione delle viste: si riprova al caricamento e a UI inattiva
-            Loaded += (s, e) => Refresh();
-            Dispatcher.BeginInvoke(new Action(Refresh), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+            // il viewer si registra nel servizio DOPO la creazione delle viste: proviamo solo dopo Loaded/ApplicationIdle senza ascoltare LayoutChanged sui non-diff
+            Loaded += (s, e) => TryBindAndRefresh();
+            if (SVNAssistPackage.Instance is SVNAssistPackage pkg)
+            {
+                pkg.JoinableTaskFactory.RunAsync(async () =>
+                {
+                    await Task.Yield();
+                    await pkg.JoinableTaskFactory.SwitchToMainThreadAsync();
+                    TryBindAndRefresh();
+                }).FileAndForget("SVNAssist/RevertMargin/Bind");
+            }
         }
 
         private string _lastLog;
-        private void LogOnce(string msg) { if (msg == _lastLog) return; _lastLog = msg; Log.Write("RevertMargin: " + msg); } // solo se cambia: niente spam a ogni layout
+        private void LogOnce(string msg) { if (!LogMargin || msg == _lastLog) return; _lastLog = msg; Log.Write("RevertMargin: " + msg); } // solo con SVNASSIST_LOG_MARGIN=1
 
-        private void OnLayout(object sender, TextViewLayoutChangedEventArgs e) => Refresh();
-
-        private void OnDiffChanged(object sender, SnapshotDifferenceChangeEventArgs e) => Dispatcher.BeginInvoke(new Action(Refresh));
-
-        private void Refresh()
+        private void TryBindAndRefresh()
         {
             if (_disposed) return;
-            Children.Clear();
-            IDifferenceViewer viewer;
-            try { viewer = _p.Viewers.TryGetViewerForTextView(_view); } catch (Exception ex) { LogOnce("TryGetViewerForTextView: " + ex.Message); return; }
-            // solo il pannello destro (in modalita' inline non c'e' una vista "destra" da annullare riga per riga)
-            var roles = string.Join(",", _view.Roles);
-            if (viewer == null || viewer.RightView != _view || viewer.DifferenceBuffer == null)
+            if (_viewer == null)
             {
-                LogOnce("nessun pulsante: viewer " + (viewer == null ? "NON trovato" : "trovato ma questa non e' la vista destra (destra=" + (viewer.RightView == _view) + ", buffer=" + (viewer.DifferenceBuffer != null) + ")") + "; ruoli: " + roles);
-                Visibility = Visibility.Collapsed; return;
-            }
-            Visibility = Visibility.Visible;
-            if (_buffer != viewer.DifferenceBuffer)
-            {
-                if (_buffer != null) _buffer.SnapshotDifferenceChanged -= OnDiffChanged;
+                IDifferenceViewer viewer;
+                try { viewer = _p.Viewers.TryGetViewerForTextView(_view); } catch (Exception ex) { LogOnce("TryGetViewerForTextView: " + ex.Message); return; }
+                if (viewer == null || viewer.RightView != _view || viewer.DifferenceBuffer == null)
+                {
+                    if (LogMargin)
+                    {
+                        var roles = string.Join(",", _view.Roles);
+                        LogOnce("nessun pulsante: viewer " + (viewer == null ? "NON trovato" : "trovato ma questa non e' la vista destra (destra=" + (viewer.RightView == _view) + ", buffer=" + (viewer.DifferenceBuffer != null) + ")") + "; ruoli: " + roles);
+                    }
+                    Visibility = Visibility.Collapsed;
+                    return;
+                }
+                _viewer = viewer;
+                _view.LayoutChanged += OnLayout;
                 _buffer = viewer.DifferenceBuffer;
                 _buffer.SnapshotDifferenceChanged += OnDiffChanged;
             }
+            Refresh();
+        }
+
+        private void OnLayout(object sender, TextViewLayoutChangedEventArgs e) => Refresh();
+
+        private void OnDiffChanged(object sender, SnapshotDifferenceChangeEventArgs e)
+        {
+            _lastDiff = null;
+            if (SVNAssistPackage.Instance is SVNAssistPackage pkg)
+            {
+                pkg.JoinableTaskFactory.RunAsync(async () =>
+                {
+                    await Task.Yield();
+                    await pkg.JoinableTaskFactory.SwitchToMainThreadAsync();
+                    TryBindAndRefresh();
+                }).FileAndForget("SVNAssist/RevertMargin/DiffChanged");
+            }
+        }
+
+        private void Refresh()
+        {
+            if (_disposed || _viewer == null || _buffer == null) return;
+            Visibility = Visibility.Visible;
             var diff = _buffer.CurrentSnapshotDifference;
-            if (diff == null) { LogOnce("viewer trovato (vista destra), ma CurrentSnapshotDifference nullo; ruoli: " + roles); return; }
+            if (diff == null) { Children.Clear(); LogOnce("viewer trovato (vista destra), ma CurrentSnapshotDifference nullo"); return; }
+
+            var ver = _view.TextSnapshot.Version.VersionNumber;
+            if (ReferenceEquals(diff, _lastDiff)
+                && ver == _lastSnapshotVer
+                && Math.Abs(_view.ViewportTop - _lastViewportTop) < 0.01
+                && Math.Abs(_view.ViewportHeight - _lastViewportHeight) < 0.01)
+                return;
+
+            _lastDiff = diff;
+            _lastSnapshotVer = ver;
+            _lastViewportTop = _view.ViewportTop;
+            _lastViewportHeight = _view.ViewportHeight;
+
+            Children.Clear();
             var right = diff.RightBufferSnapshot;
             int nDiffs = 0;
-            try { nDiffs = System.Linq.Enumerable.Count(diff.LineDifferences); } catch { }
+            if (LogMargin) { try { nDiffs = System.Linq.Enumerable.Count(diff.LineDifferences); } catch { } }
 
             foreach (var d in diff.LineDifferences)
             {
@@ -123,7 +171,8 @@ namespace SVNAssist.Host
                 SetTop(btn, line.Top - _view.ViewportTop);
                 Children.Add(btn);
             }
-            LogOnce("viewer trovato, vista destra, differenze " + nDiffs + ", pulsanti creati " + Children.Count + "; ruoli: " + roles);
+            if (LogMargin)
+                LogOnce("viewer trovato, vista destra, differenze " + nDiffs + ", pulsanti creati " + Children.Count + "; ruoli: " + string.Join(",", _view.Roles));
         }
 
         private void Revert(int from, int to)

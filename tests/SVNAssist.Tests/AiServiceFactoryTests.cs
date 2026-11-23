@@ -16,6 +16,8 @@ public class AiServiceFactoryTests
         public string ApiKey { get; init; } = string.Empty;
         public string AnthropicKey { get; init; } = string.Empty;
         public string Model { get; init; } = "openai/gpt-4o-mini";
+        public string GeminiKey { get; init; } = string.Empty;
+        public string GeminiModel { get; init; } = SettingDefinitions.DefaultGeminiModel;
         public string Language { get; init; } = "auto";
         public string WorkingCopyPath { get; init; } = string.Empty;
 
@@ -26,6 +28,8 @@ public class AiServiceFactoryTests
         public Task<string> GetAiEndpointAsync(CancellationToken ct) => Task.FromResult(Endpoint);
         public Task<string> GetAiApiKeyAsync(CancellationToken ct) => Task.FromResult(ApiKey);
         public Task<string> GetAiModelAsync(CancellationToken ct) => Task.FromResult(Model);
+        public Task<string> GetGeminiApiKeyAsync(CancellationToken ct) => Task.FromResult(GeminiKey);
+        public Task<string> GetGeminiModelAsync(CancellationToken ct) => Task.FromResult(GeminiModel);
         public Task<string> GetDefaultLanguageAsync(CancellationToken ct) => Task.FromResult(Language);
         public Task<string> GetWorkingCopyPathAsync(CancellationToken ct) => Task.FromResult(WorkingCopyPath);
         public Task<string> GetWindowThemeAsync(CancellationToken ct) => Task.FromResult("auto");
@@ -206,4 +210,34 @@ public class AiServiceFactoryTests
     [Fact]
     public void ModelloClaudeDiDefault_ESonnet()
         => Assert.Equal("claude-sonnet-5-5", SettingDefinitions.DefaultClaudeModel);
+
+    [Fact]
+    public async Task CreateAsync_GeminiConChiaveDedicata_FunzionaSiaInAutoCheEsplicito_EDefaultFlash()
+    {
+        var autoAi = Assert.IsType<AiService>(await Create(
+            new FakeSettings { Provider = "auto", GeminiKey = "AIza-dedicated", Endpoint = "" },
+            new FakeTokenResolver(null)).CreateAsync(CancellationToken.None));
+        Assert.True(autoAi.IsGemini);
+        Assert.Equal("gemini-2.5-flash", autoAi.LastModelUsed);
+
+        var explicitAi = Assert.IsType<AiService>(await Create(
+            new FakeSettings { Provider = "gemini", GeminiKey = "AIza-dedicated", GeminiModel = "" },
+            new FakeTokenResolver(null)).CreateAsync(CancellationToken.None));
+        Assert.True(explicitAi.IsGemini);
+        Assert.Equal("gemini-2.5-flash", explicitAi.LastModelUsed);
+    }
+
+    [Theory]
+    [InlineData("GEMINI_API_KEY")]
+    [InlineData("GOOGLE_API_KEY")]
+    public async Task CreateAsync_GeminiLeggeVariabiliAmbiente(string envName)
+    {
+        var factory = new AiServiceFactory(new FakeSettings { Provider = "auto", Endpoint = "" }, new FakeTokenResolver(null),
+            processRunner: null, claudeLocator: () => null,
+            environmentReader: name => name == envName ? "AIza-env" : null,
+            copilotRuntimeInstalled: () => false);
+
+        var ai = Assert.IsType<AiService>(await factory.CreateAsync(CancellationToken.None));
+        Assert.True(ai.IsGemini);
+    }
 }

@@ -82,6 +82,15 @@ internal sealed class FakeHost : IHost
         return Task.CompletedTask;
     }
 
+    public bool OpenMergeResult { get; set; }
+    public List<(string Left, string Right, string Base, string Result, string LeftLabel, string RightLabel, string BaseLabel, string ResultLabel)> Merges { get; } = [];
+
+    public Task<bool> OpenMergeAsync(string leftPath, string rightPath, string basePath, string resultPath, string leftLabel, string rightLabel, string baseLabel, string resultLabel)
+    {
+        Merges.Add((leftPath, rightPath, basePath, resultPath, leftLabel, rightLabel, baseLabel, resultLabel));
+        return Task.FromResult(OpenMergeResult);
+    }
+
     public Task OpenFileAsync(string path)
     {
         OpenedFiles.Add(path);

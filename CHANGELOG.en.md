@@ -2,6 +2,61 @@
 
 List of SVNAssist changes by version, from the most recent to the oldest. Button, menu and window names are those of the interface, in English.
 
+## 0.7.0 (2026-11-23)
+
+Contents: Lightweight mode for low-spec PCs and automatic pause during builds, 300-row initial cap per section, Test key button in Options, active AI provider label, clickable working copy path, Merge button in the Changes header, Resolve as menu on conflicts, inline actions on Shelved rows, per-instance VS merge editor.
+
+Installation: replaces 0.6.1. Tested on Visual Studio 18 (2026). Visual Studio 2022 (17.x) is declared as supported but not yet tested.
+
+### New
+
+- **Lightweight mode (low-spec PCs).** New option under `Tools > Options > SVNAssist > General`, off by default: disables the continuous disk watcher and automatic server revision checks.
+  - With the option enabled, status refreshes when saving a file in Visual Studio, when Visual Studio regains focus (with a 5-second minimum interval), and on manual Refresh.
+- **Test key in Tools > Options.** Next to the API key field for Claude API, OpenAI-compatible / GitHub Models and Gemini, a **Test key** button is now available.
+  - A click saves any pasted key (encrypted for your Windows user), queries the selected provider and displays the count of available models or the returned error below the row.
+
+  <img src="https://raw.githubusercontent.com/PignaBoyz/SVNAssist/main/docs/release-notes/img/0.7.0/en/05-options-070.png" width="720" alt="Options view showing Test key with Gemini and Lightweight mode option">
+
+  *Linked provider settings with Test key and General settings with Lightweight mode (low-spec PCs).*
+- **Active AI provider label in the commit bar.** Next to **Generate with AI**, a button shows the active provider and model (or `Auto`). Clicking it opens the guided setup to switch provider or model.
+- **Clickable working copy path in SVN Changes.** Below the header, the current working copy folder path is displayed. Clicking it opens the folder input box directly without opening the **More actions** menu; `Esc` closes it.
+- **Merge button in the Changes header.** The **Merge** button now sits directly next to the branch selector in the SVN Changes header, in addition to the item under **More actions**.
+
+### Changes
+
+- **Conflicts panel with Resolve as menu.** Each text conflict keeps **Open merge editor** and **Mark as resolved** directly visible; **Use mine**, **Use theirs**, **Use both (mine then theirs)** and **Use both (theirs then mine)** move inside the **Resolve as** menu. With 2 or more text conflicts, bulk actions move into a single **Resolve all as** menu.
+
+  <img src="https://raw.githubusercontent.com/PignaBoyz/SVNAssist/main/docs/release-notes/img/0.7.0/en/01-changes-070.png" width="480" alt="SVN Changes panel with Merge button, WC path, AI label and Conflicts">
+
+  *The SVN Changes panel with the Merge button, working copy path, AI provider label and Conflicts panel.*
+
+  <img src="https://raw.githubusercontent.com/PignaBoyz/SVNAssist/main/docs/release-notes/img/0.7.0/en/02-conflitti-menu.png" width="480" alt="Resolve as menu showing the four per-file resolution options">
+
+  *The Resolve as menu showing the four resolution options per file.*
+- **Inline actions on Shelved rows.** Each row inside **Shelved (n)** displays direct icon buttons for **Unshelve** and **Delete**, while keeping the full right-click menu.
+
+  <img src="https://raw.githubusercontent.com/PignaBoyz/SVNAssist/main/docs/release-notes/img/0.7.0/en/03-shelved-inline.png" width="480" alt="Expanded Shelved section with inline Unshelve and Delete buttons">
+
+  *The expanded Shelved (1) section showing inline buttons to apply or delete the shelve.*
+- **Merge view header in the Log.** Title, revision count, hint text and **Preview**, **Merge all**, **Merge selected (n)** and **Clear selection** buttons are placed side by side across the top bar of the Merge view.
+
+  <img src="https://raw.githubusercontent.com/PignaBoyz/SVNAssist/main/docs/release-notes/img/0.7.0/en/04-merge-compatto.png" width="720" alt="Merge view in Log with title and action buttons arranged across the top strip">
+
+  *The Merge view header in the Log with title, description and action buttons in the top strip.*
+- **Lower workload on large solutions and during builds.**
+  - **Staged**, **Changes** and **Unversioned** initially render 300 rows per section, with a **Show all (N hidden)…** button to expand the full list.
+  - Automatic refresh pauses during builds and solution loading, extends quiet wait times after burst disk writes (`1.5 s` to `10 s`), and filters out NuGet `packages` folders, `TestResults` and temporary build files.
+  - Hidden SVNAssist panes suspend after 5 seconds; Solution Explorer status icons update in batches of 8 projects and only when state changes.
+  - Periodic remote lock checks skip server queries when no versioned files are modified.
+- **Gemini included in Automatic when a key is set.** When **AI provider for commit messages** is set to `Automatic`, Gemini is tried after Copilot, Claude Code, Claude API and OpenAI-compatible whenever a Gemini API key or environment variable is configured; default model `gemini-2.5-flash`.
+
+### Fixes
+
+- **Merge editor with multiple Visual Studio instances open.** Before: opening conflict merge from `SVN Changes` with two or more Visual Studio windows open could open in the other window and fail to record saved changes. Now: when TortoiseMerge is not used, the merge editor opens inside the active Visual Studio instance and detects state on save and close.
+- **Startup error on diff navigation shortcuts.** Before: Visual Studio startup could log an invalid-argument error for `Alt+F8` and `Shift+Alt+F8`. Now: shortcut initialization matches existing bindings even under localized scope names and eliminates the startup error.
+- **Line revert at the end of a diff file.** Before: reverting the final hunk near the end of a file could exceed valid line bounds. Now: line bounds are checked before applying the revert.
+- **Files outside the working copy and temporary resources.** Before: checking files outside a working copy repeated Subversion probes and shutdown could leave temporary folders or open stream readers behind. Now: verified external roots are cached and temporary folders are cleaned up on shutdown.
+
 ## 0.6.1 (2026-11-18)
 
 Contents: Options with the modern interface, summary of incoming revisions based on the real changes, Copilot AI credits. Installs over 0.6.0.

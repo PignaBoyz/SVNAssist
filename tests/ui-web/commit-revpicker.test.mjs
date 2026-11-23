@@ -36,9 +36,19 @@ test('in inglese le etichette dei tooltip sono tradotte', () => {
   try { assert.match(commitBtn(H.commitBar(s)), /Staged is empty: commits all 5 changes/); } finally { U.setLang('it'); }
 });
 
-test('header: Show Log accanto a SVN Update, invia showLog', () => {
+test('header: Merge accanto al branch, Show Log accanto a SVN Update', () => {
   const h = H.header(fx());
-  assert.match(h, /data-cmd="update"[\s\S]*data-cmd="showLog"/); assert.match(h, /Show Log/);
+  assert.match(h, /data-cmd="switchOpen"[\s\S]*data-cmd="mergeOpen"[\s\S]*data-cmd="update"[\s\S]*data-cmd="showLog"/);
+  assert.match(h, /Show Log/);
+});
+
+test('workingCopy bar cliccabile e badge provider AI nella commit bar', () => {
+  const s = fx();
+  assert.match(H.wcForm(s), /data-wc-edit[\s\S]*C:\\dev\\Acme\.Shop/);
+  s.commit.aiProviderLabel = 'Gemini · gemini-2.5-flash';
+  const cb = H.commitBar(s);
+  assert.match(cb, /class="chip ai-tag"[^>]*data-cmd="wizardOpen"/);
+  assert.match(cb, /Gemini · gemini-2\.5-flash/);
 });
 
 test('barra di stato: messaggio su una riga a tutta larghezza con tooltip, prerequisiti sulla riga sotto', () => {

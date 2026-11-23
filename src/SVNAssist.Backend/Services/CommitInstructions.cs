@@ -8,9 +8,9 @@ namespace SVNAssist.Services;
 /// </summary>
 /// <remarks>
 /// Fonti, dalla più generale alla più specifica (le più specifiche stanno in fondo e prevalgono):
-/// 1. <c>~/.copilot/copilot-instructions.md</c> (file utente globale, lo stesso della Copilot CLI) e <c>~/.claude/CLAUDE.md</c>
+/// 1. <c>~/.copilot/copilot-instructions.md</c>, <c>~/.claude/CLAUDE.md</c> e <c>~/.gemini/GEMINI.md</c>
 /// 2. risalendo dalla working copy, la prima cartella con <c>.github/copilot-instructions.md</c>
-///    e/o <c>.github/instructions/*.instructions.md</c> con <c>applyTo</c> globale (<c>**</c>, <c>*</c> o assente), <c>CLAUDE.md</c> o <c>AGENTS.md</c>.
+///    e/o <c>.github/instructions/*.instructions.md</c> con <c>applyTo</c> globale (<c>**</c>, <c>*</c> o assente), <c>CLAUDE.md</c>, <c>AGENTS.md</c> o <c>GEMINI.md</c>.
 /// Il contenuto è limitato in dimensione: va nel prompt di ogni richiesta.
 /// </remarks>
 internal static class CommitInstructions
@@ -31,6 +31,7 @@ internal static class CommitInstructions
             {
                 AddFile(parts, Path.Combine(userHome, ".copilot", "copilot-instructions.md"));
                 AddFile(parts, Path.Combine(userHome, ".claude", "CLAUDE.md"));
+                AddFile(parts, Path.Combine(userHome, ".gemini", "GEMINI.md"));
             }
 
             var dir = string.IsNullOrWhiteSpace(workingCopyPath) ? null : new DirectoryInfo(workingCopyPath);
@@ -41,6 +42,7 @@ internal static class CommitInstructions
                 AddFile(parts, Path.Combine(github, "copilot-instructions.md"));
                 AddFile(parts, Path.Combine(dir.FullName, "CLAUDE.md"));
                 AddFile(parts, Path.Combine(dir.FullName, "AGENTS.md"));
+                AddFile(parts, Path.Combine(dir.FullName, "GEMINI.md"));
 
                 var folder = Path.Combine(github, "instructions");
                 if (Directory.Exists(folder))

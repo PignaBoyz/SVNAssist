@@ -119,7 +119,11 @@ internal sealed class AiModelSource : IAiModelSource
     /// <summary>Gemini: <c>GET {base}/models</c> con la API key; senza chiave "Non collegato" (nessun elenco, mai uno scritto a mano).</summary>
     private async Task<AiModelsFetched?> ListGeminiAsync(CancellationToken ct)
     {
-        var key = (await _settings.GetAiApiKeyAsync(ct)).Trim();
+        var key = (await _settings.GetGeminiApiKeyAsync(ct)).Trim();
+        if (key.Length == 0)
+            key = (_env("GEMINI_API_KEY") ?? _env("GOOGLE_API_KEY") ?? string.Empty).Trim();
+        if (key.Length == 0 && AiProviderGuide.Normalize(await _settings.GetAiProviderAsync(ct)) == "gemini")
+            key = (await _settings.GetAiApiKeyAsync(ct)).Trim();
         if (key.Length == 0)
             return null;
         using var request = new HttpRequestMessage(HttpMethod.Get, AiServiceFactory.GeminiEndpoint + "/models");

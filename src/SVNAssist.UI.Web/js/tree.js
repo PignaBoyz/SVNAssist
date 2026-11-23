@@ -26,7 +26,8 @@
     return rows.filter((r, i) => keep[i]);
   }
   U.filterRows = filterRows;
-  function sectionHTML(s, cursor, q, sel) {
+  const ROW_CAP = 300;
+  function sectionHTML(s, cursor, q, sel, expandedCaps) {
     const key = 'section:' + s.id, open = s.expanded !== false;
     let h = `<div class="tr sec" role="treeitem" aria-level="1" aria-expanded="${open}" data-key="${U.esc(key)}" data-kind="section" data-sec="${s.id}" tabindex="${cursor === key ? 0 : -1}">` +
       `<span class="chev">${U.icon(open ? 'chev-d' : 'chev-r')}</span><span class="nm">${U.esc(s.title)}</span><span class="cnt" title="${U.esc(t('{0} elementi', s.count))}">${s.count}</span><span class="fill"></span>` +
@@ -34,7 +35,9 @@
     if (!open) return h;
     const rows = filterRows(s.rows, q);
     if (!rows.length) return h + `<div class="tr empty" role="none">${q ? t('Nessun risultato.') : s.id === 'staged' ? t('Nessun file da committare. Usa + sulle modifiche per aggiungerli qui.') : t('Nessun elemento.')}</div>`;
-    for (const r of rows) {
+    const truncated = !q && rows.length > ROW_CAP && !(expandedCaps && expandedCaps.has(s.id));
+    const shown = truncated ? rows.slice(0, ROW_CAP) : rows;
+    for (const r of shown) {
       const lvl = r.depth + 2, isF = r.kind === 'folder', st = r.status;
       h += `<div class="tr ${isF ? 'fol' : 'fil'}" role="treeitem" aria-level="${lvl}" ${isF ? `aria-expanded="${!!r.expanded}"` : ''} aria-selected="${sel && sel.size ? sel.has(r.key) : cursor === r.key}" aria-checked="${s.id === 'staged'}" data-key="${U.esc(r.key)}" data-kind="${r.kind}" data-sec="${s.id}" tabindex="${cursor === r.key ? 0 : -1}" title="${U.esc(r.tooltip || r.name)}">` +
         guides(r.depth + 1) + `<span class="chev">${isF ? U.icon(r.expanded ? 'chev-d' : 'chev-r') : ''}</span>` +
@@ -42,9 +45,11 @@
         `<span class="nm">${U.esc(r.name)}</span>${r.lockedBy ? `<span title="${U.esc(r.lockedBy)}">${U.icon('lock', 'lk')}</span>` : r.locked && st !== 'K' ? U.icon('lock', 'lk') : ''}${r.detail ? `<span class="dt">${U.esc(r.detail)}</span>` : ''}${isF ? `<span class="cnt">${r.count}</span>` : ''}<span class="fill"></span>` +
         `<span class="acts">${rowActs(s.id, r)}</span>${st ? `<span class="st ${U.stClass(st)}" title="${U.esc(r.statusText || U.statusName(st))}" aria-label="${U.esc(r.statusText || U.statusName(st))}">${U.esc(st)}</span>` : ''}</div>`;
     }
+    if (truncated)
+      h += `<div class="tr more" role="none"><button type="button" class="btn sm ghost" data-more-sec="${U.esc(s.id)}">${U.esc(t('Mostra tutti ({0} nascosti)…', rows.length - ROW_CAP))}</button></div>`;
     return h;
   }
-  U.treeHTML = (sections, cursor, q, sel) => sections.map(s => sectionHTML(s, cursor, q, sel)).join('');
+  U.treeHTML = (sections, cursor, q, sel, expandedCaps) => sections.map(s => sectionHTML(s, cursor, q, sel, expandedCaps)).join('');
 
   // ---- interazione ----
   const rowsOf = list => [...list.querySelectorAll('.tr[role=treeitem]')];

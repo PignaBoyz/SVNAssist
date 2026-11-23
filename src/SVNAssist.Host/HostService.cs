@@ -26,9 +26,11 @@ namespace SVNAssist.Host
         private readonly Dictionary<string, WebViewHost> _views = new Dictionary<string, WebViewHost>();
         private readonly Dictionary<string, string> _lastReady = new Dictionary<string, string>();
         private readonly Dictionary<string, TaskCompletionSource<bool>> _readyTcs = new Dictionary<string, TaskCompletionSource<bool>>();
+        private readonly HashSet<MergeFrameMonitor> _mergeMonitors = new HashSet<MergeFrameMonitor>();
         private string _solutionDir;
         private int _sccPending;
         private int _seq = 1_000_000; // id dei cmd generati dall'host (i comandi del menu), lontani da quelli della UI
+        private JObject _lastKeyTest;
 
         public HostService(SVNAssistPackage pkg)
         {
@@ -87,7 +89,7 @@ namespace SVNAssist.Host
             }
         }
 
-        private static readonly string[] SecretKeys = { "anthropicApiKey", "aiApiKey" };
+        private static readonly string[] SecretKeys = { "anthropicApiKey", "aiApiKey", "geminiApiKey" };
 
         /// <summary>Stato della pagina Impostazioni: i valori (mai le API key, solo se sono impostate) e la lingua.</summary>
         public void PushSettingsState()
@@ -100,10 +102,18 @@ namespace SVNAssist.Host
             d["previousChangeShortcut"] = o.PreviousChangeShortcut ?? "";
             var values = new JObject();
             foreach (var kv in d) if (!SecretKeys.Contains(kv.Key, StringComparer.OrdinalIgnoreCase)) values[kv.Key] = kv.Value;
+            var state = new JObject
+            {
+                ["values"] = values,
+                ["hasAnthropicKey"] = !string.IsNullOrEmpty(o.AnthropicApiKey),
+                ["hasAiKey"] = !string.IsNullOrEmpty(o.AiApiKey),
+                ["hasGeminiKey"] = !string.IsNullOrEmpty(o.GeminiApiKey),
+            };
+            if (_lastKeyTest != null) state["testResult"] = _lastKeyTest.DeepClone();
             var msg = new JObject
             {
                 ["v"] = 1, ["type"] = "state", ["view"] = "settings", ["lang"] = o.EffectiveLanguage,
-                ["state"] = new JObject { ["values"] = values, ["hasAnthropicKey"] = !string.IsNullOrEmpty(o.AnthropicApiKey), ["hasAiKey"] = !string.IsNullOrEmpty(o.AiApiKey) },
+                ["state"] = state,
             };
             Find("settings")?.Post(msg.ToString(Newtonsoft.Json.Formatting.None));
         }
@@ -118,15 +128,54 @@ namespace SVNAssist.Host
                     var m = JObject.Parse(json);
                     var name = (string)m["name"]; var a = m["args"] as JObject;
                     if (name == "settingsWizard") { Find("settings")?.CloseParentDialog(); _ = SendCommandAsync("changes", "wizardOpen", null); return; } // il dialogo Options e' modale e coprirebbe la procedura: si chiude (le modifiche sono gia' salvate)
+                    if (name == "settingsTestKey") { await TestApiKeyAsync((string)a?["provider"]).ConfigureAwait(false); return; }
                     var key = (string)a?["key"]; var value = (string)a?["value"] ?? "";
                     var secret = key != null && SecretKeys.Contains(key);
                     if (!((name == "settingsSet" && !secret) || (name == "settingsSecret" && secret)) || !_pkg.Options.TrySet(key, value)) { Log.Write("impostazione rifiutata: " + name + " " + key); return; }
+                    if (secret || string.Equals(key, "aiProvider", StringComparison.OrdinalIgnoreCase)) _lastKeyTest = null;
                     _pkg.Options.SaveSettingsToStorage();
                     SvnAssistOptions.RaiseChanged(); // lingua, tema, scorciatoie, glifi e backend leggono i nuovi valori
                 }
                 PushSettingsState();
             }
             catch (Exception ex) { Log.Write("settings view: " + ex.Message); }
+        }
+
+        private async Task TestApiKeyAsync(string provider)
+        {
+            provider = (provider ?? "").Trim().ToLowerInvariant();
+            if (provider != "claude" && provider != "gemini" && provider != "openai") return;
+            _lastKeyTest = new JObject { ["provider"] = provider, ["busy"] = true, ["ok"] = false, ["msg"] = Loc.T("Verifica della chiave in corso…") };
+            PushSettingsState();
+
+            bool ok = false;
+            string msg;
+            try
+            {
+                var b = await _backend.GetAsync().ConfigureAwait(false);
+                var raw = await b.ListAiModelsAsync(provider, forceRefresh: true).ConfigureAwait(false);
+                var doc = JObject.Parse(raw);
+                var err = (string)doc["error"];
+                var source = (string)doc["source"];
+                var count = (doc["models"] as JArray)?.Count ?? 0;
+                if (!string.IsNullOrWhiteSpace(err))
+                    msg = err;
+                else if (source == "live" && count > 0)
+                {
+                    ok = true;
+                    msg = Loc.T("Chiave valida ({0} modelli disponibili).", count);
+                }
+                else
+                    msg = Loc.T("Nessuna chiave configurata o provider non raggiungibile.");
+            }
+            catch (Exception ex)
+            {
+                msg = ex.Message;
+            }
+
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            _lastKeyTest = new JObject { ["provider"] = provider, ["busy"] = false, ["ok"] = ok, ["msg"] = msg };
+            PushSettingsState();
         }
 
         /// <summary>
@@ -168,15 +217,42 @@ namespace SVNAssist.Host
             await SccStatusChangedAsync().ConfigureAwait(false);
         }
 
-        /// <summary>Dal backend: lo stato dei file e' cambiato (coalescenza 300 ms), si rilegge la cache e si ridisegnano i glifi.</summary>
+        /// <summary>Dal backend: lo stato dei file e' cambiato (coalescenza 500 ms), si rilegge la cache e si ridisegnano i glifi.</summary>
         public async Task SccStatusChangedAsync()
         {
             var scc = _pkg.Scc;
             if (scc == null || !scc.Active || Interlocked.Exchange(ref _sccPending, 1) == 1) return;
-            await Task.Delay(300).ConfigureAwait(false);
+            await Task.Delay(500).ConfigureAwait(false);
             Interlocked.Exchange(ref _sccPending, 0);
             try { scc.SetStates(await (await _backend.GetAsync().ConfigureAwait(false)).GetSccStatesAsync().ConfigureAwait(false)); }
             catch (Exception ex) { Log.Write("scc stati: " + ex.Message); }
+        }
+
+        /// <summary>Metto in pausa o riprendo il watcher debounced nel backend (es. durante build/caricamento solution).</summary>
+        public async Task SetAutoRefreshPausedAsync(bool paused)
+        {
+            if (!_backend.IsRunning) return;
+            try { await (await _backend.GetAsync().ConfigureAwait(false)).SetAutoRefreshPausedAsync(paused).ConfigureAwait(false); }
+            catch (Exception ex) { Log.Write("autopause: " + ex.Message); }
+        }
+
+        /// <summary>Salvataggio di un documento in VS: notifica il backend per refresh incrementale in modalita' leggera.</summary>
+        public async Task OnDocumentSavedAsync(string filePath)
+        {
+            if (!_backend.IsRunning || string.IsNullOrEmpty(filePath)) return;
+            try { await (await _backend.GetAsync().ConfigureAwait(false)).OnDocumentSavedAsync(filePath).ConfigureAwait(false); }
+            catch (Exception ex) { Log.Write("docsaved: " + ex.Message); }
+        }
+
+        internal async Task OnMergeEditorClosedAsync(string filePath, int state)
+        {
+            try
+            {
+                // Attende brevemente affinche' VS completi l'eventuale flush del file su disco alla chiusura della finestra.
+                await Task.Delay(150).ConfigureAwait(false);
+                await (await _backend.GetAsync().ConfigureAwait(false)).OnMergeEditorClosedAsync(filePath, state).ConfigureAwait(false);
+            }
+            catch (Exception ex) { Log.Write("merge closed: " + ex.Message); }
         }
 
         public async Task RunPathCommandAsync(string command, string[] paths)
@@ -341,8 +417,95 @@ namespace SVNAssist.Host
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
             var svc = await _pkg.GetServiceAsync(typeof(SVsDifferenceService)) as IVsDifferenceService;
             if (svc == null) throw new InvalidOperationException(Loc.T("IVsDifferenceService non disponibile."));
-            svc.OpenComparisonWindow2(leftPath, rightPath, caption, caption, leftLabel, rightLabel, caption, null,
-                (uint)__VSDIFFSERVICEOPTIONS.VSDIFFOPT_DetectBinaryFiles);
+            uint flags = (uint)__VSDIFFSERVICEOPTIONS.VSDIFFOPT_DetectBinaryFiles;
+            if (IsUnderTemp(leftPath)) flags |= (uint)__VSDIFFSERVICEOPTIONS.VSDIFFOPT_LeftFileIsTemporary;
+            if (IsUnderTemp(rightPath)) flags |= (uint)__VSDIFFSERVICEOPTIONS.VSDIFFOPT_RightFileIsTemporary;
+            svc.OpenComparisonWindow2(leftPath, rightPath, caption, caption, leftLabel, rightLabel, caption, null, flags);
+        }
+
+        private static bool IsUnderTemp(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return false;
+            try
+            {
+                var tmp = Path.GetFullPath(Path.GetTempPath()).TrimEnd('\\', '/') + Path.DirectorySeparatorChar;
+                return Path.GetFullPath(path).StartsWith(tmp, StringComparison.OrdinalIgnoreCase);
+            }
+            catch { return false; }
+        }
+
+        public async Task<bool> OpenMergeAsync(string leftPath, string rightPath, string basePath, string resultPath, string leftLabel, string rightLabel, string baseLabel, string resultLabel)
+        {
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            try
+            {
+                var svc = await _pkg.GetServiceAsync(typeof(SVsFileMergeService)) as IVsFileMergeService;
+                if (svc == null) return false;
+                var frame = svc.OpenAndRegisterMergeWindow(
+                    leftPath, rightPath, basePath, resultPath,
+                    leftLabel, rightLabel, baseLabel, resultLabel,
+                    leftLabel, rightLabel, baseLabel, resultLabel,
+                    Ids.PackageGuid, leftPath, rightPath, out int cookie);
+                if (frame == null) return false;
+
+                if (frame is IVsWindowFrame2 f2)
+                {
+                    var monitor = new MergeFrameMonitor(this, svc, f2, cookie, resultPath);
+                    lock (_gate) _mergeMonitors.Add(monitor);
+                    if (f2.Advise(monitor, out var notifyCookie) == VSConstants.S_OK)
+                        monitor.NotifyCookie = notifyCookie;
+                }
+                frame.Show();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.Write("OpenMergeAsync fallback: " + ex.Message);
+                return false;
+            }
+        }
+
+        private sealed class MergeFrameMonitor : IVsWindowFrameNotify, IVsWindowFrameNotify3
+        {
+            private readonly HostService _host;
+            private readonly IVsFileMergeService _svc;
+            private readonly IVsWindowFrame2 _frame;
+            private readonly int _cookie;
+            private readonly string _resultPath;
+            private int _closed;
+            public uint NotifyCookie;
+
+            public MergeFrameMonitor(HostService host, IVsFileMergeService svc, IVsWindowFrame2 frame, int cookie, string resultPath)
+            {
+                _host = host; _svc = svc; _frame = frame; _cookie = cookie; _resultPath = resultPath;
+            }
+
+            public void Detach()
+            {
+                if (Interlocked.Exchange(ref _closed, 1) != 0) return;
+                try { if (NotifyCookie != 0) _frame.Unadvise(NotifyCookie); } catch { }
+                try { _svc.UnregisterMergeWindow(_cookie); } catch { }
+            }
+
+            public int OnShow(int fShow) => VSConstants.S_OK;
+            public int OnMove() => VSConstants.S_OK;
+            public int OnSize() => VSConstants.S_OK;
+            public int OnDockableChange(int fDockable) => VSConstants.S_OK;
+            public int OnMove(int x, int y, int w, int h) => VSConstants.S_OK;
+            public int OnSize(int x, int y, int w, int h) => VSConstants.S_OK;
+            public int OnDockableChange(int fDockable, int x, int y, int w, int h) => VSConstants.S_OK;
+
+            public int OnClose(ref uint pgrfSaveOptions)
+            {
+                if (Interlocked.Exchange(ref _closed, 1) != 0) return VSConstants.S_OK;
+                int state = 0;
+                try { _svc.QueryMergeWindowState(_cookie, out state, out _); } catch (Exception ex) { Log.Write("QueryMergeWindowState: " + ex.Message); }
+                try { if (NotifyCookie != 0) _frame.Unadvise(NotifyCookie); } catch { }
+                try { _svc.UnregisterMergeWindow(_cookie); } catch { }
+                lock (_host._gate) _host._mergeMonitors.Remove(this);
+                _ = _host.OnMergeEditorClosedAsync(_resultPath, state);
+                return VSConstants.S_OK;
+            }
         }
 
         public async Task OpenFileAsync(string path)
@@ -383,8 +546,8 @@ namespace SVNAssist.Host
                 if (!VsShellUtilities.IsDocumentOpen(_pkg, path, Guid.Empty, out _, out _, out var frame)) return false;
                 var tv = VsShellUtilities.GetTextView(frame);
                 if (tv == null || tv.GetBuffer(out var vsBuf) != VSConstants.S_OK || vsBuf == null) return false;
-                var cm = (Microsoft.VisualStudio.ComponentModelHost.IComponentModel)await _pkg.GetServiceAsync(typeof(Microsoft.VisualStudio.ComponentModelHost.SComponentModel));
-                var buf = cm.GetService<Microsoft.VisualStudio.Editor.IVsEditorAdaptersFactoryService>().GetDocumentBuffer(vsBuf);
+                if (!(await _pkg.GetServiceAsync(typeof(Microsoft.VisualStudio.ComponentModelHost.SComponentModel)) is Microsoft.VisualStudio.ComponentModelHost.IComponentModel cm)) return false;
+                var buf = cm.GetService<Microsoft.VisualStudio.Editor.IVsEditorAdaptersFactoryService>()?.GetDocumentBuffer(vsBuf);
                 if (buf == null) return false;
                 var old = buf.CurrentSnapshot.GetText();
                 if (old != text)
@@ -425,6 +588,9 @@ namespace SVNAssist.Host
         {
             SvnAssistOptions.Changed -= OnOptionsChanged;
             VSColorTheme.ThemeChanged -= OnVsThemeChanged;
+            MergeFrameMonitor[] monitors;
+            lock (_gate) { monitors = _mergeMonitors.ToArray(); _mergeMonitors.Clear(); }
+            foreach (var m in monitors) m.Detach();
             _backend.Dispose();
         }
     }

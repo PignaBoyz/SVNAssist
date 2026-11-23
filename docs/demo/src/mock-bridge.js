@@ -141,7 +141,7 @@
       workingCopy: { path: v.wcPath || '', showInput: !!v.showInput, branch: v.branch || '', rev: S.wcRev || 0, svnVersion: '1.14.3', ...(S.wcRev ? { head: S.headRev, revState: S.headRev > S.wcRev ? 'behind' : 'current' } : {}) },
       commit: { text: v.commitMsg || '', aiStatus: tr(v.aiMsg || ''), aiLevel: aiLevel(v), aiSeq: v.aiSeq || 0, busy: !!v.aiBusy, lang: String(v.lang || S.settings.defaultlanguage || 'auto').toLowerCase(),
         trace: (v.trace || []).map(t => ({ name: t.name, state: t.state, detail: t.detail || '' })), download: v.dl ? { pct: v.dl.pct, label: v.dl.label } : null,
-        count: commitSet().files.length, all: commitSet().all, recent: (S.recentMsgs || []).slice() },
+        count: commitSet().files.length, all: commitSet().all, aiProviderLabel: S.settings.aiprovider === 'auto' ? tr('Auto') : S.settings.aiprovider, recent: (S.recentMsgs || []).slice() },
       view: v.view, theme: { mode: theme.mode, kind: kindOf() }, sections, status: { msg: tr(msg), err: !!v.err || /^Errore/.test(msg), seq: v.statusSeq || 0, ...(/E155004/.test(msg) ? { action: { label: tr('Esegui Cleanup'), cmd: 'cleanup' } } : {}) }, prereq: prereq(), loading: !!v.loading, wizard: wizardSnap(), revPicker: rpSnap(), switchPicker: swSnap(),
       ...(S.pendMerge ? { merge: { text: pendText().applied, conflicts: S.files.filter(f => f.st === 'C').length, pending: pendSnap() } } : {}),
       ...(!S.pendMerge && v.mergeBanner && commitSet().files.length ? { merge: { text: tr(v.mergeBanner.text), conflicts: S.files.filter(f => f.st === 'C').length } } : {}),

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.Imaging;
 using Microsoft.VisualStudio.Shell;
@@ -14,10 +15,10 @@ namespace SVNAssist.Host
     /// Barra informativa (InfoBar) in cima a un documento aperto in VS quando il file e' in conflitto (stato dalla cache SCC):
     /// "Segna come risolto", "Usa la mia", "Usa la loro", "Usa entrambe", "Apri editor di merge". Ogni pulsante manda al backend
     /// <c>conflictOpPath</c> (lo stesso codice del pannello Conflitti di Changes, con le sue conferme), senza aprire la finestra Changes.
-    /// La barra compare quando la scheda del documento viene mostrata (apertura o cambio scheda) e sparisce quando il file non e' piu' in conflitto.
-    /// Solo thread UI.
+    /// La barra compare quando la scheda del documento viene mostrata (apertura o cambio scheda) e sparisce in modo deterministico
+    /// quando <see cref="SvnSccService.StatesUpdated"/> segnala che il file non e' piu' in conflitto. Solo thread UI.
     /// </summary>
-    internal sealed class ConflictInfoBars : IVsRunningDocTableEvents, IVsInfoBarUIEvents
+    internal sealed class ConflictInfoBars : IVsRunningDocTableEvents, IVsInfoBarUIEvents, IDisposable
     {
         private readonly SVNAssistPackage _pkg;
         private IVsRunningDocumentTable _rdt;
@@ -39,6 +40,17 @@ namespace SVNAssist.Host
             ThreadHelper.ThrowIfNotOnUIThread();
             _rdt = Package.GetGlobalService(typeof(SVsRunningDocumentTable)) as IVsRunningDocumentTable;
             _rdt?.AdviseRunningDocTableEvents(this, out _cookie);
+            if (_pkg.Scc != null) _pkg.Scc.StatesUpdated += OnSccStatesUpdated;
+        }
+
+        private void OnSccStatesUpdated()
+        {
+            _pkg.JoinableTaskFactory.RunAsync(async () =>
+            {
+                await _pkg.JoinableTaskFactory.SwitchToMainThreadAsync();
+                foreach (var k in _bars.Where(p => !(_pkg.Scc != null && _pkg.Scc.IsConflicted(p.Value.Path))).Select(p => p.Key).ToList())
+                    Remove(k);
+            }).FileAndForget("SVNAssist/infoBarSync");
         }
 
         // ---- documenti ----
@@ -70,7 +82,23 @@ namespace SVNAssist.Host
         }
 
         public int OnAfterFirstDocumentLock(uint docCookie, uint dwRDTLockType, uint dwReadLocksRemaining, uint dwEditLocksRemaining) => VSConstants.S_OK;
-        public int OnAfterSave(uint docCookie) => VSConstants.S_OK;
+
+        public int OnAfterSave(uint docCookie)
+        {
+            try
+            {
+                ThreadHelper.ThrowIfNotOnUIThread();
+                if (_rdt != null
+                    && _rdt.GetDocumentInfo(docCookie, out _, out _, out _, out var path, out _, out _, out var docData) == VSConstants.S_OK)
+                {
+                    if (docData != IntPtr.Zero) Marshal.Release(docData);
+                    if (!string.IsNullOrEmpty(path))
+                        _pkg.Host.OnDocumentSavedAsync(path).FileAndForget("SVNAssist/docSaved");
+                }
+            }
+            catch (Exception ex) { Log.Write("onAfterSave: " + ex.Message); }
+            return VSConstants.S_OK;
+        }
         public int OnAfterAttributeChange(uint docCookie, uint grfAttribs) => VSConstants.S_OK;
         public int OnAfterDocumentWindowHide(uint docCookie, IVsWindowFrame pFrame) => VSConstants.S_OK;
 
@@ -124,14 +152,22 @@ namespace SVNAssist.Host
             var op = OpOf(actionItem.Text);
             if (op == null) return;
             var path = bar.Path;
-            _pkg.JoinableTaskFactory.RunAsync(async () =>
+            _pkg.Host.SendQuietAsync("changes", "conflictOpPath", new JObject { ["op"] = op, ["path"] = path }).FileAndForget("SVNAssist/conflictInfoBar");
+        }
+
+        public void Dispose()
+        {
+            if (_pkg.Scc != null) _pkg.Scc.StatesUpdated -= OnSccStatesUpdated;
+            try
             {
-                await _pkg.Host.SendQuietAsync("changes", "conflictOpPath", new JObject { ["op"] = op, ["path"] = path }).ConfigureAwait(false);
-                // lo stato SCC si aggiorna dopo qualche istante: poi la barra sparisce da sola se il file non e' piu' in conflitto
-                await System.Threading.Tasks.Task.Delay(1500).ConfigureAwait(false);
-                await _pkg.JoinableTaskFactory.SwitchToMainThreadAsync();
-                foreach (var k in _bars.Where(p => !(_pkg.Scc != null && _pkg.Scc.IsConflicted(p.Value.Path))).Select(p => p.Key).ToList()) Remove(k);
-            }).FileAndForget("SVNAssist/conflictInfoBar");
+                if (ThreadHelper.CheckAccess())
+                {
+                    foreach (var k in _bars.Keys.ToList()) Remove(k);
+                    if (_cookie != 0 && _rdt != null) _rdt.UnadviseRunningDocTableEvents(_cookie);
+                }
+            }
+            catch { }
+            _cookie = 0;
         }
 
         private static string OpOf(string text)

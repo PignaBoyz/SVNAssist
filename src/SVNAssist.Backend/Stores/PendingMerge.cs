@@ -1,4 +1,5 @@
 using System.Text.Json;
+using SVNAssist.Services;
 
 namespace SVNAssist.Stores;
 
@@ -39,6 +40,8 @@ internal sealed class PendingMerge
     private readonly string? _file;
     private readonly object _lock = new();
     private Dictionary<string, Entry>? _all;
+    private DateTime _cacheStampUtc;
+    private long _cacheLen = -1;
 
     /// <param name="file">File JSON; <c>null</c> = solo in memoria (test e prove: non scrive in <c>%LOCALAPPDATA%</c>).</param>
     public PendingMerge(string? file = null) => _file = file;
@@ -68,16 +71,22 @@ internal sealed class PendingMerge
     {
         lock (_lock)
         {
-            var all = All();
-            edit(all);
             if (_file is null)
+            {
+                edit(_all ??= []);
                 return;
+            }
+
             try
             {
-                Directory.CreateDirectory(System.IO.Path.GetDirectoryName(_file)!);
-                var tmp = _file + ".tmp";
-                File.WriteAllText(tmp, JsonSerializer.Serialize(all));
-                File.Move(tmp, _file, overwrite: true); // mai un file scritto a meta' se VS si chiude proprio ora
+                AtomicJsonFile.WithFileLock(_file, () =>
+                {
+                    var all = Read();
+                    edit(all);
+                    AtomicJsonFile.WriteAllTextAtomic(_file, JsonSerializer.Serialize(all));
+                    _all = all;
+                    UpdateStamp();
+                });
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -86,7 +95,46 @@ internal sealed class PendingMerge
         }
     }
 
-    private Dictionary<string, Entry> All() => _all ??= Read();
+    private Dictionary<string, Entry> All()
+    {
+        if (_file is null)
+            return _all ??= [];
+        try
+        {
+            if (!File.Exists(_file))
+            {
+                _cacheStampUtc = default;
+                _cacheLen = -1;
+                return _all = [];
+            }
+
+            var fi = new FileInfo(_file);
+            if (_all is not null && fi.LastWriteTimeUtc == _cacheStampUtc && fi.Length == _cacheLen)
+                return _all;
+
+            _cacheStampUtc = fi.LastWriteTimeUtc;
+            _cacheLen = fi.Length;
+            return _all = Read();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return _all ??= [];
+        }
+    }
+
+    private void UpdateStamp()
+    {
+        try
+        {
+            if (_file is not null && File.Exists(_file))
+            {
+                var fi = new FileInfo(_file);
+                _cacheStampUtc = fi.LastWriteTimeUtc;
+                _cacheLen = fi.Length;
+            }
+        }
+        catch { /* best effort */ }
+    }
 
     private Dictionary<string, Entry> Read()
     {
@@ -94,9 +142,10 @@ internal sealed class PendingMerge
             return [];
         try
         {
-            return File.Exists(_file)
-                ? JsonSerializer.Deserialize<Dictionary<string, Entry>>(File.ReadAllText(_file)) ?? []
-                : [];
+            var json = AtomicJsonFile.TryReadAllText(_file);
+            return json is null
+                ? []
+                : JsonSerializer.Deserialize<Dictionary<string, Entry>>(json) ?? [];
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {

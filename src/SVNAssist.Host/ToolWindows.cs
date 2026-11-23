@@ -1,9 +1,11 @@
 using System;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
+using Task = System.Threading.Tasks.Task;
 
 namespace SVNAssist.Host
 {
@@ -12,6 +14,7 @@ namespace SVNAssist.Host
     {
         private WebViewHost _view;
         private readonly string _viewName;
+        private uint _frameCookie;
 
         protected WebToolWindow(string view, string caption, object host) : base(null)
         {
@@ -39,8 +42,8 @@ namespace SVNAssist.Host
         public override void OnToolWindowCreated()
         {
             base.OnToolWindowCreated();
-            // Per ricevere OnShow (tab attivata) e dare il focus alla pagina.
-            if (Frame is IVsWindowFrame2 f2) f2.Advise(this, out _);
+            // Per ricevere OnShow (tab attivata/nascosta) e dare il focus o sospendere la WebView.
+            if (Frame is IVsWindowFrame2 f2) f2.Advise(this, out _frameCookie);
         }
 
         // VS intercetta Del, Ctrl+A/C/V, frecce, Tab prima della WebView: se il focus e' nella WebView
@@ -54,8 +57,32 @@ namespace SVNAssist.Host
         int IVsWindowFrameNotify.OnShow(int fShow)
         {
             var s = (__FRAMESHOW)fShow;
-            if (s == __FRAMESHOW.FRAMESHOW_TabActivated || s == __FRAMESHOW.FRAMESHOW_WinShown)
-                _view?.Dispatcher.BeginInvoke(new Action(_view.FocusPage));
+            if (s == __FRAMESHOW.FRAMESHOW_Hidden
+                || s == __FRAMESHOW.FRAMESHOW_WinHidden
+                || s == __FRAMESHOW.FRAMESHOW_TabDeactivated
+                || s == __FRAMESHOW.FRAMESHOW_WinMinimized
+                || s == __FRAMESHOW.FRAMESHOW_WinClosed)
+            {
+                _view?.SetHostVisible(false);
+            }
+            else if (s == __FRAMESHOW.FRAMESHOW_WinShown || s == __FRAMESHOW.FRAMESHOW_TabActivated)
+            {
+                _view?.SetHostVisible(true);
+                if (_view != null && SVNAssistPackage.Instance is SVNAssistPackage pkg)
+                {
+                    var v = _view;
+                    pkg.JoinableTaskFactory.RunAsync(async () =>
+                    {
+                        await Task.Yield();
+                        await pkg.JoinableTaskFactory.SwitchToMainThreadAsync();
+                        v.FocusPage();
+                    }).FileAndForget("SVNAssist/ToolWindow/FocusPage");
+                }
+            }
+            else if (s == __FRAMESHOW.FRAMESHOW_WinRestored || s == __FRAMESHOW.FRAMESHOW_WinMaximized)
+            {
+                _view?.SetHostVisible(true);
+            }
             return VSConstants.S_OK;
         }
 
@@ -65,7 +92,12 @@ namespace SVNAssist.Host
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) _view?.DisposeHost();
+            if (disposing)
+            {
+                try { if (_frameCookie != 0 && Frame is IVsWindowFrame2 f2) f2.Unadvise(_frameCookie); } catch { }
+                _frameCookie = 0;
+                _view?.DisposeHost();
+            }
             base.Dispose(disposing);
         }
     }

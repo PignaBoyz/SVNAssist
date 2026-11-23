@@ -2,6 +2,61 @@
 
 Elenco delle modifiche di SVNAssist per versione, dalla più recente alla più vecchia. I nomi di pulsanti, menu e finestre sono quelli dell'interfaccia, in inglese.
 
+## 0.7.0 (2026-11-23)
+
+Contenuti: Modalità leggera per PC poco potenti e pausa automatica in compilazione, limite iniziale a 300 righe per sezione, Testa chiave in Options, badge provider AI, percorso working copy apribile con click, Merge nell'intestazione di Changes, menu Risolvi come sui conflitti, azioni inline su Shelved, editor di merge isolato per istanza VS.
+
+Installazione: sostituisce la 0.6.1. Provata su Visual Studio 18 (2026). Visual Studio 2022 (17.x) è dichiarato come supportata ma non provata.
+
+### Novità
+
+- **Modalità leggera (PC poco potenti).** Nuova opzione in `Tools > Options > SVNAssist > Generale`, spenta di default: disattiva il watcher continuo su disco e il controllo periodico delle revisioni sul server.
+  - Con l'opzione attiva lo stato si aggiorna quando salvi un file in Visual Studio, quando la finestra di Visual Studio torna in primo piano (con intervallo minimo di 5 secondi) e alla pressione di Refresh.
+- **Testa chiave in Tools > Options.** Accanto alla chiave API di Claude API, OpenAI-compatibile / GitHub Models e Gemini compare il pulsante **Testa chiave**.
+  - Un click salva l'eventuale chiave incollata (cifrata per il tuo utente Windows), interroga il provider scelto e mostra sotto la riga il numero di modelli disponibili oppure l'errore restituito.
+
+  <img src="https://raw.githubusercontent.com/PignaBoyz/SVNAssist/main/docs/release-notes/img/0.7.0/it/05-options-070.png" width="720" alt="Schermata Options con Testa chiave per Gemini e opzione Modalità leggera">
+
+  *Le impostazioni Provider collegato con Testa chiave e Generale con Modalità leggera (PC poco potenti).*
+- **Provider AI attivo nella barra di commit.** Accanto a **Genera con AI** compare il nome del provider e del modello in uso (oppure `Auto`). Un click apre la procedura guidata per cambiare provider o modello.
+- **Percorso della working copy in SVN Changes.** Sotto l'intestazione compare il percorso della working copy corrente. Un click apre il campo di testo per cambiare cartella; `Esc` chiude il campo senza aprire il menu **Altre azioni**.
+- **Pulsante Merge nell'intestazione di Changes.** Il comando **Merge** compare direttamente accanto al selettore del branch nell'intestazione di SVN Changes, in aggiunta alla voce in **Altre azioni**.
+
+### Modifiche
+
+- **Riquadro Conflitti con menu Risolvi come.** Su ogni conflitto di testo restano visibili **Apri editor di merge** e **Segna come risolto**; **Usa la mia**, **Usa la loro**, **Usa entrambe (mia poi loro)** e **Usa entrambe (loro poi mia)** passano nel menu **Risolvi come**. Con 2 o più conflitti di testo, le azioni globali si raccolgono nell'unico menu **Risolvi tutti come**.
+
+  <img src="https://raw.githubusercontent.com/PignaBoyz/SVNAssist/main/docs/release-notes/img/0.7.0/it/01-changes-070.png" width="480" alt="Pannello SVN Changes con Merge nell'intestazione, percorso WC, etichetta AI e Conflitti">
+
+  *Il pannello SVN Changes con il pulsante Merge, il percorso della working copy, il badge AI e il riquadro Conflitti.*
+
+  <img src="https://raw.githubusercontent.com/PignaBoyz/SVNAssist/main/docs/release-notes/img/0.7.0/it/02-conflitti-menu.png" width="480" alt="Menu Risolvi come con le quattro strategie di risoluzione">
+
+  *Il menu Risolvi come con le quattro opzioni di risoluzione per file.*
+- **Azioni dirette sugli Shelved.** Ogni riga della sezione **Shelved (n)** mostra le icone dirette per **Unshelve** e **Elimina**, oltre al menu completo del tasto destro.
+
+  <img src="https://raw.githubusercontent.com/PignaBoyz/SVNAssist/main/docs/release-notes/img/0.7.0/it/03-shelved-inline.png" width="480" alt="Sezione Shelved espansa con pulsanti diretti Unshelve ed Elimina">
+
+  *La sezione Shelved (1) espansa con i pulsanti diretti per applicare ed eliminare lo shelve.*
+- **Testata della vista Merge nel Log.** Titolo, conteggio delle revisioni e i pulsanti **Anteprima**, **Merge tutto**, **Merge selezionate (n)** e **Deseleziona** sono disposti affiancati nella fascia superiore della vista Merge.
+
+  <img src="https://raw.githubusercontent.com/PignaBoyz/SVNAssist/main/docs/release-notes/img/0.7.0/it/04-merge-compatto.png" width="720" alt="Vista Merge nel Log con testata e pulsanti affiancati">
+
+  *La testata della vista Merge nel Log con titolo, descrizione e pulsanti nella fascia superiore.*
+- **Riduzione del carico su solution grandi e durante la compilazione.**
+  - Le sezioni **Staged**, **Modifiche** e **Non versionati** mostrano inizialmente 300 righe per sezione, con il pulsante **Mostra tutti (N nascosti)…** per espandere l'elenco completo.
+  - L'aggiornamento automatico va in pausa durante la compilazione e il caricamento della solution, allunga l'attesa dopo raffiche di scritture su disco (da `1,5 s` a `10 s`) ed esclude cartelle di pacchetti NuGet (`packages`), risultati test (`TestResults`) e file temporanei di compilazione.
+  - Le finestre di SVNAssist non visibili vengono messe in pausa dopo 5 secondi; i glifi in Solution Explorer si aggiornano a blocchi di 8 progetti e solo quando cambia lo stato.
+  - Il controllo periodico dei lock di altri utenti sul server non interroga il server se non ci sono file versionati modificati.
+- **Gemini in Automatico quando è impostata una chiave.** Quando **Provider AI per i commit message** è impostato su `Automatico`, Gemini entra nella sequenza dopo Copilot, Claude Code, Claude API e OpenAI-compatibile se trova una chiave configurata o nelle variabili d'ambiente; modello predefinito `gemini-2.5-flash`.
+
+### Correzioni
+
+- **Editor di merge con più istanze di Visual Studio aperte.** Prima: aprendo il merge di un conflitto da `SVN Changes` con due o più finestre di Visual Studio aperte, la vista di merge poteva aprirsi nell'altra finestra senza registrare le modifiche. Ora: quando non si usa TortoiseMerge, l'editor di merge si apre nella stessa istanza di Visual Studio e rileva lo stato al salvataggio e alla chiusura.
+- **Errore all'avvio sulle scorciatoie del diff.** Prima: all'avvio di Visual Studio il log poteva riportare un errore di argomento non valido su `Alt+F8` e `Shift+Alt+F8`. Ora: il controllo riconosce le scorciatoie già assegnate anche con nomi localizzati e azzera l'errore di avvio.
+- **Annulla riga nel diff vicino all'ultima riga.** Prima: annullando l'ultimo blocco di un diff a fine file il comando poteva andare fuori dai limiti delle righe. Ora: l'intervallo di righe viene verificato prima di applicare l'annullamento.
+- **File esterni alla working copy e risorse temporanee.** Prima: aprire o controllare file fuori dalla working copy ripeteva le verifiche e alla chiusura potevano restare cartelle temporanee o letture bloccate. Ora: le radici esterne vengono memorizzate e le cartelle temporanee vengono eliminate alla chiusura.
+
 ## 0.6.1 (2026-11-18)
 
 Contenuti: Options con l'interfaccia moderna, riassunto delle revisioni in arrivo basato sulle modifiche vere, crediti AI di Copilot. Si installa sopra la 0.6.0.

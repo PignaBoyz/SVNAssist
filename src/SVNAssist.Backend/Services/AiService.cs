@@ -46,11 +46,16 @@ public class AiService : AiServiceBase, IReportsModel
         _apiKey = apiKey;
     }
 
+    /// <summary>Attesa iniettabile dai test per i retry 429.</summary>
+    internal Func<TimeSpan, CancellationToken, Task> DelayAsync { get; set; } = Task.Delay;
+
     /// <summary>Endpoint di Gemini (stesso percorso OpenAI-compatibile): serve per nominare il provider e il consumo.</summary>
     internal bool IsGemini => AiServiceFactory.IsGeminiEndpoint(_endpoint);
 
     /// <inheritdoc />
-    public override AiLimits Limits => AiServiceFactory.IsGitHubModelsEndpoint(_endpoint) ? AiLimits.GitHubModels : AiLimits.OpenAiCompatible;
+    public override AiLimits Limits => IsGemini ? AiLimits.Gemini
+        : AiServiceFactory.IsGitHubModelsEndpoint(_endpoint) ? AiLimits.GitHubModels
+        : AiLimits.OpenAiCompatible;
 
     /// <inheritdoc />
     protected override Task<string> CompleteAsync(string systemPrompt, string userMessage, CancellationToken ct)
@@ -92,7 +97,8 @@ public class AiService : AiServiceBase, IReportsModel
         string systemPrompt,
         string userMessage,
         CancellationToken ct,
-        bool allowRetryOnLimit)
+        bool allowRetryOnLimit,
+        int rateLimitRetriesLeft = 2)
     {
         var requestBody = new
         {
@@ -118,10 +124,17 @@ public class AiService : AiServiceBase, IReportsModel
 
         if (!response.IsSuccessStatusCode)
         {
+            if (rateLimitRetriesLeft > 0 && response.StatusCode == HttpStatusCode.TooManyRequests)
+            {
+                var wait = RetryAfterDelay(response.Headers.RetryAfter, attempt: 3 - rateLimitRetriesLeft);
+                await DelayAsync(wait, ct);
+                return await CallChatCompletionsAsync(systemPrompt, userMessage, ct, allowRetryOnLimit, rateLimitRetriesLeft - 1);
+            }
+
             if (allowRetryOnLimit && IsTokenLimitError(response.StatusCode, responseJson))
             {
-                var reducedMessage = TrimToMaxChars(userMessage, MaxUserMessageChars / 2);
-                return await CallChatCompletionsAsync(systemPrompt, reducedMessage, ct, allowRetryOnLimit: false);
+                var reducedMessage = TrimToMaxChars(userMessage, Math.Min(MaxUserMessageChars / 2, Math.Max(2000, userMessage.Length / 2)));
+                return await CallChatCompletionsAsync(systemPrompt, reducedMessage, ct, allowRetryOnLimit: false, rateLimitRetriesLeft);
             }
 
             // Il corpo d'errore del server può citare la chiave (es. "invalid key: sk-..."): la si oscura.
@@ -150,9 +163,23 @@ public class AiService : AiServiceBase, IReportsModel
 
         // Prima causa probabile: contesto/dimensione della richiesta. Un solo nuovo tentativo con il messaggio dimezzato.
         if (allowRetryOnLimit)
-            return await CallChatCompletionsAsync(systemPrompt, TrimToMaxChars(userMessage, Math.Max(2000, userMessage.Length / 2)), ct, allowRetryOnLimit: false);
+            return await CallChatCompletionsAsync(systemPrompt, TrimToMaxChars(userMessage, Math.Max(2000, userMessage.Length / 2)), ct, allowRetryOnLimit: false, rateLimitRetriesLeft);
 
         throw NotJson(response.StatusCode, responseJson);
+    }
+
+    private static TimeSpan RetryAfterDelay(RetryConditionHeaderValue? retryAfter, int attempt)
+    {
+        if (retryAfter?.Delta is { } delta && delta > TimeSpan.Zero)
+            return delta > TimeSpan.FromSeconds(10) ? TimeSpan.FromSeconds(10) : delta;
+        if (retryAfter?.Date is { } date)
+        {
+            var d = date - DateTimeOffset.UtcNow;
+            if (d > TimeSpan.Zero)
+                return d > TimeSpan.FromSeconds(10) ? TimeSpan.FromSeconds(10) : d;
+        }
+
+        return TimeSpan.FromSeconds(attempt <= 1 ? 2 : 4);
     }
 
     private HttpRequestException NotJson(HttpStatusCode status, string body)
@@ -205,6 +232,9 @@ public class AiService : AiServiceBase, IReportsModel
             return true;
 
         return responseJson.Contains("tokens_limit_reached", StringComparison.OrdinalIgnoreCase)
-               || responseJson.Contains("Request body too large", StringComparison.OrdinalIgnoreCase);
+               || responseJson.Contains("Request body too large", StringComparison.OrdinalIgnoreCase)
+               || responseJson.Contains("exceeds the maximum number of tokens", StringComparison.OrdinalIgnoreCase)
+               || responseJson.Contains("token count exceeds", StringComparison.OrdinalIgnoreCase)
+               || responseJson.Contains("maximum context length", StringComparison.OrdinalIgnoreCase);
     }
 }

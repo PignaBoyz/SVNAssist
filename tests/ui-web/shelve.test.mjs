@@ -16,6 +16,7 @@ test('senza shelve niente sezione; con shelve chiusa di default, aperta mostra n
   assert.match(closed, /<b>Shelved<\/b><span class="pill">1<\/span>/); assert.doesNotMatch(closed, /shl-r/);
   const open = U.changesHTML.shelvedHTML(s, true);
   assert.match(open, /data-shelve="20261115-103005-Prova"/); assert.doesNotMatch(open, /<b>Prova/); assert.match(open, /3 file/);
+  assert.match(open, /data-cmd="unshelve"/); assert.match(open, /data-cmd="shelveDelete"/);
 });
 
 test('comandi shelve validi, keep obbligatorio su shelve', () => {

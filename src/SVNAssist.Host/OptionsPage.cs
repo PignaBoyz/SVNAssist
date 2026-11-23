@@ -97,6 +97,14 @@ namespace SVNAssist.Host
             SVNAssistPackage.Instance?.Host?.PushSettingsState(); // valori aggiornati a ogni apertura (il menu Lingua o la procedura guidata possono averli cambiati)
         }
 
+        protected override void OnClosed(EventArgs e)
+        {
+            // Chiudendo Tools > Options rilasciamo subito il processo WebView2 della pagina Settings.
+            _child?.DisposeHost();
+            _child = null;
+            base.OnClosed(e);
+        }
+
         protected override void Dispose(bool disposing)
         {
             if (disposing) { _child?.DisposeHost(); _child = null; }
@@ -111,10 +119,10 @@ namespace SVNAssist.Host
 
         // chiave del setting (come in SettingsService, camelCase) -> proprieta'
         internal static readonly string[] Keys =
-            { "aiProvider", "claudeModel", "anthropicApiKey", "copilotModel", "aiEndpoint", "aiApiKey", "aiModel", "defaultLanguage", "aiShowUsage", "workingCopyPath", "repoLayout", "headCheckMinutes", "windowTheme", "uiLanguage" };
+            { "aiProvider", "claudeModel", "anthropicApiKey", "copilotModel", "aiEndpoint", "aiApiKey", "aiModel", "geminiApiKey", "geminiModel", "defaultLanguage", "aiShowUsage", "workingCopyPath", "repoLayout", "headCheckMinutes", "lightweightMode", "windowTheme", "uiLanguage" };
 
         [LCategory("Commit message AI"), LDisplayName("Provider AI per i commit message"), DefaultValue("auto"), TypeConverter(typeof(AiProviderConverter))]
-        [LDescription("Automatico prova Copilot, Claude Code, Claude API e OpenAI-compatibile in quest'ordine.")]
+        [LDescription("Automatico prova Copilot, Claude Code, Claude API, OpenAI-compatibile e Gemini (se impostata una chiave) in quest'ordine.")]
         public string AiProvider { get; set; } = "auto";
 
         [LCategory("Commit message AI"), LDisplayName("Modello Claude (solo Claude Code e Claude API)"), DefaultValue("claude-sonnet-5-5")]
@@ -141,6 +149,14 @@ namespace SVNAssist.Host
         [LDescription("Scrivi un id modello. L'elenco aggiornato dei modelli disponibili e' nella procedura guidata (Cambia provider AI).")]
         public string AiModel { get; set; } = "openai/gpt-4o-mini";
 
+        [LCategory("Commit message AI"), LDisplayName("API key Gemini (solo Gemini)"), PasswordPropertyText(true)]
+        [LDescription("Vuota = variabile d'ambiente GEMINI_API_KEY o GOOGLE_API_KEY. Salvata cifrata (DPAPI, solo per il tuo utente Windows) nelle impostazioni di Visual Studio.")]
+        public string GeminiApiKey { get; set; } = "";
+
+        [LCategory("Commit message AI"), LDisplayName("Modello Gemini (solo Gemini)"), DefaultValue("gemini-2.5-flash")]
+        [LDescription("Scrivi un id modello Gemini (es. gemini-2.5-flash). L'elenco aggiornato dei modelli disponibili e' nella procedura guidata (Cambia provider AI).")]
+        public string GeminiModel { get; set; } = "gemini-2.5-flash";
+
         [LCategory("Commit message AI"), LDisplayName("Lingua dei commit message"), DefaultValue("auto"), TypeConverter(typeof(LanguageConverter))]
         public string DefaultLanguage { get; set; } = "auto";
 
@@ -163,6 +179,10 @@ namespace SVNAssist.Host
         [LCategory("Generale"), LDisplayName("Controllo nuove revisioni (minuti)"), DefaultValue(5)]
         [LDescription("Ogni quanti minuti SVNAssist chiede al server l'ultima revisione del ramo (una sola richiesta piccola, in sola lettura) per avvisarti se altri hanno committato. 0 = spento.")]
         public int HeadCheckMinutes { get; set; } = 5;
+
+        [LCategory("Generale"), LDisplayName("Modalita' leggera (PC poco potenti)"), DefaultValue(false)]
+        [LDescription("Spegne il watcher continuo del file system e il controllo automatico delle revisioni sul server; aggiorna al salvataggio in Visual Studio, al rientro del focus su Visual Studio e con Refresh manuale.")]
+        public bool LightweightMode { get; set; }
 
         [LCategory("Generale"), LDisplayName("Tema delle finestre SVNAssist"), DefaultValue("auto"), TypeConverter(typeof(WindowThemeConverter))]
         [LDescription("Automatico usa i colori del tema di Visual Studio (chiaro, scuro, blu, alto contrasto).")]
@@ -196,9 +216,9 @@ namespace SVNAssist.Host
 
         public override void SaveSettingsToStorage()
         {
-            var a = AnthropicApiKey; var k = AiApiKey;
-            try { AnthropicApiKey = Protect(a); AiApiKey = Protect(k); base.SaveSettingsToStorage(); }
-            finally { AnthropicApiKey = a; AiApiKey = k; }
+            var a = AnthropicApiKey; var k = AiApiKey; var g = GeminiApiKey;
+            try { AnthropicApiKey = Protect(a); AiApiKey = Protect(k); GeminiApiKey = Protect(g); base.SaveSettingsToStorage(); }
+            finally { AnthropicApiKey = a; AiApiKey = k; GeminiApiKey = g; }
         }
 
         public override void LoadSettingsFromStorage()
@@ -206,6 +226,7 @@ namespace SVNAssist.Host
             base.LoadSettingsFromStorage();
             AnthropicApiKey = Unprotect(AnthropicApiKey);
             AiApiKey = Unprotect(AiApiKey);
+            GeminiApiKey = Unprotect(GeminiApiKey);
         }
 
         private static string Protect(string s)
@@ -250,12 +271,15 @@ namespace SVNAssist.Host
                 ["aiEndpoint"] = endpoint,
                 ["aiApiKey"] = AiApiKey ?? "",
                 ["aiModel"] = Model(AiModel, "openai/gpt-4o-mini"),
+                ["geminiApiKey"] = GeminiApiKey ?? "",
+                ["geminiModel"] = Model(GeminiModel, "gemini-2.5-flash"),
                 ["defaultLanguage"] = Pick(DefaultLanguage, new LanguageConverter(), "auto"),
                 ["aiShowUsage"] = AiShowUsage ? "true" : "false",
                 ["aiExplainIncoming"] = AiExplainIncoming ? "true" : "false",
                 ["workingCopyPath"] = WorkingCopyPath ?? "",
                 ["repoLayout"] = string.IsNullOrWhiteSpace(RepoLayout) ? "trunk/branches/tags" : RepoLayout,
                 ["headCheckMinutes"] = Math.Max(0, Math.Min(24 * 60, HeadCheckMinutes)).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["lightweightMode"] = LightweightMode ? "true" : "false",
                 ["windowTheme"] = Pick(WindowTheme, new WindowThemeConverter(), "auto"),
                 ["uiLanguage"] = Pick(UiLanguage, new UiLanguageConverter(), "auto"),
                 ["uiLanguageEffective"] = EffectiveLanguage,
@@ -289,12 +313,15 @@ namespace SVNAssist.Host
                 case "aiEndpoint": AiEndpoint = value; break;
                 case "aiApiKey": AiApiKey = value; break;
                 case "aiModel": AiModel = value; break;
+                case "geminiApiKey": GeminiApiKey = value; break;
+                case "geminiModel": GeminiModel = value; break;
                 case "defaultLanguage": DefaultLanguage = value; break;
                 case "aiExplainIncoming": AiExplainIncoming = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase); break;
                 case "aiShowUsage": AiShowUsage = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase); break;
                 case "workingCopyPath": WorkingCopyPath = value; break;
                 case "repoLayout": RepoLayout = value; break;
                 case "headCheckMinutes": { int n; HeadCheckMinutes = int.TryParse(value, out n) ? n : 5; break; }
+                case "lightweightMode": LightweightMode = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase); break;
                 case "windowTheme": WindowTheme = value; break;
                 case "uiLanguage": UiLanguage = value; break;
                 case "showSccGlyphs": ShowSccGlyphs = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase); break;

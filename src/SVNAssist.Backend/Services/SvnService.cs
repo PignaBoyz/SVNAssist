@@ -99,6 +99,28 @@ public class SvnService : ISvnService
         return ParseRemoteLocks(r.StandardOutput);
     }
 
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<SvnRemoteLock>> GetRemoteLocksAsync(string workingCopyPath, IReadOnlyList<string> paths, CancellationToken ct)
+    {
+        if (paths.Count == 0)
+            return [];
+
+        var all = new List<SvnRemoteLock>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var targets = paths.Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.OrdinalIgnoreCase).Select(p => Peg(SafeTarget(p))).ToList();
+        foreach (var chunk in ChunkByCommandLine(["status", "-u", "--depth", "empty", "--xml"], targets))
+        {
+            var r = await RunSvnOnceAsync(chunk, workingCopyPath, ct, true, null);
+            if (r.ExitCode != 0)
+                throw new InvalidOperationException(BuildErrorMessage("status -u", r.ExitCode, r.StandardError));
+            foreach (var l in ParseRemoteLocks(r.StandardOutput))
+                if (seen.Add(l.Path))
+                    all.Add(l);
+        }
+
+        return all;
+    }
+
     /// <summary>Lock di altri: <c>repos-status/lock</c> senza <c>lock</c> in <c>wc-status</c> (quello e' nostro).</summary>
     internal static IReadOnlyList<SvnRemoteLock> ParseRemoteLocks(string xml) =>
         XDocument.Parse(xml).Descendants("entry")

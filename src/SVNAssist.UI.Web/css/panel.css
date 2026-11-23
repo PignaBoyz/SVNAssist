@@ -48,6 +48,12 @@ button.branch:hover{background:var(--bg3)}
 button.branch:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .wc{display:flex;gap:6px;align-items:center;padding:0 8px 6px}
 .wc label{font-weight:600;white-space:nowrap}
+.wc-bar{padding:0 8px 4px;flex:none}
+.wc-btn{display:inline-flex;align-items:center;gap:6px;max-width:100%;padding:2px 6px;border:1px solid transparent;border-radius:4px;background:transparent;color:var(--fg2);font-size:.9em}
+.wc-btn:hover{background:var(--bg3);color:var(--fg);border-color:var(--bd)}
+.wc-path{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.ai-tag{font-size:.86em;cursor:pointer}
+.ai-tag:hover{border-color:var(--acc2);color:var(--fg)}
 .commit{padding:0 8px 4px;flex:none;display:flex;flex-direction:column;gap:2px}
 .commit .bar{padding:6px 0 2px}
 .ai-s{font-size:.92em;color:var(--fg2);padding:2px 0}
@@ -98,6 +104,7 @@ progress{display:block;width:100%;height:8px;margin:4px 0;accent-color:var(--acc
 .tr.sec{background:var(--bg3);font-weight:600;border-bottom:1px solid var(--bd);position:sticky;top:0;z-index:1;text-transform:none}
 .tr.sec:hover{background:var(--bg4)}
 .tr.empty{color:var(--fg2);height:auto;padding:8px 14px;white-space:normal;line-height:1.4}
+.tr.more{height:auto;padding:4px 12px;justify-content:center}
 .gd{width:14px;height:26px;flex:none;border-left:1px solid var(--bd);margin-left:2px}
 .gd:first-child{border-left-color:transparent}
 .chev{width:16px;height:16px;flex:none;display:grid;place-items:center;color:var(--fg2)}
@@ -147,6 +154,9 @@ pre.cmd{background:var(--bg0);border:1px solid var(--bd);padding:6px 8px;font:12
 .ck.on{background:var(--acc);border-color:var(--acc);color:var(--acc-fg)}
 .ck .ic{width:10px;height:10px}
 .mact{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 2px}
+.mp-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.mp-info{flex:1 1 260px;min-width:0}
+.mp-top .mact{margin:0;flex:none}
 .mres{padding:8px 12px}
 .mb.info{border-color:var(--bd2);color:var(--fg2)}
 .mf,.mrv{padding:0 12px 6px}
@@ -383,6 +393,7 @@ progress.obar::-webkit-progress-value{background:var(--acc2);border-radius:3px;t
 .shl-r{display:flex;align-items:center;gap:10px;padding:6px 12px;border-top:1px solid var(--bd);min-width:0}
 .shl-r:hover,.shl-r:focus-visible{background:var(--bg2)}
 .shl-n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.shl-acts{display:inline-flex;align-items:center;gap:2px;flex:none}
 
 .ops-strip{position:fixed;left:8px;right:8px;bottom:8px;z-index:120;display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--bg3);box-shadow:0 2px 8px rgba(0,0,0,.25)}
 .ops-strip.err{border-color:var(--bad,#c0392b)}
@@ -416,3 +427,7 @@ html[data-view=settings] body{background:var(--bg1)}
 .set-c{flex:1 1 45%;display:flex;align-items:center;gap:6px;min-width:0}
 .set-c select,.set-c input[type=text],.set-c input[type=number],.set-c input[type=password]{background:var(--bg1);border:1px solid var(--bd2);border-radius:4px;padding:5px 8px;width:100%;color:var(--fg)}
 .set-c input[type=checkbox]{width:18px;height:18px;accent-color:var(--acc)}
+.set-test{font-size:.92em;padding:4px 0 8px;display:flex;align-items:center;gap:6px}
+.set-test.ok{color:var(--chip-ok-fg)}
+.set-test.err{color:var(--chip-fail-fg)}
+.set-test.busy{color:var(--fg2)}

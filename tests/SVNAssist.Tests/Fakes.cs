@@ -29,6 +29,12 @@ internal sealed class StubSettings : ISvnAssistSettings
     public Task<string> GetAiEndpointAsync(CancellationToken ct) => Task.FromResult(Endpoint);
     public Task<string> GetAiApiKeyAsync(CancellationToken ct) => Task.FromResult(ApiKey);
     public Task<string> GetAiModelAsync(CancellationToken ct) => Task.FromResult("model");
+    public string GeminiKey { get; set; } = string.Empty;
+    public Task<string> GetGeminiApiKeyAsync(CancellationToken ct) => Task.FromResult(GeminiKey);
+    public string GeminiModelSaved { get; set; } = SettingDefinitions.DefaultGeminiModel;
+    public Task<string> GetGeminiModelAsync(CancellationToken ct) => Task.FromResult(GeminiModelSaved);
+    public bool LightweightModeSaved { get; set; }
+    public Task<bool> GetLightweightModeAsync(CancellationToken ct) => Task.FromResult(LightweightModeSaved);
     public Task<string> GetDefaultLanguageAsync(CancellationToken ct) => Task.FromResult(Language);
     public Task<string> GetWorkingCopyPathAsync(CancellationToken ct) => Task.FromResult(WorkingCopy);
     public Task<string> GetWindowThemeAsync(CancellationToken ct) => Task.FromResult(Theme);
@@ -47,6 +53,9 @@ internal sealed class StubSettings : ISvnAssistSettings
             case SettingDefinitions.AnthropicApiKey: AnthropicKey = value; break;
             case SettingDefinitions.AiApiKey: ApiKey = value; break;
             case SettingDefinitions.AiEndpoint: Endpoint = value; break;
+            case SettingDefinitions.GeminiApiKey: GeminiKey = value; break;
+            case SettingDefinitions.GeminiModel: GeminiModelSaved = value; break;
+            case SettingDefinitions.LightweightMode: LightweightModeSaved = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase); break;
         }
 
         return Task.CompletedTask;
@@ -88,7 +97,18 @@ internal sealed class FakeSvnService : ISvnService
     public int LogEntryCount { get; set; } = 500;
 
     public List<SvnRemoteLock> RemoteLocks { get; } = [];
+    public List<IReadOnlyList<string>> RemoteLockRequests { get; } = [];
     public Task<IReadOnlyList<SvnRemoteLock>> GetRemoteLocksAsync(string workingCopyPath, CancellationToken ct) => Task.FromResult<IReadOnlyList<SvnRemoteLock>>(RemoteLocks.ToList());
+    public Task<IReadOnlyList<SvnRemoteLock>> GetRemoteLocksAsync(string workingCopyPath, IReadOnlyList<string> paths, CancellationToken ct)
+    {
+        RemoteLockRequests.Add(paths.ToList());
+        var set = paths.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return Task.FromResult<IReadOnlyList<SvnRemoteLock>>(RemoteLocks.Where(l =>
+        {
+            var full = Path.IsPathRooted(l.Path) ? l.Path : Path.GetFullPath(Path.Combine(workingCopyPath, l.Path));
+            return set.Contains(full) || set.Contains(l.Path);
+        }).ToList());
+    }
     public Task<IReadOnlyList<SvnFileStatus>> GetStatusAsync(string workingCopyPath, CancellationToken ct)
     {
         StatusCalls++;

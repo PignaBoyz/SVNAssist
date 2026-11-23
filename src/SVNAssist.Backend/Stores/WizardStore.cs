@@ -60,7 +60,8 @@ internal sealed class WizardStore
     internal static string ModelSettingKey(string provider) => provider switch
     {
         "copilot" => SettingDefinitions.CopilotModel,
-        "openai" or "gemini" => SettingDefinitions.AiModel,
+        "openai" => SettingDefinitions.AiModel,
+        "gemini" => SettingDefinitions.GeminiModel,
         _ => SettingDefinitions.ClaudeModel,
     };
 
@@ -377,7 +378,7 @@ internal sealed class WizardStore
             case "openai":
                 return AiServiceFactory.NormalizeOpenAiModel(await _settings.GetAiEndpointAsync(ct), await _settings.GetAiModelAsync(ct));
             case "gemini":
-                return AiServiceFactory.NormalizeGeminiModel(await _settings.GetAiModelAsync(ct));
+                return AiServiceFactory.NormalizeGeminiModel(await _settings.GetGeminiModelAsync(ct));
             case "claude":
             case "claudecode":
                 return AiServiceFactory.ResolveClaudeModel(await _settings.GetClaudeModelAsync(ct));
@@ -424,7 +425,8 @@ internal sealed class WizardStore
         {
             "copilot" => PrerequisiteIds.GitHubLogin,
             "claude" => PrerequisiteIds.AnthropicKey,
-            "openai" or "gemini" => PrerequisiteIds.OpenAiKey,
+            "openai" => PrerequisiteIds.OpenAiKey,
+            "gemini" => PrerequisiteIds.GeminiKey,
             _ => null,
         };
         var install = InstallIds(provider);
@@ -517,7 +519,12 @@ internal sealed class WizardStore
         }
 
         if (key.Length > 0 && provider is "claude" or "openai" or "gemini")
-            await _settings.SetSettingAsync(provider == "claude" ? SettingDefinitions.AnthropicApiKey : SettingDefinitions.AiApiKey, key, ct);
+            await _settings.SetSettingAsync(provider switch
+            {
+                "claude" => SettingDefinitions.AnthropicApiKey,
+                "gemini" => SettingDefinitions.GeminiApiKey,
+                _ => SettingDefinitions.AiApiKey,
+            }, key, ct);
 
         await RefreshAsync(ct);
     }

@@ -137,8 +137,8 @@ internal sealed class AiModelCatalog : IAiModelCatalog
         {
             try
             {
-                if (File.Exists(_cacheFile))
-                    foreach (var (key, entry) in ParseCacheFile(File.ReadAllText(_cacheFile)))
+                if (AtomicJsonFile.TryReadAllText(_cacheFile) is { } text)
+                    foreach (var (key, entry) in ParseCacheFile(text))
                         entries[key] = entry;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
@@ -156,8 +156,23 @@ internal sealed class AiModelCatalog : IAiModelCatalog
             return;
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(_cacheFile)!);
-            File.WriteAllText(_cacheFile, SerializeCacheFile(entries));
+            AtomicJsonFile.WithFileLock(_cacheFile, () =>
+            {
+                var merged = new Dictionary<string, Entry>(StringComparer.OrdinalIgnoreCase);
+                if (AtomicJsonFile.TryReadAllText(_cacheFile) is { } existing)
+                {
+                    try
+                    {
+                        foreach (var (k, v) in ParseCacheFile(existing))
+                            merged[k] = v;
+                    }
+                    catch (JsonException) { /* file precedente corrotto: lo sostituisco */ }
+                }
+
+                foreach (var kv in entries)
+                    merged[kv.Key] = kv.Value;
+                AtomicJsonFile.WriteAllTextAtomic(_cacheFile, SerializeCacheFile(merged));
+            });
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -272,7 +287,9 @@ internal sealed class AiModelCatalog : IAiModelCatalog
         return models.OrderBy(m => m.Id, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
-    private static readonly Regex NotForChat = new("embed|whisper|tts|dall-e|moderation", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex NotForChat = new(
+        @"embed|whisper|tts|dall-e|moderation|imagen|veo|lyria|\baqa\b|native-audio|-image(?:-|\b)|robotics|computer-use|deep-research|learnlm",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     /// <summary>
     /// Modelli di Copilot (<c>ListModelsAsync</c>): tutti quelli abilitati per l'account (i disabilitati da piano/organizzazione non si offrono);

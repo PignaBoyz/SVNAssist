@@ -30,12 +30,15 @@ namespace SVNAssist.Rpc
             return sb.ToString();
         }
 
+#if !NETFRAMEWORK
+        [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+#endif
         private static string ReadRegistryPath(RegistryKey root, string subKey)
         {
             try
             {
                 using (var k = root.OpenSubKey(subKey))
-                    return Environment.ExpandEnvironmentVariables((string)k?.GetValue("Path", "", RegistryValueOptions.DoNotExpandEnvironmentNames) ?? "");
+                    return Environment.ExpandEnvironmentVariables((k?.GetValue("Path", "", RegistryValueOptions.DoNotExpandEnvironmentNames) as string) ?? "");
             }
             catch (Exception) { return ""; } // registro non leggibile: si resta col PATH del processo
         }
@@ -43,6 +46,9 @@ namespace SVNAssist.Rpc
         /// <summary>Aggiorna il PATH del processo (e quindi dei figli) con quello del registro. <c>true</c> se è cambiato.</summary>
         public static bool Refresh()
         {
+#if !NETFRAMEWORK
+            if (!OperatingSystem.IsWindows()) return false;
+#endif
             var current = Environment.GetEnvironmentVariable("PATH") ?? "";
             var merged = Merge(current,
                 ReadRegistryPath(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"),

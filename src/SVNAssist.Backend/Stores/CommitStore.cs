@@ -78,6 +78,7 @@ internal sealed class CommitStore
 
     private StatusActionDto? _aiAction;
     private string? _aiProviderHint;
+    private string? _aiProviderLabel;
 
     /// <summary>Provider (<c>copilot</c>, <c>claude</c>...) dell'ultimo errore legato al modello: la procedura "Aggiorna elenco modelli" parte da li'. Null = non noto.</summary>
     internal string? FailedProvider { get; private set; }
@@ -159,7 +160,7 @@ internal sealed class CommitStore
     internal CommitDto GetSnapshot(DownloadDto? download, int count = 0, bool all = false)
     {
         lock (_lock)
-            return new CommitDto(_text, _aiStatus, LevelOf(_aiStatus, _busy), _aiSeq, _busy, _lang, _trace, download, count, all, AiAction: _aiAction);
+            return new CommitDto(_text, _aiStatus, LevelOf(_aiStatus, _busy), _aiSeq, _busy, _lang, _trace, download, count, all, AiAction: _aiAction, AiProviderLabel: _aiProviderLabel);
     }
 
     /// <summary>Cambia la lingua del messaggio AI (valori: auto, italiano, english).</summary>
@@ -178,9 +179,10 @@ internal sealed class CommitStore
         Changed?.Invoke();
     }
 
-    /// <summary>Legge la lingua iniziale dalle impostazioni (se l'utente non ha gia' scelto).</summary>
+    /// <summary>Legge la lingua iniziale e il badge del provider dalle impostazioni.</summary>
     internal async Task InitializeAsync(CancellationToken ct)
     {
+        await RefreshProviderLabelAsync(ct);
         if (_languageLoaded)
             return;
 
@@ -195,6 +197,71 @@ internal sealed class CommitStore
         }
 
         Changed?.Invoke();
+    }
+
+    /// <summary>Aggiorna l'etichetta compatta del provider/modello AI attivo mostrata nella barra commit.</summary>
+    internal async Task RefreshProviderLabelAsync(CancellationToken ct)
+    {
+        var provider = AiProviderGuide.Normalize(await _settings.GetAiProviderAsync(ct));
+        string label;
+        switch (provider)
+        {
+            case "copilot":
+            {
+                var model = ShortModel(await _settings.GetCopilotModelAsync(ct));
+                label = model.Length == 0 || string.Equals(model, SettingDefinitions.CopilotDefaultModel, StringComparison.OrdinalIgnoreCase)
+                    ? "Copilot"
+                    : "Copilot · " + model;
+                break;
+            }
+            case "claudecode":
+            {
+                var model = ShortModel(await _settings.GetClaudeModelAsync(ct));
+                label = model.Length > 0 ? "Claude Code · " + model : "Claude Code";
+                break;
+            }
+            case "claude":
+            {
+                var model = ShortModel(await _settings.GetClaudeModelAsync(ct));
+                label = model.Length > 0 ? "Claude · " + model : "Claude";
+                break;
+            }
+            case "openai":
+            {
+                var model = ShortModel(await _settings.GetAiModelAsync(ct));
+                label = model.Length > 0 ? "OpenAI · " + model : "OpenAI";
+                break;
+            }
+            case "gemini":
+            {
+                var model = ShortModel(await _settings.GetGeminiModelAsync(ct));
+                label = model.Length > 0 ? "Gemini · " + model : "Gemini";
+                break;
+            }
+            default:
+                label = Loc.T("Auto");
+                break;
+        }
+
+        var changed = false;
+        lock (_lock)
+        {
+            if (!string.Equals(_aiProviderLabel, label, StringComparison.Ordinal))
+            {
+                _aiProviderLabel = label;
+                changed = true;
+            }
+        }
+
+        if (changed)
+            Changed?.Invoke();
+    }
+
+    private static string ShortModel(string? model)
+    {
+        var s = AiModelIds.StripModelsPrefix((model ?? string.Empty).Trim()) ?? string.Empty;
+        var slash = s.LastIndexOf('/');
+        return slash >= 0 && slash + 1 < s.Length ? s[(slash + 1)..] : s;
     }
 
     /// <summary>Se impostato, "Genera con AI" senza provider utilizzabile apre la procedura guidata invece del prompt <see cref="IAiSetupPrompt"/>.</summary>
