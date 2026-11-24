@@ -354,6 +354,8 @@ Il file .patch viene cancellato e non si recupera.`)) return;
     toggleSection: a => { S.vm.collapsed['sec:' + a.sec] = !S.vm.collapsed['sec:' + a.sec]; render(); },
     expandAll: () => { S.vm.collapsed = {}; render(); },
     collapseAll: () => { allFolderCks().forEach(k => { S.vm.collapsed[k] = true; }); render(); },
+    showAllRows: () => render(),   // la demo ha poche righe: nessun taglio a 300
+    setRowFilter: () => {},
     setView: a => { S.vm.view = a.view === 'list' ? 'list' : 'tree'; render(); },
     openFile: a => showDiff(a.key, false),   // nella demo: il file si apre nel visualizzatore (come Mostra differenze)
     showDiff: a => showDiff(a.key, false),

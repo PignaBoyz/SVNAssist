@@ -123,22 +123,13 @@ internal sealed class RefreshDebouncer
 }
 
 /// <summary>
-/// Decide quali eventi del file system ignorare: cartelle di build e file temporanei/metadati che cambiano di continuo
-/// senza modificare lo stato SVN.
+/// Eventi del file system scartati sempre: solo le cartelle di amministrazione di svn (<c>.svn</c>) e di SVNAssist (<c>.svn-assist</c>),
+/// che non sono mai contenuto della working copy. Nessun'altra cartella o estensione e' ignorata d'ufficio (0.7.1):
+/// le cartelle da ignorare le decide l'utente con svn:ignore, e il watcher le impara da svn (vedi <c>ChangesStore.Ignored.cs</c>).
 /// </summary>
 internal static class WorkingCopyPathFilter
 {
-    private static readonly HashSet<string> NoiseFolders = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".svn", ".vs", ".svn-assist", ".git", "bin", "obj", "node_modules",
-        "packages", "TestResults", "artifacts", "Debug", "Release", "x64", "x86", ".idea", ".vscode",
-    };
-
-    private static readonly HashSet<string> NoiseExtensions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".tmp", ".user", ".suo", ".cache", ".db-wal", ".db-shm", ".log",
-        ".pdb", ".ilk", ".tlog", ".lastbuildstate", ".up2date",
-    };
+    private static readonly HashSet<string> AdminFolders = new(StringComparer.OrdinalIgnoreCase) { ".svn", ".svn-assist" };
 
     /// <summary><c>true</c> se l'evento su <paramref name="fullPath"/> va ignorato.</summary>
     /// <param name="workingCopyRoot">Root della working copy (solo i segmenti sotto la root contano).</param>
@@ -150,18 +141,6 @@ internal static class WorkingCopyPathFilter
             : fullPath;
 
         var segments = relative.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries);
-        if (segments.Any(NoiseFolders.Contains))
-            return true;
-
-        var fileName = segments.Length > 0 ? segments[^1] : string.Empty;
-        if (fileName.Length == 0)
-            return false;
-        if (fileName.StartsWith("~$", StringComparison.Ordinal) || fileName.EndsWith("~", StringComparison.Ordinal))
-            return true;
-        if (fileName.EndsWith(".FileListAbsolute.txt", StringComparison.OrdinalIgnoreCase))
-            return true;
-
-        var ext = Path.GetExtension(fileName);
-        return ext.Length > 0 && NoiseExtensions.Contains(ext);
+        return segments.Any(AdminFolders.Contains);
     }
 }

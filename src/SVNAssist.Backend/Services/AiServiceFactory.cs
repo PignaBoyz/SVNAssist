@@ -95,9 +95,9 @@ internal sealed class AiServiceFactory : IAiServiceFactory
         if (Use("openai") && await CreateOpenAiCompatibleAsync(ct) is { } openAi)
             candidates.Add((Loc.T("OpenAI-compatibile"), openAi));
 
-        // Gemini in "auto" usa SOLO la propria chiave dedicata o variabile GEMINI_API_KEY/GOOGLE_API_KEY
-        // (mai la chiave condivisa aiApiKey, per non mandare un PAT GitHub/OpenAI a Google).
-        if (Use("gemini") && await CreateGeminiAsync(provider == "gemini", ct) is { } gemini)
+        // Gemini SOLO se scelto esplicitamente (decisione 0.6.0, ribadita nella 0.7.1): in "auto" mai,
+        // nemmeno con una chiave dedicata o una variabile d'ambiente, cosi' il codice non va a Google senza una scelta.
+        if (provider == "gemini" && await CreateGeminiAsync(ct) is { } gemini)
             candidates.Add(("Gemini", gemini));
 
         return candidates.Count switch
@@ -108,13 +108,13 @@ internal sealed class AiServiceFactory : IAiServiceFactory
         };
     }
 
-    private async Task<IAiService?> CreateGeminiAsync(bool allowLegacySharedKey, CancellationToken ct)
+    private async Task<IAiService?> CreateGeminiAsync(CancellationToken ct)
     {
         var dedicated = (await _settings.GetGeminiApiKeyAsync(ct)).Trim();
         var envKey = (_environmentReader("GEMINI_API_KEY") ?? _environmentReader("GOOGLE_API_KEY") ?? string.Empty).Trim();
         var key = dedicated.Length > 0 ? dedicated : envKey;
         var usedLegacy = false;
-        if (key.Length == 0 && allowLegacySharedKey)
+        if (key.Length == 0)
         {
             key = (await _settings.GetAiApiKeyAsync(ct)).Trim();
             usedLegacy = key.Length > 0;

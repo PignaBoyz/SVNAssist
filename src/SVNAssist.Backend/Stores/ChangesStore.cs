@@ -59,7 +59,12 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
     private long _lastFocusRefreshTicks;
     private int _rowsVersion;
     private (int Version, string Lang, List<SectionDto> Sections)? _sectionsCache;
-    private readonly Dictionary<string, (byte[] Hash, bool HadMarkers)> _activeMerges = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Righe per sezione inviate alla UI finche' l'utente non chiede "Mostra tutti" o non filtra: su working copy grandi lo snapshot resta leggero.</summary>
+    internal const int RowCap = 300;
+    private readonly HashSet<string> _uncappedSections = new(StringComparer.OrdinalIgnoreCase);
+    private bool _rowFilterActive;
+    private readonly Dictionary<string, byte[]> _activeMerges = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Merge di piu' revisioni fermo o interrotto, per working copy (su disco: sopravvive alla chiusura di VS). Nei test (senza file dei recenti) solo in memoria.</summary>
     internal PendingMerge PendingMerges { get; set; }
@@ -184,7 +189,7 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             return;
         if (!IsUnder(filePath, wc) || WorkingCopyPathFilter.IsNoise(wc, filePath))
             return;
-        _debouncer.Request();
+        OnFsPath(filePath);
     }
 
     /// <summary>Rientro del focus su VS in modalita' leggera: refresh una-tantum con cooldown per intercettare modifiche fatte fuori da VS.</summary>
@@ -198,7 +203,7 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             return;
         if (Interlocked.CompareExchange(ref _lastFocusRefreshTicks, now, prev) != prev)
             return;
-        _debouncer.Request();
+        RequestFullRefresh();
     }
 
     /// <summary>Controllo periodico "altri hanno committato?" (indicatore della revisione nella barra di stato).</summary>
@@ -263,8 +268,18 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
     }
 
     /// <summary>Refresh automatico (watcher): salta se non c'e' una working copy o se un'operazione dell'utente e' in corso.</summary>
-    internal Task AutoRefreshAsync(CancellationToken ct)
-        => string.IsNullOrWhiteSpace(WorkingCopyPath) || OperationRunning ? Task.CompletedTask : RefreshAsync(ct, reloadBranch: false);
+    /// Con soli eventi sotto cartelle che svn ignora (svn:ignore dell'utente) non lancia svn status.
+    internal async Task AutoRefreshAsync(CancellationToken ct)
+    {
+        var wc = WorkingCopyPath;
+        if (string.IsNullOrWhiteSpace(wc) || OperationRunning)
+            return;
+        if (!await NeedsAutoRefreshAsync(wc, ct))
+            return;
+        _inAutoRefresh = true;
+        try { await RefreshAsync(ct, reloadBranch: false); }
+        finally { _inAutoRefresh = false; }
+    }
 
     /// <summary>Messaggio di commit e azioni AI.</summary>
     internal CommitStore CommitMessage { get; }
@@ -801,8 +816,16 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
         {
             var items = _entries.Where(e => SectionOf(e) == section).ToList();
             var id = ChangesTreeBuilder.SectionId(section);
-            return new SectionDto(id, ChangesTreeBuilder.SectionTitle(section), items.Count,
-                !_collapsed.Contains(SectionCollapseKey(id)), BuildRows(section, items));
+            var expanded = !_collapsed.Contains(SectionCollapseKey(id));
+            // Al massimo RowCap righe per sezione, salvo "Mostra tutti" o filtro attivo nella UI.
+            var rows = BuildRows(section, items);
+            int? hidden = null;
+            if (rows.Count > RowCap && !_rowFilterActive && !_uncappedSections.Contains(id))
+            {
+                hidden = rows.Count - RowCap;
+                rows = rows.GetRange(0, RowCap);
+            }
+            return new SectionDto(id, ChangesTreeBuilder.SectionTitle(section), items.Count, expanded, rows, hidden);
         }).ToList();
         _sectionsCache = (_rowsVersion, lang, sections);
         return sections;
@@ -1165,6 +1188,26 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                 break;
             case "collapseAll":
                 SetAllExpanded(false);
+                break;
+            case "showAllRows":
+                lock (_stateLock)
+                {
+                    if (_uncappedSections.Add(Args.OneOf(args, "sec", "staged", "changes", "unversioned")))
+                        _rowsVersion++;
+                }
+                NotifyChanged();
+                break;
+            case "setRowFilter":
+                lock (_stateLock)
+                {
+                    var active = Args.Bool(args, "active");
+                    if (_rowFilterActive != active)
+                    {
+                        _rowFilterActive = active;
+                        _rowsVersion++;
+                    }
+                }
+                NotifyChanged();
                 break;
             case "setView":
                 lock (_stateLock)
@@ -1555,6 +1598,9 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
     /// </summary>
     internal async Task RefreshAsync(CancellationToken ct, bool reloadBranch = false, string? statusMessage = null, bool showLoading = false)
     {
+        // Dopo un'operazione o un Refresh esplicito svn:ignore puo' essere cambiato: le cartelle si riclassificano.
+        if (!_inAutoRefresh)
+            InvalidateIgnoredCache();
         await _refreshGate.WaitAsync(ct);
         try
         {
@@ -3341,16 +3387,15 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
         if (info is { Type: "text", Base: { } b, Mine: { } m, Theirs: { } t })
         {
             var initialHash = ComputeFileHash(entry.FullPath);
-            var hadMarkers = ConflictMarkers.HasMarkers(entry.FullPath);
             if (await _host.OpenMergeAsync(t, m, b, entry.FullPath,
                 Loc.T("In arrivo (Theirs)"), Loc.T("Tuo (Mine)"), Loc.T("Base"), Path.GetFileName(entry.FullPath)))
             {
                 if (initialHash is not null)
                 {
                     lock (_stateLock)
-                        _activeMerges[entry.FullPath] = (initialHash, hadMarkers);
+                        _activeMerges[entry.FullPath] = initialHash;
                 }
-                SetStatus(Loc.T("Editor di merge aperto in questa istanza di VS: accetta e salva il risultato per completare."));
+                SetStatus(Loc.T("Editor di merge aperto in questa istanza di VS: accetta e salva il risultato, poi premi \"Segna come risolto\"."));
                 return;
             }
 
@@ -3366,54 +3411,43 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
         SetStatus(Loc.T("Nessun editor di merge a 3 vie disponibile: aperto il file con i marcatori di conflitto (<<<<<<<, =======, >>>>>>>). Sistemalo e rimuovili, poi premi \"Segna come risolto\"."));
     }
 
-    /// <summary>L'editor di merge in-process di Visual Studio per <paramref name="filePath"/> è stato chiuso: verifica se segnare il conflitto come risolto.</summary>
-    internal async Task OnMergeEditorClosedAsync(string filePath, int state, CancellationToken ct)
+    /// <summary>
+    /// L'editor di merge in-process di Visual Studio per <paramref name="filePath"/> e' stato chiuso: dice cosa resta da fare.
+    /// Non esegue mai <c>svn resolve</c> da solo: lo stato della finestra (<paramref name="state"/>) non e' documentato da
+    /// Microsoft e un salvataggio a meta' merge sembrerebbe un merge completo. Il conflitto si chiude solo con "Segna come risolto".
+    /// </summary>
+    internal Task OnMergeEditorClosedAsync(string filePath, int state, CancellationToken ct)
     {
+        _ = state; // solo per il log dell'host; vedi sopra
         if (string.IsNullOrWhiteSpace(filePath))
-            return;
+            return Task.CompletedTask;
 
-        (byte[] Hash, bool HadMarkers) before;
+        byte[]? before;
         ChangeEntry? entry;
         lock (_stateLock)
         {
-            if (!_activeMerges.TryGetValue(filePath, out before))
-                return;
-            _activeMerges.Remove(filePath);
+            if (!_activeMerges.Remove(filePath, out before))
+                return Task.CompletedTask;
             entry = _entries.FirstOrDefault(e => string.Equals(e.FullPath, filePath, StringComparison.OrdinalIgnoreCase));
         }
 
         if (entry is null || entry.Status != SvnStatusKind.Conflicted || !File.Exists(filePath))
-            return;
+            return Task.CompletedTask;
 
         var afterHash = ComputeFileHash(filePath);
-        if (afterHash is null)
-            return;
+        if (afterHash is null || before.AsSpan().SequenceEqual(afterHash))
+        {
+            SetStatus(Loc.T("Editor di merge chiuso senza salvare: \"{0}\" è ancora in conflitto.", entry.RelativePath));
+            return Task.CompletedTask;
+        }
 
-        var changed = !before.Hash.AsSpan().SequenceEqual(afterHash);
         if (ConflictMarkers.HasMarkers(filePath))
-        {
             SetStatus(Loc.T("Nel file rimangono marcatori di conflitto (<<<<<<<, =======, >>>>>>>): rimuovili e premi \"Segna come risolto\"."));
-            return;
-        }
-
-        if (!changed && state == 0)
-            return;
-
-        if (SameAsBase(entry))
-        {
+        else if (SameAsBase(entry))
             SetStatus(Loc.T("\"{0}\" è identico alla versione di partenza: controlla le modifiche prima di premere \"Segna come risolto\".", entry.RelativePath));
-            return;
-        }
-
-        try
-        {
-            await _svnService.ResolveAsync(entry.FullPath, SvnConflictChoice.Working, ct);
-            await RefreshAsync(ct, reloadBranch: false, Loc.T("Conflitto risolto: {0}", entry.RelativePath));
-        }
-        catch (Exception ex) when (!ct.IsCancellationRequested)
-        {
-            SetStatus(Loc.T("Errore resolve: {0}", ex.Message));
-        }
+        else
+            SetStatus(Loc.T("Merge salvato in \"{0}\": controlla il risultato e premi \"Segna come risolto\".", entry.RelativePath));
+        return Task.CompletedTask;
     }
 
     private static byte[]? ComputeFileHash(string path)
@@ -3732,7 +3766,7 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             watcher.Deleted += OnFsChanged;
             watcher.Renamed += OnFsChanged;
             // Overflow del buffer (molti file cambiati insieme): gli eventi persi si recuperano con un refresh completo.
-            watcher.Error += (_, _) => _debouncer.Request();
+            watcher.Error += (_, _) => RequestFullRefresh();
             watcher.EnableRaisingEvents = true;
             _watcher = watcher;
         }
@@ -3740,11 +3774,10 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
 
     private void OnFsChanged(object sender, FileSystemEventArgs e)
     {
-        // bin/ obj/ .vs/ .svn/ cambiano di continuo senza toccare lo stato SVN.
-        if (WorkingCopyPathFilter.IsNoise(_watchedRoot, e.FullPath))
-            return;
-
-        _debouncer.Request();
+        // Solo .svn e .svn-assist si scartano subito; il resto lo decide svn:ignore (ChangesStore.Ignored.cs).
+        if (e is RenamedEventArgs r)
+            OnFsPath(r.OldFullPath);
+        OnFsPath(e.FullPath);
     }
 
     // ── Utilita' ─────────────────────────────────────────────────────

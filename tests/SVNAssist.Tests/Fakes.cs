@@ -96,6 +96,18 @@ internal sealed class FakeSvnService : ISvnService
     public int LogRequestedLimit { get; private set; }
     public int LogEntryCount { get; set; } = 500;
 
+    /// <summary>Percorsi completi che il fake considera ignorati da svn (svn:ignore dell'utente).</summary>
+    public HashSet<string> IgnoredPaths { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public List<IReadOnlyList<string>> IgnoredRequests { get; } = [];
+    public bool IgnoredThrows { get; set; }
+    public Task<IReadOnlyCollection<string>> GetIgnoredPathsAsync(string workingCopyPath, IReadOnlyList<string> paths, CancellationToken ct)
+    {
+        IgnoredRequests.Add(paths.ToList());
+        if (IgnoredThrows)
+            throw new InvalidOperationException("svn status --no-ignore fallito");
+        return Task.FromResult<IReadOnlyCollection<string>>(paths.Where(IgnoredPaths.Contains).ToList());
+    }
+
     public List<SvnRemoteLock> RemoteLocks { get; } = [];
     public List<IReadOnlyList<string>> RemoteLockRequests { get; } = [];
     public Task<IReadOnlyList<SvnRemoteLock>> GetRemoteLocksAsync(string workingCopyPath, CancellationToken ct) => Task.FromResult<IReadOnlyList<SvnRemoteLock>>(RemoteLocks.ToList());

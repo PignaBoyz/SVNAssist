@@ -47,6 +47,17 @@ public class PrerequisitesTests
     }
 
     [Fact]
+    public async Task Gemini_MaiInAuto_AncheConChiave_SoloSeScelto()
+    {
+        var auto = await Service(new StubSettings { GeminiKey = "AIza" }).CheckAsync(CancellationToken.None);
+        var gemini = await Service(new StubSettings { Provider = "gemini", GeminiKey = "AIza" }).CheckAsync(CancellationToken.None);
+
+        Assert.DoesNotContain("Gemini", auto.UsableProviders);
+        Assert.DoesNotContain(auto.Items, i => i.Id == PrerequisiteIds.GeminiKey);
+        Assert.Equal(["Gemini"], gemini.UsableProviders);
+    }
+
+    [Fact]
     public async Task ProviderImpostato_LimitaQuelliUtilizzabili()
     {
         var probes = new PrerequisiteProbes { FindClaude = () => "claude", ReadEnvironment = _ => "sk-ant" };

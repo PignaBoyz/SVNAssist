@@ -29,7 +29,7 @@
     "Cancella la chiave": "Clear the key",
     "Commit message AI": "AI commit messages",
     "Provider AI per i commit message": "AI provider for commit messages",
-    "Automatico prova Copilot, Claude Code, Claude API, OpenAI-compatibile e Gemini (se impostata una chiave) in quest'ordine.": "Automatic tries Copilot, Claude Code, Claude API, OpenAI-compatible, and Gemini (if a key is set) in this order.",
+    "Automatico prova Copilot, Claude Code, Claude API e OpenAI-compatibile in quest'ordine. Gemini solo se scelto qui.": "Automatic tries Copilot, Claude Code, Claude API, and OpenAI-compatible in this order. Gemini only if chosen here.",
     "API key Gemini (solo Gemini)": "Gemini API key (Gemini only)",
     "Vuota = variabile d'ambiente GEMINI_API_KEY o GOOGLE_API_KEY. Salvata cifrata (DPAPI, solo per il tuo utente Windows).": "Empty = GEMINI_API_KEY or GOOGLE_API_KEY environment variable. Stored encrypted (DPAPI, for your Windows user only).",
     "Modello Gemini (solo Gemini)": "Gemini model (Gemini only)",

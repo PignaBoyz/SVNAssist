@@ -122,7 +122,7 @@ namespace SVNAssist.Host
             { "aiProvider", "claudeModel", "anthropicApiKey", "copilotModel", "aiEndpoint", "aiApiKey", "aiModel", "geminiApiKey", "geminiModel", "defaultLanguage", "aiShowUsage", "workingCopyPath", "repoLayout", "headCheckMinutes", "lightweightMode", "windowTheme", "uiLanguage" };
 
         [LCategory("Commit message AI"), LDisplayName("Provider AI per i commit message"), DefaultValue("auto"), TypeConverter(typeof(AiProviderConverter))]
-        [LDescription("Automatico prova Copilot, Claude Code, Claude API, OpenAI-compatibile e Gemini (se impostata una chiave) in quest'ordine.")]
+        [LDescription("Automatico prova Copilot, Claude Code, Claude API e OpenAI-compatibile in quest'ordine. Gemini solo se scelto qui.")]
         public string AiProvider { get; set; } = "auto";
 
         [LCategory("Commit message AI"), LDisplayName("Modello Claude (solo Claude Code e Claude API)"), DefaultValue("claude-sonnet-5-5")]

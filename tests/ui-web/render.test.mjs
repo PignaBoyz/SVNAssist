@@ -55,3 +55,10 @@ test('contatore Commit (n) e tastiera: Canc/Spazio/Invio inviano i comandi giust
   for (const k of ["'Delete'", "' '", "'Enter'", "'ArrowLeft'", "'ArrowRight'", "'ArrowDown'", "'ArrowUp'"]) assert.ok(js.includes(`case ${k}`), k);
   assert.match(js, /op: 'deleteFile'/);
 });
+test('albero: righe tagliate dal backend (hidden) -> Mostra tutti con il numero giusto, niente pulsante con il filtro', () => {
+  const s = structuredClone(st.sections); s[1].hidden = 1234;
+  const h = U.treeHTML(s, null);
+  assert.match(h, /data-more-sec="changes"[^>]*>[^<]*1234/);
+  assert.equal((h.match(/data-more-sec=/g) || []).length, 1);
+  assert.doesNotMatch(U.treeHTML(s, null, 'Order'), /data-more-sec/);
+});

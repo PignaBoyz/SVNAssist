@@ -1354,4 +1354,31 @@ public class ChangesStoreTests
         snap = ((ChangesState)f.Store.GetSnapshot()).Commit;
         Assert.Equal("Auto", snap.AiProviderLabel);
     }
+
+    [Fact]
+    public async Task RigheOltre300_NonVannoAllaUi_FinoAMostraTuttiOFiltro()
+    {
+        using var f = new Fixture();
+        for (var i = 0; i < 350; i++)
+            f.With(($"f{i:D3}.txt", SvnStatusKind.Unversioned));
+        await f.RefreshOnly();
+        await f.Cmd("setView", new { view = "list" });
+
+        var sec = f.Section("unversioned");
+        Assert.Equal(350, sec.Count);
+        Assert.Equal(ChangesStore.RowCap, sec.Rows.Count);
+        Assert.Equal(50, sec.Hidden);
+
+        // Filtro attivo nella UI: arrivano tutte, cosi' la ricerca le trova.
+        await f.Cmd("setRowFilter", new { active = true });
+        Assert.Equal(350, f.Section("unversioned").Rows.Count);
+        Assert.Null(f.Section("unversioned").Hidden);
+        await f.Cmd("setRowFilter", new { active = false });
+        Assert.Equal(ChangesStore.RowCap, f.Section("unversioned").Rows.Count);
+
+        // Mostra tutti sulla sezione: restano tutte.
+        await f.Cmd("showAllRows", new { sec = "unversioned" });
+        Assert.Equal(350, f.Section("unversioned").Rows.Count);
+        Assert.Null(f.Section("unversioned").Hidden);
+    }
 }

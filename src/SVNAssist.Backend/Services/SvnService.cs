@@ -121,6 +121,33 @@ public class SvnService : ISvnService
         return all;
     }
 
+    /// <inheritdoc />
+    public async Task<IReadOnlyCollection<string>> GetIgnoredPathsAsync(string workingCopyPath, IReadOnlyList<string> paths, CancellationToken ct)
+    {
+        var ignored = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var targets = paths.Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.OrdinalIgnoreCase).Select(p => Peg(SafeTarget(p))).ToList();
+        if (targets.Count == 0)
+            return ignored;
+        foreach (var chunk in ChunkByCommandLine(["status", "--no-ignore", "--depth", "empty", "--xml"], targets))
+        {
+            var r = await RunSvnOnceAsync(chunk, workingCopyPath, ct, true, null);
+            if (r.ExitCode != 0)
+                throw new InvalidOperationException(BuildErrorMessage("status --no-ignore", r.ExitCode, r.StandardError));
+            foreach (var path in ParseIgnoredPaths(r.StandardOutput))
+                ignored.Add(Path.IsPathRooted(path) ? Path.GetFullPath(path) : Path.GetFullPath(Path.Combine(workingCopyPath, path)));
+        }
+
+        return ignored;
+    }
+
+    /// <summary>Percorsi con <c>wc-status item="ignored"</c> nell'XML di <c>svn status --no-ignore</c>.</summary>
+    internal static IReadOnlyList<string> ParseIgnoredPaths(string xml) =>
+        XDocument.Parse(xml).Descendants("entry")
+            .Where(e => e.Element("wc-status")?.Attribute("item")?.Value == "ignored")
+            .Select(e => e.Attribute("path")?.Value ?? string.Empty)
+            .Where(p => p.Length > 0)
+            .ToList();
+
     /// <summary>Lock di altri: <c>repos-status/lock</c> senza <c>lock</c> in <c>wc-status</c> (quello e' nostro).</summary>
     internal static IReadOnlyList<SvnRemoteLock> ParseRemoteLocks(string xml) =>
         XDocument.Parse(xml).Descendants("entry")

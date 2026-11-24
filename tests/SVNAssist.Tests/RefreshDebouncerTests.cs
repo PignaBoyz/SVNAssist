@@ -84,23 +84,23 @@ public class RefreshDebouncerTests
     [InlineData(@"C:\wc\src\a.cs", false)]
     [InlineData(@"C:\wc\.svn\wc.db", true)]
     [InlineData(@"C:\wc\.svn", true)]
-    [InlineData(@"C:\wc\src\bin\Debug\x.dll", true)]
-    [InlineData(@"C:\wc\proj\obj\project.assets.json", true)]
-    [InlineData(@"C:\wc\.vs\slnx.sqlite", true)]
-    [InlineData(@"C:\wc\.git\HEAD", true)]
-    [InlineData(@"C:\wc\packages\Foo\lib\a.dll", true)]
-    [InlineData(@"C:\wc\artifacts\out\app.exe", true)]
-    [InlineData(@"C:\wc\src\~$doc.docx", true)]
-    [InlineData(@"C:\wc\src\app.log", true)]
-    [InlineData(@"C:\wc\src\ReleaseNotes.cs", false)]
-    [InlineData(@"C:\wc\src\binary.txt", false)]
-    [InlineData(@"C:\wc\objects\a.cs", false)]
-    public void IsNoise_IgnoraBinObjVsESvn(string path, bool noise)
+    [InlineData(@"C:\wc\.svn-assist\shelves\x.patch", true)]
+    // 0.7.1: nessuna cartella o estensione ignorata d'ufficio, decide svn:ignore dell'utente.
+    [InlineData(@"C:\wc\src\bin\Debug\x.dll", false)]
+    [InlineData(@"C:\wc\proj\obj\project.assets.json", false)]
+    [InlineData(@"C:\wc\.vs\slnx.sqlite", false)]
+    [InlineData(@"C:\wc\packages\Foo\lib\a.dll", false)]
+    [InlineData(@"C:\wc\src\x64\Kernel.cpp", false)]
+    [InlineData(@"C:\wc\Logger\Debug\Trace.cpp", false)]
+    [InlineData(@"C:\wc\Release\Notes.txt", false)]
+    [InlineData(@"C:\wc\src\app.log", false)]
+    [InlineData(@"C:\wc\src\~$doc.docx", false)]
+    public void IsNoise_SoloSvnESvnAssist(string path, bool noise)
         => Assert.Equal(noise, WorkingCopyPathFilter.IsNoise(@"C:\wc", path));
 
     [Fact]
     public void IsNoise_ContaSoloISegmentiSottoLaRoot()
-        => Assert.False(WorkingCopyPathFilter.IsNoise(@"C:\bin\wc", @"C:\bin\wc\src\a.cs"));
+        => Assert.False(WorkingCopyPathFilter.IsNoise(@"C:\.svn-assist\wc", @"C:\.svn-assist\wc\src\a.cs"));
 
     [Fact]
     public async Task SetPaused_DiferisceIlRefreshFinoAllaRipresa()

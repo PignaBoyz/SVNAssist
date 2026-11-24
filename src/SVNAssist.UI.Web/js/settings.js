@@ -46,7 +46,7 @@
     const keep = document.activeElement && document.activeElement.dataset && (document.activeElement.dataset.k || document.activeElement.dataset.secret);
     const html =
       card(t('Commit message AI'),
-        sel('aiProvider', t('Provider AI per i commit message'), t("Automatico prova Copilot, Claude Code, Claude API, OpenAI-compatibile e Gemini (se impostata una chiave) in quest'ordine.")) +
+        sel('aiProvider', t('Provider AI per i commit message'), t("Automatico prova Copilot, Claude Code, Claude API e OpenAI-compatibile in quest'ordine. Gemini solo se scelto qui.")) +
         sel('defaultLanguage', t('Lingua dei commit message')) +
         chk('aiShowUsage', t('Mostra modello e costo nel messaggio generato'), t('Dopo "Genera con AI" la riga di stato scrive modello, token e costo o crediti AI, solo se il provider li dichiara. Non finisce nel messaggio di commit.')) +
         chk('aiExplainIncoming', t('Spiega le revisioni in arrivo prima di SVN Update'), t('Elenca le revisioni in arrivo e, a richiesta, chiede all\'AI cosa è entrato. All\'AI vanno messaggi di log e modifiche (diff); dei file sensibili solo il nome.'))) +

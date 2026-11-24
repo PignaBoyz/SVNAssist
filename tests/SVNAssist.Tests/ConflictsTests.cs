@@ -817,7 +817,7 @@ public class ConflictsTests
     }
 
     [Fact]
-    public async Task MergeInProcess_RisolveQuandoChiusoSenzaMarcatori_EBloccaSeUgualeABaseOMarcatoriRimasti()
+    public async Task MergeInProcess_AllaChiusuraNonRisolveMai_DiceCosaFare()
     {
         var dir = Path.Combine(Path.GetTempPath(), "SVNAssist_InProcMerge_" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(dir);
@@ -858,11 +858,18 @@ public class ConflictsTests
             await store.OnMergeEditorClosedAsync(merged, state: 1, Ct);
             Assert.Empty(svn.Resolved);
 
-            // Riapertura + salvataggio valido -> auto-resolve working
+            // Riapertura + salvataggio valido -> NON risolve da solo (anche con uno stato qualsiasi): chiede "Segna come risolto"
             await store.DispatchAsync("conflictOp", JsonSerializer.SerializeToElement(new { op = "edit", key = "changes:x.txt" }), Ct);
             File.WriteAllText(merged, "a\nLOCALE+SERVER\nc\n");
             await store.OnMergeEditorClosedAsync(merged, state: 1, Ct);
-            Assert.Equal([(merged, SvnConflictChoice.Working)], svn.Resolved);
+            Assert.Empty(svn.Resolved);
+            Assert.Contains("Segna come risolto", ((ChangesState)store.GetSnapshot()).Status.Msg);
+
+            // Riapertura + chiusura senza salvare -> resta in conflitto
+            await store.DispatchAsync("conflictOp", JsonSerializer.SerializeToElement(new { op = "edit", key = "changes:x.txt" }), Ct);
+            await store.OnMergeEditorClosedAsync(merged, state: 0, Ct);
+            Assert.Empty(svn.Resolved);
+            Assert.Contains("ancora in conflitto", ((ChangesState)store.GetSnapshot()).Status.Msg);
         }
         finally
         {

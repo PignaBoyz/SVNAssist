@@ -1622,6 +1622,64 @@
       }
     },
     {
+      "title": "showAllRows",
+      "description": "Mostra tutte le righe di una sezione oltre le prime 300 (pulsante Mostra tutti).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "showAllRows"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sec"
+          ],
+          "properties": {
+            "sec": {
+              "enum": [
+                "staged",
+                "changes",
+                "unversioned"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "setRowFilter",
+      "description": "Il filtro dei file nella UI e' attivo (true) o vuoto (false): con il filtro attivo arrivano tutte le righe, cosi' la ricerca trova anche quelle oltre le prime 300.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "setRowFilter"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "active"
+          ],
+          "properties": {
+            "active": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    {
       "title": "setView",
       "description": "Albero per cartelle o elenco piatto.",
       "type": "object",

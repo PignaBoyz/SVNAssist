@@ -99,6 +99,19 @@ public class SnapshotSchemaTests
     }
 
     [Fact]
+    public async Task SnapshotChanges_ConRigheTagliate_RispettaLoSchema()
+    {
+        var svn = new FakeSvnService();
+        for (var i = 0; i < ChangesStore.RowCap + 5; i++)
+            svn.Statuses.Add(new SvnFileStatus($"n{i}.txt", SvnStatusKind.Unversioned));
+        var store = NewStore(svn);
+        await store.RefreshAsync(Ct);
+        var json = UiJson.Serialize(store.GetSnapshot());
+        Assert.Contains("\"hidden\":", json);
+        AssertValid("changes-state", json);
+    }
+
+    [Fact]
     public void SnapshotChanges_StatoIniziale_RispettaLoSchema()
         => AssertValid("changes-state", UiJson.Serialize(new ChangesStore(
             new StubSettings(), new FakeSvnService(), new FakeAiFactory(), new NoopAiPrompt(), new FakeDialogs(), new FakeHost(),

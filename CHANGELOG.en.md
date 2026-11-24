@@ -2,6 +2,23 @@
 
 List of SVNAssist changes by version, from the most recent to the oldest. Button, menu and window names are those of the interface, in English.
 
+## 0.7.1 (2026-11-24)
+
+Contents: Gemini never in Automatic, automatic refresh that follows only svn:ignore, merge editor that no longer closes the conflict on its own, rows beyond the first 300 prepared only on request.
+
+Installation: replaces 0.7.0.
+
+### Changes
+
+- **Gemini only when chosen.** Before: with **AI provider for commit messages** set to `Automatic`, Gemini joined the sequence when it found a Gemini key or the `GEMINI_API_KEY` / `GOOGLE_API_KEY` variables. Now: in `Automatic` Gemini is never used; it is used only when chosen as the provider. The 0.6.0 rule is back.
+- **Rows beyond the first 300 prepared only on request.** With more than 300 rows in a section of **SVN Changes**, SVNAssist prepares only the first 300 until you press **Show all (N hidden)…** or type in the **Filter files…** field; the filter always searches all files.
+
+### Fixes
+
+- **Changes in the Debug, Release, x64, x86, packages and artifacts folders.** Before: changes to versioned files in these folders (and to `.log`, `.user`, `.tmp`, `.cache` files) did not refresh **SVN Changes** automatically. Now: they are detected. The automatic refresh skips only the folders svn ignores (`svn:ignore`, `svn:global-ignores`, `global-ignores` in the svn configuration) and the `.svn` folder.
+  - `bin`, `obj` and `.vs` are no longer skipped by default either: if they are not in `svn:ignore`, a build outside Visual Studio refreshes **SVN Changes**. To avoid it, add them to `svn:ignore`.
+- **Merge editor: the conflict is no longer closed on its own.** Before: closing the Visual Studio merge editor after saving a file without conflict markers marked the conflict as resolved, even with a half-done merge. Now: a message says what is left to do and the conflict is closed only with **Mark as resolved**.
+
 ## 0.7.0 (2026-11-23)
 
 Contents: Lightweight mode for low-spec PCs and automatic pause during builds, 300-row initial cap per section, Test key button in Options, active AI provider label, clickable working copy path, Merge button in the Changes header, Resolve as menu on conflicts, inline actions on Shelved rows, per-instance VS merge editor.

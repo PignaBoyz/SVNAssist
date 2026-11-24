@@ -35,8 +35,10 @@
     if (!open) return h;
     const rows = filterRows(s.rows, q);
     if (!rows.length) return h + `<div class="tr empty" role="none">${q ? t('Nessun risultato.') : s.id === 'staged' ? t('Nessun file da committare. Usa + sulle modifiche per aggiungerli qui.') : t('Nessun elemento.')}</div>`;
+    // Il backend manda al massimo 300 righe per sezione (s.hidden = quante ne restano fuori); il taglio qui resta per stati senza hidden.
     const truncated = !q && rows.length > ROW_CAP && !(expandedCaps && expandedCaps.has(s.id));
     const shown = truncated ? rows.slice(0, ROW_CAP) : rows;
+    const hiddenN = truncated ? rows.length - ROW_CAP : (!q && s.hidden > 0 ? s.hidden : 0);
     for (const r of shown) {
       const lvl = r.depth + 2, isF = r.kind === 'folder', st = r.status;
       h += `<div class="tr ${isF ? 'fol' : 'fil'}" role="treeitem" aria-level="${lvl}" ${isF ? `aria-expanded="${!!r.expanded}"` : ''} aria-selected="${sel && sel.size ? sel.has(r.key) : cursor === r.key}" aria-checked="${s.id === 'staged'}" data-key="${U.esc(r.key)}" data-kind="${r.kind}" data-sec="${s.id}" tabindex="${cursor === r.key ? 0 : -1}" title="${U.esc(r.tooltip || r.name)}">` +
@@ -45,8 +47,8 @@
         `<span class="nm">${U.esc(r.name)}</span>${r.lockedBy ? `<span title="${U.esc(r.lockedBy)}">${U.icon('lock', 'lk')}</span>` : r.locked && st !== 'K' ? U.icon('lock', 'lk') : ''}${r.detail ? `<span class="dt">${U.esc(r.detail)}</span>` : ''}${isF ? `<span class="cnt">${r.count}</span>` : ''}<span class="fill"></span>` +
         `<span class="acts">${rowActs(s.id, r)}</span>${st ? `<span class="st ${U.stClass(st)}" title="${U.esc(r.statusText || U.statusName(st))}" aria-label="${U.esc(r.statusText || U.statusName(st))}">${U.esc(st)}</span>` : ''}</div>`;
     }
-    if (truncated)
-      h += `<div class="tr more" role="none"><button type="button" class="btn sm ghost" data-more-sec="${U.esc(s.id)}">${U.esc(t('Mostra tutti ({0} nascosti)…', rows.length - ROW_CAP))}</button></div>`;
+    if (hiddenN)
+      h += `<div class="tr more" role="none"><button type="button" class="btn sm ghost" data-more-sec="${U.esc(s.id)}">${U.esc(t('Mostra tutti ({0} nascosti)…', hiddenN))}</button></div>`;
     return h;
   }
   U.treeHTML = (sections, cursor, q, sel, expandedCaps) => sections.map(s => sectionHTML(s, cursor, q, sel, expandedCaps)).join('');

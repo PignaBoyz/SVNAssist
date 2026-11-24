@@ -47,7 +47,7 @@ internal static class AiProviderGuide
         "gemini" => Loc.T("Gemini: serve una API key di Google AI Studio; l'uso ha un livello gratuito limitato, oltre è a consumo."),
         "openai" => Loc.T("OpenAI-compatibile: con GitHub Models (default) basta il login GitHub (gh auth login) o un token, gratis entro i limiti; " +
                           "con altri endpoint serve la loro API key (a pagamento, tranne Ollama in locale)."),
-        _ => Loc.T("Automatico: prova in ordine Copilot, Claude Code, Claude API, OpenAI-compatibile e Gemini; ne basta uno configurato."),
+        _ => Loc.T("Automatico: prova in ordine Copilot, Claude Code, Claude API, OpenAI-compatibile; ne basta uno configurato. Gemini solo se scelto."),
     };
 
     /// <summary>Pagina utile per configurare il provider scelto.</summary>
@@ -293,7 +293,7 @@ internal sealed class PrerequisitesService
         var openAiKeyOk = !string.IsNullOrWhiteSpace(apiKey) || (AiServiceFactory.IsGitHubModelsEndpoint(endpoint) && token is not null);
         if (Use("openai") && openAiKeyOk)
             usable.Add(Loc.T("OpenAI-compatibile"));
-        if (Use("gemini") && geminiKeySource is not null)
+        if (provider == "gemini" && geminiKeySource is not null) // mai in "auto"
             usable.Add("Gemini");
 
         var items = new List<PrerequisiteItem>
@@ -354,10 +354,12 @@ internal sealed class PrerequisitesService
                       "oppure imposta la variabile d'ambiente GEMINI_API_KEY e riavvia Visual Studio.")),
         };
 
-        // Con un provider fisso mostra solo i prerequisiti AI che lo riguardano (in auto, tutti).
+        // Con un provider fisso mostra solo i prerequisiti AI che lo riguardano (in auto, tutti tranne Gemini, che in auto non si usa mai).
         var relevant = RelevantAiItems(provider);
         if (relevant is not null)
             items.RemoveAll(i => i.Group == GroupAi && !relevant.Contains(i.Id));
+        else
+            items.RemoveAll(i => i.Id == PrerequisiteIds.GeminiKey);
 
         return new PrerequisitesSnapshot(items, provider, usable, AiProviderGuide.Requirements(provider));
     }

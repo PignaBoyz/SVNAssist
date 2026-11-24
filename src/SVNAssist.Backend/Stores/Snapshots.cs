@@ -46,7 +46,9 @@ internal sealed record RowDto(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Locked = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? LockedBy = null);
 
-internal sealed record SectionDto(string Id, string Title, int Count, bool Expanded, IReadOnlyList<RowDto> Rows);
+/// <param name="Hidden">Righe non inviate alla UI (oltre <c>ChangesStore.RowCap</c>): la UI mostra "Mostra tutti (N nascosti)".</param>
+internal sealed record SectionDto(string Id, string Title, int Count, bool Expanded, IReadOnlyList<RowDto> Rows,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? Hidden = null);
 
 /// <summary>Pulsante d'azione accanto al messaggio di stato (es. "Esegui Cleanup" quando la working copy è bloccata).</summary>
 internal sealed record StatusActionDto(string Label, string Cmd);

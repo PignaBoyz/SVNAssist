@@ -654,7 +654,7 @@
         render(); const b = root.querySelector('[' + k + ']'); if (b) b.focus();   // il riquadro e' stato ridisegnato: il focus resta sul pulsante
       });
       root.addEventListener('click', e => { if (e.target.closest('[data-shl-toggle]')) { shlOpen = !shlOpen; render(); const b = root.querySelector('[data-shl-toggle]'); if (b) b.focus(); } });
-      root.addEventListener('click', e => { const m = e.target.closest('[data-more-sec]'); if (m) { expandedCaps.add(m.dataset.moreSec); render(); } });
+      root.addEventListener('click', e => { const m = e.target.closest('[data-more-sec]'); if (m) { expandedCaps.add(m.dataset.moreSec); U.bridge.send('showAllRows', { sec: m.dataset.moreSec }); render(); } });
       const cflMenu = (li, x, y) => U.menu.open(x, y, conflictMenu(li.dataset.cfkey, (st.conflicts || []).find(f => f.key === li.dataset.cfkey)?.kind || 'text'), li);
       root.addEventListener('contextmenu', e => { const li = e.target.closest('li.cf[data-cfkey]'); if (li) { e.preventDefault(); cflMenu(li, e.clientX, e.clientY); } });
       root.addEventListener('keydown', e => {   // tasto Menu / Maiusc+F10 sul blocco di un conflitto
@@ -736,8 +736,11 @@
         const r = b.getBoundingClientRect(); U.menu.open(Math.max(0, r.right - 220), r.bottom + 2, b.dataset.menu === 'ai' ? aiMenu() : b.dataset.menu === 'recent' ? recentMenu() : moreMenu(), b);
       });
       const fl = root.querySelector('#flt');
-      fl.addEventListener('input', () => { filter = fl.value; render(); });
-      fl.addEventListener('keydown', e => { if (e.key === 'Escape' && fl.value) { e.preventDefault(); fl.value = filter = ''; render(); } else if (e.key === 'ArrowDown') { e.preventDefault(); const r = root.querySelector('#list .tr[tabindex="0"]'); if (r) r.focus(); } });
+      // Filtro attivo: il backend manda tutte le righe (non solo le prime 300), cosi' la ricerca le trova tutte.
+      let fltActive = false;
+      const syncFlt = () => { const a = !!filter.trim(); if (a !== fltActive) { fltActive = a; U.bridge.send('setRowFilter', { active: a }); } };
+      fl.addEventListener('input', () => { filter = fl.value; syncFlt(); render(); });
+      fl.addEventListener('keydown', e => { if (e.key === 'Escape' && fl.value) { e.preventDefault(); fl.value = filter = ''; syncFlt(); render(); } else if (e.key === 'ArrowDown') { e.preventDefault(); const r = root.querySelector('#list .tr[tabindex="0"]'); if (r) r.focus(); } });
       U.bindTree(root.querySelector('#list'), { rowMenu });
     },
     update(root, state) { st = state; render(); },

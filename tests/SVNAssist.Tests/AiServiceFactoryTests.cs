@@ -212,13 +212,11 @@ public class AiServiceFactoryTests
         => Assert.Equal("claude-sonnet-5-5", SettingDefinitions.DefaultClaudeModel);
 
     [Fact]
-    public async Task CreateAsync_GeminiConChiaveDedicata_FunzionaSiaInAutoCheEsplicito_EDefaultFlash()
+    public async Task CreateAsync_GeminiConChiaveDedicata_SoloEsplicito_MaiInAuto_EDefaultFlash()
     {
-        var autoAi = Assert.IsType<AiService>(await Create(
+        Assert.Null(await Create(
             new FakeSettings { Provider = "auto", GeminiKey = "AIza-dedicated", Endpoint = "" },
             new FakeTokenResolver(null)).CreateAsync(CancellationToken.None));
-        Assert.True(autoAi.IsGemini);
-        Assert.Equal("gemini-2.5-flash", autoAi.LastModelUsed);
 
         var explicitAi = Assert.IsType<AiService>(await Create(
             new FakeSettings { Provider = "gemini", GeminiKey = "AIza-dedicated", GeminiModel = "" },
@@ -230,14 +228,15 @@ public class AiServiceFactoryTests
     [Theory]
     [InlineData("GEMINI_API_KEY")]
     [InlineData("GOOGLE_API_KEY")]
-    public async Task CreateAsync_GeminiLeggeVariabiliAmbiente(string envName)
+    public async Task CreateAsync_GeminiLeggeVariabiliAmbiente_SoloSeScelto(string envName)
     {
-        var factory = new AiServiceFactory(new FakeSettings { Provider = "auto", Endpoint = "" }, new FakeTokenResolver(null),
+        AiServiceFactory Factory(string provider) => new(new FakeSettings { Provider = provider, Endpoint = "" }, new FakeTokenResolver(null),
             processRunner: null, claudeLocator: () => null,
             environmentReader: name => name == envName ? "AIza-env" : null,
             copilotRuntimeInstalled: () => false);
 
-        var ai = Assert.IsType<AiService>(await factory.CreateAsync(CancellationToken.None));
+        Assert.Null(await Factory("auto").CreateAsync(CancellationToken.None));
+        var ai = Assert.IsType<AiService>(await Factory("gemini").CreateAsync(CancellationToken.None));
         Assert.True(ai.IsGemini);
     }
 }

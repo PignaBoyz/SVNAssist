@@ -274,6 +274,11 @@
             "items": {
               "$ref": "#/$defs/row"
             }
+          },
+          "hidden": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Righe non inviate (oltre 300 per sezione): la UI mostra 'Mostra tutti (N nascosti)' e manda showAllRows. Assente se non ce ne sono."
           }
         }
       }

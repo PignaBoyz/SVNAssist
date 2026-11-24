@@ -2,6 +2,23 @@
 
 Elenco delle modifiche di SVNAssist per versione, dalla più recente alla più vecchia. I nomi di pulsanti, menu e finestre sono quelli dell'interfaccia, in inglese.
 
+## 0.7.1 (2026-11-24)
+
+Contenuti: Gemini mai in Automatico, aggiornamento automatico che segue solo svn:ignore, editor di merge che non chiude il conflitto da solo, righe oltre le prime 300 preparate solo a richiesta.
+
+Installazione: sostituisce la 0.7.0.
+
+### Modifiche
+
+- **Gemini solo se scelto.** Prima: con **Provider AI per i commit message** su `Automatico`, Gemini entrava nella sequenza se trovava una chiave Gemini o le variabili `GEMINI_API_KEY` / `GOOGLE_API_KEY`. Ora: in `Automatico` Gemini non viene mai usato; si usa solo scegliendolo come provider. Torna la regola della 0.6.0.
+- **Righe oltre le prime 300 preparate solo a richiesta.** Con più di 300 righe in una sezione di **SVN Changes**, SVNAssist prepara solo le prime 300 finché non premi **Mostra tutti (N nascosti)…** o scrivi nel campo **Filtra i file…**; il filtro cerca sempre fra tutti i file.
+
+### Correzioni
+
+- **Modifiche nelle cartelle Debug, Release, x64, x86, packages e artifacts.** Prima: le modifiche ai file versionati in queste cartelle (e ai file `.log`, `.user`, `.tmp`, `.cache`) non aggiornavano **SVN Changes** in automatico. Ora: vengono rilevate. L'aggiornamento automatico salta solo le cartelle che svn ignora (`svn:ignore`, `svn:global-ignores`, `global-ignores` della configurazione di svn) e la cartella `.svn`.
+  - Anche `bin`, `obj` e `.vs` non sono più saltate d'ufficio: se non sono in `svn:ignore`, una compilazione fuori da Visual Studio aggiorna **SVN Changes**. Per evitarlo aggiungile a `svn:ignore`.
+- **Editor di merge: il conflitto non si chiude più da solo.** Prima: chiudendo l'editor di merge di Visual Studio dopo aver salvato un file senza marcatori di conflitto, il conflitto veniva segnato come risolto, anche con un merge salvato a metà. Ora: un messaggio dice cosa resta da fare e il conflitto si chiude solo con **Segna come risolto**.
+
 ## 0.7.0 (2026-11-23)
 
 Contenuti: Modalità leggera per PC poco potenti e pausa automatica in compilazione, limite iniziale a 300 righe per sezione, Testa chiave in Options, badge provider AI, percorso working copy apribile con click, Merge nell'intestazione di Changes, menu Risolvi come sui conflitti, azioni inline su Shelved, editor di merge isolato per istanza VS.

@@ -225,6 +225,13 @@ public interface ISvnService
     Task<IReadOnlyList<SvnRemoteLock>> GetRemoteLocksAsync(string workingCopyPath, IReadOnlyList<string> paths, CancellationToken ct)
         => GetRemoteLocksAsync(workingCopyPath, ct);
 
+    /// <summary>
+    /// Fra <paramref name="paths"/> (percorsi completi), quelli che svn considera ignorati (<c>svn status --no-ignore --depth empty --xml</c>):
+    /// svn:ignore, svn:global-ignores e global-ignores della configurazione dell'utente. Solo locale, mai interattiva; in caso di errore lancia.
+    /// </summary>
+    Task<IReadOnlyCollection<string>> GetIgnoredPathsAsync(string workingCopyPath, IReadOnlyList<string> paths, CancellationToken ct)
+        => Task.FromResult<IReadOnlyCollection<string>>([]);
+
     /// <summary>Versione di svn (<c>svn --version --quiet</c>); <c>null</c> se non si riesce a leggerla. Le funzioni che richiedono svn &lt; 1.8 si nascondono.</summary>
     Task<Version?> GetSvnVersionAsync(CancellationToken ct);
 
