@@ -76,6 +76,8 @@ public sealed class ChangesStoreIgnoredTests : IDisposable
     [Fact]
     public async Task RichiestaSenzaPercorso_RefreshCompletoSenzaChiedereASvn()
     {
+        Assert.False(await _store.NeedsAutoRefreshAsync(_wc, Ct)); // nulla in attesa: nessun refresh
+        _store.RequestFullRefresh(); // overflow del watcher, salvataggio in VS, rientro del focus
         Assert.True(await _store.NeedsAutoRefreshAsync(_wc, Ct));
         Assert.Empty(_svn.IgnoredRequests);
     }
@@ -108,8 +110,7 @@ public sealed class ChangesStoreIgnoredTests : IDisposable
     {
         _store.OnFsPath(P(".svn", "wc.db"));
         _store.OnFsPath(P(".svn-assist", "shelves", "x.patch"));
-        // nessun percorso in attesa: la richiesta (se ci fosse) sarebbe completa, ma qui non e' partita alcuna richiesta
-        Assert.True(await _store.NeedsAutoRefreshAsync(_wc, Ct));
+        Assert.False(await _store.NeedsAutoRefreshAsync(_wc, Ct));
         Assert.Empty(_svn.IgnoredRequests);
     }
 }

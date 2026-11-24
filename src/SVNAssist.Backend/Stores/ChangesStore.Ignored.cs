@@ -52,7 +52,7 @@ internal sealed partial class ChangesStore
     }
 
     /// <summary>Refresh richiesto senza un percorso preciso (overflow del watcher, salvataggio in VS, rientro del focus).</summary>
-    private void RequestFullRefresh()
+    internal void RequestFullRefresh()
     {
         lock (_fsLock)
             _fsNeedsFull = true;
@@ -71,7 +71,8 @@ internal sealed partial class ChangesStore
 
     /// <summary>
     /// Prende i percorsi raccolti dal watcher e dice se serve <c>svn status</c>: <c>false</c> se stanno tutti sotto cartelle
-    /// ignorate da svn. Senza percorsi (o troppi, o errore di svn) risponde <c>true</c>: meglio un refresh in piu' che uno perso.
+    /// ignorate da svn o se non c'e' nulla di nuovo. Con una richiesta senza percorso, troppi percorsi o un errore di svn risponde <c>true</c>:
+    /// meglio un refresh in piu' che uno perso.
     /// </summary>
     internal async Task<bool> NeedsAutoRefreshAsync(string wc, CancellationToken ct)
     {
@@ -80,7 +81,7 @@ internal sealed partial class ChangesStore
         lock (_fsLock)
         {
             paths = [.. _fsPending];
-            full = _fsNeedsFull || paths.Count == 0;
+            full = _fsNeedsFull;
             _fsPending.Clear();
             _fsNeedsFull = false;
             ResetIgnoredCacheIfStaleLocked(wc);
@@ -88,6 +89,8 @@ internal sealed partial class ChangesStore
 
         if (full)
             return true;
+        if (paths.Count == 0)
+            return false; // nulla di nuovo: gli eventi li ha gia' presi un refresh precedente (o erano tutti sotto cartelle ignorate)
 
         List<string> candidates;
         lock (_fsLock)
