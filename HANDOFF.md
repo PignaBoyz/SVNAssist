@@ -4,6 +4,7 @@
 Vedi `prompt.md` (aggiornato per la 0.3.0).
 
 ## Stato
+- [x] **0.7.2 (2026-11-25)**: Genera con AI legge anche `%USERPROFILE%\copilot-instructions.md` (file personale di VS 2026, usato anche dai commit di Git), dopo `~/.copilot/copilot-instructions.md`; stesso testo = una volta sola (`CommitInstructions.cs`, 3 test in `AiBugFixTests`). Richiesta utente: un solo file nel profilo per SVNAssist e Git di VS.
 - [x] **0.7.1 (2026-11-24)**: correzioni dopo l'audit della 0.7.0, decise dall'utente.
   - **Watcher senza cartelle d'ufficio**: `WorkingCopyPathFilter` scarta solo `.svn` e `.svn-assist`; le cartelle ignorate le decide svn:ignore dell'utente (`ChangesStore.Ignored.cs`, `ISvnService.GetIgnoredPathsAsync`). Decisione utente: "non voglio che vengano ignorate cartelle in automatico, faccio l'ignore io".
   - **Gemini mai in Automatico** (decisione della 0.6.0 ripristinata): `AiServiceFactory` e `PrerequisitesService` lo usano solo con provider `gemini`.

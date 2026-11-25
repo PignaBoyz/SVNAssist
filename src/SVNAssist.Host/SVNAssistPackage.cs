@@ -22,7 +22,7 @@ using Task = System.Threading.Tasks.Task;
 namespace SVNAssist.Host
 {
     [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
-    [InstalledProductRegistration("SVNAssist", "SVN integration with AI commit messages", "0.7.1")]
+    [InstalledProductRegistration("SVNAssist", "SVN integration with AI commit messages", "0.7.2")]
     [Guid(Ids.PackageGuid)]
     [ProvideMenuResource("Menus.ctmenu", 1)]
     [ProvideToolWindow(typeof(ChangesToolWindow), Style = VsDockStyle.Tabbed, Window = ToolWindowGuids80.SolutionExplorer, Orientation = ToolWindowOrientation.Left)]

@@ -8,7 +8,8 @@ namespace SVNAssist.Services;
 /// </summary>
 /// <remarks>
 /// Fonti, dalla più generale alla più specifica (le più specifiche stanno in fondo e prevalgono):
-/// 1. <c>~/.copilot/copilot-instructions.md</c>, <c>~/.claude/CLAUDE.md</c> e <c>~/.gemini/GEMINI.md</c>
+/// 1. <c>~/.copilot/copilot-instructions.md</c>, <c>~/copilot-instructions.md</c> (file personale letto da Visual Studio 2026,
+///    anche per i commit di Git), <c>~/.claude/CLAUDE.md</c> e <c>~/.gemini/GEMINI.md</c>; se ha lo stesso testo di <c>~/.copilot</c> si legge una volta sola
 /// 2. risalendo dalla working copy, la prima cartella con <c>.github/copilot-instructions.md</c>
 ///    e/o <c>.github/instructions/*.instructions.md</c> con <c>applyTo</c> globale (<c>**</c>, <c>*</c> o assente), <c>CLAUDE.md</c>, <c>AGENTS.md</c> o <c>GEMINI.md</c>.
 /// Il contenuto è limitato in dimensione: va nel prompt di ogni richiesta.
@@ -30,6 +31,7 @@ internal static class CommitInstructions
             if (!string.IsNullOrEmpty(userHome))
             {
                 AddFile(parts, Path.Combine(userHome, ".copilot", "copilot-instructions.md"));
+                AddFile(parts, Path.Combine(userHome, "copilot-instructions.md"), skipIfAlreadyRead: true);
                 AddFile(parts, Path.Combine(userHome, ".claude", "CLAUDE.md"));
                 AddFile(parts, Path.Combine(userHome, ".gemini", "GEMINI.md"));
             }
@@ -72,7 +74,7 @@ internal static class CommitInstructions
             : "\n\nRegole del progetto/utente: rispetta quelle che riguardano i messaggi di commit " +
               "(formato, lingua, prefissi, lunghezza), ignora il resto.\n---\n" + instructions.Trim() + "\n---";
 
-    private static void AddFile(List<string> parts, string path, bool requireGlobalApplyTo = false)
+    private static void AddFile(List<string> parts, string path, bool requireGlobalApplyTo = false, bool skipIfAlreadyRead = false)
     {
         if (!File.Exists(path))
             return;
@@ -86,7 +88,11 @@ internal static class CommitInstructions
         if (body.Length == 0)
             return;
 
-        parts.Add(body.Length <= MaxFileChars ? body : body[..MaxFileChars] + "\n...(troncato)");
+        body = body.Length <= MaxFileChars ? body : body[..MaxFileChars] + "\n...(troncato)";
+        if (skipIfAlreadyRead && parts.Contains(body, StringComparer.Ordinal))
+            return; // stesso testo in due posti (~/.copilot e ~/): una volta sola
+
+        parts.Add(body);
     }
 
     /// <summary>Toglie il blocco <c>---...---</c> iniziale e ne estrae <c>applyTo</c> (senza virgolette).</summary>

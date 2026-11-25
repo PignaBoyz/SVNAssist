@@ -2,6 +2,17 @@
 
 List of SVNAssist changes by version, from the most recent to the oldest. Button, menu and window names are those of the interface, in English.
 
+## 0.7.2 (2026-11-25)
+
+Contents: commit rules also read from `%USERPROFILE%\copilot-instructions.md`, the Visual Studio 2026 personal file.
+
+Installation: replaces 0.7.1.
+
+### Fixes
+
+- **Commit rules in the user profile.** Before: **Generate with AI** read personal rules only from `%USERPROFILE%\.copilot\copilot-instructions.md`, while Visual Studio 2026 (also for Git commit messages) reads them from `%USERPROFILE%\copilot-instructions.md`: having the same rules in SVNAssist and in Git took two copies. Now: SVNAssist also reads `%USERPROFILE%\copilot-instructions.md`, so a single file in the profile is enough.
+  - If both files hold the same text, it is used only once.
+
 ## 0.7.1 (2026-11-24)
 
 Contents: Gemini never in Automatic, automatic refresh that follows only svn:ignore, merge editor that no longer closes the conflict on its own, rows beyond the first 300 prepared only on request.

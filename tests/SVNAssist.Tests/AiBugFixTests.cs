@@ -220,6 +220,39 @@ public class AiBugFixTests : IDisposable
     }
 
     [Fact]
+    public void Regole_FilePersonaleDiVisualStudioNelProfilo_VieneLetto()
+    {
+        Write("home/copilot-instructions.md", "Usa Conventional Commits.");
+
+        var rules = CommitInstructions.Load(_dir, userHome: Path.Combine(_dir, "home"));
+
+        Assert.Equal("Usa Conventional Commits.", rules);
+    }
+
+    [Fact]
+    public void Regole_StessoFileInDotCopilotENelProfilo_UnaVoltaSola()
+    {
+        Write("home/.copilot/copilot-instructions.md", "Usa Conventional Commits.");
+        Write("home/copilot-instructions.md", "Usa Conventional Commits.\n");
+
+        var rules = CommitInstructions.Load(_dir, userHome: Path.Combine(_dir, "home"));
+
+        Assert.Equal("Usa Conventional Commits.", rules);
+    }
+
+    [Fact]
+    public void Regole_DotCopilotENelProfiloDiversi_EntrambiPrimaDelProgetto()
+    {
+        Write("home/.copilot/copilot-instructions.md", "Regola copilot.");
+        Write("home/copilot-instructions.md", "Regola profilo.");
+        Write(".github/copilot-instructions.md", "Regola progetto.");
+
+        var rules = CommitInstructions.Load(_dir, userHome: Path.Combine(_dir, "home"));
+
+        Assert.Equal("Regola copilot.\n\nRegola profilo.\n\nRegola progetto.", rules);
+    }
+
+    [Fact]
     public void Regole_InstructionsConApplyTo_SoloQuelleGlobali()
     {
         Write(".github/instructions/tutto.instructions.md", "---\napplyTo: \"**\"\n---\nMessaggi in inglese.");

@@ -74,7 +74,7 @@ Switch e Merge da Visual Studio (dettagli in `docs/release-notes/v0.3.0.md`): ra
 ### AI per i commit
 - **Procedura guidata** (provider, prerequisiti, login, modello) riapribile da "Change AI Provider...": GitHub Copilot, Claude Code, Claude API, GitHub Models.
 - **Genera con AI** / **Migliora** dal diff minimo dei soli file in Staged (aggiunti/eliminati/vuoti/binari citati, diff compattato con molti file); lingua del commit selezionabile; dal menu AI **Più corto** / **Più dettagliato** riscrivono il messaggio corrente (riassunto o con più dettagli) a partire dal diff.
-- Segue le regole di commit in `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md`, `~/.copilot/copilot-instructions.md`.
+- Segue le regole di commit in `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md`, `~/.copilot/copilot-instructions.md`, `~/copilot-instructions.md` (file personale di Visual Studio 2026).
 - Modelli da **tendina** (elenco fisso); default Claude: Sonnet. API key **cifrate con DPAPI**.
 
 ### Qualità e distribuzione
