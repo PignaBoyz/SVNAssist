@@ -26,7 +26,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.14.40265" ExcludeAssets="runtime" />
-    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="17.14.2120" />
+    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="18.5.40034" />
     <!-- Stessa versione di VS 18.12 (PrivateAssemblies): non si copia nel VSIX, la fornisce VS. -->
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3967.48" ExcludeAssets="runtime;native;build" />
     <PackageReference Include="StreamJsonRpc" Version="2.22.23" ExcludeAssets="runtime" />
@@ -41,6 +41,7 @@
     <Compile Include="..\Shared\LocEn.cs" Link="LocEn.cs" />
     <Compile Include="..\Shared\DotnetRuntime.cs" Link="DotnetRuntime.cs" />
     <Compile Include="..\Shared\PathRefresh.cs" Link="PathRefresh.cs" />
+    <Content Include="Options\registration.json" IncludeInVSIX="true" CopyToOutputDirectory="PreserveNewest" />
     <VSCTCompile Include="SVNAssist.vsct">
       <ResourceName>Menus.ctmenu</ResourceName>
     </VSCTCompile>

@@ -53,7 +53,7 @@ Per privacy, il diff lascia il computer solo dopo la tua conferma, e ogni creden
 ## Installazione
 
 Servono:
-- **Visual Studio 2026 (18.x)**. Visual Studio 2022 è dichiarato supportato ma non provato.
+- **Visual Studio 2026 (18.x)**. Dalla 0.8.0 Visual Studio 2022 non è più supportato (opzioni moderne di VS 2026).
 - **`svn.exe`** nel PATH (da TortoiseSVN con i command line tools, SlikSVN o CollabNet).
 - **Runtime .NET 10** (se manca, SVNAssist propone l'installazione).
 
@@ -78,7 +78,6 @@ Lingua dell'interfaccia (italiano o inglese) e tema sono nel menu **Extensions >
 
 ## Limiti noti
 
-- Visual Studio 2022 non è stato provato.
 - In Solution Explorer restano le icone di stato standard di Visual Studio.
 - Gli elenchi dei modelli non sono ancora verificati con tutti i provider reali.
 

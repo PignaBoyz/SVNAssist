@@ -1,0 +1,256 @@
+{
+  // Opzioni moderne di Visual Studio 2026 (Unified Settings: Tools > Options > SVNAssist). Chiavi e default devono
+  // coincidere con UnifiedOptions.Map: il test UnifiedOptionsRegistrationTests lo controlla.
+  "properties": {
+    "svnAssist.general.uiLanguage": {
+      "type": "string",
+      "title": "Lingua dell'interfaccia / UI language",
+      "description": "Automatica usa la lingua di Visual Studio. / Automatic follows the Visual Studio language.",
+      "default": "auto",
+      "order": 0,
+      "enum": [
+        "auto",
+        "it",
+        "en"
+      ],
+      "enumItemLabels": [
+        "Automatica / Automatic",
+        "Italiano",
+        "English"
+      ]
+    },
+    "svnAssist.general.windowTheme": {
+      "type": "string",
+      "title": "Tema delle finestre SVNAssist / Window theme",
+      "description": "Automatico segue Visual Studio. / Automatic follows Visual Studio.",
+      "default": "auto",
+      "order": 1,
+      "enum": [
+        "auto",
+        "light",
+        "dark",
+        "blue"
+      ],
+      "enumItemLabels": [
+        "Automatico / Automatic",
+        "Chiaro / Light",
+        "Scuro / Dark",
+        "Blu / Blue"
+      ]
+    },
+    "svnAssist.general.logTheme": {
+      "type": "string",
+      "title": "Tema della finestra Log / Log window theme",
+      "description": "Solo per la finestra Log. / Log window only.",
+      "default": "same",
+      "order": 2,
+      "enum": [
+        "same",
+        "light",
+        "dark"
+      ],
+      "enumItemLabels": [
+        "Come le altre finestre / Same as the others",
+        "Chiaro / Light",
+        "Scuro / Dark"
+      ]
+    },
+    "svnAssist.general.showSccGlyphs": {
+      "type": "boolean",
+      "title": "Stato SVN in Solution Explorer / SVN status in Solution Explorer",
+      "description": "Icone accanto ai file. / Icons next to the files.",
+      "default": true,
+      "order": 3
+    },
+    "svnAssist.general.lightweightMode": {
+      "type": "boolean",
+      "title": "Modalità leggera / Lightweight mode",
+      "description": "Niente controllo continuo dei file e delle nuove revisioni: per PC lenti o solution grandi. / No continuous file watching or new-revision checks.",
+      "default": false,
+      "order": 4
+    },
+    "svnAssist.general.headCheckMinutes": {
+      "type": "integer",
+      "title": "Controllo nuove revisioni (minuti) / New revisions check (minutes)",
+      "description": "Ogni quanti minuti controllare se altri hanno committato sul ramo (0 = spento). / 0 = off.",
+      "default": 5,
+      "order": 5,
+      "minimum": 0,
+      "maximum": 1440
+    },
+    "svnAssist.general.workingCopyPath": {
+      "type": "string",
+      "title": "Working copy",
+      "description": "Vuoto = rilevata dalla solution aperta. / Empty = detected from the open solution.",
+      "default": "",
+      "order": 6
+    },
+    "svnAssist.general.repoLayout": {
+      "type": "string",
+      "title": "Layout del repository / Repository layout",
+      "description": "Cartelle trunk/branches/tags separate da /. / trunk/branches/tags folders separated by /.",
+      "default": "trunk/branches/tags",
+      "order": 7
+    },
+    "svnAssist.ai.aiProvider": {
+      "type": "string",
+      "title": "Provider AI / AI provider",
+      "description": "Le chiavi API si inseriscono nella procedura guidata del pannello (Cambia provider AI). / API keys go in the panel wizard.",
+      "default": "auto",
+      "order": 0,
+      "enum": [
+        "auto",
+        "copilot",
+        "claudecode",
+        "claude",
+        "openai",
+        "gemini"
+      ],
+      "enumItemLabels": [
+        "Automatico / Automatic",
+        "GitHub Copilot",
+        "Claude Code",
+        "Claude API",
+        "GitHub Models / OpenAI",
+        "Gemini"
+      ]
+    },
+    "svnAssist.ai.defaultLanguage": {
+      "type": "string",
+      "title": "Lingua dei commit message / Commit message language",
+      "description": "",
+      "default": "auto",
+      "order": 1,
+      "enum": [
+        "auto",
+        "italiano",
+        "english"
+      ],
+      "enumItemLabels": [
+        "Automatica / Automatic",
+        "Italiano",
+        "English"
+      ]
+    },
+    "svnAssist.ai.aiShowUsage": {
+      "type": "boolean",
+      "title": "Modello e costo nel messaggio / Model and cost in the message",
+      "description": "",
+      "default": false,
+      "order": 2
+    },
+    "svnAssist.ai.aiExplainIncoming": {
+      "type": "boolean",
+      "title": "Riassunto AI prima di SVN Update / AI summary before SVN Update",
+      "description": "",
+      "default": false,
+      "order": 3
+    },
+    "svnAssist.ai.claudeModel": {
+      "type": "string",
+      "title": "Modello Claude / Claude model",
+      "description": "",
+      "default": "claude-sonnet-5-5",
+      "order": 4
+    },
+    "svnAssist.ai.copilotModel": {
+      "type": "string",
+      "title": "Modello Copilot / Copilot model",
+      "description": "default = predefinito di Copilot.",
+      "default": "default",
+      "order": 5
+    },
+    "svnAssist.ai.aiEndpoint": {
+      "type": "string",
+      "title": "Endpoint OpenAI-compatibile / OpenAI-compatible endpoint",
+      "description": "",
+      "default": "https://models.github.ai/inference/chat/completions",
+      "order": 6
+    },
+    "svnAssist.ai.aiModel": {
+      "type": "string",
+      "title": "Modello OpenAI-compatibile / OpenAI-compatible model",
+      "description": "",
+      "default": "openai/gpt-4o-mini",
+      "order": 7
+    },
+    "svnAssist.ai.geminiModel": {
+      "type": "string",
+      "title": "Modello Gemini / Gemini model",
+      "description": "",
+      "default": "gemini-2.5-flash",
+      "order": 8
+    },
+    "svnAssist.shortcuts.nextChangeShortcut": {
+      "type": "string",
+      "title": "Prossima modifica nel diff / Next change in diff",
+      "description": "Es. Alt+F8. Vuoto = nessuna. / Empty = none.",
+      "default": "Alt+F8",
+      "order": 0
+    },
+    "svnAssist.shortcuts.previousChangeShortcut": {
+      "type": "string",
+      "title": "Modifica precedente nel diff / Previous change in diff",
+      "description": "Es. Shift+Alt+F8.",
+      "default": "Shift+Alt+F8",
+      "order": 1
+    },
+    "svnAssist.azure.azEnabled": {
+      "type": "boolean",
+      "title": "Integrazione attiva / Integration on",
+      "description": "Si configura con la procedura guidata nel pannello (Changes > menu > Collega Azure DevOps): lì si inserisce il token. / Set up with the panel wizard, where the token goes.",
+      "default": false,
+      "order": 0
+    },
+    "svnAssist.azure.azOrg": {
+      "type": "string",
+      "title": "Organizzazione / Organization",
+      "description": "Es. https://dev.azure.com/azienda",
+      "default": "",
+      "order": 1
+    },
+    "svnAssist.azure.azProject": {
+      "type": "string",
+      "title": "Progetto / Project",
+      "description": "",
+      "default": "",
+      "order": 2
+    },
+    "svnAssist.azure.azLinkOnCommit": {
+      "type": "boolean",
+      "title": "Link sul work item al commit / Link on the work item at commit",
+      "description": "Sostituisce il link precedente di SVNAssist. / Replaces the previous SVNAssist link.",
+      "default": true,
+      "order": 3
+    },
+    "svnAssist.azure.azComment": {
+      "type": "boolean",
+      "title": "Commento nella discussione / Comment in the discussion",
+      "description": "Manda notifiche a chi segue il work item. / Notifies the followers.",
+      "default": false,
+      "order": 4
+    }
+  },
+  "categories": {
+    "svnAssist": {
+      "title": "SVNAssist",
+      "description": "SVN per Visual Studio con commit message AI. Le chiavi API e il token Azure si inseriscono nelle procedure guidate del pannello SVNAssist. / SVN for Visual Studio with AI commit messages. API keys and the Azure token go in the SVNAssist panel wizards."
+    },
+    "svnAssist.general": {
+      "title": "Generale / General",
+      "order": 0
+    },
+    "svnAssist.ai": {
+      "title": "Commit message AI",
+      "order": 1
+    },
+    "svnAssist.shortcuts": {
+      "title": "Scorciatoie / Shortcuts",
+      "order": 2
+    },
+    "svnAssist.azure": {
+      "title": "Azure DevOps",
+      "order": 3
+    }
+  }
+}

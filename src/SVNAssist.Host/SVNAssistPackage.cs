@@ -27,7 +27,9 @@ namespace SVNAssist.Host
     [ProvideMenuResource("Menus.ctmenu", 1)]
     [ProvideToolWindow(typeof(ChangesToolWindow), Style = VsDockStyle.Tabbed, Window = ToolWindowGuids80.SolutionExplorer, Orientation = ToolWindowOrientation.Left)]
     [ProvideToolWindow(typeof(LogToolWindow), Style = VsDockStyle.MDI, Transient = true)] // il Log e' un documento nell'area editor, come i diff
-    [ProvideOptionPage(typeof(SvnAssistOptions), "SVNAssist", "General", 0, 0, true)]
+    // Opzioni moderne di VS 2026 (Unified Settings, Tools > Options > SVNAssist): niente piu' vecchia pagina con popup.
+    // SvnAssistOptions resta il modello in memoria (e il posto cifrato di chiavi API e token), vedi UnifiedOptions.
+    [ProvideSettingsManifest(PackageRelativeManifestFile = @"Options\registration.json")]
     [ProvideService(typeof(SvnSccService), IsAsyncQueryable = true)]
     [ProvideSourceControlProvider("SVNAssist", "SVNAssist", Ids.SccProviderGuid, Ids.PackageGuid, Ids.SccServiceGuid)]
     // Serve per i solution events (SolutionChanged al backend); il backend parte solo alla prima vista/comando.
@@ -57,7 +59,24 @@ namespace SVNAssist.Host
 
         private void OnSccOptionsChanged() => Scc.Reevaluate(null);
         private void OnAfterSolutionChanged(object sender, EventArgs e) => NotifySolution();
-        private void OnAppActivated(object sender, EventArgs e) => Host.OnIdeActiveAsync(true).FileAndForget("SVNAssist/ideActive");
+        private void OnAppActivated(object sender, EventArgs e)
+        {
+            SyncUnified(); // di ritorno da Tools > Options: i valori cambiati li' arrivano qui
+            Host.OnIdeActiveAsync(true).FileAndForget("SVNAssist/ideActive");
+        }
+
+        /// <summary>Opzioni moderne (Unified Settings); null se non disponibili.</summary>
+        internal UnifiedOptions Unified { get; private set; }
+
+        /// <summary>Rilegge Unified Settings; se qualcosa e' cambiato salva e avvisa (lingua, tema, scorciatoie, backend).</summary>
+        internal void SyncUnified()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            if (Unified == null || !Unified.ReadInto(Options)) return;
+            Options.SaveSettingsToStorage();
+            Loc.Lang = Options.EffectiveLanguage;
+            SvnAssistOptions.RaiseChanged();
+        }
         private void OnAppDeactivated(object sender, EventArgs e) => Host.OnIdeActiveAsync(false).FileAndForget("SVNAssist/ideActive");
 
         protected override async Task InitializeAsync(CancellationToken ct, IProgress<ServiceProgressData> progress)
@@ -66,6 +85,12 @@ namespace SVNAssist.Host
             Instance = this;
             _ = Options; // crea la pagina sul thread UI
             SvnAssistOptions.VsCulture = System.Globalization.CultureInfo.CurrentUICulture.Name; // lingua dell'interfaccia di VS (thread UI)
+            Unified = await UnifiedOptions.CreateAsync(this);
+            if (Unified != null)
+            {
+                Unified.MigrateOnce(Options);
+                if (Unified.ReadInto(Options)) Options.SaveSettingsToStorage();
+            }
             Loc.Lang = Options.EffectiveLanguage;
             Host = new HostService(this);
             Scc = new SvnSccService(this);

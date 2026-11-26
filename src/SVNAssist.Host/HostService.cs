@@ -134,6 +134,7 @@ namespace SVNAssist.Host
                     if (!((name == "settingsSet" && !secret) || (name == "settingsSecret" && secret)) || !_pkg.Options.TrySet(key, value)) { Log.Write("impostazione rifiutata: " + name + " " + key); return; }
                     if (secret || string.Equals(key, "aiProvider", StringComparison.OrdinalIgnoreCase)) _lastKeyTest = null;
                     _pkg.Options.SaveSettingsToStorage();
+                    _pkg.Unified?.Write(key, value);
                     SvnAssistOptions.RaiseChanged(); // lingua, tema, scorciatoie, glifi e backend leggono i nuovi valori
                 }
                 PushSettingsState();
@@ -407,13 +408,20 @@ namespace SVNAssist.Host
             var o = _pkg.Options;
             if (!o.TrySet(key, value ?? "")) { Log.Write("setting sconosciuto: " + key); return; }
             o.SaveSettingsToStorage();
+            _pkg.Unified?.Write(key, value ?? "");
             if (key == "windowTheme" || key == "logTheme") { foreach (var v in Views()) Find(v)?.RefreshTheme(); NotifyBackendTheme(); }
         }
 
         public async Task OpenSettingsAsync()
         {
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-            _pkg.ShowOptionPage(typeof(SvnAssistOptions));
+            // Tools > Options (pagina moderna di VS 2026: le opzioni di SVNAssist sono sotto "SVNAssist").
+            if (await _pkg.GetServiceAsync(typeof(Microsoft.VisualStudio.Shell.Interop.SVsUIShell)) is Microsoft.VisualStudio.Shell.Interop.IVsUIShell shell)
+            {
+                var cmd = Microsoft.VisualStudio.VSConstants.GUID_VSStandardCommandSet97;
+                object arg = null;
+                shell.PostExecCommand(ref cmd, (uint)Microsoft.VisualStudio.VSConstants.VSStd97CmdID.ToolsOptions, 0, ref arg);
+            }
         }
 
         public Task OpenUrlAsync(string url)

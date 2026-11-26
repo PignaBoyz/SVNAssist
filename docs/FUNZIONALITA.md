@@ -40,7 +40,7 @@ Switch e Merge da Visual Studio (dettagli in `docs/release-notes/v0.3.0.md`): ra
 
 ### Architettura
 - Finestre in **WebView2** (stesso design della demo) dentro VS; logica SVN e AI in un **backend .NET 10** separato (JSON-RPC): se cade, VS no. Host net472 in-process. Dettagli in `DESIGN.md`.
-- Richiede VS 2026 (18.x) e .NET 10 Runtime (proposto in automatico se manca). VS 2022 dichiarata, non provata.
+- Richiede VS 2026 (18.x) e .NET 10 Runtime (proposto in automatico se manca). Dalla 0.8.0 niente VS 2022.
 - Temi chiaro / scuro / blu / alto contrasto con cambio a caldo; lingua **Italiano / English** a caldo.
 
 ### Pannello SVN Changes
@@ -114,7 +114,6 @@ Le voci del merge sono dettagliate nel piano 0.3.0 di `docs/ROADMAP.md` (~100 h 
 - [ ] **AI: cosa sta per arrivare** — riassunto delle modifiche in arrivo prima dell'Update (+ indicatore "n file in arrivo") · P1 · ~10 h
 - [ ] **Elenco modelli AI dinamico** — scaricato dal provider invece che fisso · P1 · ~5 h
 - [ ] **Lettura sezione `## Commit` di CLAUDE.md** per i provider Claude · P1 · ~3 h
-- [ ] **Verifica su VS 2022** — collaudo e fix di compatibilità · P1 · ~8 h
 - [ ] **AI: review pre-commit** — file di debug, segreti, TODO nel diff · P2 · ~6 h
 - [ ] **Changelist** — liste nominate committabili separatamente · P2 · ~8 h
 - [ ] **Autocompletamento messaggi** — messaggi recenti, file, ticket · P2 · ~14 h (~6 h solo recenti)
@@ -144,7 +143,7 @@ Le voci del merge sono dettagliate nel piano 0.3.0 di `docs/ROADMAP.md` (~100 h 
 - **Copilot**: runtime di ~100 MB da scaricare al primo uso.
 - Layout repository assunto `trunk/branches/tags`; senza questo layout l'header mostra "/ (radice)".
 - Refresh su WC molto grandi può essere pesante.
-- Solo VS 2026 provata; VS 2022 non verificata; nessuna versione VS Code.
+- Solo VS 2026 (dalla 0.8.0 VS 2022 non è supportato); nessuna versione VS Code.
 
 ---
 
