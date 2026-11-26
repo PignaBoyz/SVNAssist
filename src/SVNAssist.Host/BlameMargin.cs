@@ -75,7 +75,7 @@ namespace SVNAssist.Host
                 Content = _text, Padding = new Thickness(6, 0, 6, 0), Margin = new Thickness(4, 0, 4, 0), BorderThickness = new Thickness(0),
                 Background = Brushes.Transparent, Cursor = System.Windows.Input.Cursors.Hand, Focusable = false, VerticalAlignment = VerticalAlignment.Stretch,
             };
-            _btn.SetResourceReference(ForegroundProperty, EnvironmentColors.ToolWindowTextBrushKey);
+            _btn.SetResourceReference(Control.ForegroundProperty, EnvironmentColors.ToolWindowTextBrushKey);
             _btn.Click += (s, e) => Toggle();
             _btn.ContextMenu = BuildMenu();
             Child = _btn;
@@ -210,13 +210,13 @@ namespace SVNAssist.Host
         {
             if (_on)
             {
-                _btn.SetResourceReference(BackgroundProperty, EnvironmentColors.SystemHighlightBrushKey);
-                _btn.SetResourceReference(ForegroundProperty, EnvironmentColors.SystemHighlightTextBrushKey);
+                _btn.SetResourceReference(Control.BackgroundProperty, EnvironmentColors.SystemHighlightBrushKey);
+                _btn.SetResourceReference(Control.ForegroundProperty, EnvironmentColors.SystemHighlightTextBrushKey);
             }
             else
             {
                 _btn.Background = Brushes.Transparent;
-                _btn.SetResourceReference(ForegroundProperty, EnvironmentColors.ToolWindowTextBrushKey);
+                _btn.SetResourceReference(Control.ForegroundProperty, EnvironmentColors.ToolWindowTextBrushKey);
             }
         }
 
