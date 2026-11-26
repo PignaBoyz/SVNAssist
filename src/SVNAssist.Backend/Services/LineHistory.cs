@@ -22,7 +22,7 @@ internal static class LineHistory
 
     private const string Separator = "------------------------------------------------------------------------";
     private static readonly Regex Header = new(@"^r(\d+) \| .*?(?: \| (\d+) lines?)?$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
-    private static readonly Regex HunkHeader = new(@"^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex HunkHeader = new(@"^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@", RegexOptions.Multiline | RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     /// <summary>
     /// Divide l'output testuale di <c>svn log --diff</c> (con <c>LC_ALL=C</c>) nelle singole revisioni, nell'ordine di svn (dalla piu' recente).
@@ -134,7 +134,7 @@ internal static class LineHistory
             var hunks = LineRevert.ParseHunks(rev.Diff);
             if (hunks.Count == 0)
                 continue; // revisione senza modifiche di testo al file (copia, proprieta', merge solo di mergeinfo)
-            if (IsCopyShownAsAdd(hunks, olderExist: i < list.Count - 1))
+            if (i < list.Count - 1 && IsWholeFileAdded(rev.Diff))
                 continue;
 
             var next = new SortedSet<int>();
@@ -160,6 +160,12 @@ internal static class LineHistory
     /// e' la copia, le righe restano dove sono e la storia continua sul ramo di origine. Senza revisioni piu' vecchie e' la nascita vera
     /// (svn log segue le copie: un file ricreato senza storia non ha revisioni prima).
     /// </summary>
-    internal static bool IsCopyShownAsAdd(IReadOnlyList<LineRevert.Hunk> hunks, bool olderExist)
-        => olderExist && hunks.Count == 1 && hunks[0].OldCount == 0 && hunks[0].NewStart == 1;
+    internal static bool IsWholeFileAdded(string diff)
+    {
+        var headers = HunkHeader.Matches(diff);
+        return headers.Count == 1 && WholeFileAdd.IsMatch(diff);
+    }
+
+    // "@@ -0,0 +1,N @@": il lato vecchio e' vuoto. Con il contesto standard una riga aggiunta in cima a un file non vuoto ha "-1,3".
+    private static readonly Regex WholeFileAdd = new(@"^@@ -0,0 \+1(?:,\d+)? @@", RegexOptions.Multiline | RegexOptions.Compiled | RegexOptions.CultureInvariant);
 }
