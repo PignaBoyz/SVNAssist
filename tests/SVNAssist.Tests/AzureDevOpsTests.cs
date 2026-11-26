@@ -257,3 +257,40 @@ public class AzureKeepHeadersTests
         Assert.Equal("solo ai", WorkItemText.KeepHeaders("bozza senza work item", "solo ai"));
     }
 }
+
+[Collection("Loc")]
+public class AzureAuthTests
+{
+    [Fact]
+    public void ParseCliToken_ScadenzaDaExpiresOn()
+    {
+        var (token, expires) = AzureTokens.ParseCliToken("""{"accessToken":"eyJ","expiresOn":"2026-11-26 22:10:00.000000","expires_on":1795727400,"tokenType":"Bearer"}""");
+
+        Assert.Equal("eyJ", token);
+        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1795727400), expires);
+        Assert.Throws<AzureDevOpsException>(() => AzureTokens.ParseCliToken("{}"));
+    }
+
+    [Fact]
+    public void CliError_MessaggiComprensibili()
+    {
+        Assert.Contains("Installa Azure CLI", AzureTokens.CliError("'az' is not recognized as an internal or external command"));
+        Assert.Contains("az login", AzureTokens.CliError("ERROR: Please run 'az login' to setup account."));
+    }
+
+    [Theory]
+    [InlineData("pat", "", "", false)]
+    [InlineData("pat", "x", "", true)]
+    [InlineData("cli", "", "", true)]
+    [InlineData("sso", "", "", false)]
+    [InlineData("sso", "", "client-id", true)]
+    public void Configured_SecondoIlModoDiAccesso(string auth, string pat, string clientId, bool configured)
+        => Assert.Equal(configured, new AzureSettings(true, "https://dev.azure.com/a", "P", pat, Auth: auth, ClientId: clientId).Configured);
+
+    [Fact]
+    public void Console_AzureCli()
+    {
+        Assert.Equal(("cmd.exe", "/k az login --allow-no-subscriptions"), ConsoleLauncher.Build(ConsoleCommand.AzureLogin));
+        Assert.Contains("Microsoft.AzureCLI", ConsoleLauncher.Build(ConsoleCommand.InstallAzureCli).Arguments);
+    }
+}

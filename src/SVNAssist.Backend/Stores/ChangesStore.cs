@@ -140,7 +140,7 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
         Prerequisites.Changed += NotifyChanged;
         Wizard = wizard ?? new WizardStore(prerequisites, settingsService);
         Wizard.Changed += NotifyChanged;
-        Azure = new AzureStore(settingsService, AiServiceFactory.SharedHttpClient);
+        Azure = new AzureStore(settingsService, AiServiceFactory.SharedHttpClient, new AzureTokens(() => host.GetMainWindowHandleAsync()));
         Azure.Changed += NotifyChanged;
         CommitMessage = new CommitStore(
             settingsService, svnService, aiServiceFactory, aiSetupPrompt,
@@ -1161,7 +1161,14 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                 Azure.CloseWizard();
                 break;
             case "azCheck":
-                await Azure.CheckAsync(Args.Str(args, "org"), Args.Str(args, "project"), Args.Str(args, "pat"), ct);
+                await Azure.CheckAsync(Args.Str(args, "org"), Args.Str(args, "project"), Args.Str(args, "pat"),
+                    Args.OneOf(args, "auth", AzureSettings.AuthModes), Args.Str(args, "clientId"), Args.Str(args, "tenant"), ct);
+                break;
+            case "azSignIn":
+                await Azure.SignInAsync(ct);
+                break;
+            case "azRun":
+                Azure.RunCli(Args.OneOf(args, "what", "install", "login"));
                 break;
             case "azOption":
                 await Azure.SetOptionAsync(Args.OneOf(args, "key", SettingDefinitions.AzEnabled, SettingDefinitions.AzLinkOnCommit, SettingDefinitions.AzComment), Args.Bool(args, "on"), ct);

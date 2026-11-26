@@ -34,6 +34,9 @@
       `<div class="muted small az-hint">${esc(t('Invio sceglie, Esc chiude'))}</div></div>`;
   };
 
+  // modo di accesso scelto nella procedura (resta alla UI finche' non si preme Verifica)
+  A.authPick = null;
+  A.auth = z => A.authPick || (z && z.auth) || 'pat';
   const checkRow = c => `<div class="pi ${c.ok === true ? 'ok' : c.ok === false ? 'ko' : ''}"><span class="pm">${c.ok == null ? '<span class="spin"></span>' : U.icon(c.ok ? 'check' : 'x')}<span class="sr">${c.ok === true ? t('A posto') : c.ok === false ? t('Da sistemare') : t('In corso')}</span></span><div class="pt"><b>${esc(c.label)}</b><div class="muted small">${esc(c.detail || '')}</div></div></div>`;
 
   /** Procedura guidata: organizzazione, progetto, token; "Verifica" fa i controlli; poi si attiva. */
@@ -45,8 +48,18 @@
       `<div class="wiz-b"><p class="muted">${t('Facoltativo: collega i commit ai work item. Il messaggio resta leggibile anche senza estensione. Se non lo configuri resta spento.')}</p>` +
       `<label for="az-org">${t('Organizzazione')}</label><input id="az-org" type="text" spellcheck="false" autocomplete="off" placeholder="https://dev.azure.com/azienda" value="${esc(z.org)}">` +
       `<label for="az-proj">${t('Progetto')}</label><input id="az-proj" type="text" spellcheck="false" autocomplete="off" value="${esc(z.project)}">` +
-      `<label for="az-pat">${t('Token PAT personale')}</label><input id="az-pat" type="password" autocomplete="off" placeholder="${esc(z.hasPat ? t('Salvato (lascia vuoto per tenerlo)') : t('Incolla il token'))}">` +
-      `<div class="muted small">${t('Permesso: Work Items (Read & write). Salvato cifrato in Windows, mai in chiaro.')} <button type="button" class="lnk" data-az-patpage>${t('Crea un token in Azure DevOps')}</button></div>` +
+      `<label>${t('Accesso')}</label><div class="az-auth" role="radiogroup">` +
+      [['cli', t('Account aziendale con Azure CLI'), t('az login una volta, niente token. Serve Azure CLI installato.')],
+       ['sso', t('Account Windows (accesso automatico)'), t('Accesso di Windows con l\'account aziendale. Serve il client id di un\'app Entra ID dal vostro IT.')],
+       ['pat', t('Token PAT personale'), t('Token creato a mano in Azure DevOps, con scadenza.')]]
+        .map(([v, l, d]) => `<label class="az-o"><input type="radio" name="az-auth" value="${v}"${A.auth(z) === v ? ' checked' : ''}> <span><b>${esc(l)}</b><br><span class="muted small">${esc(d)}</span></span></label>`).join('') + `</div>` +
+      (A.auth(z) === 'cli' ? `<div class="pb">${U.btn('btn sm', t('Installa Azure CLI'), null, 'azRun', { what: 'install' }, t('winget install Microsoft.AzureCLI in una console'))}${U.btn('btn sm', t('Accedi (az login)'), null, 'azRun', { what: 'login' }, t('Apre il browser per l\'accesso con l\'account aziendale'))}</div>` : '') +
+      (A.auth(z) === 'sso' ? `<label for="az-cid">${t('Client id app Entra ID')}</label><input id="az-cid" type="text" spellcheck="false" autocomplete="off" value="${esc(z.clientId)}">` +
+        `<label for="az-ten">${t('Tenant (facoltativo)')}</label><input id="az-ten" type="text" spellcheck="false" autocomplete="off" placeholder="organizations" value="${esc(z.tenant)}">` +
+        `<div class="pb"><button type="button" class="btn sm" data-az-signin ${z.busy ? 'disabled' : ''}>${t('Accedi')}</button></div>` : '') +
+      (A.auth(z) === 'pat' ? `<label for="az-pat">${t('Token PAT personale')}</label><input id="az-pat" type="password" autocomplete="off" placeholder="${esc(z.hasPat ? t('Salvato (lascia vuoto per tenerlo)') : t('Incolla il token'))}">` +
+        `<div class="muted small">${t('Permesso: Work Items (Read & write). Salvato cifrato in Windows, mai in chiaro.')} <button type="button" class="lnk" data-az-patpage>${t('Crea un token in Azure DevOps')}</button></div>` : '') +
+      (z.feedback ? `<div class="small fb" role="status">${esc(z.feedback)}</div>` : '') +
       (z.checks.length ? `<div class="az-checks">${z.checks.map(checkRow).join('')}</div>` : '') +
       `<div class="az-opts">${opt('azLinkOnCommit', z.linkOnCommit, t('Link sul work item dopo il commit'), t('Revisione, ramo e ramo di origine nel commento del link'))}${opt('azComment', z.comment, t('Commento nella discussione'), t('Manda una notifica a chi segue il work item'))}</div></div>` +
       `<div class="wiz-f"><button type="button" class="btn" data-az-check ${z.busy ? 'disabled' : ''}>${z.busy ? '<span class="spin"></span>' : U.icon('refresh')}<span>${t('Verifica')}</span></button><span class="fill"></span>` +
@@ -66,15 +79,22 @@
       const u = e.target.closest('[data-az-unlink]'); if (u) { flush(); send('azUnlink', { id: +u.dataset.azUnlink, text: msg().value }); return; }
       const p = e.target.closest('[data-az-pick]'); if (p) { link(p.dataset.azPick); msg().focus(); return; }
       if (e.target.closest('[data-az-check]')) {
-        const v = id => (root.querySelector(id) || { value: '' }).value;
-        send('azCheck', { org: v('#az-org'), project: v('#az-proj'), pat: v('#az-pat') });
+        const v = id => (root.querySelector(id) || { value: '' }).value, z = (getState().azure || {}).wizard;
+        send('azCheck', { org: v('#az-org'), project: v('#az-proj'), pat: v('#az-pat'), auth: A.auth(z), clientId: z && A.auth(z) === 'sso' ? v('#az-cid') : (z ? z.clientId : ''), tenant: z && A.auth(z) === 'sso' ? v('#az-ten') : (z ? z.tenant : '') });
         const pat = root.querySelector('#az-pat'); if (pat) pat.value = '';
+        return;
+      }
+      if (e.target.closest('[data-az-signin]')) {
+        const v = id => (root.querySelector(id) || { value: '' }).value;
+        send('azCheck', { org: v('#az-org'), project: v('#az-proj'), pat: '', auth: 'sso', clientId: v('#az-cid'), tenant: v('#az-ten') });
+        send('azSignIn');
         return;
       }
       if (e.target.closest('[data-az-patpage]')) send('azOpenPatPage', { org: (root.querySelector('#az-org') || { value: '' }).value });
     });
     root.addEventListener('change', e => {
       if (e.target.id === 'az-state') send('azState', { state: e.target.value });
+      else if (e.target.name === 'az-auth') { A.authPick = e.target.value; A.render(root, getState().azure); }
       else if (e.target.dataset && e.target.dataset.azOpt) send('azOption', { key: e.target.dataset.azOpt, on: e.target.checked });
     });
     root.addEventListener('keydown', e => {
@@ -101,7 +121,7 @@
       const keep = {}; wiz.querySelectorAll('input[type=text]').forEach(i => { keep[i.id] = i.value; });
       const was = !!wiz.__open, open = !!(az && az.wizard);
       if (U.setHTML(wiz, A.wizardHTML(az)) && was) wiz.querySelectorAll('input[type=text]').forEach(i => { if (keep[i.id] != null) i.value = keep[i.id]; });
-      if (open && !was) { const h = wiz.querySelector('#az-org'); if (h) h.focus(); }
+      if (open && !was) { A.authPick = null; U.setHTML(wiz, A.wizardHTML(az)); const h = wiz.querySelector('#az-org'); if (h) h.focus(); }
       wiz.__open = open;
     }
   };

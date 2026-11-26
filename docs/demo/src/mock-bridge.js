@@ -342,7 +342,7 @@ Il file .patch viene cancellato e non si recupera.`)) return;
     commitWarnAdd: () => vmCommitWarn('add'),
     commitWarnNo: () => vmCommitWarn('no'),
     commitWarnCancel: () => vmCommitWarn('cancel'),
-    ...Object.fromEntries(['azWizardOpen', 'azWizardClose', 'azCheck', 'azOption', 'azLink', 'azUnlink', 'azState', 'azSuggestClose', 'azOpen', 'azOpenPatPage'].map(n => [n, () => { setStatus('Azure DevOps: non disponibile nella demo.'); render(); }])),
+    ...Object.fromEntries(['azWizardOpen', 'azWizardClose', 'azCheck', 'azOption', 'azLink', 'azUnlink', 'azState', 'azSuggestClose', 'azOpen', 'azOpenPatPage', 'azSignIn', 'azRun'].map(n => [n, () => { setStatus('Azure DevOps: non disponibile nella demo.'); render(); }])),
     useRecentMessage: a => { const m = (S.recentMsgs || [])[+a.i]; if (m != null) { S.vm.commitMsg = m; render(); } },
     setCommitText: a => { S.vm.commitMsg = String(a.text || ''); },   // niente render: e' la UI a tenere il testo
     genAi: () => vmAi('gen'),

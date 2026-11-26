@@ -64,6 +64,8 @@ internal sealed class FakeHost : IHost
 
     public int SettingsOpened { get; private set; }
 
+    public Task<long> GetMainWindowHandleAsync() => Task.FromResult(0L);
+
     public Task OpenSettingsAsync()
     {
         SettingsOpened++;

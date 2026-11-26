@@ -67,7 +67,7 @@ internal static class SettingDefinitions
 
     // Azure DevOps (facoltativo, spento): organizzazione, progetto, token PAT (segreto) e cosa fare dopo i commit.
     internal const string AzEnabled = "azEnabled", AzOrg = "azOrg", AzProject = "azProject", AzPat = "azPat",
-        AzLinkOnCommit = "azLinkOnCommit", AzComment = "azComment";
+        AzLinkOnCommit = "azLinkOnCommit", AzComment = "azComment", AzAuth = "azAuth", AzClientId = "azClientId", AzTenant = "azTenant";
 
     /// <summary>Tutte le chiavi con il loro valore di default (usato quando l'host non ne fornisce una).</summary>
     internal static readonly IReadOnlyDictionary<string, string> Defaults = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -95,6 +95,9 @@ internal static class SettingDefinitions
         [AzPat] = "",
         [AzLinkOnCommit] = "true",
         [AzComment] = "false",
+        [AzAuth] = "pat",
+        [AzClientId] = "",
+        [AzTenant] = "",
         // UiLanguage non ha default qui: senza il valore dell'host (es. nei test) l'interfaccia resta in italiano.
     };
 }
@@ -275,7 +278,9 @@ internal sealed class HostSettings : ISvnAssistSettings, IDisposable
         async Task<bool> On(string key) => string.Equals(await GetAsync(key, ct), "true", StringComparison.OrdinalIgnoreCase);
         return new AzureSettings(await On(SettingDefinitions.AzEnabled), (await GetAsync(SettingDefinitions.AzOrg, ct)).Trim(),
             (await GetAsync(SettingDefinitions.AzProject, ct)).Trim(), (await GetAsync(SettingDefinitions.AzPat, ct)).Trim(),
-            await On(SettingDefinitions.AzLinkOnCommit), await On(SettingDefinitions.AzComment));
+            await On(SettingDefinitions.AzLinkOnCommit), await On(SettingDefinitions.AzComment),
+            AzureSettings.AuthModes.Contains(await GetAsync(SettingDefinitions.AzAuth, ct)) ? await GetAsync(SettingDefinitions.AzAuth, ct) : "pat",
+            (await GetAsync(SettingDefinitions.AzClientId, ct)).Trim(), (await GetAsync(SettingDefinitions.AzTenant, ct)).Trim());
     }
 
     public async Task SetSettingAsync(string key, string value, CancellationToken ct)

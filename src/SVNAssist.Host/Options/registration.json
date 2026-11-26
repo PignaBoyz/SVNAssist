@@ -229,6 +229,29 @@
       "description": "Manda notifiche a chi segue il work item. / Notifies the followers.",
       "default": false,
       "order": 4
+    },
+    "svnAssist.azure.azAuth": {
+      "type": "string",
+      "title": "Accesso / Sign-in",
+      "description": "Azure CLI e accesso Windows usano l'account aziendale (Entra ID), senza token PAT. / Azure CLI and Windows sign-in use the work account, no PAT.",
+      "default": "pat",
+      "order": 5,
+      "enum": ["pat", "cli", "sso"],
+      "enumItemLabels": ["Token PAT", "Azure CLI (az login)", "Accesso Windows / Windows sign-in (SSO)"]
+    },
+    "svnAssist.azure.azClientId": {
+      "type": "string",
+      "title": "Client id app Entra ID (accesso Windows) / Entra ID app client id (Windows sign-in)",
+      "description": "Solo per l'accesso Windows: registrazione app fornita dall'IT. / Windows sign-in only: app registration from IT.",
+      "default": "",
+      "order": 6
+    },
+    "svnAssist.azure.azTenant": {
+      "type": "string",
+      "title": "Tenant (accesso Windows) / Tenant (Windows sign-in)",
+      "description": "Id o dominio del tenant; vuoto = organizations. / Tenant id or domain; empty = organizations.",
+      "default": "",
+      "order": 7
     }
   },
   "categories": {

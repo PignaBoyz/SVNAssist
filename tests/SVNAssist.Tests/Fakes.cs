@@ -49,7 +49,8 @@ internal sealed class StubSettings : ISvnAssistSettings
         string V(string k, string d) => Saved.TryGetValue(k, out var v) ? v : d;
         bool B(string k, bool d) => Saved.TryGetValue(k, out var v) ? string.Equals(v, "true", StringComparison.OrdinalIgnoreCase) : d;
         return Task.FromResult(new AzureSettings(B(SettingDefinitions.AzEnabled, false), V(SettingDefinitions.AzOrg, ""), V(SettingDefinitions.AzProject, ""),
-            V(SettingDefinitions.AzPat, ""), B(SettingDefinitions.AzLinkOnCommit, true), B(SettingDefinitions.AzComment, false)));
+            V(SettingDefinitions.AzPat, ""), B(SettingDefinitions.AzLinkOnCommit, true), B(SettingDefinitions.AzComment, false),
+            V(SettingDefinitions.AzAuth, "pat"), V(SettingDefinitions.AzClientId, ""), V(SettingDefinitions.AzTenant, "")));
     }
 
     public Task SetSettingAsync(string key, string value, CancellationToken ct)

@@ -19,6 +19,12 @@ internal enum ConsoleCommand
 
     /// <summary>Avvia <c>claude</c>: al primo avvio chiede il login.</summary>
     ClaudeLogin,
+
+    /// <summary>Installa Azure CLI con winget (accesso ad Azure DevOps con l'account aziendale).</summary>
+    InstallAzureCli,
+
+    /// <summary><c>az login</c>: accesso con l'account aziendale dal browser.</summary>
+    AzureLogin,
 }
 
 /// <summary>
@@ -49,6 +55,9 @@ internal static class ConsoleLauncher
                 "-NoExit -Command \"irm https://claude.ai/install.ps1 | iex\""),
             ConsoleCommand.ClaudeLogin => ("cmd.exe",
                 string.IsNullOrWhiteSpace(claudeExePath) ? "/k claude" : $"/k \"\"{claudeExePath}\"\""),
+            ConsoleCommand.InstallAzureCli => ("cmd.exe",
+                "/k winget install --id Microsoft.AzureCLI -e --accept-package-agreements --accept-source-agreements"),
+            ConsoleCommand.AzureLogin => ("cmd.exe", "/k az login --allow-no-subscriptions"),
             _ => throw new ArgumentOutOfRangeException(nameof(command)),
         };
 
@@ -64,6 +73,8 @@ internal static class ConsoleLauncher
             ConsoleCommand.GitHubLogin => "gh auth login --hostname github.com --git-protocol https --web",
             ConsoleCommand.InstallClaudeCode => "irm https://claude.ai/install.ps1 | iex",
             ConsoleCommand.ClaudeLogin => string.IsNullOrWhiteSpace(claudeExePath) ? "claude" : $"& \"{claudeExePath}\"",
+            ConsoleCommand.InstallAzureCli => "winget install --id Microsoft.AzureCLI -e --accept-package-agreements --accept-source-agreements",
+            ConsoleCommand.AzureLogin => "az login --allow-no-subscriptions",
             _ => throw new ArgumentOutOfRangeException(nameof(command)),
         };
 

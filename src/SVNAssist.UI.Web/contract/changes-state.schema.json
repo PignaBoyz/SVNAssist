@@ -1560,7 +1560,11 @@
             "canEnable",
             "enabled",
             "linkOnCommit",
-            "comment"
+            "comment",
+            "auth",
+            "clientId",
+            "tenant",
+            "feedback"
           ],
           "properties": {
             "org": {
@@ -1623,6 +1627,25 @@
             },
             "comment": {
               "type": "boolean"
+            },
+            "auth": {
+              "enum": [
+                "pat",
+                "cli",
+                "sso"
+              ],
+              "description": "pat = token personale; cli = Azure CLI (az login); sso = accesso Windows (Entra ID)."
+            },
+            "clientId": {
+              "type": "string",
+              "description": "Client id dell'app Entra ID (solo sso)."
+            },
+            "tenant": {
+              "type": "string"
+            },
+            "feedback": {
+              "type": "string",
+              "description": "Esito dell'ultima azione (accesso, console)."
             }
           }
         }

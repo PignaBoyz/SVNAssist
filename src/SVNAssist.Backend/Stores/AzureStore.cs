@@ -15,8 +15,9 @@ internal sealed record AzItemDto(int Id, string Type, string Title, string State
 internal sealed record AzStateDto(string Name, IReadOnlyList<string> Via, bool Ok, string Note);
 
 /// <summary>Procedura guidata "Collega Azure DevOps".</summary>
+/// <param name="Auth">pat | cli | sso (vedi <see cref="AzureSettings"/>).</param>
 internal sealed record AzWizardDto(string Org, string Project, bool HasPat, bool Busy, IReadOnlyList<AzCheckDto> Checks, bool CanEnable,
-    bool Enabled, bool LinkOnCommit, bool Comment);
+    bool Enabled, bool LinkOnCommit, bool Comment, string Auth, string ClientId, string Tenant, string Feedback);
 
 /// <summary>
 /// Stato Azure nello snapshot di Changes: <c>Ready</c> = integrazione attiva e configurata (senza, la UI non mostra nulla di Azure
@@ -38,6 +39,8 @@ internal sealed class AzureStore
 {
     private readonly ISvnAssistSettings _settings;
     private readonly AzureDevOpsClient _client;
+    private readonly IAzureTokens _tokens;
+    private string _wizFeedback = string.Empty;
     private readonly Func<DateTime> _now;
     private readonly object _lock = new();
     private readonly Dictionary<int, (WorkItemInfo Item, DateTime At)> _cache = new();
@@ -58,10 +61,11 @@ internal sealed class AzureStore
     private IReadOnlyList<AzCheckDto> _checks = [];
     private AzureSettings _wizSettings = AzureSettings.Off;
 
-    public AzureStore(ISvnAssistSettings settings, HttpClient http, Func<DateTime>? now = null)
+    public AzureStore(ISvnAssistSettings settings, HttpClient http, IAzureTokens? tokens = null, Func<DateTime>? now = null)
     {
         _settings = settings;
-        _client = new AzureDevOpsClient(http);
+        _tokens = tokens ?? new PatTokens();
+        _client = new AzureDevOpsClient(http, _tokens);
         _now = now ?? (() => DateTime.UtcNow);
     }
 
@@ -93,7 +97,8 @@ internal sealed class AzureStore
             var linked = _linkedIds.Select(id => _cache.TryGetValue(id, out var c) ? Dto(c.Item) : new AzItemDto(id, string.Empty, string.Empty, string.Empty, string.Empty)).ToList();
             var wiz = _wizOpen
                 ? new AzWizardDto(_wizSettings.Org, _wizSettings.Project, _wizSettings.Pat.Length > 0, _wizBusy, _checks,
-                    _checks.Count > 0 && _checks.Where(c => c.Id != "write").All(c => c.Ok == true), _wizSettings.Enabled, _wizSettings.LinkOnCommit, _wizSettings.Comment)
+                    _checks.Count > 0 && _checks.Where(c => c.Id != "write").All(c => c.Ok == true), _wizSettings.Enabled, _wizSettings.LinkOnCommit, _wizSettings.Comment,
+                    _wizSettings.Auth, _wizSettings.ClientId, _wizSettings.Tenant, _wizFeedback)
                 : null;
             return new AzureDto(_ready, _busy, _error, linked, _suggest, _states, _targetState, wiz);
         }
@@ -393,7 +398,7 @@ internal sealed class AzureStore
     internal async Task OpenWizardAsync(CancellationToken ct)
     {
         var s = await SettingsAsync(ct);
-        lock (_lock) { _wizOpen = true; _wizSettings = s; _checks = []; _wizBusy = false; }
+        lock (_lock) { _wizOpen = true; _wizSettings = s; _checks = []; _wizBusy = false; _wizFeedback = string.Empty; }
         Notify();
     }
 
@@ -407,18 +412,64 @@ internal sealed class AzureStore
     /// "Verifica": salva organizzazione, progetto e (se scritto) il token, poi controlla in ordine: organizzazione e token,
     /// progetto, lettura dei work item, scrittura (validateOnly su un mio work item: Azure non salva nulla).
     /// </summary>
-    internal async Task CheckAsync(string org, string project, string? pat, CancellationToken ct)
+    internal async Task CheckAsync(string org, string project, string? pat, string auth, string clientId, string tenant, CancellationToken ct)
     {
         org = AzureSettings.NormalizeOrg(org);
         project = (project ?? string.Empty).Trim();
+        auth = AzureSettings.AuthModes.Contains(auth) ? auth : "pat";
         await _settings.SetSettingAsync(SettingDefinitions.AzOrg, org, ct);
         await _settings.SetSettingAsync(SettingDefinitions.AzProject, project, ct);
+        await _settings.SetSettingAsync(SettingDefinitions.AzAuth, auth, ct);
+        await _settings.SetSettingAsync(SettingDefinitions.AzClientId, (clientId ?? string.Empty).Trim(), ct);
+        await _settings.SetSettingAsync(SettingDefinitions.AzTenant, (tenant ?? string.Empty).Trim(), ct);
         if (!string.IsNullOrWhiteSpace(pat))
             await _settings.SetSettingAsync(SettingDefinitions.AzPat, pat.Trim(), ct);
+        await RunChecksAsync(ct);
+    }
+
+    /// <summary>
+    /// Accesso Windows (SSO): apre la finestra di accesso di Windows per l'account aziendale (una volta; poi e' silenzioso),
+    /// quindi rifa' i controlli.
+    /// </summary>
+    internal async Task SignInAsync(CancellationToken ct)
+    {
         var s = await SettingsAsync(ct);
+        lock (_lock) { _wizBusy = true; _wizFeedback = Loc.T("Accesso in corso: completa la finestra di Windows..."); }
+        Notify();
+        try
+        {
+            var who = await _tokens.SignInAsync(s, ct);
+            lock (_lock) _wizFeedback = who.Length > 0 ? Loc.T("Accesso fatto: {0}", who) : string.Empty;
+        }
+        catch (AzureDevOpsException ex)
+        {
+            lock (_lock) { _wizFeedback = ex.Message; _wizBusy = false; }
+            Notify();
+            return;
+        }
+
+        await RunChecksAsync(ct);
+    }
+
+    /// <summary>Installa Azure CLI o fa "az login" in una console visibile (l'utente completa li', poi preme Verifica).</summary>
+    internal void RunCli(string what)
+    {
+        var ok = ConsoleLauncher.Launch(what == "install" ? ConsoleCommand.InstallAzureCli : ConsoleCommand.AzureLogin);
+        lock (_lock)
+            _wizFeedback = !ok ? Loc.T("Non riesco ad aprire la console.")
+                : what == "install" ? Loc.T("Installazione di Azure CLI avviata nella console: al termine premi Accedi (az login).")
+                : Loc.T("Completa l'accesso nel browser aperto da az login, poi premi Verifica.");
+        Notify();
+    }
+
+    private async Task RunChecksAsync(CancellationToken ct)
+    {
+        var s = await SettingsAsync(ct);
+        var org = AzureSettings.NormalizeOrg(s.Org);
+        var project = s.Project;
         var checks = new List<AzCheckDto>
         {
-            new("org", Loc.T("Organizzazione e token PAT"), null, org),
+            new("org", s.Auth switch { "cli" => Loc.T("Organizzazione e accesso (Azure CLI)"), "sso" => Loc.T("Organizzazione e accesso (Windows)"), _ => Loc.T("Organizzazione e token PAT") }, null, org),
             new("project", Loc.T("Progetto"), null, project),
             new("read", Loc.T("Lettura work item"), null, Loc.T("badge, ricerca, titoli")),
             new("write", Loc.T("Scrittura work item"), null, Loc.T("link alle revisioni e cambio stato")),
@@ -437,7 +488,7 @@ internal sealed class AzureStore
         {
             if (!s.Configured)
             {
-                Set("org", false, Loc.T("Compila organizzazione, progetto e token PAT."));
+                Set("org", false, s.Auth == "sso" ? Loc.T("Compila organizzazione, progetto e client id dell'app Entra ID.") : s.Auth == "cli" ? Loc.T("Compila organizzazione e progetto.") : Loc.T("Compila organizzazione, progetto e token PAT."));
                 return;
             }
 

@@ -32,6 +32,7 @@ public sealed class BackendProcessTests
         public Task<string?> PickFileAsync(bool save, string title, string defaultName, string filter) => Task.FromResult<string?>(null);
         public Task OpenUrlAsync(string url) => Task.CompletedTask;
         public Task OpenSettingsAsync() => Task.CompletedTask;
+        public Task<long> GetMainWindowHandleAsync() => Task.FromResult(0L);
         public Task OpenDiffAsync(string l, string r, string ll, string rl, string c) => Task.CompletedTask;
         public Task<bool> OpenMergeAsync(string l, string r, string b, string res, string ll, string rl, string bl, string resl) => Task.FromResult(false);
         public Task OpenFileAsync(string path) => Task.CompletedTask;

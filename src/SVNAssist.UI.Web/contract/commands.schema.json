@@ -3159,7 +3159,10 @@
           "required": [
             "org",
             "project",
-            "pat"
+            "pat",
+            "auth",
+            "clientId",
+            "tenant"
           ],
           "properties": {
             "org": {
@@ -3171,6 +3174,19 @@
             "pat": {
               "type": "string",
               "description": "Vuoto = tiene quello salvato."
+            },
+            "auth": {
+              "enum": [
+                "pat",
+                "cli",
+                "sso"
+              ]
+            },
+            "clientId": {
+              "type": "string"
+            },
+            "tenant": {
+              "type": "string"
             }
           }
         }
@@ -3374,6 +3390,57 @@
           "properties": {
             "org": {
               "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "azSignIn",
+      "description": "Accesso Windows (Entra ID): finestra di accesso, poi rifa' i controlli.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "azSignIn"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "azRun",
+      "description": "Azure CLI in una console: install = winget install, login = az login.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "azRun"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "what"
+          ],
+          "properties": {
+            "what": {
+              "enum": [
+                "install",
+                "login"
+              ]
             }
           }
         }

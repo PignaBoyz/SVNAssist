@@ -216,6 +216,15 @@ namespace SVNAssist.Host
         [Browsable(false)]
         public string AzPat { get; set; } = "";
 
+        [Browsable(false)]
+        public string AzAuth { get; set; } = "pat";
+
+        [Browsable(false)]
+        public string AzClientId { get; set; } = "";
+
+        [Browsable(false)]
+        public string AzTenant { get; set; } = "";
+
         [LCategory("Azure DevOps"), LDisplayName("Link sul work item al commit"), DefaultValue(true)]
         [LDescription("Dopo il commit aggiunge al work item un link alla revisione, con ramo e ramo di origine.")]
         public bool AzLinkOnCommit { get; set; } = true;
@@ -325,6 +334,9 @@ namespace SVNAssist.Host
                 ["azPat"] = AzPat ?? "",
                 ["azLinkOnCommit"] = AzLinkOnCommit ? "true" : "false",
                 ["azComment"] = AzComment ? "true" : "false",
+                ["azAuth"] = AzAuth == "cli" || AzAuth == "sso" ? AzAuth : "pat",
+                ["azClientId"] = (AzClientId ?? "").Trim(),
+                ["azTenant"] = (AzTenant ?? "").Trim(),
                 ["uiLanguage"] = Pick(UiLanguage, new UiLanguageConverter(), "auto"),
                 ["uiLanguageEffective"] = EffectiveLanguage,
             };
@@ -374,6 +386,9 @@ namespace SVNAssist.Host
                 case "azPat": AzPat = value ?? ""; break;
                 case "azLinkOnCommit": AzLinkOnCommit = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase); break;
                 case "azComment": AzComment = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase); break;
+                case "azAuth": AzAuth = value == "cli" || value == "sso" ? value : "pat"; break;
+                case "azClientId": AzClientId = value ?? ""; break;
+                case "azTenant": AzTenant = value ?? ""; break;
                 case "uiLanguage": UiLanguage = value; break;
                 case "showSccGlyphs": ShowSccGlyphs = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase); break;
                 case "nextChangeShortcut": NextChangeShortcut = value; break;

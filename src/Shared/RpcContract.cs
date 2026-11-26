@@ -116,6 +116,9 @@ namespace SVNAssist.Rpc
         /// <summary>Apre Tools > Options > SVNAssist ("Faccio io").</summary>
         Task OpenSettingsAsync();
 
+        /// <summary>Finestra principale di Visual Studio (HWND): padre della finestra di accesso di Windows (Azure DevOps, accesso aziendale).</summary>
+        Task<long> GetMainWindowHandleAsync();
+
         /// <summary>
         /// Dialogo con un campo di testo (revisione, messaggio di lock). Ritorna il testo digitato, null se annullato.
         /// </summary>

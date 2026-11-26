@@ -412,6 +412,12 @@ namespace SVNAssist.Host
             if (key == "windowTheme" || key == "logTheme") { foreach (var v in Views()) Find(v)?.RefreshTheme(); NotifyBackendTheme(); }
         }
 
+        public async Task<long> GetMainWindowHandleAsync()
+        {
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            return System.Diagnostics.Process.GetCurrentProcess().MainWindowHandle.ToInt64();
+        }
+
         public async Task OpenSettingsAsync()
         {
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();

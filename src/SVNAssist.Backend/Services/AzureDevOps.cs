@@ -12,11 +12,21 @@ namespace SVNAssist.Services;
 /// Impostazioni dell'integrazione Azure DevOps (facoltativa, spenta di default): organizzazione (es. https://dev.azure.com/azienda),
 /// progetto, token PAT personale e cosa fare dopo i commit. <see cref="Ready"/> = attiva e configurata: solo allora parte una chiamata.
 /// </summary>
-internal sealed record AzureSettings(bool Enabled, string Org, string Project, string Pat, bool LinkOnCommit = true, bool Comment = false)
+/// <param name="Auth">pat | cli (Azure CLI, account aziendale) | sso (accesso Windows, Entra ID: serve <paramref name="ClientId"/>).</param>
+internal sealed record AzureSettings(bool Enabled, string Org, string Project, string Pat, bool LinkOnCommit = true, bool Comment = false,
+    string Auth = "pat", string ClientId = "", string Tenant = "")
 {
     internal static readonly AzureSettings Off = new(false, string.Empty, string.Empty, string.Empty);
 
-    internal bool Configured => Org.Length > 0 && Project.Length > 0 && Pat.Length > 0;
+    internal static readonly string[] AuthModes = ["pat", "cli", "sso"];
+
+    /// <summary>Organizzazione, progetto e il necessario per il modo di accesso (token PAT; client id per l'accesso Windows; niente per Azure CLI).</summary>
+    internal bool Configured => Org.Length > 0 && Project.Length > 0 && Auth switch
+    {
+        "cli" => true,
+        "sso" => ClientId.Length > 0,
+        _ => Pat.Length > 0,
+    };
 
     internal bool Ready => Enabled && Configured;
 
@@ -191,24 +201,26 @@ internal sealed class AzureDevOpsException(HttpStatusCode? status, string messag
 /// Chiamate REST ad Azure DevOps (api-version 7.1) con il token PAT dell'utente (Basic, utente vuoto).
 /// Solo cio' che serve all'estensione: verifica, lettura work item, ricerca dei propri, link, stato, commento.
 /// </summary>
-internal sealed class AzureDevOpsClient(HttpClient http)
+internal sealed class AzureDevOpsClient(HttpClient http, IAzureTokens? tokens = null)
 {
+    private readonly IAzureTokens _tokens = tokens ?? new PatTokens();
+
     private const string Api = "api-version=7.1";
     private static readonly string[] Fields = ["System.Id", "System.WorkItemType", "System.Title", "System.State"];
 
-    private static HttpRequestMessage Request(HttpMethod method, string url, AzureSettings s, JsonNode? body = null, string mediaType = "application/json")
-    {
-        var r = new HttpRequestMessage(method, url);
-        r.Headers.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.ASCII.GetBytes(":" + s.Pat)));
-        r.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        if (body is not null)
-            r.Content = new StringContent(body.ToJsonString(), Encoding.UTF8, mediaType);
-        return r;
-    }
+    private static RequestSpec Request(HttpMethod method, string url, AzureSettings s, JsonNode? body = null, string mediaType = "application/json")
+        => new(method, url, s, body, mediaType);
 
-    private async Task<JsonNode?> SendAsync(HttpRequestMessage request, CancellationToken ct)
+    /// <summary>Richiesta da fare: l'intestazione di accesso si aggiunge in <see cref="SendAsync"/> (puo' richiedere un token Entra).</summary>
+    private sealed record RequestSpec(HttpMethod Method, string Url, AzureSettings S, JsonNode? Body, string MediaType);
+
+    private async Task<JsonNode?> SendAsync(RequestSpec spec, CancellationToken ct)
     {
-        using var _ = request;
+        using var request = new HttpRequestMessage(spec.Method, spec.Url);
+        request.Headers.Authorization = await _tokens.HeaderAsync(spec.S, ct);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        if (spec.Body is not null)
+            request.Content = new StringContent(spec.Body.ToJsonString(), Encoding.UTF8, spec.MediaType);
         HttpResponseMessage resp;
         try
         {

@@ -57,6 +57,9 @@ namespace SVNAssist.Host
             ("azProject", "svnAssist.azure.azProject", Kind.Text, ""),
             ("azLinkOnCommit", "svnAssist.azure.azLinkOnCommit", Kind.Bool, "true"),
             ("azComment", "svnAssist.azure.azComment", Kind.Bool, "false"),
+            ("azAuth", "svnAssist.azure.azAuth", Kind.Text, "pat"),
+            ("azClientId", "svnAssist.azure.azClientId", Kind.Text, ""),
+            ("azTenant", "svnAssist.azure.azTenant", Kind.Text, ""),
         };
 
         private const string StateCollection = "SVNAssist";

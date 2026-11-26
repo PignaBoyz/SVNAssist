@@ -459,3 +459,4 @@ button.lnk{background:none;border:0;padding:0;color:var(--acc2);text-decoration:
 .wi-b{display:inline-flex;gap:4px;align-items:center;margin-right:6px;padding:0 6px;border-radius:9px;background:var(--chip-ok-bg);color:var(--chip-ok-fg);font-size:.9em;white-space:nowrap;border:0;cursor:pointer}
 .wi-b .st{opacity:.85}
 .wi-d{margin:6px 0 0;display:flex;flex-direction:column;gap:2px}
+.az-auth{display:flex;flex-direction:column;gap:6px;margin:2px 0 6px}

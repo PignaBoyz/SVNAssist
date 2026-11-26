@@ -32,6 +32,9 @@
 
   <ItemGroup>
     <PackageReference Include="Anthropic" Version="13.8.0" />
+    <!-- Azure DevOps con accesso Windows (Entra ID, broker WAM): token senza PAT. -->
+    <PackageReference Include="Microsoft.Identity.Client" Version="4.66.2" />
+    <PackageReference Include="Microsoft.Identity.Client.Broker" Version="4.66.2" />
     <PackageReference Include="GitHub.Copilot.SDK" Version="1.0.31" />
     <PackageReference Include="StreamJsonRpc" Version="2.22.23" />
     <!-- MessagePack arriva transitivo da StreamJsonRpc (2.5.192, con advisory NU1902/NU1903): versione patchata fissata. -->
