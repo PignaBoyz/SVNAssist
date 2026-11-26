@@ -151,3 +151,13 @@ test('menu del log: Apri file di questa revisione nell\'editor (un file) e menu 
   assert.equal(U.logPathMenu(123, 2).map(i => i.cmd).join(), 'logOpenFile,logOpenRevFile');
   valid({ name: 'logOpenRevFile', args: { rev: 123, i: 0 } });
 });
+
+test('la revisione della working copy ("current") e\' evidenziata con "sei qui", solo quella', () => {
+  const s = fx(); s.current = 123;
+  assert.deepEqual(validate(S, j(s)), []);
+  const h = U.logHTML.list(s);
+  assert.equal((h.match(/class="wcr"/g) || []).length, 1);
+  assert.match(h, /class="lr cur"[^>]*data-rev="123"/);
+  delete s.current;
+  assert.doesNotMatch(U.logHTML.list(s), /wcr| cur/);
+});

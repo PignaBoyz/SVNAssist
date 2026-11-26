@@ -53,6 +53,8 @@ internal sealed class LogStore : ViewStore
     private IReadOnlyList<SvnChange> _files = [];
     private readonly IHost? _host;
     private readonly ChangesStore? _changes;
+    // Revisione dell'elenco in cui si trova la working copy (null = log di un URL o revisione non nota): evidenziata nel Log.
+    private long? _current;
     // Storia delle righe selezionate nell'editor (null = log normale): il Log mostra solo le revisioni che le hanno toccate.
     private LineScope? _line;
 
@@ -106,7 +108,7 @@ internal sealed class LogStore : ViewStore
         }
 
         lock (_lock)
-            return new LogState(_path, _msgInitial ? Loc.T("Inserisci il percorso della working copy e premi Carica log.") : _msg, _err, _loading, _canMore, _sel, _entries, _diff, _filterText, FilesDto(), null, _stopOnCopy, _includeMerged, _changes?.Progress.GetSnapshot(), _affectedBase);
+            return new LogState(_path, _msgInitial ? Loc.T("Inserisci il percorso della working copy e premi Carica log.") : _msg, _err, _loading, _canMore, _sel, _entries, _diff, _filterText, FilesDto(), null, _stopOnCopy, _includeMerged, _changes?.Progress.GetSnapshot(), _affectedBase, _current);
     }
 
     private LogFilesDto? FilesDto() => _filesKind is null
@@ -397,6 +399,7 @@ internal sealed class LogStore : ViewStore
         {
             _path = file;
             _line = null;
+            _current = null;
             _entries = [];
             _sel = null;
             _diff = string.Empty;
@@ -490,6 +493,7 @@ internal sealed class LogStore : ViewStore
             {
                 _entries = [];
                 _canMore = false;
+                _current = null;
             }
 
             Set(line.LocalOnly > 0 ? Loc.T("Le righe selezionate non sono ancora committate: non hanno storia.") : Loc.T("Nessuna revisione trovata."), err: false);
@@ -522,11 +526,13 @@ internal sealed class LogStore : ViewStore
 
             var dtos = entries.SelectMany(e => Flatten(e, 0)).ToList();
             await EnsureAffectedBaseAsync(path, ct);
+            var current = CurrentRevision(entries, await WorkingRevisionAsync(path, ct));
 
             lock (_lock)
             {
                 _limit = limit;
                 _entries = dtos;
+                _current = current;
                 // Se svn ha restituito tutte quelle richieste, ce ne possono essere altre (non nella storia delle righe: l'elenco e' completo).
                 _canMore = line is null && entries.Count >= limit;
                 // La selezione sopravvive solo se la revisione e' ancora in elenco.
@@ -586,6 +592,30 @@ internal sealed class LogStore : ViewStore
             _affectedBaseFor = path;
         }
     }
+
+    /// <summary>Revisione della working copy (<c>svn info</c>: quella dell'ultimo update della cartella o del file); null per un URL o se non si legge.</summary>
+    private async Task<long?> WorkingRevisionAsync(string path, CancellationToken ct)
+    {
+        if (RepositoryUrl.IsMatch(path))
+            return null;
+        try
+        {
+            return (await _svnService.GetInfoAsync(File.Exists(path) ? System.IO.Path.GetDirectoryName(path)! : path, ct)).Revision;
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            BackendLog.Info("Log: revisione della working copy non disponibile: " + ex.Message);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// La riga "sei qui": la working copy aggiornata a r<paramref name="wcRevision"/> contiene la revisione piu' recente dell'elenco
+    /// non successiva a quella (il log elenca solo le revisioni che hanno toccato il percorso, quindi r<paramref name="wcRevision"/> spesso
+    /// non c'e'). Solo revisioni del ramo (non quelle entrate per merge). Null se sono tutte piu' recenti della working copy.
+    /// </summary>
+    internal static long? CurrentRevision(IReadOnlyList<SvnLogEntry> entries, long? wcRevision)
+        => wcRevision is { } wc && entries.Where(e => e.Revision <= wc).Select(e => (long?)e.Revision).Max() is { } r ? r : null;
 
     private void SetFilter(JsonElement args)
     {

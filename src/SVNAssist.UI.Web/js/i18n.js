@@ -435,6 +435,8 @@
     "Includi revisioni unite": "Include merged revisions",
     "Mostra sotto ogni merge le revisioni che ha portato (svn log -g)": "Show under each merge the revisions it brought in (svn log -g)",
     "Entrata per merge": "Brought in by merge",
+    "sei qui": "you are here",
+    "La working copy è a questa revisione (ultimo update)": "The working copy is at this revision (last update)",
     "merge inverso": "reverse merge",
     "Autore": "Author",
     "Messaggio": "Message",

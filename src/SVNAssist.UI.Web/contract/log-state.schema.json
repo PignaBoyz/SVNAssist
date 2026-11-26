@@ -837,6 +837,11 @@
     "base": {
       "type": "string",
       "description": "Percorso nel repository della cartella o del file di cui si legge il log (es. /trunk/src). Serve all'opzione Solo percorsi interessati: i percorsi di una revisione fuori da qui si nascondono."
+    },
+    "current": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Revisione dell'elenco in cui si trova la working copy (la piu' recente non successiva alla revisione di svn info): la riga si evidenzia. Assente per il log di un URL."
     }
   }
 }

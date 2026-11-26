@@ -84,13 +84,27 @@ public class LineHistoryTests
             new LineHistory.RevisionDiff(7, "@@ -1,3 +1,3 @@\n a\n-b\n+B\n c\n"),             // modifica la riga
             new LineHistory.RevisionDiff(5, "@@ -1,3 +1,3 @@\n a\n b\n-c\n+C\n"),             // modifica un'altra riga
             new LineHistory.RevisionDiff(2, "@@ -0,0 +1,3 @@\n+a\n+b\n+c\n"),                // nascita
-            new LineHistory.RevisionDiff(1, "@@ -0,0 +1,1 @@\n+mai\n"),                       // non si arriva qui
         };
 
         var r = LineHistory.Trace("", history, 3, 3); // riga 3 = "B"
 
         Assert.Equal([7L, 2L], r.Revisions);
         Assert.Equal(0, r.LocalOnly);
+    }
+
+    [Fact]
+    public void Trace_CopiaDelBranchMostrataComeFileAggiunto_ContinuaSulRamoDiOrigine()
+    {
+        // Con alcuni server (http) il diff della revisione che crea il branch mostra il file intero come aggiunto.
+        var history = new[]
+        {
+            new LineHistory.RevisionDiff(14121, "@@ -0,0 +1,3 @@\n+a\n+B\n+c\n"),            // svn copy trunk -> branch
+            new LineHistory.RevisionDiff(900, "@@ -1,3 +1,3 @@\n a\n-b\n+B\n c\n"),          // modifica su trunk
+            new LineHistory.RevisionDiff(100, "@@ -0,0 +1,3 @@\n+a\n+b\n+c\n"),              // nascita vera: nessuna revisione prima
+        };
+
+        Assert.Equal([900L, 100L], LineHistory.Trace("", history, 2, 2).Revisions);
+        Assert.Equal([100L], LineHistory.Trace("", history, 1, 1).Revisions);
     }
 
     [Fact]
@@ -124,6 +138,19 @@ public class LineHistoryTests
         Assert.Equal([6L, 2L], kept.Select(e => e.Revision));
         Assert.Equal([5L], kept[0].Children!.Select(e => e.Revision));
         Assert.Equal([1L], kept[1].Children!.Select(e => e.Revision));
+    }
+
+    [Theory]
+    [InlineData(125L, 120L)] // la working copy e' tra due revisioni del log: contiene la 120
+    [InlineData(200L, 130L)] // piu' recente di tutte: la prima
+    [InlineData(120L, 120L)]
+    [InlineData(90L, null)]  // piu' vecchia di tutte quelle caricate: nessuna riga
+    [InlineData(null, null)] // log di un URL
+    public void CurrentRevision_LaPiuRecenteNonSuccessivaAllaWorkingCopy(long? wc, long? expected)
+    {
+        var entries = new[] { 130L, 120L, 100L }.Select(r => new SvnLogEntry(r, "u", DateTimeOffset.UnixEpoch, "m")).ToList();
+
+        Assert.Equal(expected, LogStore.CurrentRevision(entries, wc));
     }
 
     [Fact]

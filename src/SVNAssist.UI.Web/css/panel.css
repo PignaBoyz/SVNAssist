@@ -178,6 +178,9 @@ pre.cmd{background:var(--bg0);border:1px solid var(--bd);padding:6px 8px;font:12
 .lr{border-bottom:1px solid var(--bd);cursor:default}
 .lr:hover{background:var(--bg3)}
 .lr.sel,.lr.sel:hover{background:var(--acc-bg);box-shadow:inset 3px 0 0 var(--acc)}
+.lr.cur:not(.sel){box-shadow:inset 3px 0 0 var(--ok)}
+.lr.cur .rv{color:var(--ok)}
+.wcr{display:inline-block;padding:0 6px;margin-right:4px;border-radius:8px;border:1px solid var(--ok);color:var(--ok);font-size:11px;font-weight:600;line-height:16px}
 .lmore{padding:8px 10px;position:sticky;left:0}
 .ldet{flex:1;min-height:0;overflow:auto;background:var(--bg1);border-top:1px solid var(--bd)}
 .ld-h{padding:8px 12px;border-bottom:1px solid var(--bd);background:var(--bg2)}

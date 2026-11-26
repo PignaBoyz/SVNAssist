@@ -125,13 +125,17 @@ internal static class LineHistory
         }
 
         var revisions = new List<long>();
-        foreach (var rev in history)
+        var list = history as IReadOnlyList<RevisionDiff> ?? history.ToList();
+        for (int i = 0; i < list.Count; i++)
         {
+            var rev = list[i];
             if (tracked.Count == 0)
                 break;
             var hunks = LineRevert.ParseHunks(rev.Diff);
             if (hunks.Count == 0)
                 continue; // revisione senza modifiche di testo al file (copia, proprieta', merge solo di mergeinfo)
+            if (IsCopyShownAsAdd(hunks, olderExist: i < list.Count - 1))
+                continue;
 
             var next = new SortedSet<int>();
             bool touched = false;
@@ -149,4 +153,13 @@ internal static class LineHistory
 
         return new Result(revisions, localOnly);
     }
+
+    /// <summary>
+    /// La creazione di un branch (<c>svn copy</c>) per svn e' una copia, ma con alcuni server (http) il diff di quella revisione
+    /// mostra il file intero come aggiunto (<c>@@ -0,0 +1,N @@</c>). Se il log ha revisioni piu' vecchie il file esisteva gia':
+    /// e' la copia, le righe restano dove sono e la storia continua sul ramo di origine. Senza revisioni piu' vecchie e' la nascita vera
+    /// (svn log segue le copie: un file ricreato senza storia non ha revisioni prima).
+    /// </summary>
+    internal static bool IsCopyShownAsAdd(IReadOnlyList<LineRevert.Hunk> hunks, bool olderExist)
+        => olderExist && hunks.Count == 1 && hunks[0].OldCount == 0 && hunks[0].NewStart == 1;
 }
