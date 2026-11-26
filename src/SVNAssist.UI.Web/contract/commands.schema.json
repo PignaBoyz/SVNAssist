@@ -2015,14 +2015,29 @@
       "description": "Tema della sola finestra Log (impostazione logTheme): same = come le altre finestre SVNAssist.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "args"],
+      "required": [
+        "name",
+        "args"
+      ],
       "properties": {
-        "name": { "const": "setLogTheme" },
+        "name": {
+          "const": "setLogTheme"
+        },
         "args": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["mode"],
-          "properties": { "mode": { "enum": ["same", "light", "dark"] } }
+          "required": [
+            "mode"
+          ],
+          "properties": {
+            "mode": {
+              "enum": [
+                "same",
+                "light",
+                "dark"
+              ]
+            }
+          }
         }
       }
     },
@@ -2176,16 +2191,33 @@
       "description": "Update a una revisione dal Log (tasto destro): scope wc = tutta la working copy, item = solo il file o la cartella del log. Conferma con modifiche locali, poi ricarica il log.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "args"],
+      "required": [
+        "name",
+        "args"
+      ],
       "properties": {
-        "name": { "const": "logUpdateTo" },
+        "name": {
+          "const": "logUpdateTo"
+        },
         "args": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["rev", "scope"],
+          "required": [
+            "rev",
+            "scope"
+          ],
           "properties": {
-            "rev": { "type": "integer", "minimum": 1, "description": "Revisione." },
-            "scope": { "enum": ["wc", "item"] }
+            "rev": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Revisione."
+            },
+            "scope": {
+              "enum": [
+                "wc",
+                "item"
+              ]
+            }
           }
         }
       }
@@ -3061,6 +3093,287 @@
             "rev": {
               "type": "integer",
               "minimum": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "azWizardOpen",
+      "description": "Apre la procedura guidata Collega Azure DevOps.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "azWizardOpen"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "azWizardClose",
+      "description": "Chiude la procedura guidata Azure DevOps.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "azWizardClose"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "azCheck",
+      "description": "Salva organizzazione, progetto e token (se non vuoto) e verifica: organizzazione e token, progetto, lettura, scrittura (validateOnly).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "azCheck"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "org",
+            "project",
+            "pat"
+          ],
+          "properties": {
+            "org": {
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "pat": {
+              "type": "string",
+              "description": "Vuoto = tiene quello salvato."
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "azOption",
+      "description": "Attiva/disattiva l'integrazione o un'opzione.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "azOption"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "key",
+            "on"
+          ],
+          "properties": {
+            "key": {
+              "enum": [
+                "azEnabled",
+                "azLinkOnCommit",
+                "azComment"
+              ]
+            },
+            "on": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "azLink",
+      "description": "Collega un work item: intestazione leggibile in cima al messaggio (toglie l'eventuale #cifre in fondo).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "azLink"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "text"
+          ],
+          "properties": {
+            "id": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "text": {
+              "type": "string",
+              "description": "Testo del messaggio nel campo adesso."
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "azUnlink",
+      "description": "Toglie l'intestazione di un work item dal messaggio.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "azUnlink"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "text"
+          ],
+          "properties": {
+            "id": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "text": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "azState",
+      "description": "Stato dopo il commit (vuoto = invariato); solo uno stato permesso.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "azState"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "state"
+          ],
+          "properties": {
+            "state": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "azSuggestClose",
+      "description": "Chiude la tendina dei work item.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "azSuggestClose"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "azOpen",
+      "description": "Apre il work item in Azure DevOps (URL costruito dal backend). Changes e Log.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "azOpen"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id"
+          ],
+          "properties": {
+            "id": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "azOpenPatPage",
+      "description": "Apre la pagina di Azure DevOps per creare il token PAT.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "azOpenPatPage"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "org"
+          ],
+          "properties": {
+            "org": {
+              "type": "string"
             }
           }
         }

@@ -89,7 +89,7 @@ namespace SVNAssist.Host
             }
         }
 
-        private static readonly string[] SecretKeys = { "anthropicApiKey", "aiApiKey", "geminiApiKey" };
+        private static readonly string[] SecretKeys = { "anthropicApiKey", "aiApiKey", "geminiApiKey", "azPat" };
 
         /// <summary>Stato della pagina Impostazioni: i valori (mai le API key, solo se sono impostate) e la lingua.</summary>
         public void PushSettingsState()

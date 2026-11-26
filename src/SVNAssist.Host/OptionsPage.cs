@@ -201,6 +201,29 @@ namespace SVNAssist.Host
         internal string ThemeFor(string view)
             => view == "log" && (LogTheme == "light" || LogTheme == "dark") ? LogTheme : (WindowTheme ?? "auto");
 
+        [LCategory("Azure DevOps"), LDisplayName("Integrazione Azure DevOps attiva"), DefaultValue(false)]
+        [LDescription("Collega i commit ai work item di Azure DevOps. Si configura con la procedura guidata nel pannello SVNAssist (Changes > menu > Collega Azure DevOps).")]
+        public bool AzEnabled { get; set; }
+
+        [LCategory("Azure DevOps"), LDisplayName("Organizzazione"), DefaultValue("")]
+        [LDescription("URL dell'organizzazione, es. https://dev.azure.com/azienda.")]
+        public string AzOrg { get; set; } = "";
+
+        [LCategory("Azure DevOps"), LDisplayName("Progetto"), DefaultValue("")]
+        [LDescription("Nome del progetto Azure DevOps che contiene i work item.")]
+        public string AzProject { get; set; } = "";
+
+        [Browsable(false)]
+        public string AzPat { get; set; } = "";
+
+        [LCategory("Azure DevOps"), LDisplayName("Link sul work item al commit"), DefaultValue(true)]
+        [LDescription("Dopo il commit aggiunge al work item un link alla revisione, con ramo e ramo di origine.")]
+        public bool AzLinkOnCommit { get; set; } = true;
+
+        [LCategory("Azure DevOps"), LDisplayName("Commento nella discussione"), DefaultValue(false)]
+        [LDescription("Scrive anche un commento nella Discussion del work item (manda notifiche a chi lo segue).")]
+        public bool AzComment { get; set; }
+
         [LCategory("Generale"), LDisplayName("Lingua dell'interfaccia"), DefaultValue("auto"), TypeConverter(typeof(UiLanguageConverter))]
         [LDescription("Automatica usa la lingua di Visual Studio (italiano se è italiano, altrimenti inglese). Si applica subito a finestre e messaggi; la lingua dei commit message AI è un'impostazione separata.")]
         public string UiLanguage { get; set; } = "auto";
@@ -229,9 +252,9 @@ namespace SVNAssist.Host
 
         public override void SaveSettingsToStorage()
         {
-            var a = AnthropicApiKey; var k = AiApiKey; var g = GeminiApiKey;
-            try { AnthropicApiKey = Protect(a); AiApiKey = Protect(k); GeminiApiKey = Protect(g); base.SaveSettingsToStorage(); }
-            finally { AnthropicApiKey = a; AiApiKey = k; GeminiApiKey = g; }
+            var a = AnthropicApiKey; var k = AiApiKey; var g = GeminiApiKey; var p = AzPat;
+            try { AnthropicApiKey = Protect(a); AiApiKey = Protect(k); GeminiApiKey = Protect(g); AzPat = Protect(p); base.SaveSettingsToStorage(); }
+            finally { AnthropicApiKey = a; AiApiKey = k; GeminiApiKey = g; AzPat = p; }
         }
 
         public override void LoadSettingsFromStorage()
@@ -240,6 +263,7 @@ namespace SVNAssist.Host
             AnthropicApiKey = Unprotect(AnthropicApiKey);
             AiApiKey = Unprotect(AiApiKey);
             GeminiApiKey = Unprotect(GeminiApiKey);
+            AzPat = Unprotect(AzPat);
         }
 
         private static string Protect(string s)
@@ -295,6 +319,12 @@ namespace SVNAssist.Host
                 ["lightweightMode"] = LightweightMode ? "true" : "false",
                 ["windowTheme"] = Pick(WindowTheme, new WindowThemeConverter(), "auto"),
                 ["logTheme"] = Pick(LogTheme, new LogThemeConverter(), "same"),
+                ["azEnabled"] = AzEnabled ? "true" : "false",
+                ["azOrg"] = (AzOrg ?? "").Trim(),
+                ["azProject"] = (AzProject ?? "").Trim(),
+                ["azPat"] = AzPat ?? "",
+                ["azLinkOnCommit"] = AzLinkOnCommit ? "true" : "false",
+                ["azComment"] = AzComment ? "true" : "false",
                 ["uiLanguage"] = Pick(UiLanguage, new UiLanguageConverter(), "auto"),
                 ["uiLanguageEffective"] = EffectiveLanguage,
             };
@@ -338,6 +368,12 @@ namespace SVNAssist.Host
                 case "lightweightMode": LightweightMode = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase); break;
                 case "windowTheme": WindowTheme = value; break;
                 case "logTheme": LogTheme = value; break;
+                case "azEnabled": AzEnabled = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase); break;
+                case "azOrg": AzOrg = value ?? ""; break;
+                case "azProject": AzProject = value ?? ""; break;
+                case "azPat": AzPat = value ?? ""; break;
+                case "azLinkOnCommit": AzLinkOnCommit = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase); break;
+                case "azComment": AzComment = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase); break;
                 case "uiLanguage": UiLanguage = value; break;
                 case "showSccGlyphs": ShowSccGlyphs = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase); break;
                 case "nextChangeShortcut": NextChangeShortcut = value; break;

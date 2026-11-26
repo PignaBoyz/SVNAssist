@@ -347,3 +347,21 @@ L'host le espone in Tools > Options > SVNAssist (categoria "SVNAssist") e le res
 Un valore fuori elenco ricade sul default (come prima). Le chiavi segrete non vanno mai loggate.
 
 **Merge di una cartella** (`mergeOpen` con `path` da Solution Explorer "SVN Merge..." sul nodo cartella, o `key` dal menu della riga cartella di Changes): dopo la scelta del ramo il backend fa un controllo di compatibilita (nessuna modifica locale sotto la cartella; sottopercorso presente nel ramo; `svn mergeinfo --show-revs eligible`; `--dry-run`) e mostra il verdetto **COMPATIBILE** (revisioni da unire, anteprima) o **NON POSSIBILE** con il motivo in italiano (E160013 sottopercorso assente, E195016 nessun antenato comune, ...). Se compatibile e confermato, il Log in modalita merge parte con cwd = la cartella e sorgente `<ramo>/<sottopercorso>` (il titolo mostra `Merge da branches/x/sub`); "Annulla merge" e "Revert di tutto" agiscono solo sotto la cartella. svn registra `svn:mergeinfo` sulla cartella, non sulla radice del ramo.
+
+### Azure DevOps (facoltativo, Changes e Log)
+
+Integrazione spenta finche' l'utente non la configura con la procedura guidata (menu di Changes > **Collega Azure DevOps…**). `snapshot.azure` di Changes c'e' solo se e' attiva (`ready`) o se la procedura e' aperta (`wizard`). Il messaggio di commit resta testo leggibile anche senza estensione: in cima `Tipo N - titolo` + link `.../_workitems/edit/N` (l'estensione riconosce i work item dal link). Dopo il commit, per ogni work item del messaggio: un link (Hyperlink) alla revisione con ramo e ramo di origine nel commento, che **sostituisce** quello precedente scritto da SVNAssist (commento che inizia con `SVN r`); poi lo stato scelto, passando per gli stati intermedi (categorie di Azure: Proposed → InProgress → Resolved → Completed), fermandosi al primo rifiuto; commento nella Discussion solo se attivo. Gli errori verso Azure vanno nella barra di stato e non toccano il commit. Genera/Migliora con l'AI tengono le intestazioni in cima.
+
+| Comando | Argomenti | Effetto |
+|---|---|---|
+| `azWizardOpen` / `azWizardClose` | — | apre/chiude la procedura guidata |
+| `azCheck` | `org, project, pat` (`pat` vuoto = tiene quello salvato) | salva e verifica: organizzazione e token, progetto, lettura, scrittura (validateOnly, Azure non salva) |
+| `azOption` | `key`: `azEnabled` \| `azLinkOnCommit` \| `azComment`, `on` | attiva/disattiva |
+| `azLink` | `id, text` | intestazione del work item in cima a `text` (toglie `#cifre` in fondo); carica gli stati con la strada e la verifica di ogni primo passaggio |
+| `azUnlink` | `id, text` | toglie l'intestazione |
+| `azState` | `state` (vuoto = invariato) | stato dopo il commit (solo uno permesso) |
+| `azSuggestClose` | — | chiude la tendina dopo `#` |
+| `azOpen` | `id` | apre il work item (URL costruito dal backend); anche nel Log |
+| `azOpenPatPage` | `org` | apre la pagina di Azure per creare il token |
+
+Nel Log, con l'integrazione attiva, `entries[].wi` = work item citati (stato attuale), una richiesta per pagina con cache di 3 minuti.

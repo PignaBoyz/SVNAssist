@@ -105,6 +105,41 @@
                 }
               }
             }
+          },
+          "wi": {
+            "type": "array",
+            "description": "Azure DevOps attivo: work item citati nel messaggio (formato dell'estensione), con stato attuale. Assente altrimenti.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "type",
+                "title",
+                "state",
+                "url"
+              ],
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "type": {
+                  "type": "string",
+                  "description": "Bug, Task, Feature..."
+                },
+                "title": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string",
+                  "description": "Stato attuale in Azure."
+                },
+                "url": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -839,11 +874,19 @@
       "description": "Percorso nel repository della cartella o del file di cui si legge il log (es. /trunk/src). Serve all'opzione Solo percorsi interessati: i percorsi di una revisione fuori da qui si nascondono."
     },
     "updateScope": {
-      "enum": ["wc", "file", "dir"],
+      "enum": [
+        "wc",
+        "file",
+        "dir"
+      ],
       "description": "Cosa si puo' aggiornare dal tasto destro (Update a questa revisione): wc = il log e' della radice della working copy; file/dir = di un elemento dentro (si offre anche solo quello). Assente per il log di un URL."
     },
     "logTheme": {
-      "enum": ["same", "light", "dark"],
+      "enum": [
+        "same",
+        "light",
+        "dark"
+      ],
       "description": "Tema della sola finestra Log: same = come le altre finestre SVNAssist."
     },
     "current": {

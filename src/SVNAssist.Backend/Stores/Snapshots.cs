@@ -24,7 +24,8 @@ internal sealed record DownloadDto(double Pct, string Label);
 internal sealed record CommitDto(string Text, string AiStatus, string AiLevel, int AiSeq, bool Busy, string Lang, IReadOnlyList<TraceDto> Trace, DownloadDto? Download, int Count = 0, bool All = false,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? Recent = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] StatusActionDto? AiAction = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? AiProviderLabel = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? AiProviderLabel = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int TextSeq = 0);
 
 internal sealed record ThemeDto(string Mode, string Kind);
 
@@ -151,7 +152,8 @@ internal sealed record ChangesState(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CommitWarnDto? CommitWarn = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BranchTagDto? BranchTag = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ShelveDto>? Shelves = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IncomingDto? Incoming = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IncomingDto? Incoming = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] AzureDto? Azure = null);
 
 /// <summary>Uno shelve (sezione "Shelved" di Changes): <c>Date</c> ISO locale, <c>Files</c> = file nella patch.</summary>
 internal sealed record ShelveDto(string Id, string Name, string Date, int Files);
@@ -172,7 +174,8 @@ internal sealed record LogFilesDto(string Kind, string Title, IReadOnlyList<LogP
 /// <param name="Reverse"><c>reverse-merge</c>: la revisione e' stata tolta dal merge.</param>
 internal sealed record LogEntryDto(long Rev, string Author, string Date, string Msg, IReadOnlyList<LogPathDto> Paths,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int Depth = 0,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Reverse = false);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Reverse = false,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<AzItemDto>? Wi = null);
 
 internal sealed record MergeCountsDto(int Updated, int Added, int Deleted, int Merged, int Conflicted);
 

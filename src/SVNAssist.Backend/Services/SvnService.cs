@@ -608,6 +608,25 @@ public class SvnService : ISvnService
         => RunSvnAsync(["log", "--diff", Peg(SafeTarget(filePath))], workingDirectory: null, ct, applyTimeout: false);
 
     /// <inheritdoc />
+    public async Task<string?> GetCopySourceAsync(string url, CancellationToken ct)
+        => ParseCopySource(await RunSvnAsync(["log", "--stop-on-copy", "-v", "--xml", "-r", "1:HEAD", "-l", "1", Peg(SafeTarget(url))], workingDirectory: null, ct));
+
+    /// <summary>
+    /// Dalla prima revisione dopo la copia (<c>svn log --stop-on-copy -v --xml -r 1:HEAD -l 1</c>): il <c>copyfrom-path</c> del percorso copiato
+    /// (la radice del ramo). Se ce ne sono piu' d'uno, il piu' corto (la cartella del ramo, non un file copiato dentro).
+    /// </summary>
+    internal static string? ParseCopySource(string xml)
+    {
+        if (string.IsNullOrWhiteSpace(xml))
+            return null;
+        return XDocument.Parse(xml).Descendants("path")
+            .Where(p => (string?)p.Attribute("copyfrom-path") is { Length: > 0 })
+            .OrderBy(p => p.Value.Length)
+            .Select(p => (string?)p.Attribute("copyfrom-path"))
+            .FirstOrDefault();
+    }
+
+    /// <inheritdoc />
     /// <remarks>Senza timeout: su file con lunga storia il server ci mette; lo chiede l'utente (blame acceso).</remarks>
     public Task<string> GetBlameXmlAsync(string filePath, CancellationToken ct)
         => RunSvnAsync(["blame", "--xml", Peg(SafeTarget(filePath))], workingDirectory: null, ct, applyTimeout: false);

@@ -5,7 +5,7 @@
   const t = U.t;
   const LANGS = () => [['auto', t('Auto (lingua del codice)')], ['italiano', 'Italiano'], ['english', 'English']];
   const THEMES = () => [['auto', t('Auto (segue Visual Studio)')], ['light', t('Chiaro')], ['dark', t('Scuro')], ['blue', t('Blu')]];
-  let st = null, forceInput = false, timer = 0, filter = '';
+  let st = null, forceInput = false, timer = 0, filter = '', lastTextSeq = -1;
   const expandedCaps = new Set();
 
   function header(s) {
@@ -188,6 +188,7 @@
       { header: true, label: t('Tema della finestra') },
       ...THEMES().map(([m, l]) => ({ label: l, cmd: 'setTheme', args: { mode: m }, checked: st.theme.mode === m })), { sep: true },
       { label: t('Cambia provider AI…'), cmd: 'wizardOpen' },
+      { label: t('Collega Azure DevOps…'), cmd: 'azWizardOpen', hint: t('Facoltativo: collega i commit ai work item di Azure DevOps') },
       { label: t('Prerequisiti…'), cmd: 'prereqToggle' },
       { label: t('Cambia working copy…'), run: () => { forceInput = true; render(); const i = document.getElementById('wcp'); if (i) i.focus(); } },
     ];
@@ -367,7 +368,12 @@
     U.setHTML(root.querySelector('#mrg'), mergeBanner(st));
     U.setHTML(root.querySelector('#cfl'), conflictsHTML(st));
     const ta = root.querySelector('#msg');
-    msgSync(ta, st.commit.text, document.activeElement);
+    const seq = +st.commit.textSeq || 0, forced = seq !== lastTextSeq;   // testo scritto dal backend (AI, recenti, work item): va nel campo anche con il focus
+    if (forced) clearTimeout(timer);
+    msgSync(ta, st.commit.text, document.activeElement, forced && lastTextSeq >= 0);
+    if (forced && lastTextSeq >= 0 && document.activeElement === ta) ta.setSelectionRange(ta.value.length, ta.value.length);
+    lastTextSeq = seq;
+    U.azure.render(root, st.azure);
     const list = root.querySelector('#list'), had = list.contains(document.activeElement), cur = list.__cursor, top = list.scrollTop;
     const keys = []; st.sections.forEach(s => { keys.push('section:' + s.id); s.rows.forEach(r => keys.push(r.key)); });
     const remap = U.syncSel(list, keys), cursor = keys.includes(remap(cur)) ? remap(cur) : keys[0];   // la selezione sopravvive allo snapshot
@@ -378,7 +384,7 @@
     list.setAttribute('aria-busy', !!st.loading);
     U.setHTML(root.querySelector('#shl'), shelvedHTML(st));
     U.setHTML(root.querySelector('#foot'), foot(st));
-    const anyModal = !!(st.wizard && st.wizard.open) || !!(st.revPicker && st.revPicker.open) || !!(st.switchPicker && st.switchPicker.open) || !!(st.progress || st.switchWarn || st.cleanup || st.commitWarn || st.incoming || st.branchTag) || U.ops.hasShelve();
+    const anyModal = !!(st.azure && st.azure.wizard) || !!(st.wizard && st.wizard.open) || !!(st.revPicker && st.revPicker.open) || !!(st.switchPicker && st.switchPicker.open) || !!(st.progress || st.switchWarn || st.cleanup || st.commitWarn || st.incoming || st.branchTag) || U.ops.hasShelve();
     if (anyModal) rcClose(false); else rcRefresh();
     renderWizard(root, anyModal);
     renderRev(root, anyModal);
@@ -627,15 +633,16 @@
   U.views.changes = {
     mount(root) {
       root.innerHTML = `<div class="app"><div class="prog" aria-hidden="true"></div><header class="bar" id="hdr"></header><div id="wcbox"></div>
-        <section class="commit"><textarea id="msg" rows="3"></textarea>
+        <section class="commit"><div class="msgbox"><textarea id="msg" rows="3"></textarea><div id="azs"></div></div><div id="azr"></div>
         <div class="bar" id="cbar"></div><div id="aist"></div></section><div id="prq"></div><div id="mrg"></div><div id="cfl"></div>
         <div class="flt"><input id="flt" type="search" spellcheck="false" autocomplete="off"></div>
         <div class="list" id="list" role="tree"></div><div id="shl"></div>
-        <footer class="foot" id="foot"></footer></div><div id="wiz"></div><div id="rev"></div><div id="sw"></div><div id="ops"></div><div id="rec" hidden></div>`;
+        <footer class="foot" id="foot"></footer></div><div id="wiz"></div><div id="azw"></div><div id="rev"></div><div id="sw"></div><div id="ops"></div><div id="rec" hidden></div>`;
       U.views.changes.relang(root);
       const ta = root.querySelector('#msg');
       ta.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => U.bridge.send('setCommitText', { text: ta.value }), 150); });
       ta.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); clearTimeout(timer); U.bridge.send('setCommitText', { text: ta.value }); U.bridge.send('commit'); } });
+      U.azure.wire(root, () => st, () => root.querySelector('#msg'), () => clearTimeout(timer));
       root.addEventListener('keydown', wizKeys);
       root.addEventListener('keydown', revKeys);
       root.addEventListener('keydown', swKeys);

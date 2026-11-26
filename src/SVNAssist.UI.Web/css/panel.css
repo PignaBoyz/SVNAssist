@@ -436,3 +436,26 @@ html[data-view=settings] body{background:var(--bg1)}
 .set-test.ok{color:var(--chip-ok-fg)}
 .set-test.err{color:var(--chip-fail-fg)}
 .set-test.busy{color:var(--fg2)}
+/* Azure DevOps (facoltativo): riga Work item sotto il messaggio, tendina dopo #, procedura guidata, badge nel Log */
+.msgbox{position:relative}
+.az-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:4px 0 0}
+.az-row #az-id{width:9em;flex:none}
+.az-chip{display:inline-flex;align-items:center;border:1px solid var(--bd2);border-radius:10px;background:var(--bg3)}
+.az-wi{background:none;border:0;padding:1px 4px 1px 8px;cursor:pointer;white-space:nowrap}
+.az-wi:hover{text-decoration:underline}
+.az-st{display:inline-flex;align-items:center;gap:6px;margin-left:auto}
+.az-st select{background:var(--bg1);border:1px solid var(--bd2);border-radius:4px;padding:3px 6px;max-width:22em}
+.az-err{display:flex;gap:6px;align-items:center;margin-top:4px;padding:3px 8px;border-radius:4px;background:var(--chip-fail-bg);color:var(--chip-fail-fg)}
+.az-sug{position:absolute;left:0;right:0;top:100%;z-index:40;background:var(--bg2);border:1px solid var(--bd2);border-radius:6px;box-shadow:0 8px 20px var(--shadow);max-height:260px;overflow:auto}
+.az-opt{display:flex;gap:8px;align-items:baseline;padding:5px 8px;cursor:pointer;border-bottom:1px solid var(--bd)}
+.az-opt:hover,.az-opt.sel{background:var(--acc-bg)}
+.az-opt b{flex:none}.az-opt .muted{flex:none}
+.az-tt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.az-hint{padding:3px 8px}
+.az-checks{display:flex;flex-direction:column;gap:4px;margin:8px 0}
+.az-opts{display:flex;flex-direction:column;gap:4px;margin-top:6px}
+.az-o{font-weight:400 !important;display:flex;gap:6px;align-items:center}
+button.lnk{background:none;border:0;padding:0;color:var(--acc2);text-decoration:underline;cursor:pointer}
+.wi-b{display:inline-flex;gap:4px;align-items:center;margin-right:6px;padding:0 6px;border-radius:9px;background:var(--chip-ok-bg);color:var(--chip-ok-fg);font-size:.9em;white-space:nowrap;border:0;cursor:pointer}
+.wi-b .st{opacity:.85}
+.wi-d{margin:6px 0 0;display:flex;flex-direction:column;gap:2px}

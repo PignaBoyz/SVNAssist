@@ -59,7 +59,7 @@ internal sealed class CommitStore
     internal string Text
     {
         get { lock (_lock) return _text; }
-        set { lock (_lock) _text = value ?? string.Empty; Changed?.Invoke(); }
+        set { lock (_lock) { _text = value ?? string.Empty; _textSeq++; } Changed?.Invoke(); }
     }
 
     /// <summary>Aggiorna il testo senza notificare: lo ha appena digitato la UI, che lo tiene lei (niente eco).</summary>
@@ -124,6 +124,8 @@ internal sealed class CommitStore
     }
 
     private int _aiSeq;
+    // Cresce quando il testo lo scrive il backend (AI, recenti, work item): la UI lo rimette nel campo anche se ha il focus.
+    private int _textSeq;
 
     /// <summary>Gravita' del messaggio per la UI (colore/icona): i messaggi "mancano i presupposti" sono avvisi, "Errore..." e' un errore.</summary>
     internal static string LevelOf(string status, bool busy)
@@ -160,7 +162,7 @@ internal sealed class CommitStore
     internal CommitDto GetSnapshot(DownloadDto? download, int count = 0, bool all = false)
     {
         lock (_lock)
-            return new CommitDto(_text, _aiStatus, LevelOf(_aiStatus, _busy), _aiSeq, _busy, _lang, _trace, download, count, all, AiAction: _aiAction, AiProviderLabel: _aiProviderLabel);
+            return new CommitDto(_text, _aiStatus, LevelOf(_aiStatus, _busy), _aiSeq, _busy, _lang, _trace, download, count, all, AiAction: _aiAction, AiProviderLabel: _aiProviderLabel, TextSeq: _textSeq);
     }
 
     /// <summary>Cambia la lingua del messaggio AI (valori: auto, italiano, english).</summary>

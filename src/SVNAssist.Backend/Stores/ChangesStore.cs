@@ -140,6 +140,8 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
         Prerequisites.Changed += NotifyChanged;
         Wizard = wizard ?? new WizardStore(prerequisites, settingsService);
         Wizard.Changed += NotifyChanged;
+        Azure = new AzureStore(settingsService, AiServiceFactory.SharedHttpClient);
+        Azure.Changed += NotifyChanged;
         CommitMessage = new CommitStore(
             settingsService, svnService, aiServiceFactory, aiSetupPrompt,
             stagedPaths: () => CommitSet().Entries.Select(e => e.FullPath).ToList(),
@@ -602,6 +604,9 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
     /// <summary>Procedura guidata per configurare l'AI.</summary>
     internal WizardStore Wizard { get; }
 
+    /// <summary>Integrazione Azure DevOps (facoltativa): work item nel messaggio, link dopo il commit, procedura guidata.</summary>
+    internal AzureStore Azure { get; }
+
     /// <summary>Se <c>true</c> un FileSystemWatcher sulla working copy rinfresca lo stato da solo (spento nei test).</summary>
     internal bool EnableWatcher { get; set; }
 
@@ -684,7 +689,8 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                 _commitWarn ? BuildCommitWarn() : null,
                 BranchTag.GetSnapshot(Total(CountDirty(_entries.Where(e => !IsVsFolder(e)).Select(e => e.Status))) > 0),
                 _shelves.Count == 0 ? null : _shelves.Select(s => new ShelveDto(s.Id, s.Name, s.Date.ToString("yyyy-MM-ddTHH:mm:ss"), s.Files)).ToList(),
-                Incoming.GetSnapshot());
+                Incoming.GetSnapshot(),
+                Azure.GetSnapshot() is { } az && (az.Ready || az.Wizard is not null) ? az : null);
         }
     }
 
@@ -1146,6 +1152,56 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                 break;
             case "setCommitText":
                 CommitMessage.SetTextQuietly(Args.Str(args, "text"));
+                await Azure.OnMessageChangedAsync(Args.Str(args, "text"), ct);
+                break;
+            case "azWizardOpen":
+                await Azure.OpenWizardAsync(ct);
+                break;
+            case "azWizardClose":
+                Azure.CloseWizard();
+                break;
+            case "azCheck":
+                await Azure.CheckAsync(Args.Str(args, "org"), Args.Str(args, "project"), Args.Str(args, "pat"), ct);
+                break;
+            case "azOption":
+                await Azure.SetOptionAsync(Args.OneOf(args, "key", SettingDefinitions.AzEnabled, SettingDefinitions.AzLinkOnCommit, SettingDefinitions.AzComment), Args.Bool(args, "on"), ct);
+                break;
+            case "azLink":
+                {
+                    // Casella "Work item" o scelta nella tendina: il testo arriva dalla UI (quello che ha nel campo adesso).
+                    var id = Args.Long(args, "id");
+                    if (id is < 1 or > int.MaxValue)
+                        throw new ArgumentException(Loc.T("Numero di work item non valido."));
+                    var text = Args.Str(args, "text");
+                    CommitMessage.SetTextQuietly(text);
+                    if (await Azure.LinkAsync((int)id, text, ct) is { } linked)
+                    {
+                        CommitMessage.Text = linked;
+                        await Azure.OnMessageChangedAsync(linked, ct);
+                    }
+
+                    break;
+                }
+            case "azUnlink":
+                {
+                    var id = Args.Long(args, "id");
+                    var text = WorkItemText.WithoutHeader(Args.Str(args, "text"), (int)Math.Clamp(id, 0, int.MaxValue));
+                    CommitMessage.Text = text;
+                    await Azure.OnMessageChangedAsync(text, ct);
+                    break;
+                }
+            case "azState":
+                Azure.SetTargetState(Args.Str(args, "state"));
+                break;
+            case "azSuggestClose":
+                Azure.CloseSuggest();
+                break;
+            case "azOpen":
+                if (await Azure.WorkItemUrlAsync(Args.Long(args, "id"), ct) is { } wiUrl)
+                    await _host.OpenUrlAsync(wiUrl);
+                break;
+            case "azOpenPatPage":
+                await _host.OpenUrlAsync(AzureStore.PatPageUrl(Args.Str(args, "org")));
                 break;
             case "useRecentMessage":
                 {
@@ -1160,11 +1216,19 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                     break;
                 }
             case "genAi":
-                await CommitMessage.GenerateAsync(ct);
-                break;
             case "improveAi":
-                await CommitMessage.ImproveAsync(ct, args.ValueKind == JsonValueKind.Object && args.TryGetProperty("style", out _) ? Args.OneOf(args, "style", "shorter", "detailed") : null);
-                break;
+                {
+                    // Le intestazioni dei work item (Azure DevOps) restano in cima: l'AI scrive o riscrive solo la descrizione.
+                    var before = CommitMessage.Text;
+                    if (name == "genAi")
+                        await CommitMessage.GenerateAsync(ct);
+                    else
+                        await CommitMessage.ImproveAsync(ct, args.ValueKind == JsonValueKind.Object && args.TryGetProperty("style", out _) ? Args.OneOf(args, "style", "shorter", "detailed") : null);
+                    var after = CommitMessage.Text;
+                    if (after != before && WorkItemText.KeepHeaders(before, after) is var kept && kept != after)
+                        CommitMessage.Text = kept;
+                    break;
+                }
             case "setLanguage":
                 CommitMessage.SetLanguage(Args.OneOf(args, "lang", "auto", "italiano", "english"));
                 break;
@@ -1408,6 +1472,7 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
 
             await Prerequisites.InitializeAsync(ct);
             await CommitMessage.InitializeAsync(ct);
+            await Azure.RefreshReadyAsync(ct);
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
@@ -1429,6 +1494,7 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
 
         HeadCheck.Nudge(); // intervallo cambiato (o acceso/spento): rilegge subito l'impostazione
         await CommitMessage.RefreshProviderLabelAsync(ct);
+        await Azure.RefreshReadyAsync(ct);
         if (Volatile.Read(ref _uiStarted) == 1)
         {
             // Rilegge anche i testi che dipendono dalla lingua dell'interfaccia (checklist, procedura guidata, riepilogo).
@@ -2166,7 +2232,9 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
 
             if (!string.IsNullOrEmpty(repo))
                 Recent?.Add(repo, message);
+            var azTarget = Azure.TakeTargetState();
             CommitMessage.Clear();
+            await Azure.OnMessageChangedAsync(string.Empty, ct);
             PreMergeSnapshot? preMerge;
             lock (_stateLock)
                 preMerge = _preMerge;
@@ -2182,12 +2250,46 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             if (behind)
                 SetUpdateHint(done);
             HeadCheck.Nudge();
+            if (revision is { } committed && !string.IsNullOrEmpty(branchUrl) && WorkItemText.IdsIn(message).Count > 0)
+                _ = Task.Run(() => UpdateAzureAsync(committed, message, branchUrl, azTarget, ct), CancellationToken.None); // non blocca: Azure lento o giu' non tocca il commit
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
             // Add/delete gia' eseguiti prima del commit fallito (es. "fai prima Update"): la lista va riallineata.
             var note = toAddCount > 0 ? " " + Loc.T("I file nuovi restano aggiunti (A): rifai il commit o annullali con Revert.") : string.Empty;
             await RefreshAsync(ct, reloadBranch: false, Loc.T("Errore commit: {0}", ex.Message) + note);
+        }
+    }
+
+    /// <summary>
+    /// Dopo il commit, se il messaggio cita work item e l'integrazione e' attiva: link alla revisione con ramo, ramo di origine
+    /// (da cui e' stato copiato) e autore; stato e commento se scelti. L'esito va nella barra di stato.
+    /// </summary>
+    private async Task UpdateAzureAsync(long revision, string message, string branchUrl, string targetState, CancellationToken ct)
+    {
+        try
+        {
+            if (!(await Azure.SettingsAsync(ct)).Ready)
+                return;
+            string branch;
+            lock (_stateLock)
+                branch = _branchName;
+            var author = string.Empty;
+            try { author = (await _svnService.GetLogAsync(branchUrl, 1, new SvnLogFilter(Revisions: [revision]), ct)).FirstOrDefault()?.Author ?? string.Empty; }
+            catch (Exception ex) when (!ct.IsCancellationRequested) { BackendLog.Info("Azure: autore non letto: " + ex.Message); }
+            var origin = string.Empty;
+            try { origin = await _svnService.GetCopySourceAsync(branchUrl, ct) is { } src ? src.TrimEnd('/').Split('/').Last() : string.Empty; }
+            catch (Exception ex) when (!ct.IsCancellationRequested) { BackendLog.Info("Azure: ramo di origine non letto: " + ex.Message); }
+            if (branch.Length == 0)
+                branch = branchUrl.TrimEnd('/').Split('/').Last();
+            var info = new AzureStore.CommitInfo(revision, message, author, branch, origin, $"{branchUrl}?p={revision.ToString(System.Globalization.CultureInfo.InvariantCulture)}", targetState);
+            if (await Azure.AfterCommitAsync(info, ct) is { } summary)
+                SetStatus(summary);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            BackendLog.Warn("Azure dopo il commit: " + ex.Message);
+            SetStatus(Loc.T("Azure DevOps non aggiornato: {0}", ex.Message));
         }
     }
 

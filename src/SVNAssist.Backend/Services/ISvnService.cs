@@ -146,6 +146,12 @@ public interface ISvnService
     /// </summary>
     Task<string> GetLogWithDiffAsync(string filePath, CancellationToken ct);
 
+    /// <summary>
+    /// Da dove e' stato copiato il ramo che contiene <paramref name="url"/> (es. "/branches/core19" per un branch di feature nato da core19):
+    /// la copia piu' recente nella storia del percorso (<c>svn log --stop-on-copy -v -r 1:HEAD -l 1</c>). null se il percorso non nasce da una copia.
+    /// </summary>
+    Task<string?> GetCopySourceAsync(string url, CancellationToken ct);
+
     /// <summary><c>svn blame --xml</c> del file (la sua BASE): lo legge <see cref="Blame.Parse"/>.</summary>
     Task<string> GetBlameXmlAsync(string filePath, CancellationToken ct);
 

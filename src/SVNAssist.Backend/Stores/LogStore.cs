@@ -278,6 +278,10 @@ internal sealed class LogStore : ViewStore
             case "logOpenRevFile":
                 await GuardAsync(() => OpenRevisionInEditorAsync(Args.Long(args, "rev"), (int)Args.Long(args, "i"), ct));
                 break;
+            case "azOpen":
+                if (_changes?.Azure is { } az && _host is not null && await az.WorkItemUrlAsync(Args.Long(args, "id"), ct) is { } wiUrl)
+                    await _host.OpenUrlAsync(wiUrl);
+                break;
             case "logUpdateTo":
                 await UpdateToAsync(Args.Long(args, "rev"), Args.OneOf(args, "scope", "wc", "item"), ct);
                 break;
@@ -598,6 +602,7 @@ internal sealed class LogStore : ViewStore
                 }
             }
 
+            await AddWorkItemsAsync(ct);
             if (line is not null)
                 Set(dtos.Count == 0 ? Loc.T("Nessuna revisione trovata.")
                     : Loc.T("{0} revisioni hanno toccato le righe {1}{2}.", entries.Count, LineRange(line.From, line.To),
@@ -713,6 +718,42 @@ internal sealed class LogStore : ViewStore
         }
 
         await LoadAsync(_limit, ct);
+    }
+
+    /// <summary>
+    /// Azure DevOps attivo: badge (numero, tipo, stato attuale) sulle revisioni che citano work item nel formato dell'estensione.
+    /// Una sola richiesta per tutti gli id della pagina (con cache); le revisioni senza link non costano nulla. Un errore non tocca il log.
+    /// </summary>
+    private async Task AddWorkItemsAsync(CancellationToken ct)
+    {
+        if (_changes?.Azure is not { } az)
+            return;
+        List<LogEntryDto> entries;
+        lock (_lock)
+            entries = _entries.ToList();
+        var ids = entries.SelectMany(e => WorkItemText.IdsIn(e.Msg)).Distinct().ToList();
+        if (ids.Count == 0)
+            return;
+        try
+        {
+            if (!(await az.SettingsAsync(ct)).Ready)
+                return;
+            var items = (await az.GetItemsAsync(ids, ct)).ToDictionary(w => w.Id);
+            var decorated = entries.Select(e =>
+            {
+                var wi = WorkItemText.IdsIn(e.Msg).Where(items.ContainsKey).Select(i => items[i]).Select(w => new AzItemDto(w.Id, w.Type, w.Title, w.State, w.Url)).ToList();
+                return wi.Count > 0 ? e with { Wi = wi } : e;
+            }).ToList();
+            lock (_lock)
+            {
+                if (_entries.Count == entries.Count && _entries.Select(e => e.Rev).SequenceEqual(entries.Select(e => e.Rev)))
+                    _entries = decorated;
+            }
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            BackendLog.Info("Log: work item Azure non letti: " + ex.Message);
+        }
     }
 
     /// <summary>Revisione della working copy (<c>svn info</c>: quella dell'ultimo update della cartella o del file); null per un URL o se non si legge.</summary>

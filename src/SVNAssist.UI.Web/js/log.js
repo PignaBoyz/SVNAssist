@@ -28,6 +28,8 @@
     fb();
   };
   // menu contestuale di una riga (tasto destro, tasto Menu, Maiusc+F10): azioni sulla revisione; in modalita' merge anche scelta, anteprima e merge di quella revisione
+  // Azure DevOps attivo: badge "Bug 81018 · Active" (stato attuale) sulle revisioni che citano work item; clic = apre il work item
+  U.wiBadges = list => (list || []).map(w => `<button type="button" class="wi-b" ${U.cmd('azOpen', { id: w.id })} title="${esc(t('Apre il work item in Azure DevOps: {0}', w.title))}">${esc((w.type || '#') + ' ' + w.id)}${w.state ? ` <span class="st">· ${esc(w.state)}</span>` : ''}</button>`).join('');
   U.logRowMenu = (s, rev) => {
     const e = s.entries.find(x => x.rev === rev); if (!e) return [];
     const copy = (txt, what) => () => { copyText(txt); if (U.toast) U.toast(t('Copiato: {0}', what)); };
@@ -111,7 +113,7 @@
       const picked = s.merge ? new Set(s.merge.selected) : null, cur = s.merge ? (s.entries.some(e => e.rev === mcur) ? mcur : s.entries[0].rev) : (s.sel == null ? s.entries[0].rev : s.sel);
       return `<div class="lh" role="row">${h(1, t('Rev.'))}${h(2, t('Autore'))}${h(3, t('Data'))}<span role="columnheader">${t('Messaggio')}</span></div>` +
         s.entries.map(e => { const on = picked ? picked.has(e.rev) : s.sel === e.rev; const d = e.depth ? Math.min(e.depth, 3) : 0; const here = !d && s.current === e.rev; return `<div class="lr${on ? ' sel' : ''}${here ? ' cur' : ''}${d ? ' mg d' + d : ''}${e.reverse ? ' rvm' : ''}${remain.has(e.rev) ? ' mrem' : ''}" role="row" aria-selected="${on}"${d ? ` aria-level="${d + 1}"` : ''} tabindex="${cur === e.rev ? 0 : -1}" data-rev="${e.rev}">` +
-          `<b class="rv" role="gridcell">${picked ? `<span class="ck${on ? ' on' : ''}" aria-hidden="true">${on ? U.icon('check') : ''}</span>` : ''}${d ? `<i class="mgi" title="${esc(t('Entrata per merge'))}" aria-hidden="true">↳</i>` : ''}r${e.rev}</b><span class="au" role="gridcell" title="${esc(e.author)}">${esc(e.author)}</span><span class="dtm muted" role="gridcell">${U.fmtDate(e.date)}</span><span class="m" role="gridcell" title="${esc(e.msg)}">${here ? `<span class="wcr" title="${esc(t('La working copy è a questa revisione (ultimo update)'))}">${esc(t('sei qui'))}</span> ` : ''}${e.reverse ? `<em class="rvt">${esc(t('merge inverso'))}</em> ` : ''}${esc((e.msg || '').split('\n')[0])}</span></div>`; }).join('') +
+          `<b class="rv" role="gridcell">${picked ? `<span class="ck${on ? ' on' : ''}" aria-hidden="true">${on ? U.icon('check') : ''}</span>` : ''}${d ? `<i class="mgi" title="${esc(t('Entrata per merge'))}" aria-hidden="true">↳</i>` : ''}r${e.rev}</b><span class="au" role="gridcell" title="${esc(e.author)}">${esc(e.author)}</span><span class="dtm muted" role="gridcell">${U.fmtDate(e.date)}</span><span class="m" role="gridcell" title="${esc(e.msg)}">${here ? `<span class="wcr" title="${esc(t('La working copy è a questa revisione (ultimo update)'))}">${esc(t('sei qui'))}</span> ` : ''}${U.wiBadges(e.wi)}${e.reverse ? `<em class="rvt">${esc(t('merge inverso'))}</em> ` : ''}${esc((e.msg || '').split('\n')[0])}</span></div>`; }).join('') +
         (s.canMore ? `<div class="lmore">${U.btn('btn', t('Carica altre 50'), null, 'logMore', null, t('Carica altre 50 revisioni più vecchie'))}</div>` : '');
     },
     // riga di un file dell'anteprima/merge (azione + percorso, senza diff: il merge non e' ancora committato)
@@ -176,7 +178,7 @@
       const all = e.paths.map((p, i) => ({ p, i })), rows = onlyAffected ? all.filter(x => inBase(x.p.p, s.base)) : all;
       const cnt = ['A', 'M', 'D', 'R'].map(a => [a, rows.filter(x => x.p.a === a && x.p.k !== 'dir').length]).filter(x => x[1]).map(([a, n]) => `${n} ${esc(U.statusName(a))}`).join(' · ');
       const opt = s.base && s.base !== '/' ? `<label class="lo-c" title="${esc(t('Nasconde i percorsi della revisione fuori da {0} (come TortoiseSVN: Only affected paths)', s.base))}"><input type="checkbox" id="lonly"${onlyAffected ? ' checked' : ''}><span>${t('Solo percorsi interessati')}</span></label>` : '';
-      return `<div class="ld-h"><b>r${e.rev}</b> · ${esc(e.author)} · <span class="muted">${U.fmtDate(e.date)}</span><p class="lmsg">${esc(e.msg)}</p>` +
+      return `<div class="ld-h"><b>r${e.rev}</b> · ${esc(e.author)} · <span class="muted">${U.fmtDate(e.date)}</span>${e.wi && e.wi.length ? `<div class="wi-d">${e.wi.map(w => `${U.wiBadges([w])}<span>${esc(w.title)}</span>`).join('<br>')}</div>` : ''}<p class="lmsg">${esc(e.msg)}</p>` +
         `<div class="pth">${t('Percorsi modificati')} · ${t('{0} file', rows.length)}${cnt ? ' · ' + cnt : ''}${onlyAffected && rows.length < all.length ? ' · ' + t('{0} nascosti', all.length - rows.length) : ''}</div>${opt}` +
         `<ul class="paths">${rows.map(x => U.logHTML.pathRow(x.p, 'logOpenFile', { rev: e.rev, i: x.i })).join('')}</ul></div>` + `<div class="ld-d">${U.diffHTML(s.diff)}</div>`;
     },
@@ -220,7 +222,7 @@
         for (const r of list.querySelectorAll('.lr')) { const on = +r.dataset.rev === rev; r.classList.toggle('sel', on); r.setAttribute('aria-selected', on); r.tabIndex = on ? 0 : -1; }
         if (delay) selTimer = setTimeout(() => U.bridge.send('logSelect', { rev }), delay); else U.bridge.send('logSelect', { rev });
       };
-      list.addEventListener('click', e => { const r = e.target.closest('.lr'); if (r && st && st.merge) { mcur = +r.dataset.rev; U.bridge.send('mergeToggle', { rev: mcur }); } else if (r) { const c = U.logClick(st && st.sel, +r.dataset.rev, e.ctrlKey || e.shiftKey || e.metaKey); if (c.cmd === 'logSelect') pick(c.args.rev, 0); else U.bridge.send(c.cmd, c.args); } });
+      list.addEventListener('click', e => { if (e.target.closest('.wi-b')) return; const r = e.target.closest('.lr'); if (r && st && st.merge) { mcur = +r.dataset.rev; U.bridge.send('mergeToggle', { rev: mcur }); } else if (r) { const c = U.logClick(st && st.sel, +r.dataset.rev, e.ctrlKey || e.shiftKey || e.metaKey); if (c.cmd === 'logSelect') pick(c.args.rev, 0); else U.bridge.send(c.cmd, c.args); } });
       list.addEventListener('contextmenu', e => { const r = e.target.closest('.lr'); if (!r || !st) return; e.preventDefault(); U.menu.open(e.clientX, e.clientY, U.logRowMenu(st, +r.dataset.rev), r); });
       list.addEventListener('pointerdown', e => {   // trascina il bordo dell'intestazione per cambiare la larghezza della colonna
         const g = e.target.closest('.rz'); if (!g) return; e.preventDefault(); e.stopPropagation();

@@ -44,6 +44,14 @@ internal sealed class StubSettings : ISvnAssistSettings
     /// <summary>Impostazioni salvate con SetSettingAsync (le chiavi AI aggiornano anche i valori letti).</summary>
     public Dictionary<string, string> Saved { get; } = new(StringComparer.OrdinalIgnoreCase);
 
+    public Task<AzureSettings> GetAzureAsync(CancellationToken ct)
+    {
+        string V(string k, string d) => Saved.TryGetValue(k, out var v) ? v : d;
+        bool B(string k, bool d) => Saved.TryGetValue(k, out var v) ? string.Equals(v, "true", StringComparison.OrdinalIgnoreCase) : d;
+        return Task.FromResult(new AzureSettings(B(SettingDefinitions.AzEnabled, false), V(SettingDefinitions.AzOrg, ""), V(SettingDefinitions.AzProject, ""),
+            V(SettingDefinitions.AzPat, ""), B(SettingDefinitions.AzLinkOnCommit, true), B(SettingDefinitions.AzComment, false)));
+    }
+
     public Task SetSettingAsync(string key, string value, CancellationToken ct)
     {
         Saved[key] = value;
@@ -253,6 +261,10 @@ internal sealed class FakeSvnService : ISvnService
     public string LogWithDiff { get; set; } = string.Empty;
 
     public Task<string> GetLogWithDiffAsync(string filePath, CancellationToken ct) => Task.FromResult(LogWithDiff);
+
+    public string? CopySource { get; set; }
+
+    public Task<string?> GetCopySourceAsync(string url, CancellationToken ct) => Task.FromResult(CopySource);
 
     public string BlameXml { get; set; } = "<blame><target/></blame>";
     public int BlameCalls { get; private set; }

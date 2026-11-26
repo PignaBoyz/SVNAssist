@@ -203,6 +203,11 @@
         "aiProviderLabel": {
           "type": "string",
           "description": "Provider/modello AI attivo mostrato accanto a Genera con AI."
+        },
+        "textSeq": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Cresce quando il testo lo scrive il backend (AI, recenti, work item): la UI lo rimette nel campo anche se ha il focus. Assente = 0."
         }
       }
     },
@@ -1408,6 +1413,216 @@
                   "type": "string"
                 }
               }
+            }
+          }
+        }
+      }
+    },
+    "azure": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Azure DevOps (facoltativo): presente solo se l'integrazione e' attiva o la procedura guidata e' aperta.",
+      "required": [
+        "ready",
+        "busy",
+        "error",
+        "linked",
+        "states",
+        "targetState"
+      ],
+      "properties": {
+        "ready": {
+          "type": "boolean"
+        },
+        "busy": {
+          "type": "boolean"
+        },
+        "error": {
+          "type": "string"
+        },
+        "linked": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "type",
+              "title",
+              "state",
+              "url"
+            ],
+            "properties": {
+              "id": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "type": {
+                "type": "string",
+                "description": "Bug, Task, Feature..."
+              },
+              "title": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string",
+                "description": "Stato attuale in Azure."
+              },
+              "url": {
+                "type": "string"
+              }
+            }
+          },
+          "description": "Work item nel messaggio (dai link). Tipo/titolo/url vuoti finche' non letti."
+        },
+        "suggest": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "type",
+              "title",
+              "state",
+              "url"
+            ],
+            "properties": {
+              "id": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "type": {
+                "type": "string",
+                "description": "Bug, Task, Feature..."
+              },
+              "title": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string",
+                "description": "Stato attuale in Azure."
+              },
+              "url": {
+                "type": "string"
+              }
+            }
+          },
+          "description": "Tendina dopo #."
+        },
+        "states": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "via",
+              "ok",
+              "note"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "via": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Stati intermedi, nell'ordine del processo."
+              },
+              "ok": {
+                "type": "boolean",
+                "description": "Primo passaggio permesso (validateOnly)."
+              },
+              "note": {
+                "type": "string",
+                "description": "Perche' non e' permesso (vuoto se ok)."
+              }
+            }
+          },
+          "description": "Stato dopo il commit (escluso quello attuale)."
+        },
+        "targetState": {
+          "type": "string",
+          "description": "Vuoto = invariato."
+        },
+        "wizard": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "org",
+            "project",
+            "hasPat",
+            "busy",
+            "checks",
+            "canEnable",
+            "enabled",
+            "linkOnCommit",
+            "comment"
+          ],
+          "properties": {
+            "org": {
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "hasPat": {
+              "type": "boolean",
+              "description": "Il token e' salvato (mai inviato alla UI)."
+            },
+            "busy": {
+              "type": "boolean"
+            },
+            "checks": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "label",
+                  "ok",
+                  "detail"
+                ],
+                "properties": {
+                  "id": {
+                    "enum": [
+                      "org",
+                      "project",
+                      "read",
+                      "write"
+                    ]
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "ok": {
+                    "type": [
+                      "boolean",
+                      "null"
+                    ],
+                    "description": "null = da fare o in corso."
+                  },
+                  "detail": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "canEnable": {
+              "type": "boolean"
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "linkOnCommit": {
+              "type": "boolean"
+            },
+            "comment": {
+              "type": "boolean"
             }
           }
         }

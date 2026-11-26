@@ -65,6 +65,10 @@ internal static class SettingDefinitions
     /// <summary>Modalita' leggera: disattiva FileSystemWatcher continuo e polling HEAD periodico per PC datati / solution grandi.</summary>
     internal const string LightweightMode = "lightweightMode";
 
+    // Azure DevOps (facoltativo, spento): organizzazione, progetto, token PAT (segreto) e cosa fare dopo i commit.
+    internal const string AzEnabled = "azEnabled", AzOrg = "azOrg", AzProject = "azProject", AzPat = "azPat",
+        AzLinkOnCommit = "azLinkOnCommit", AzComment = "azComment";
+
     /// <summary>Tutte le chiavi con il loro valore di default (usato quando l'host non ne fornisce una).</summary>
     internal static readonly IReadOnlyDictionary<string, string> Defaults = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
@@ -85,6 +89,12 @@ internal static class SettingDefinitions
         [RepoLayout] = SVNAssist.Models.RepoLayout.Default,
         [HeadCheckMinutes] = DefaultHeadCheckMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture),
         [LightweightMode] = "false",
+        [AzEnabled] = "false",
+        [AzOrg] = "",
+        [AzProject] = "",
+        [AzPat] = "",
+        [AzLinkOnCommit] = "true",
+        [AzComment] = "false",
         // UiLanguage non ha default qui: senza il valore dell'host (es. nei test) l'interfaccia resta in italiano.
     };
 }
@@ -151,6 +161,9 @@ internal interface ISvnAssistSettings
 
     /// <summary>Salva il tema della finestra (scrive nelle impostazioni dell'host).</summary>
     Task SetWindowThemeAsync(string mode, CancellationToken ct);
+
+    /// <summary>Integrazione Azure DevOps (spenta se l'host non la fornisce).</summary>
+    Task<AzureSettings> GetAzureAsync(CancellationToken ct) => Task.FromResult(AzureSettings.Off);
 
     /// <summary>Salva un'impostazione (chiavi di <see cref="SettingDefinitions"/>) nelle impostazioni dell'host: la usa la procedura guidata dell'AI.</summary>
     Task SetSettingAsync(string key, string value, CancellationToken ct) => throw new NotSupportedException();
@@ -256,6 +269,14 @@ internal sealed class HostSettings : ISvnAssistSettings, IDisposable
     }
 
     public Task SetWindowThemeAsync(string mode, CancellationToken ct) => SetSettingAsync(SettingDefinitions.WindowTheme, mode, ct);
+
+    public async Task<AzureSettings> GetAzureAsync(CancellationToken ct)
+    {
+        async Task<bool> On(string key) => string.Equals(await GetAsync(key, ct), "true", StringComparison.OrdinalIgnoreCase);
+        return new AzureSettings(await On(SettingDefinitions.AzEnabled), (await GetAsync(SettingDefinitions.AzOrg, ct)).Trim(),
+            (await GetAsync(SettingDefinitions.AzProject, ct)).Trim(), (await GetAsync(SettingDefinitions.AzPat, ct)).Trim(),
+            await On(SettingDefinitions.AzLinkOnCommit), await On(SettingDefinitions.AzComment));
+    }
 
     public async Task SetSettingAsync(string key, string value, CancellationToken ct)
     {
