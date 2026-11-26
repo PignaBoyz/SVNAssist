@@ -11,6 +11,7 @@
   /** Riga sotto il messaggio: casella numero + Cerca, work item collegati (chip), stato dopo il commit, errore. */
   A.commitHTML = az => {
     if (!az || !az.ready) return '';
+    const mc = A.mergeCloseHTML(az);
     const chips = (az.linked || []).map(wi => `<span class="az-chip"><button type="button" class="az-wi" ${U.cmd('azOpen', { id: wi.id })} title="${esc(t('Apre il work item in Azure DevOps: {0}', wi.title || ''))}">${esc(label(wi))}${wi.state ? ` <span class="muted">· ${esc(wi.state)}</span>` : ''}</button><button type="button" class="ib" data-az-unlink="${wi.id}" title="${esc(t('Toglie il work item dal messaggio'))}" aria-label="${esc(t('Scollega {0}', label(wi)))}">${U.icon('x')}</button></span>`).join('');
     const states = az.states || [];
     const sel = states.length ? `<label class="az-st"><span>${t('Stato dopo il commit')}</span><select id="az-state">` +
@@ -18,10 +19,47 @@
       states.map(s => `<option value="${esc(s.name)}"${s.ok ? '' : ' disabled'}${az.targetState === s.name ? ' selected' : ''}>${esc(s.name)}${s.via.length ? ' ' + esc(t('(passa per {0})', s.via.join(' → '))) : ''}${s.ok ? '' : ' ' + esc(t('— non permesso'))}</option>`).join('') +
       `</select></label>` : '';
     const blocked = states.filter(s => !s.ok && s.note).map(s => `<div class="muted small">${U.icon('warn')} ${esc(s.note)}</div>`).join('');
-    return `<div class="az-row"><input id="az-id" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="${esc(t('Work item n.'))}" aria-label="${esc(t('Numero del work item'))}">` +
+    return mc + `<div class="az-row"><input id="az-id" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="${esc(t('Work item n.'))}" aria-label="${esc(t('Numero del work item'))}">` +
       `<button type="button" class="btn sm" data-az-find ${az.busy ? 'disabled' : ''} title="${esc(t('Cerca il work item in Azure DevOps e mette tipo, numero, titolo e link in cima al messaggio'))}">${az.busy ? '<span class="spin"></span>' : ''}<span>${t('Cerca')}</span></button>` +
       chips + sel + `</div>` + blocked +
       (az.error ? `<div class="az-err" role="alert">${U.icon('warn')}<span>${esc(az.error)}</span></div>` : '');
+  };
+
+  /** Accanto al nome del ramo: a cosa e' collegato il ramo (clic = cambia). Solo con l'integrazione attiva. */
+  A.branchChipHTML = az => {
+    const b = az && az.ready && az.branch;
+    if (!b) return '';
+    const it = b.item, pend = b.pending ? ' · ' + t('da committare') : '';
+    const text = b.role === 'workitem' ? (it && it.type ? `${it.type} ${it.id}` : '#' + (it ? it.id : '')) + (it && it.state ? ' · ' + it.state : '') + pend
+      : b.role === 'release' ? t('ramo di rilascio') + pend : t('Collega work item');
+    const tip = b.role === 'workitem' ? t('Ramo collegato a {0}{1}. Clic per cambiare.', it ? `${it.type} ${it.id} - ${it.title}` : '', b.closed ? ' ' + t('(già consegnato o chiuso)') : '')
+      : b.role === 'release' ? t('Ramo di rilascio: i rami che ci rientrano propongono di chiudere il loro work item. Clic per cambiare.')
+      : t('Collega il ramo a un work item (feature) o segnalo come ramo di rilascio.');
+    return `<button type="button" class="az-brl${b.role === 'none' ? ' ghost' : ''}${b.closed ? ' closed' : ''}" ${U.cmd('azBranchOpen')} title="${esc(tip)}" aria-label="${esc(tip)}">${b.closed ? U.icon('warn') : ''}<span>${esc(text)}</span></button>`;
+  };
+
+  /** Dialogo "Collega il ramo": numero, i miei work item, ramo di rilascio, nessun collegamento. */
+  A.pickHTML = az => {
+    const p = az && az.ready && az.pick, b = az && az.branch;
+    if (!p) return '';
+    const cur = b ? b.role : 'none', curId = b && b.item ? b.item.id : 0;
+    const mine = (p.mine || []).map(wi => `<button type="button" class="az-opt${cur === 'workitem' && curId === wi.id ? ' sel' : ''}" data-az-bset="${wi.id}"><b>#${wi.id}</b><span class="muted">${esc(wi.type)} · ${esc(wi.state)}</span><span class="az-tt">${esc(wi.title)}</span></button>`).join('');
+    return `<div class="wiz-scrim"><div class="wiz" role="dialog" aria-modal="true" aria-labelledby="azp-t"><div class="wiz-h"><h3 id="azp-t" tabindex="-1">${t('Collega il ramo')}</h3><span class="fill"></span>${U.btn('ib', '', 'x', 'azBranchClose', null, t('Chiudi (Esc)'))}</div><div class="wiz-b">` +
+      `<p class="muted">${esc(t('Ramo {0}. Il collegamento si salva nel file nascosto .svnassist ed entra nel tuo prossimo commit (nessun commit apposta).', b ? b.path : ''))}</p>` +
+      `<label for="azp-id">${t('Work item (feature o bug)')}</label><div class="az-row"><input id="azp-id" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="${esc(t('Numero'))}"><button type="button" class="btn sm primary" data-az-bnum ${p.busy ? 'disabled' : ''}>${t('Collega')}</button></div>` +
+      (p.error ? `<div class="az-err" role="alert">${U.icon('warn')}<span>${esc(p.error)}</span></div>` : '') +
+      `<label>${t('I tuoi work item aperti')}</label><div class="az-pick">${p.busy ? '<span class="spin"></span>' : mine || `<span class="muted small">${t('Nessuno assegnato a te.')}</span>`}</div>` +
+      `<div class="pb">${U.btn('btn sm' + (cur === 'release' ? ' primary' : ''), t('Ramo di rilascio'), null, 'azBranchSet', { role: 'release', id: 0 }, t('Ramo principale (trunk, core19…): nessun work item; chi ci rientra completo propone di chiudere il suo'))}` +
+      `${U.btn('btn sm ghost', t('Nessun collegamento'), null, 'azBranchSet', { role: 'none', id: 0 }, t('Il ramo non è collegato a nulla'))}</div>` +
+      `</div></div></div>`;
+  };
+
+  /** Rientro completo di un ramo collegato: proposta di chiudere il work item. */
+  A.mergeCloseHTML = az => {
+    const m = az && az.ready && az.mergeClose;
+    if (!m) return '';
+    return `<div class="az-mc" role="status">${U.icon('branch')}<span>${esc(t('Rientro completo di {0} in {1}: chiudere {2}?', m.from, m.into, `${m.item.type} ${m.item.id} - ${m.item.title}`))} <span class="muted">(${esc(m.item.state)})</span></span><span class="fill"></span>` +
+      `<button type="button" class="btn sm primary" data-az-mc title="${esc(t('Mette intestazione e link nel messaggio e sceglie lo stato di consegna: al commit il work item viene aggiornato'))}">${t('Prepara la chiusura')}</button>${U.btn('btn sm ghost', t('No'), null, 'azMergeCloseNo', null, t('Committa il merge senza toccare il work item'))}</div>`;
   };
 
   /** Tendina dopo #: i miei work item aperti che iniziano con le cifre scritte. */
@@ -95,6 +133,9 @@
         const pat = root.querySelector('#az-pat'); if (pat) pat.value = '';
         return;
       }
+      if (e.target.closest('[data-az-mc]')) { flush(); send('azMergeClose', { text: msg().value }); return; }
+      const bs = e.target.closest('[data-az-bset]'); if (bs) { send('azBranchSet', { role: 'workitem', id: +bs.dataset.azBset }); return; }
+      if (e.target.closest('[data-az-bnum]')) { A.bnum(); return; }
       if (e.target.closest('[data-az-signin]')) {
         const v = id => (root.querySelector(id) || { value: '' }).value;
         send('azCheck', { org: v('#az-org'), project: v('#az-proj'), pat: '', auth: 'sso', clientId: v('#az-cid'), tenant: v('#az-ten') });
@@ -112,7 +153,9 @@
     });
     root.addEventListener('keydown', e => {
       if (e.target.id === 'az-id' && e.key === 'Enter') { e.preventDefault(); find(); return; }
+      if (e.target.id === 'azp-id' && e.key === 'Enter') { e.preventDefault(); A.bnum(); return; }
       const az = getState() && getState().azure;
+      if (az && az.pick && e.key === 'Escape') { e.preventDefault(); send('azBranchClose'); return; }
       if (az && az.wizard && e.key === 'Escape') { e.preventDefault(); send('azWizardClose'); return; }
       if (e.target !== msg() || !az || !az.suggest || !az.suggest.length) return;
       const n = az.suggest.length;
@@ -121,6 +164,8 @@
       else if (e.key === 'Escape') { e.preventDefault(); A.sel = 0; send('azSuggestClose'); }
     }, true);
   };
+
+  A.bnum = () => { const i = document.getElementById('azp-id'), v = i ? i.value.trim().replace(/^#/, '') : ''; if (/^\d{1,9}$/.test(v)) U.bridge.send('azBranchSet', { role: 'workitem', id: +v }); };
 
   /** Rilegge organizzazioni e progetti con il modo di accesso e l'organizzazione scritti (tendine). */
   A.discover = (root, getState) => {
@@ -135,7 +180,13 @@
 
   /** Ridisegna riga, tendina e procedura (chiamata dal render di Changes). */
   A.render = (root, az) => {
-    const row = root.querySelector('#azr'), sug = root.querySelector('#azs'), wiz = document.getElementById('azw');
+    const row = root.querySelector('#azr'), sug = root.querySelector('#azs'), wiz = document.getElementById('azw'), pk = document.getElementById('azp');
+    if (pk) {
+      const was = !!pk.__open, open = !!(az && az.ready && az.pick), keep = pk.querySelector('#azp-id'), v = keep ? keep.value : '';
+      U.setHTML(pk, A.pickHTML(az));
+      const n = pk.querySelector('#azp-id'); if (n) { n.value = v; if (open && !was) n.focus(); }
+      pk.__open = open;
+    }
     if (row) {
       const keep = row.querySelector('#az-id'), v = keep ? keep.value : '', had = keep && document.activeElement === keep;
       if (U.setHTML(row, A.commitHTML(az))) { const n = row.querySelector('#az-id'); if (n) { n.value = v; if (had) n.focus(); } }

@@ -68,6 +68,7 @@ internal sealed class ReloadableSvnService : ISvnService
     public Task<string> GetLogWithDiffAsync(string filePath, CancellationToken ct) => Current.GetLogWithDiffAsync(filePath, ct);
     public Task<string> GetBlameXmlAsync(string filePath, CancellationToken ct) => Current.GetBlameXmlAsync(filePath, ct);
     public Task<string?> GetCopySourceAsync(string url, CancellationToken ct) => Current.GetCopySourceAsync(url, ct);
+    public Task<string> CatAsync(string url, CancellationToken ct) => Current.CatAsync(url, ct);
     public Task<string> GetRepositoryRootAsync(string target, CancellationToken ct) => Current.GetRepositoryRootAsync(target, ct);
     public Task ExportRevisionAsync(string target, long revision, string destination, CancellationToken ct) => Current.ExportRevisionAsync(target, revision, destination, ct);
     public Task<IReadOnlyList<SvnChange>> GetChangedBetweenAsync(string target, long fromRevision, long toRevision, CancellationToken ct) => Current.GetChangedBetweenAsync(target, fromRevision, toRevision, ct);

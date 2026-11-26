@@ -627,6 +627,13 @@ public class SvnService : ISvnService
     }
 
     /// <inheritdoc />
+    public async Task<string> CatAsync(string url, CancellationToken ct)
+    {
+        try { return await RunSvnAsync(["cat", Peg(SafeTarget(url))], workingDirectory: null, ct); }
+        catch (Exception ex) when (!ct.IsCancellationRequested) { BackendLog.Info("svn cat " + url + ": " + ex.Message.Split('\n')[0]); return string.Empty; }
+    }
+
+    /// <inheritdoc />
     /// <remarks>Senza timeout: su file con lunga storia il server ci mette; lo chiede l'utente (blame acceso).</remarks>
     public Task<string> GetBlameXmlAsync(string filePath, CancellationToken ct)
         => RunSvnAsync(["blame", "--xml", Peg(SafeTarget(filePath))], workingDirectory: null, ct, applyTimeout: false);

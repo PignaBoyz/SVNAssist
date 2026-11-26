@@ -2977,6 +2977,10 @@
             },
             "switch": {
               "type": "boolean"
+            },
+            "workItem": {
+              "type": "string",
+              "description": "Work item del ramo (facoltativo, solo branch con Azure attivo)."
             }
           }
         }
@@ -3486,6 +3490,132 @@
               "type": "string"
             }
           }
+        }
+      }
+    },
+    {
+      "title": "azBranchOpen",
+      "description": "Apre il dialogo Collega il ramo.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "azBranchOpen"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "azBranchClose",
+      "description": "Chiude il dialogo Collega il ramo.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "azBranchClose"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    {
+      "title": "azBranchSet",
+      "description": "Collega il ramo (scrive .svnassist, nessun commit): workitem con id, release, none (id 0).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "azBranchSet"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "role",
+            "id"
+          ],
+          "properties": {
+            "role": {
+              "enum": [
+                "workitem",
+                "release",
+                "none"
+              ]
+            },
+            "id": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "azMergeClose",
+      "description": "Prepara la chiusura del work item del ramo rientrato: intestazione, link e stato di consegna.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "azMergeClose"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text"
+          ],
+          "properties": {
+            "text": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "azMergeCloseNo",
+      "description": "Niente chiusura per questo merge.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "azMergeCloseNo"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {}
         }
       }
     }

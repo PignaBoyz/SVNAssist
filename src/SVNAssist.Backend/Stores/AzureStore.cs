@@ -34,7 +34,22 @@ internal sealed record AzWizardDto(string Org, string Project, bool HasPat, bool
 internal sealed record AzureDto(bool Ready, bool Busy, string Error, IReadOnlyList<AzItemDto> Linked,
     [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<AzItemDto>? Suggest,
     IReadOnlyList<AzStateDto> States, string TargetState,
-    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] AzWizardDto? Wizard);
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] AzWizardDto? Wizard,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] AzBranchDto? Branch = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] AzPickDto? Pick = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] AzMergeCloseDto? MergeClose = null);
+
+/// <summary>
+/// Collegamento del ramo della working copy (file <c>.svnassist</c>). Role: none | workitem | release.
+/// Closed = il work item e' gia' consegnato o chiuso (categoria Resolved/Completed); Pending = il file e' cambiato e entra nel prossimo commit.
+/// </summary>
+internal sealed record AzBranchDto(string Path, string Role, AzItemDto? Item, bool Closed, bool Pending);
+
+/// <summary>Dialogo "Collega il ramo": i miei work item aperti tra cui scegliere.</summary>
+internal sealed record AzPickDto(bool Busy, IReadOnlyList<AzItemDto> Mine, string Error);
+
+/// <summary>Rientro completo di un ramo collegato nel ramo da cui e' nato (o in un ramo di rilascio): proposta di chiusura.</summary>
+internal sealed record AzMergeCloseDto(AzItemDto Item, string From, string Into);
 
 /// <summary>
 /// Integrazione facoltativa con Azure DevOps (protocollo: comandi <c>az*</c> di Changes; badge nel Log).
@@ -65,6 +80,12 @@ internal sealed class AzureStore
     private string _targetState = string.Empty;
     private IReadOnlyList<int> _linkedIds = [];
     private bool _ready;
+
+    private BranchLink? _branch;
+    private bool _branchPending, _branchClosed;
+    private bool _pickOpen, _pickBusy;
+    private string _pickError = string.Empty;
+    private (int Id, string From, string Into)? _mergeClose;
 
     private bool _wizOpen, _wizBusy;
     private IReadOnlyList<AzCheckDto> _checks = [];
@@ -110,7 +131,16 @@ internal sealed class AzureStore
                     _wizSettings.Auth, _wizSettings.ClientId, _wizSettings.Tenant, _wizFeedback,
                     _orgs, _projects, _who)
                 : null;
-            return new AzureDto(_ready, _busy, _error, linked, _suggest, _states, _targetState, wiz);
+            AzBranchDto? branch = null;
+            if (_ready && _branch is { } b)
+                branch = new AzBranchDto(b.Path, b.Role switch { BranchRole.WorkItem => "workitem", BranchRole.Release => "release", _ => "none" },
+                    b.Role == BranchRole.WorkItem ? (_cache.TryGetValue(b.WorkItem, out var bc) ? Dto(bc.Item) : new AzItemDto(b.WorkItem, string.Empty, string.Empty, string.Empty, string.Empty)) : null,
+                    _branchClosed, _branchPending);
+            var pick = _ready && _pickOpen
+                ? new AzPickDto(_pickBusy, (_mine?.Items ?? []).Select(Dto).ToList(), _pickError)
+                : null;
+            var close = _ready && _mergeClose is { } mc && _cache.TryGetValue(mc.Id, out var cc) ? new AzMergeCloseDto(Dto(cc.Item), mc.From, mc.Into) : null;
+            return new AzureDto(_ready, _busy, _error, linked, _suggest, _states, _targetState, wiz, branch, pick, close);
         }
     }
 
@@ -402,6 +432,168 @@ internal sealed class AzureStore
 
     /// <summary>Pagina di Azure DevOps dove si crea il token PAT (per la procedura guidata).</summary>
     internal static string PatPageUrl(string org) => AzureSettings.NormalizeOrg(org) is { Length: > 0 } o ? o + "/_usersSettings/tokens" : "https://dev.azure.com";
+
+    // ── Ramo collegato (.svnassist) ─────────────────────────────────
+
+    /// <summary>Collegamento del ramo corrente (dopo ogni refresh): legge titolo e stato del work item e se e' gia' chiuso.</summary>
+    internal async Task SetBranchAsync(BranchLink link, bool pending, CancellationToken ct)
+    {
+        lock (_lock) { _branch = link; _branchPending = pending; }
+        var closed = false;
+        if (_ready && link.Role == BranchRole.WorkItem)
+        {
+            try
+            {
+                if ((await GetItemsAsync([link.WorkItem], ct)).FirstOrDefault() is { } item)
+                    closed = await IsDeliveredAsync(item, ct);
+            }
+            catch (AzureDevOpsException ex) { BackendLog.Info("Azure: work item del ramo non letto: " + ex.Message); }
+        }
+
+        lock (_lock) _branchClosed = closed;
+        Notify();
+    }
+
+    /// <summary>Lo stato del work item e' "consegnato" o chiuso (categoria Resolved o Completed, letta da Azure).</summary>
+    private async Task<bool> IsDeliveredAsync(WorkItemInfo item, CancellationToken ct)
+    {
+        var s = await SettingsAsync(ct);
+        var cat = (await TypeStatesAsync(s, item.Type, ct)).FirstOrDefault(x => string.Equals(x.Name, item.State, StringComparison.OrdinalIgnoreCase))?.Category;
+        return cat is "Resolved" or "Completed";
+    }
+
+    /// <summary>Prima di un commit sul ramo: se la sua feature e' chiusa, il testo dell'avviso (null = niente da dire).</summary>
+    internal string? ClosedBranchWarning(string message)
+    {
+        lock (_lock)
+        {
+            if (!_ready || !_branchClosed || _branch is not { Role: BranchRole.WorkItem } b || WorkItemText.IdsIn(message).Contains(b.WorkItem))
+                return null;
+            var item = _cache.TryGetValue(b.WorkItem, out var c) ? c.Item : null;
+            var name = item is null ? "#" + b.WorkItem : $"{item.Type} {item.Id} - {item.Title}";
+            return Loc.T("Il ramo è collegato a {0}, che è già {1}.\n\nSe ci stai ancora lavorando: collega il work item nel messaggio e scegli lo stato per riaprirlo, oppure cambia il collegamento del ramo (pulsante accanto al nome del ramo).", name, item?.State ?? "?");
+        }
+    }
+
+    /// <summary>Apre il dialogo "Collega il ramo" e carica i miei work item aperti.</summary>
+    internal async Task OpenPickAsync(CancellationToken ct)
+    {
+        lock (_lock) { _pickOpen = true; _pickBusy = true; _pickError = string.Empty; }
+        Notify();
+        try { await MineCachedAsync(ct); }
+        catch (AzureDevOpsException ex) { lock (_lock) _pickError = ex.Message; }
+        finally
+        {
+            lock (_lock) _pickBusy = false;
+            Notify();
+        }
+    }
+
+    internal void ClosePick()
+    {
+        lock (_lock) { _pickOpen = false; _pickError = string.Empty; }
+        Notify();
+    }
+
+    /// <summary>Verifica che il work item esista prima di collegarci il ramo; null se no (errore nel dialogo).</summary>
+    internal async Task<WorkItemInfo?> CheckPickAsync(int id, CancellationToken ct)
+    {
+        try
+        {
+            if ((await GetItemsAsync([id], ct)).FirstOrDefault() is { } item)
+                return item;
+            lock (_lock) _pickError = Loc.T("Work item {0} non trovato nel progetto.", id);
+        }
+        catch (AzureDevOpsException ex) { lock (_lock) _pickError = ex.Message; }
+        Notify();
+        return null;
+    }
+
+    private async Task<IReadOnlyList<WorkItemInfo>> MineCachedAsync(CancellationToken ct)
+    {
+        var now = _now();
+        lock (_lock)
+            if (_mine is { } m && now - m.At < CacheAge)
+                return m.Items;
+        var s = await SettingsAsync(ct);
+        if (!s.Ready)
+            return [];
+        var mine = await _client.MineAsync(s, ct);
+        lock (_lock)
+        {
+            _mine = (mine, now);
+            foreach (var w in mine) _cache[w.Id] = (w, now);
+        }
+
+        return mine;
+    }
+
+    /// <summary>Rientro completo di un ramo collegato: propone la chiusura (banner sopra il messaggio).</summary>
+    internal async Task ProposeMergeCloseAsync(int id, string from, string into, CancellationToken ct)
+    {
+        try
+        {
+            if ((await GetItemsAsync([id], ct)).FirstOrDefault() is null)
+                return;
+        }
+        catch (AzureDevOpsException ex)
+        {
+            BackendLog.Info("Azure: work item del ramo rientrato non letto: " + ex.Message);
+            return;
+        }
+
+        lock (_lock) _mergeClose = (id, from, into);
+        Notify();
+    }
+
+    internal void ClearMergeClose()
+    {
+        lock (_lock)
+        {
+            if (_mergeClose is null) return;
+            _mergeClose = null;
+        }
+
+        Notify();
+    }
+
+    /// <summary>
+    /// "Prepara la chiusura": intestazione e link del work item nel messaggio e, come stato dopo il commit, il primo stato di consegna
+    /// permesso (categoria Resolved, altrimenti Completed). Restituisce il messaggio nuovo, null se non riuscito.
+    /// </summary>
+    internal async Task<string?> PrepareMergeCloseAsync(string message, CancellationToken ct)
+    {
+        int id;
+        lock (_lock)
+        {
+            if (_mergeClose is not { } mc) return null;
+            id = mc.Id;
+        }
+
+        var text = await LinkAsync(id, message, ct);
+        if (text is null)
+            return null;
+        try
+        {
+            var item = (await GetItemsAsync([id], ct)).First();
+            var s = await SettingsAsync(ct);
+            var all = await TypeStatesAsync(s, item.Type, ct);
+            List<AzStateDto> options;
+            lock (_lock) options = _states.ToList();
+            var pick = new[] { "Resolved", "Completed" }
+                .Select(cat => options.FirstOrDefault(o => o.Ok && all.Any(a => a.Name == o.Name && a.Category == cat)))
+                .FirstOrDefault(o => o is not null);
+            lock (_lock)
+            {
+                if (pick is not null) _targetState = pick.Name;
+                _mergeClose = null;
+            }
+        }
+        catch (AzureDevOpsException ex) { BackendLog.Info("Azure: stato di consegna non scelto: " + ex.Message); }
+
+        Notify();
+        return text;
+    }
 
     // ── Procedura guidata ───────────────────────────────────────────
 

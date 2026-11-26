@@ -1700,6 +1700,175 @@
               "description": "Account con cui l'accesso funziona; vuoto se non ancora."
             }
           }
+        },
+        "branch": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "role",
+            "item",
+            "closed",
+            "pending"
+          ],
+          "description": "Collegamento del ramo (file .svnassist).",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "role": {
+              "enum": [
+                "none",
+                "workitem",
+                "release"
+              ]
+            },
+            "item": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "type",
+                    "title",
+                    "state",
+                    "url"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "type": {
+                      "type": "string",
+                      "description": "Bug, Task, Feature..."
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string",
+                      "description": "Stato attuale in Azure."
+                    },
+                    "url": {
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "closed": {
+              "type": "boolean"
+            },
+            "pending": {
+              "type": "boolean"
+            }
+          }
+        },
+        "pick": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "busy",
+            "mine",
+            "error"
+          ],
+          "description": "Dialogo Collega il ramo.",
+          "properties": {
+            "busy": {
+              "type": "boolean"
+            },
+            "mine": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "type",
+                  "title",
+                  "state",
+                  "url"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "type": {
+                    "type": "string",
+                    "description": "Bug, Task, Feature..."
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string",
+                    "description": "Stato attuale in Azure."
+                  },
+                  "url": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "error": {
+              "type": "string"
+            }
+          }
+        },
+        "mergeClose": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "item",
+            "from",
+            "into"
+          ],
+          "description": "Rientro completo di un ramo collegato: proposta di chiusura.",
+          "properties": {
+            "item": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "type",
+                "title",
+                "state",
+                "url"
+              ],
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "type": {
+                  "type": "string",
+                  "description": "Bug, Task, Feature..."
+                },
+                "title": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string",
+                  "description": "Stato attuale in Azure."
+                },
+                "url": {
+                  "type": "string"
+                }
+              }
+            },
+            "from": {
+              "type": "string"
+            },
+            "into": {
+              "type": "string"
+            }
+          }
         }
       }
     }

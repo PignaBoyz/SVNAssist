@@ -126,11 +126,11 @@
   };
 
   // SVN Branch/Tag: i campi stanno nella UI (sopravvivono ai ridisegni) e vanno al backend solo con "branchTagOk".
-  const bt = { kind: 'branch', name: '', msg: '', touched: false, src: 'head', rev: '', sw: true };
-  O.btReset = b => Object.assign(bt, { kind: b.kind, name: '', msg: '', touched: false, src: 'head', rev: '', sw: true });
+  const bt = { kind: 'branch', name: '', msg: '', touched: false, src: 'head', rev: '', sw: true, wi: '' };
+  O.btReset = b => Object.assign(bt, { kind: b.kind, name: '', msg: '', touched: false, src: 'head', rev: '', sw: true, wi: '' });
   O.btMsg = b => bt.touched ? bt.msg : bt.kind === 'tag' ? t('Crea tag {0} da {1}', bt.name.trim() || '…', b.from) : t('Crea branch {0} da {1}', bt.name.trim() || '…', b.from);
-  O.btValid = b => !!bt.name.trim() && !b.busy && (bt.src !== 'rev' || !!bt.rev.trim());
-  O.btArgs = b => ({ kind: bt.kind, name: bt.name, message: O.btMsg(b), source: bt.src === 'wc' && !b.dirty ? 'head' : bt.src, rev: bt.rev, switch: bt.sw });
+  O.btValid = b => !!bt.name.trim() && !b.busy && (bt.src !== 'rev' || !!bt.rev.trim()) && (!bt.wi.trim() || /^#?\d{1,9}$/.test(bt.wi.trim()));
+  O.btArgs = b => ({ kind: bt.kind, name: bt.name, message: O.btMsg(b), source: bt.src === 'wc' && !b.dirty ? 'head' : bt.src, rev: bt.rev, switch: bt.sw, ...(bt.kind === 'branch' && U.azReady && bt.wi.trim() ? { workItem: bt.wi.trim() } : {}) });
   O.branchTagHTML = b => {
     const tag = bt.kind === 'tag', dest = '^/' + (tag ? b.tags : b.branches) + '/' + (bt.name.trim() || '…'), off = b.busy ? 'disabled' : '';
     const rd = (grp, v, cur, label, hint) => `<label class="ock"><input type="radio" id="bt-${grp}-${v}" name="bt-${grp}" data-bt="${grp}" value="${v}" ${cur === v ? 'checked' : ''} ${off}><span><b>${esc(label)}</b>${hint ? `<small class="muted">${esc(hint)}</small>` : ''}</span></label>`;
@@ -143,6 +143,8 @@
       `<div class="bt-row">${rd('src', 'rev', bt.src, t('Revisione'))}<input id="bt-rev" type="text" inputmode="numeric" autocomplete="off" placeholder="${esc(t('es. 1234'))}" value="${esc(bt.rev)}" ${bt.src === 'rev' && !b.busy ? '' : 'disabled'}></div>` +
       (b.dirty ? rd('src', 'wc', bt.src, t('Working copy'), t('Include le modifiche locali non committate')) : '') +
       `<label for="bt-msg">${esc(t('Messaggio di log'))}</label><textarea id="bt-msg" rows="3" ${off}>${esc(O.btMsg(b))}</textarea>` +
+      (!tag && U.azReady ? `<label for="bt-wi">${esc(t('Work item del ramo (facoltativo)'))}</label><input id="bt-wi" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="${esc(t('es. 81018'))}" value="${esc(bt.wi)}" ${off}>` +
+        `<p class="muted small">${esc(t('Collega il ramo alla feature: il collegamento entra nel tuo primo commit sul ramo, e al rientro completo ti proporrà di chiuderla.'))}</p>` : '') +
       `<label class="ock"><input id="bt-sw" type="checkbox" data-bt="sw" ${bt.sw ? 'checked' : ''} ${off}><span><b>${esc(tag ? t('Passa subito al nuovo tag') : t('Passa subito al nuovo branch'))}</b></span></label>` +
       (b.error ? `<div class="rp-err" role="alert">${U.icon('warn')}<span>${esc(b.error)}</span></div>` : '') +
       `</div><div class="wiz-f">${U.btn('btn ghost', t('Annulla'), null, 'branchTagCancel', null, t('Chiude senza creare nulla'))}<span class="fill"></span>` +
@@ -207,7 +209,7 @@
     box.addEventListener('input', e => {
       if (!getState().branchTag) return;
       const id = e.target.id;
-      if (id === 'bt-name') bt.name = e.target.value; else if (id === 'bt-rev') bt.rev = e.target.value; else if (id === 'bt-msg') { bt.msg = e.target.value; bt.touched = true; } else return;
+      if (id === 'bt-name') bt.name = e.target.value; else if (id === 'bt-rev') bt.rev = e.target.value; else if (id === 'bt-wi') bt.wi = e.target.value; else if (id === 'bt-msg') { bt.msg = e.target.value; bt.touched = true; } else return;
       O.render(box, getState());
     });
     box.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.target.id === 'bt-name' || e.target.id === 'bt-rev')) { e.preventDefault(); btOk(); } });

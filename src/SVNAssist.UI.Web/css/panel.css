@@ -462,3 +462,7 @@ button.lnk{background:none;border:0;padding:0;color:var(--acc2);text-decoration:
 .az-auth{display:flex;flex-direction:column;gap:6px;margin:2px 0 6px}
 .az-fix{margin-top:4px;padding:6px 8px;border-left:2px solid var(--warn,#c90);background:var(--bg-sub,rgba(127,127,127,.08));border-radius:3px;display:flex;flex-direction:column;gap:4px}
 .az-cmd{display:flex;align-items:center;gap:6px}.az-cmd code{flex:1;font-family:var(--mono,Consolas,monospace);font-size:11px;padding:3px 6px;background:var(--bg,rgba(0,0,0,.15));border-radius:3px;overflow-x:auto;white-space:nowrap}
+.az-brl{display:inline-flex;align-items:center;gap:4px;max-width:220px;padding:1px 8px;border:1px solid var(--border,rgba(127,127,127,.35));border-radius:10px;background:transparent;color:inherit;font-size:11px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.az-brl.ghost{opacity:.75;border-style:dashed}.az-brl.closed{border-color:var(--warn,#c90)}
+.az-pick{display:flex;flex-direction:column;gap:2px;max-height:220px;overflow:auto}.az-pick .az-opt{text-align:left;border:0;background:transparent;color:inherit;cursor:pointer;display:grid;grid-template-columns:auto auto 1fr;gap:6px;padding:4px 6px;border-radius:3px}.az-pick .az-opt:hover,.az-pick .az-opt.sel{background:var(--hover,rgba(127,127,127,.15))}
+.az-mc{display:flex;align-items:center;gap:6px;padding:6px 8px;margin:4px 0;border:1px solid var(--accent,#3794ff);border-radius:4px;font-size:12px}

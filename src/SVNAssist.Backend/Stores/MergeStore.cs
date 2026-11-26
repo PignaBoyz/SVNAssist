@@ -743,7 +743,7 @@ internal sealed class MergeStore
                     _changes.PendingMerges.Clear(_changes.WorkingCopyPath);
                     await _changes.RefreshAsync(ct, reloadBranch: false, Loc.T("Merge completato: rivedi le modifiche e committa."));
                     var logs = await EnsureLogAsync(state.Revs, source, ct);
-                    _changes.AfterMerge(MergeCommitMessage(state.Revs, logs, source.Path), Loc.T("Merge {0} da {1}: rivedi le modifiche e committa, oppure annulla il merge. Messaggio del merge disponibile nei Recenti.", RevsLabel(state.Revs), "^/" + source.Path));
+                    _changes.AfterMerge(MergeCommitMessage(state.Revs, logs, source.Path), Loc.T("Merge {0} da {1}: rivedi le modifiche e committa, oppure annulla il merge. Messaggio del merge disponibile nei Recenti.", RevsLabel(state.Revs), "^/" + source.Path), source.Url, source.Path);
                     return;
                 }
 
@@ -918,7 +918,7 @@ internal sealed class MergeStore
         // Dopo il refresh: il repository (chiave dei Recenti) e' noto.
         _changes.AfterMerge(MergeCommitMessage(revs, logs, source.Path),
             Loc.T("Merge {0} da {1}: rivedi le modifiche e committa, oppure annulla il merge. Messaggio del merge disponibile nei Recenti.", label, "^/" + source.Path)
-            + (snapshot is null ? string.Empty : " " + Loc.T("Le tue {0} modifiche pendenti sono nella working copy insieme al merge (finiscono nello stesso commit se non scegli i file): \"Annulla merge\" le ripristina.", snapshot.Entries.Count)));
+            + (snapshot is null ? string.Empty : " " + Loc.T("Le tue {0} modifiche pendenti sono nella working copy insieme al merge (finiscono nello stesso commit se non scegli i file): \"Annulla merge\" le ripristina.", snapshot.Entries.Count)), source.Url, source.Path);
         _changes.Progress.Done(true, conflictsNow > 0
             ? Loc.T("Merge completato con {0} conflitti: vanno risolti prima di committare.", conflictsNow)
             : Loc.T("Merge completato: rivedi le modifiche e committa."), conflictsNow);
@@ -967,7 +967,7 @@ internal sealed class MergeStore
             var logs = await EnsureLogAsync(revs, source, ct);
             await _changes.RefreshAsync(ct, reloadBranch: false, Loc.T("Merge completato: {0} file in conflitto da risolvere.", result.Conflicts));
             _changes.AfterMerge(MergeCommitMessage(revs, logs, source.Path),
-                Loc.T("Merge {0} da {1}: rivedi le modifiche e committa, oppure annulla il merge. Messaggio del merge disponibile nei Recenti.", RevsLabel(revs), "^/" + source.Path));
+                Loc.T("Merge {0} da {1}: rivedi le modifiche e committa, oppure annulla il merge. Messaggio del merge disponibile nei Recenti.", RevsLabel(revs), "^/" + source.Path), source.Url, source.Path);
             _changes.Progress.Done(true, Loc.T("Merge completato con {0} conflitti: vanno risolti prima di committare.", result.Conflicts), result.Conflicts);
             await AfterStopAsync(ct);
             Say(Loc.T("Merge eseguito, da committare. Conflitti da risolvere in Changes: {0}.", result.Conflicts));

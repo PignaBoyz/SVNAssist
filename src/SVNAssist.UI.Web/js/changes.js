@@ -10,7 +10,7 @@
 
   function header(s) {
     const wc = s.workingCopy, hasWc = !!(wc && wc.path);
-    return `<button type="button" class="branch" ${U.cmd('switchOpen')} title="${esc(t('SVN Switch…: cambia branch o tag (ramo attuale: {0})', wc.branch || '—'))}" aria-label="${esc(t('SVN Switch…: cambia branch o tag (ramo attuale: {0})', wc.branch || '—'))}">${U.icon('branch')}<b>${esc(wc.branch || '—')}</b>${U.icon('chev-d')}</button>` +
+    return `<button type="button" class="branch" ${U.cmd('switchOpen')} title="${esc(t('SVN Switch…: cambia branch o tag (ramo attuale: {0})', wc.branch || '—'))}" aria-label="${esc(t('SVN Switch…: cambia branch o tag (ramo attuale: {0})', wc.branch || '—'))}">${U.icon('branch')}<b>${esc(wc.branch || '—')}</b>${U.icon('chev-d')}</button>` + (U.azure ? U.azure.branchChipHTML(s.azure) : '') +
       U.btn('btn sm', 'Merge', 'branch', 'mergeOpen', null, t('Unisce nella working copy le modifiche di un altro branch (svn merge)'), !hasWc || s.loading ? 'disabled' : '') +
       `<span class="fill"></span>` +
       U.btn('btn', 'SVN Update', 'down', 'update', null, t('Scarica le modifiche dal server (svn update)')) +
@@ -384,7 +384,8 @@
     list.setAttribute('aria-busy', !!st.loading);
     U.setHTML(root.querySelector('#shl'), shelvedHTML(st));
     U.setHTML(root.querySelector('#foot'), foot(st));
-    const anyModal = !!(st.azure && st.azure.wizard) || !!(st.wizard && st.wizard.open) || !!(st.revPicker && st.revPicker.open) || !!(st.switchPicker && st.switchPicker.open) || !!(st.progress || st.switchWarn || st.cleanup || st.commitWarn || st.incoming || st.branchTag) || U.ops.hasShelve();
+    U.azReady = !!(st.azure && st.azure.ready);
+    const anyModal = !!(st.azure && (st.azure.wizard || st.azure.pick)) || !!(st.wizard && st.wizard.open) || !!(st.revPicker && st.revPicker.open) || !!(st.switchPicker && st.switchPicker.open) || !!(st.progress || st.switchWarn || st.cleanup || st.commitWarn || st.incoming || st.branchTag) || U.ops.hasShelve();
     if (anyModal) rcClose(false); else rcRefresh();
     renderWizard(root, anyModal);
     renderRev(root, anyModal);
@@ -637,7 +638,7 @@
         <div class="bar" id="cbar"></div><div id="aist"></div></section><div id="prq"></div><div id="mrg"></div><div id="cfl"></div>
         <div class="flt"><input id="flt" type="search" spellcheck="false" autocomplete="off"></div>
         <div class="list" id="list" role="tree"></div><div id="shl"></div>
-        <footer class="foot" id="foot"></footer></div><div id="wiz"></div><div id="azw"></div><div id="rev"></div><div id="sw"></div><div id="ops"></div><div id="rec" hidden></div>`;
+        <footer class="foot" id="foot"></footer></div><div id="wiz"></div><div id="azw"></div><div id="azp"></div><div id="rev"></div><div id="sw"></div><div id="ops"></div><div id="rec" hidden></div>`;
       U.views.changes.relang(root);
       const ta = root.querySelector('#msg');
       ta.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => U.bridge.send('setCommitText', { text: ta.value }), 150); });

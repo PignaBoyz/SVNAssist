@@ -48,9 +48,16 @@ jobs:
       - name: Test UI web
         run: node --test "tests/ui-web/*.test.mjs"
 
+      - name: Prepare VSIX and test checklist
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out | Out-Null
+          Copy-Item src/SVNAssist.Host/bin/Release/net472/SVNAssist.vsix out/
+          Copy-Item docs/collaudo/COLLAUDO-0.8.0.md out/
+
       - name: Upload VSIX
         uses: actions/upload-artifact@v4
         with:
           name: SVNAssist-vsix
-          path: src/SVNAssist.Host/bin/Release/net472/SVNAssist.vsix
+          path: out/*
           if-no-files-found: error

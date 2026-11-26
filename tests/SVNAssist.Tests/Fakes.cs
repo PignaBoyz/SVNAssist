@@ -266,6 +266,8 @@ internal sealed class FakeSvnService : ISvnService
     public string? CopySource { get; set; }
 
     public Task<string?> GetCopySourceAsync(string url, CancellationToken ct) => Task.FromResult(CopySource);
+    public Dictionary<string, string> Files { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Task<string> CatAsync(string url, CancellationToken ct) => Task.FromResult(Files.GetValueOrDefault(url) ?? string.Empty);
 
     public string BlameXml { get; set; } = "<blame><target/></blame>";
     public int BlameCalls { get; private set; }

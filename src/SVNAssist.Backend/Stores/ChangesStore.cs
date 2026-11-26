@@ -471,8 +471,11 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
     /// Dopo un merge: banner con "Annulla merge" e messaggio di commit (stile TortoiseSVN) in cima ai Recenti del repository.
     /// Il campo del messaggio non si tocca: il messaggio resta nei Recenti anche dopo un revert e lo si inserisce da li' se serve.
     /// </summary>
-    internal void AfterMerge(string commitText, string bannerText)
+    internal void AfterMerge(string commitText, string bannerText, string? sourceUrl = null, string? sourcePath = null)
     {
+        // Merge concluso dell'intera working copy (non di una cartella): forse e' il rientro di un ramo collegato.
+        if (sourceUrl is not null && sourcePath is not null && _mergeSub is null)
+            _ = Task.Run(() => CheckMergeCloseAsync(sourceUrl, sourcePath, CancellationToken.None), CancellationToken.None);
         string? repo;
         lock (_stateLock)
         {
@@ -562,6 +565,8 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             _preMerge = null; // il banner non c'e' piu': niente da annullare. I file della copia restano su disco (li toglie Prune)
             _pendingIncompatible = null;
         }
+
+        Azure.ClearMergeClose();
 
         // Commit, annullamento, revert di tutto: il merge e' concluso, non c'e' piu' nulla da continuare.
         if (!string.IsNullOrWhiteSpace(WorkingCopyPath))
@@ -1168,6 +1173,30 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                 await Azure.DiscoverFromUiAsync(Args.Str(args, "org"), Args.OneOf(args, "auth", AzureSettings.AuthModes),
                     Args.Str(args, "clientId"), Args.Str(args, "tenant"), ct);
                 break;
+            case "azBranchOpen":
+                await Azure.OpenPickAsync(ct);
+                break;
+            case "azBranchClose":
+                Azure.ClosePick();
+                break;
+            case "azBranchSet":
+                await SetBranchLinkAsync(Args.OneOf(args, "role", "workitem", "release", "none"), Args.Long(args, "id"), ct);
+                break;
+            case "azMergeClose":
+                {
+                    var text = Args.Str(args, "text");
+                    CommitMessage.SetTextQuietly(text);
+                    if (await Azure.PrepareMergeCloseAsync(text, ct) is { } closing)
+                    {
+                        CommitMessage.Text = closing;
+                        await Azure.OnMessageChangedAsync(closing, ct);
+                    }
+
+                    break;
+                }
+            case "azMergeCloseNo":
+                Azure.ClearMergeClose();
+                break;
             case "azSignIn":
                 await Azure.SignInAsync(ct);
                 break;
@@ -1773,6 +1802,7 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                 _pendingSwitch.Clear(path);
 
             EntriesChanged?.Invoke();
+            _ = Task.Run(() => RefreshBranchLinkAsync(ct), CancellationToken.None); // Azure lento non ferma il refresh
 
             if (urlChanged)
             {
@@ -2140,6 +2170,10 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
         if (addNew && all)
             selected = selected.Concat(NewFiles(allEntries)).ToList();
 
+        // Collegamento del ramo cambiato (.svnassist): entra nel primo commit, senza un commit apposta.
+        if (selected.Count > 0 && BranchFileEntry() is { } branchFile && !selected.Any(e => string.Equals(e.FullPath, branchFile.FullPath, StringComparison.OrdinalIgnoreCase)))
+            selected = selected.Append(branchFile).ToList();
+
         if (selected.Count == 0)
         {
             SetStatus(Loc.T("Nessuna modifica da committare."));
@@ -2168,6 +2202,17 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                 SetStatus(Loc.T("Commit annullato: {0} contiene marcatori di conflitto.", f.RelativePath));
                 return;
             }
+        }
+
+        // Feature del ramo gia' consegnata o chiusa: lo si dice prima (non vale per il commit di un merge).
+        bool merging;
+        lock (_stateLock)
+            merging = _mergeBanner is not null;
+        if (!merging && Azure.ClosedBranchWarning(CommitMessage.Text) is { } closedWarn
+            && !await _dialogs.AskAsync(closedWarn, Loc.T("Committa comunque"), Loc.T("Annulla"), ct))
+        {
+            SetStatus(Loc.T("Commit annullato: la feature del ramo è chiusa."));
+            return;
         }
 
         // Revisioni di altri sul ramo che la working copy non ha: il commit passerebbe (file diversi) ma la copia locale,
@@ -2605,6 +2650,8 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
         if (message.Length == 0)
             message = plan.Kind == "tag" ? Loc.T("Crea tag {0}", plan.Name) : Loc.T("Crea branch {0}", plan.Name);
         var goSwitch = Args.Bool(args, "switch");
+        var workItem = plan.Kind == "branch" && args.TryGetProperty("workItem", out var wiArg) && wiArg.ValueKind == JsonValueKind.String
+            && long.TryParse((wiArg.GetString() ?? string.Empty).Trim().TrimStart('#'), out var wiParsed) ? wiParsed : 0;
         var created = false;
         await RunExclusiveAsync(async () =>
         {
@@ -2629,7 +2676,10 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
             return;
         BranchTag.Close();
         Switch.InvalidateCache();
-        SetStatus(Loc.T("{0} creato sul server.", plan.Name));
+        RememberNewBranchLink(plan.DestUrl, workItem);
+        SetStatus(workItem > 0 && !goSwitch
+            ? Loc.T("{0} creato sul server: il collegamento al work item {1} si salva quando passi sul ramo.", plan.Name, workItem)
+            : Loc.T("{0} creato sul server.", plan.Name));
         if (goSwitch)
             await BeginSwitchAsync(new SwitchPickerStore.Target(plan.Name, plan.Kind, plan.DestUrl, false, plan.DestUrl), ct);
     }
