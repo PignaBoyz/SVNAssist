@@ -368,6 +368,7 @@ Il file .patch viene cancellato e non si recupera.`)) return;
     ...Object.fromEntries(['wizardOpen', 'wizardOpenPrereq', 'wizardCancel', 'wizardPick', 'wizardBack', 'wizardNext', 'wizardRecheck', 'wizardOpenModels', 'wizardOpenAuth', 'wizardModelsRefresh', 'wizardRun', 'wizardLogin', 'wizardSetAuth', 'wizardFinish', 'openOptions'].map(n => [n, a => WIZ[n](a)])),   // WIZ e' definito in demo.js (caricato dopo)
     logLoad: a => { S.lvm.merge = null; S.lvm.path = String(a.path || ''); return lvmLoad(50); },
     logMore: () => lvmMore(),
+    logUpdateTo: a => { S.lvm.current = +a.rev; },
     logSelect: a => { S.lvm.files = null; return lvmSelect(+a.rev); },
     logFilter: a => {
       const f = { author: '', text: '', path: '', from: '', to: '', ...Object.fromEntries(Object.entries(a || {}).filter(([k]) => ['author', 'text', 'path', 'from', 'to'].includes(k)).map(([k, v]) => [k, String(v).trim()])) };

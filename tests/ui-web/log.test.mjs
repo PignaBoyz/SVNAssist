@@ -179,3 +179,17 @@ test('tema della sola finestra Log: select nelle opzioni, valore dello snapshot,
   assert.match(h, /<option value="light" selected>/);
   valid({ name: 'setLogTheme', args: { mode: 'dark' } });
 });
+
+test('Update a questa revisione: nel menu solo con updateScope e per le revisioni del ramo; "solo questo file" se il log e\' di un file', () => {
+  const s = fx(); const rev = s.entries[0].rev;
+  const labels = m => JSON.parse(JSON.stringify(m.filter(x => x.cmd === 'logUpdateTo').map(x => x.args.scope)));
+  assert.deepEqual(labels(U.logRowMenu(s, rev)), []);
+  s.updateScope = 'wc';
+  assert.deepEqual(labels(U.logRowMenu(s, rev)), ['wc']);
+  s.updateScope = 'file';
+  assert.deepEqual(labels(U.logRowMenu(s, rev)), ['wc', 'item']);
+  assert.deepEqual(validate(S, j(s)), []);
+  valid({ name: 'logUpdateTo', args: { rev: 5, scope: 'item' } });
+  s.entries[0].depth = 1;
+  assert.deepEqual(labels(U.logRowMenu(s, rev)), []);
+});

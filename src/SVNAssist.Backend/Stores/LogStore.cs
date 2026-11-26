@@ -57,6 +57,8 @@ internal sealed class LogStore : ViewStore
     private long? _current;
     // Tema della sola finestra Log (impostazione "logTheme" dell'host): same = come le altre finestre SVNAssist.
     private string _logTheme = "same";
+    // UpdateScope del percorso caricato (calcolato al caricamento: lo snapshot non tocca il disco).
+    private string? _updateScope;
     private static readonly string[] LogThemes = ["same", "light", "dark"];
     // Storia delle righe selezionate nell'editor (null = log normale): il Log mostra solo le revisioni che le hanno toccate.
     private LineScope? _line;
@@ -112,7 +114,7 @@ internal sealed class LogStore : ViewStore
         }
 
         lock (_lock)
-            return new LogState(_path, _msgInitial ? Loc.T("Inserisci il percorso della working copy e premi Carica log.") : _msg, _err, _loading, _canMore, _sel, _entries, _diff, _filterText, FilesDto(), null, _stopOnCopy, _includeMerged, _changes?.Progress.GetSnapshot(), _affectedBase, _current, _logTheme);
+            return new LogState(_path, _msgInitial ? Loc.T("Inserisci il percorso della working copy e premi Carica log.") : _msg, _err, _loading, _canMore, _sel, _entries, _diff, _filterText, FilesDto(), null, _stopOnCopy, _includeMerged, _changes?.Progress.GetSnapshot(), _affectedBase, _current, _logTheme, _updateScope);
     }
 
     private LogFilesDto? FilesDto() => _filesKind is null
@@ -275,6 +277,9 @@ internal sealed class LogStore : ViewStore
                 break;
             case "logOpenRevFile":
                 await GuardAsync(() => OpenRevisionInEditorAsync(Args.Long(args, "rev"), (int)Args.Long(args, "i"), ct));
+                break;
+            case "logUpdateTo":
+                await UpdateToAsync(Args.Long(args, "rev"), Args.OneOf(args, "scope", "wc", "item"), ct);
                 break;
             case "logCompare":
                 await GuardAsync(() => CompareAsync(Args.Long(args, "a"), Args.Long(args, "b"), ct));
@@ -575,12 +580,14 @@ internal sealed class LogStore : ViewStore
             var dtos = entries.SelectMany(e => Flatten(e, 0)).ToList();
             await EnsureAffectedBaseAsync(path, ct);
             var current = CurrentRevision(entries, await WorkingRevisionAsync(path, ct));
+            var updateScope = UpdateScope(path);
 
             lock (_lock)
             {
                 _limit = limit;
                 _entries = dtos;
                 _current = current;
+                _updateScope = updateScope;
                 // Se svn ha restituito tutte quelle richieste, ce ne possono essere altre (non nella storia delle righe: l'elenco e' completo).
                 _canMore = line is null && entries.Count >= limit;
                 // La selezione sopravvive solo se la revisione e' ancora in elenco.
@@ -639,6 +646,73 @@ internal sealed class LogStore : ViewStore
             _affectedBase = string.IsNullOrEmpty(result) ? "/" : (result.StartsWith('/') ? result : "/" + result);
             _affectedBaseFor = path;
         }
+    }
+
+    /// <summary>
+    /// Cosa si puo' aggiornare dal Log (tasto destro > Update a questa revisione): null per un URL o senza working copy,
+    /// "wc" se il log e' della radice della working copy, "file"/"dir" se e' di un elemento dentro (si offre anche "solo questo").
+    /// </summary>
+    internal static string? UpdateScope(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || RepositoryUrl.IsMatch(path))
+            return null;
+        var isFile = File.Exists(path);
+        var root = SvnService.FindSvnRoot(isFile ? System.IO.Path.GetDirectoryName(path)! : path);
+        if (root is null)
+            return null;
+        if (string.Equals(System.IO.Path.GetFullPath(root).TrimEnd('\\', '/'), System.IO.Path.GetFullPath(path).TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase))
+            return "wc";
+        return isFile ? "file" : "dir";
+    }
+
+    /// <summary>
+    /// Update della working copy (<paramref name="scope"/> "wc") o del solo elemento del log ("item") alla revisione <paramref name="rev"/>.
+    /// Con modifiche locali chiede conferma (svn le unisce alla revisione, possono nascere conflitti). Poi ricarica il log: "sei qui" si sposta.
+    /// </summary>
+    private async Task UpdateToAsync(long rev, string scope, CancellationToken ct)
+    {
+        string path;
+        lock (_lock)
+            path = _path;
+        var kind = UpdateScope(path);
+        if (kind is null || _changes is null || _host is null)
+        {
+            Set(Loc.T("Update non disponibile: il log non è di una working copy."), err: true);
+            return;
+        }
+
+        var isFile = File.Exists(path);
+        var root = SvnService.FindSvnRoot(isFile ? System.IO.Path.GetDirectoryName(path)! : path)!;
+        var target = scope == "item" ? path : root;
+        var revision = rev.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        IReadOnlyList<SvnFileStatus> status;
+        try
+        {
+            status = await _svnService.GetStatusAsync(target, ct);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            Set(Loc.T("Errore: {0}", ex.Message), err: true);
+            return;
+        }
+
+        var dirty = status.Count(s => s.Status is SvnStatusKind.Modified or SvnStatusKind.Added or SvnStatusKind.Deleted or SvnStatusKind.Replaced or SvnStatusKind.Conflicted);
+        var what = scope == "item" ? System.IO.Path.GetFileName(target.TrimEnd('\\', '/')) : Loc.T("la working copy");
+        var question = dirty > 0
+            ? Loc.T("Update di {0} alla revisione r{1}.\n\nCi sono modifiche locali in {2} file: svn le unisce alla revisione e possono nascere conflitti. Continuare?", what, revision, dirty)
+            : Loc.T("Update di {0} alla revisione r{1}?", what, revision);
+        if (await _host.PromptAsync(question, [Loc.T("Update"), Loc.T("Annulla")]) != 0)
+            return;
+
+        await _changes.UpdateToRevisionFromLogAsync([target], revision, ct);
+        lock (_lock)
+        {
+            if (!string.Equals(_path, path, StringComparison.OrdinalIgnoreCase))
+                return; // nel frattempo l'utente ha aperto un altro log
+        }
+
+        await LoadAsync(_limit, ct);
     }
 
     /// <summary>Revisione della working copy (<c>svn info</c>: quella dell'ultimo update della cartella o del file); null per un URL o se non si legge.</summary>

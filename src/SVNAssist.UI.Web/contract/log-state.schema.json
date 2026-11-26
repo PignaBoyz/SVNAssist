@@ -838,6 +838,10 @@
       "type": "string",
       "description": "Percorso nel repository della cartella o del file di cui si legge il log (es. /trunk/src). Serve all'opzione Solo percorsi interessati: i percorsi di una revisione fuori da qui si nascondono."
     },
+    "updateScope": {
+      "enum": ["wc", "file", "dir"],
+      "description": "Cosa si puo' aggiornare dal tasto destro (Update a questa revisione): wc = il log e' della radice della working copy; file/dir = di un elemento dentro (si offre anche solo quello). Assente per il log di un URL."
+    },
     "logTheme": {
       "enum": ["same", "light", "dark"],
       "description": "Tema della sola finestra Log: same = come le altre finestre SVNAssist."

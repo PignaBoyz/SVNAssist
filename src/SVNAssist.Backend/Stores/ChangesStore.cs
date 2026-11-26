@@ -2343,6 +2343,10 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
         await RunExclusiveAsync(() => UpdateToRevisionCoreAsync(targets, revision, ct));
     }
 
+    /// <summary>"Update a questa revisione" dal Log: stesso update (avanzamento, annulla, conflitti) della scelta revisione di Changes.</summary>
+    internal Task UpdateToRevisionFromLogAsync(IReadOnlyList<string> targets, string revision, CancellationToken ct)
+        => RunExclusiveAsync(() => UpdateToRevisionCoreAsync(targets, revision, ct));
+
     /// <summary><c>svn update -r</c> sui percorsi scelti.</summary>
     private async Task UpdateToRevisionCoreAsync(IReadOnlyList<string> targets, string revision, CancellationToken ct)
     {

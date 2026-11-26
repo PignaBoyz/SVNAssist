@@ -47,6 +47,10 @@
     if (s.sel != null && s.sel !== rev) items.push({ label: t('Confronta con r{0}', s.sel), cmd: 'logCompare', args: { a: s.sel, b: rev }, hint: t('Elenca i file cambiati tra le due revisioni') });
     // l'URL del repository non e' noto alla UI (ne' dove si veda nel browser): si copia percorso@revisione, usabile in svn e nel Repository browser
     const repoPaths = files.map(f => f.p + '@' + rev).join('\n');
+    if (s.updateScope && !e.depth) {   // revisioni del ramo (non quelle entrate per merge)
+      items.push({ sep: true }, { label: t('Update della working copy a r{0}', rev), cmd: 'logUpdateTo', args: { rev, scope: 'wc' }, hint: t('svn update -r: porta tutta la working copy a questa revisione') });
+      if (s.updateScope !== 'wc') items.push({ label: s.updateScope === 'file' ? t('Update solo di questo file a r{0}', rev) : t('Update solo di questa cartella a r{0}', rev), cmd: 'logUpdateTo', args: { rev, scope: 'item' }, hint: t('svn update -r solo sull\'elemento di questo log, come in TortoiseSVN') });
+    }
     return [...items, { sep: true }, { label: t('Copia percorso nel repository'), run: copy(repoPaths, t('percorso')), disabled: !files.length, hint: t('Copia percorso@revisione dei file della revisione (uno per riga)') }, ...tail];
   };
   U.logFileOpenItem = (rev, i) => ({ label: t('Apri file di questa revisione nell\'editor'), cmd: 'logOpenRevFile', args: { rev, i }, hint: t('Esporta il file com\'era alla revisione r{0} e lo apre in sola lettura in Visual Studio', rev) });

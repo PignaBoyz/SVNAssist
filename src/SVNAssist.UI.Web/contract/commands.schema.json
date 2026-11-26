@@ -2172,6 +2172,25 @@
       }
     },
     {
+      "title": "logUpdateTo",
+      "description": "Update a una revisione dal Log (tasto destro): scope wc = tutta la working copy, item = solo il file o la cartella del log. Conferma con modifiche locali, poi ricarica il log.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "args"],
+      "properties": {
+        "name": { "const": "logUpdateTo" },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["rev", "scope"],
+          "properties": {
+            "rev": { "type": "integer", "minimum": 1, "description": "Revisione." },
+            "scope": { "enum": ["wc", "item"] }
+          }
+        }
+      }
+    },
+    {
       "title": "logCompare",
       "description": "Elenca i file cambiati tra due revisioni dell'elenco (Ctrl+clic): riempisce files.",
       "type": "object",
