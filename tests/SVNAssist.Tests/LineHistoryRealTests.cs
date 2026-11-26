@@ -97,6 +97,9 @@ public class LineHistoryRealTests : IDisposable
         Assert.Equal([0, 1, 2, 0], s.Entries.Select(e => e.Depth));
         Assert.Equal("luca", s.Entries.Single(e => e.Rev == 5).Author);
         Assert.False(s.CanMore);
+        // Si apre gia' sulla modifica piu' recente, con il diff di quel punto.
+        Assert.Equal(8L, s.Sel);
+        Assert.Contains("+C60", s.Diff);
         Assert.Contains("f.txt", Assert.Single(host.LogWindowTitles));
     }
 

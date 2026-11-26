@@ -4,6 +4,11 @@
 (function (w) {
   const U = w.SVNUI, esc = U.esc, t = U.t;
   let st = null;
+  // Selezione "ottimistica": la riga scelta si evidenzia subito, senza aspettare il backend (svn diff puo' metterci un attimo,
+  // e intanto uno snapshot con la selezione vecchia riportava il focus indietro). Con le frecce la richiesta parte dopo una breve pausa,
+  // cosi' scorrendo non si lancia un svn diff per ogni riga attraversata.
+  let pend = null, pendAt = 0, selTimer = 0, shownSel = null;
+  U.logView = (s, p) => (p != null && !s.merge && s.sel !== p ? Object.assign({}, s, { sel: p }) : s);
   // Clic su una revisione: Ctrl/Maiusc+clic su un'altra revisione la confronta con quella selezionata.
   U.logClick = (sel, rev, multi) => multi && sel != null && sel !== rev ? { cmd: 'logCompare', args: { a: sel, b: rev } } : { cmd: 'logSelect', args: { rev } };
   // Tastiera sulla tabella: revisione da selezionare (null = tasto ignorato). Frecce/Home/End spostano, Invio/Spazio confermano la corrente.
@@ -174,9 +179,12 @@
     root.querySelector('#llist').classList.toggle('mrg', !!st.merge);
     root.querySelector('#llist').setAttribute('aria-multiselectable', !!st.merge);
     U.setHTML(root.querySelector('#ltop'), U.logHTML.top(st));
+    if (pend != null && (st.sel === pend || Date.now() - pendAt > 8000)) pend = null;
     const list = root.querySelector('#llist'), had = list.contains(document.activeElement), top = list.scrollTop;
-    if (U.setHTML(list, U.logHTML.list(st))) { list.scrollTop = top; if (had) { const f = list.querySelector('[tabindex="0"]'); if (f) f.focus(); } }
-    U.setHTML(root.querySelector('#ldet'), U.logHTML.detail(st));
+    if (U.setHTML(list, U.logHTML.list(U.logView(st, pend)))) { list.scrollTop = top; if (had) { const f = list.querySelector('[tabindex="0"]'); if (f) f.focus(); } }
+    const det = root.querySelector('#ldet');
+    U.setHTML(det, U.logHTML.detail(st));
+    if (st.sel !== shownSel) { shownSel = st.sel; det.scrollTop = 0; }   // revisione nuova: il dettaglio riparte dall'alto, non a meta' del diff precedente
     root.querySelector('.app').inert = U.ops.render(root.querySelector('#ops'), st, 'log');
     const m = root.querySelector('#lmsg'); m.textContent = st.msg || ''; m.className = 'foot msg' + (st.err ? ' err' : '');
   }
@@ -199,7 +207,12 @@
         const a = JSON.parse(b.dataset.args); e.preventDefault(); U.menu.open(e.clientX, e.clientY, U.logPathMenu(a.rev, a.i), b);
       });
       const list = root.querySelector('#llist');
-      list.addEventListener('click', e => { const r = e.target.closest('.lr'); if (r && st && st.merge) { mcur = +r.dataset.rev; U.bridge.send('mergeToggle', { rev: mcur }); } else if (r) { const c = U.logClick(st && st.sel, +r.dataset.rev, e.ctrlKey || e.shiftKey || e.metaKey); U.bridge.send(c.cmd, c.args); } });
+      const pick = (rev, delay) => {   // evidenzia subito la riga, poi chiede il diff (subito o dopo una pausa)
+        pend = rev; pendAt = Date.now(); clearTimeout(selTimer);
+        for (const r of list.querySelectorAll('.lr')) { const on = +r.dataset.rev === rev; r.classList.toggle('sel', on); r.setAttribute('aria-selected', on); r.tabIndex = on ? 0 : -1; }
+        if (delay) selTimer = setTimeout(() => U.bridge.send('logSelect', { rev }), delay); else U.bridge.send('logSelect', { rev });
+      };
+      list.addEventListener('click', e => { const r = e.target.closest('.lr'); if (r && st && st.merge) { mcur = +r.dataset.rev; U.bridge.send('mergeToggle', { rev: mcur }); } else if (r) { const c = U.logClick(st && st.sel, +r.dataset.rev, e.ctrlKey || e.shiftKey || e.metaKey); if (c.cmd === 'logSelect') pick(c.args.rev, 0); else U.bridge.send(c.cmd, c.args); } });
       list.addEventListener('contextmenu', e => { const r = e.target.closest('.lr'); if (!r || !st) return; e.preventDefault(); U.menu.open(e.clientX, e.clientY, U.logRowMenu(st, +r.dataset.rev), r); });
       list.addEventListener('pointerdown', e => {   // trascina il bordo dell'intestazione per cambiare la larghezza della colonna
         const g = e.target.closest('.rz'); if (!g) return; e.preventDefault(); e.stopPropagation();
@@ -217,7 +230,7 @@
           mcur = rev; if (e.key === 'Enter' || e.key === ' ') U.bridge.send('mergeToggle', { rev }); else { rs.forEach(r => r.tabIndex = +r.dataset.rev === rev ? 0 : -1); }
           rs.find(r => +r.dataset.rev === rev).focus(); return;
         }
-        U.bridge.send('logSelect', { rev }); rs.find(r => +r.dataset.rev === rev).focus();
+        pick(rev, e.key === 'Enter' || e.key === ' ' ? 0 : 150); rs.find(r => +r.dataset.rev === rev).focus();
       });
     },
     update(root, state) { st = state; render(root); },

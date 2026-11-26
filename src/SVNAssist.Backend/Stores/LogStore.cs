@@ -63,7 +63,8 @@ internal sealed class LogStore : ViewStore
     /// (il <c>svn log -g</c> va chiesto li': sul singolo file svn non sempre espande i merge), <paramref name="RelPath"/> = file
     /// relativo alla radice con '/' (per tenere, dentro un merge, solo le revisioni che toccano quel file).
     /// </summary>
-    private sealed record LineScope(string File, string Root, string RelPath, int From, int To, IReadOnlyList<long> Revisions, int LocalOnly);
+    private sealed record LineScope(string File, string Root, string RelPath, int From, int To, IReadOnlyList<long> Revisions, int LocalOnly,
+        IReadOnlyDictionary<long, IReadOnlyList<int>>? Lines = null);
     private readonly DiffOpener? _diffs;
 
     /// <param name="host">Serve ad aprire i diff nell'editor di VS; senza host (test) i comandi di diff falliscono con un messaggio.</param>
@@ -418,7 +419,7 @@ internal sealed class LogStore : ViewStore
             {
                 if (!string.Equals(_path, file, StringComparison.OrdinalIgnoreCase))
                     return; // nel frattempo l'utente ha caricato un altro log
-                _line = new LineScope(file, root, rel, from, to, result.Revisions, result.LocalOnly);
+                _line = new LineScope(file, root, rel, from, to, result.Revisions, result.LocalOnly, result.Lines);
             }
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
@@ -428,6 +429,13 @@ internal sealed class LogStore : ViewStore
         }
 
         await LoadAsync(PageSize, ct);
+
+        // Si apre gia' sulla modifica piu' recente di quelle righe, con il diff ridotto ai blocchi che le toccano.
+        long? first;
+        lock (_lock)
+            first = _line is not null && _entries.FirstOrDefault(e => e.Depth == 0) is { } top ? top.Rev : null;
+        if (first is { } rev)
+            await SelectAsync(rev, ct);
     }
 
     internal static string LineRange(int from, int to) => from == to ? from.ToString(System.Globalization.CultureInfo.InvariantCulture) : $"{from}-{to}";
@@ -914,6 +922,18 @@ internal sealed class LogStore : ViewStore
         {
             // una revisione entrata per merge sta su un altro ramo: il diff -c si chiede alla radice del repository
             var diff = await _svnService.GetDiffAsync(merged ? await RepoRootAsync(path, ct) : path, revision, ct);
+            LineScope? line;
+            lock (_lock)
+                line = _line;
+            if (line is not null)
+            {
+                // Storia delle righe: solo il file e, per le revisioni del ramo, solo i blocchi che toccano le righe seguite.
+                if (merged)
+                    diff = LineHistory.OnlyFile(diff, line.RelPath);
+                else if (line.Lines?.TryGetValue(revision, out var touched) == true)
+                    diff = LineHistory.FocusDiff(diff, touched);
+            }
+
             lock (_lock)
             {
                 if (_sel == revision)

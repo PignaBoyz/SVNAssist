@@ -122,6 +122,45 @@ public class LineHistoryTests
     }
 
     [Fact]
+    public void Trace_DicePerOgniRevisioneQualiRigheTocca()
+    {
+        var history = new[]
+        {
+            new LineHistory.RevisionDiff(7, "@@ -1,3 +1,3 @@\n a\n-b\n+B\n c\n"),
+            new LineHistory.RevisionDiff(2, "@@ -0,0 +1,3 @@\n+a\n+b\n+c\n"),
+        };
+
+        var r = LineHistory.Trace("", history, 2, 3);
+
+        Assert.Equal([2], r.Lines![7]);
+        Assert.Equal([2, 3], r.Lines[2]);
+    }
+
+    [Fact]
+    public void FocusDiff_TieneIntestazioniESoloIBlocchiDelleRighe()
+    {
+        var diff = "Index: f.txt\n===\n--- f.txt\t(revision 1)\n+++ f.txt\t(revision 2)\n@@ -1,3 +1,3 @@\n a\n-b\n+B\n c\n@@ -40,3 +40,3 @@\n x\n-y\n+Y\n z\n";
+
+        var f = LineHistory.FocusDiff(diff, [41]);
+
+        Assert.Contains("+++ f.txt", f);
+        Assert.Contains("+Y", f);
+        Assert.DoesNotContain("+B", f);
+        Assert.Equal(diff, LineHistory.FocusDiff(diff, [500])); // nessun blocco: diff intero
+    }
+
+    [Fact]
+    public void OnlyFile_DiUnDiffDellaRevisioneTieneSoloIlFile()
+    {
+        var diff = "Index: trunk/src/f.txt\n===\n@@ -1 +1 @@\n-a\n+A\nIndex: trunk/altro.txt\n===\n@@ -1 +1 @@\n-x\n+X\n";
+
+        var f = LineHistory.OnlyFile(diff, "src/f.txt");
+
+        Assert.Contains("+A", f);
+        Assert.DoesNotContain("altro", f);
+    }
+
+    [Fact]
     public void KeepTouching_TieneSoloLeRevisioniMergiateCheToccanoIlFile()
     {
         static SvnLogEntry E(long r, string path, params SvnLogEntry[] children)

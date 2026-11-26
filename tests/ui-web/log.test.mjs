@@ -161,3 +161,12 @@ test('la revisione della working copy ("current") e\' evidenziata con "sei qui",
   delete s.current;
   assert.doesNotMatch(U.logHTML.list(s), /wcr| cur/);
 });
+
+test('selezione ottimistica: la riga scelta e\' evidenziata finche\' il backend non risponde; nel merge non si tocca', () => {
+  const s = fx(); s.sel = 124;
+  const h = U.logHTML.list(U.logView(s, 123));
+  assert.match(h, /class="lr sel"[^>]*aria-selected="true" tabindex="0" data-rev="123"/);
+  assert.equal(U.logView(s, null), s);
+  s.merge = { selected: [] };
+  assert.equal(U.logView(s, 123), s);
+});

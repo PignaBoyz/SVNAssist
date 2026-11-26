@@ -18,7 +18,8 @@ internal static class LineHistory
     /// Esito: <see cref="Revisions"/> dalla piu' recente; <see cref="LocalOnly"/> = righe selezionate che esistono solo
     /// nel file di lavoro (aggiunte e non ancora committate), quindi senza storia.
     /// </summary>
-    internal sealed record Result(IReadOnlyList<long> Revisions, int LocalOnly);
+    /// <param name="Lines">Per ogni revisione trovata, le righe seguite che il suo diff tocca (numeri del lato nuovo, cioe' del file a quella revisione): servono a mostrare solo quei blocchi del diff.</param>
+    internal sealed record Result(IReadOnlyList<long> Revisions, int LocalOnly, IReadOnlyDictionary<long, IReadOnlyList<int>>? Lines = null);
 
     private const string Separator = "------------------------------------------------------------------------";
     private static readonly Regex Header = new(@"^r(\d+) \| .*?(?: \| (\d+) lines?)?$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -125,6 +126,7 @@ internal static class LineHistory
         }
 
         var revisions = new List<long>();
+        var lines = new Dictionary<long, IReadOnlyList<int>>();
         var list = history as IReadOnlyList<RevisionDiff> ?? history.ToList();
         for (int i = 0; i < list.Count; i++)
         {
@@ -138,20 +140,82 @@ internal static class LineHistory
                 continue;
 
             var next = new SortedSet<int>();
-            bool touched = false;
+            var hit = new List<int>();
             foreach (var line in tracked)
             {
                 var (t, old) = MapBack(hunks, line);
-                touched |= t;
+                if (t) hit.Add(line);
                 if (old is { } o && o > 0) next.Add(o);
             }
 
-            if (touched)
+            if (hit.Count > 0)
+            {
                 revisions.Add(rev.Revision);
+                lines[rev.Revision] = hit;
+            }
             tracked = next;
         }
 
-        return new Result(revisions, localOnly);
+        return new Result(revisions, localOnly, lines);
+    }
+
+    /// <summary>
+    /// Diff di una revisione ridotto ai blocchi che toccano <paramref name="lines"/> (lato nuovo), con le intestazioni del file:
+    /// lo Show Log delle righe apre il diff sul punto giusto invece che su tutto il file. Se nessun blocco corrisponde, il diff intero.
+    /// </summary>
+    internal static string FocusDiff(string diff, IReadOnlyCollection<int> lines)
+    {
+        var src = diff.Replace("\r\n", "\n").Split('\n');
+        var head = new System.Text.StringBuilder();
+        var kept = new System.Text.StringBuilder();
+        System.Text.StringBuilder? hunk = null;
+        bool keep = false, any = false;
+        void Flush()
+        {
+            if (hunk is not null && keep) { kept.Append(hunk); any = true; }
+            hunk = null;
+        }
+
+        foreach (var l in src)
+        {
+            var m = HunkHeader.Match(l);
+            if (m.Success)
+            {
+                Flush();
+                var nm = Regex.Match(l, @"\+(\d+)(?:,(\d+))?");
+                int start = int.Parse(nm.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+                int count = nm.Groups[2].Success ? int.Parse(nm.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture) : 1;
+                keep = lines.Any(x => x >= start && x < start + Math.Max(count, 1));
+                hunk = new System.Text.StringBuilder();
+                hunk.Append(l).Append('\n');
+            }
+            else if (hunk is not null)
+            {
+                if (l.StartsWith("Property changes on:", StringComparison.Ordinal) || l.StartsWith("Index: ", StringComparison.Ordinal)) { Flush(); break; }
+                hunk.Append(l).Append('\n');
+            }
+            else
+                head.Append(l).Append('\n');
+        }
+
+        Flush();
+        return any ? head.ToString() + kept.ToString().TrimEnd('\n') + "\n" : diff;
+    }
+
+    /// <summary>Di un diff di piu' file (<c>svn diff -c</c> alla radice del repository) solo le sezioni del file con percorso che finisce per <paramref name="relPath"/>; il diff intero se non ce ne sono.</summary>
+    internal static string OnlyFile(string diff, string relPath)
+    {
+        var suffix = relPath.Replace('\\', '/').TrimStart('/');
+        var parts = Regex.Split(diff.Replace("\r\n", "\n"), @"(?=^Index: )", RegexOptions.Multiline);
+        static string PathOf(string section)
+        {
+            var nl = section.IndexOf('\n');
+            return section[7..(nl > 7 ? nl : section.Length)].Trim().Replace('\\', '/');
+        }
+
+        var kept = parts.Where(p => p.StartsWith("Index: ", StringComparison.Ordinal) && PathOf(p) is var path
+            && (path.Equals(suffix, StringComparison.OrdinalIgnoreCase) || path.EndsWith("/" + suffix, StringComparison.OrdinalIgnoreCase))).ToList();
+        return kept.Count == 0 ? diff : string.Concat(kept);
     }
 
     /// <summary>
