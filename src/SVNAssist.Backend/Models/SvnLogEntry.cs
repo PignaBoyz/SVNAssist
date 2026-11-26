@@ -28,10 +28,10 @@ public sealed record SvnLogEntry(
 
 /// <summary>
 /// Filtri del log (tutti facoltativi). Autore, testo e percorso: sottostringa senza distinzione maiuscole/minuscole.
-/// <see cref="From"/>/<see cref="To"/>: giorni inclusi.
+/// <see cref="From"/>/<see cref="To"/>: giorni inclusi. <see cref="Revisions"/>: solo queste revisioni (storia delle righe), al posto dell'intervallo.
 /// </summary>
 public sealed record SvnLogFilter(string? Author = null, string? Text = null, string? Path = null, DateOnly? From = null, DateOnly? To = null,
-    bool StopOnCopy = false, bool IncludeMerged = false)
+    bool StopOnCopy = false, bool IncludeMerged = false, IReadOnlyList<long>? Revisions = null)
 {
     public bool IsEmpty => string.IsNullOrWhiteSpace(Author) && string.IsNullOrWhiteSpace(Text)
         && string.IsNullOrWhiteSpace(Path) && From is null && To is null;

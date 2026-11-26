@@ -249,6 +249,11 @@ internal sealed class FakeSvnService : ISvnService
         return Task.FromResult(list);
     }
 
+    /// <summary>Testo restituito da <see cref="GetLogWithDiffAsync"/> (output di svn log --diff).</summary>
+    public string LogWithDiff { get; set; } = string.Empty;
+
+    public Task<string> GetLogWithDiffAsync(string filePath, CancellationToken ct) => Task.FromResult(LogWithDiff);
+
     public Task<string> GetRepositoryRootAsync(string target, CancellationToken ct) => Task.FromResult("file:///repo");
 
     public List<(string Target, long Rev, string Destination)> ExportedRevisions { get; } = [];

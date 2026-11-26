@@ -17,11 +17,15 @@ internal sealed class PathCommands
     private readonly DiffOpener _diffs;
 
     private readonly Func<IReadOnlyList<string>, CancellationToken, Task> _openRevisionPicker;
+    private readonly Func<string, int, int, CancellationToken, Task> _openLineHistory;
 
+    /// <param name="openLineHistory">"Show Log righe selezionate": file, riga iniziale e finale (1-based). E' il Log (<see cref="LogStore.StartLineHistoryAsync"/>).</param>
     public PathCommands(ISvnService svn, IHost host, Func<Task> refresh, string tempRoot,
-        Func<IReadOnlyList<string>, CancellationToken, Task>? openRevisionPicker = null)
+        Func<IReadOnlyList<string>, CancellationToken, Task>? openRevisionPicker = null,
+        Func<string, int, int, CancellationToken, Task>? openLineHistory = null)
     {
         _openRevisionPicker = openRevisionPicker ?? ((_, _) => Task.CompletedTask);
+        _openLineHistory = openLineHistory ?? ((_, _, _, _) => Task.CompletedTask);
         _svn = svn;
         _host = host;
         _refresh = refresh;
@@ -41,6 +45,13 @@ internal sealed class PathCommands
         if (command == "revertlines")
         {
             await RevertLinesAsync(paths, ct);
+            return;
+        }
+
+        // linelog: paths = [file, "da-a"] come revertlines; apre il Log con le sole revisioni che hanno toccato quelle righe.
+        if (command == "linelog")
+        {
+            await LineLogAsync(paths, ct);
             return;
         }
 
@@ -239,13 +250,44 @@ internal sealed class PathCommands
     /// "Annulla le modifiche selezionate": riporta a BASE solo le righe del file di lavoro nell'intervallo (vedi <see cref="LineRevert"/>).
     /// Scrive su disco mantenendo encoding, BOM e fine riga; l'host ha gia' salvato il documento aperto.
     /// </summary>
+    /// <summary>
+    /// Righe 1-based da <c>"da-a"</c> (secondo elemento di revertlines/linelog). Eccezione se non valide: arrivano dall'host,
+    /// ma restano input da non fidare.
+    /// </summary>
+    internal static (int From, int To) ParseLineRange(string[] paths)
+    {
+        var range = paths.Length > 1 ? paths[1].Split('-') : [];
+        if (paths.Length < 2 || range.Length != 2 || !int.TryParse(range[0], out var from) || !int.TryParse(range[1], out var to) || from < 1 || to < from)
+            throw new ArgumentException(Loc.T("Intervallo di righe non valido."));
+        return (from, to);
+    }
+
+    private async Task LineLogAsync(string[] paths, CancellationToken ct)
+    {
+        try
+        {
+            var (from, to) = ParseLineRange(paths);
+            var t = SvnTarget.Resolve(paths[0]);
+            if (t is null || t.IsDirectory || !File.Exists(t.Path)) { await InfoAsync(Loc.T("Nessun percorso valido selezionato.")); return; }
+            if (t.WorkingCopyRoot is null) { await InfoAsync(SvnTarget.NotWorkingCopyMessage); return; }
+            await _openLineHistory(t.Path, from, to, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // chiusura
+        }
+        catch (Exception ex)
+        {
+            BackendLog.Warn("Log righe: " + ex.Message);
+            await InfoAsync(Loc.T("Errore ({0}):\n{1}", "Show Log", ex.Message));
+        }
+    }
+
     private async Task RevertLinesAsync(string[] paths, CancellationToken ct)
     {
         try
         {
-            var range = paths.Length > 1 ? paths[1].Split('-') : [];
-            if (paths.Length < 2 || range.Length != 2 || !int.TryParse(range[0], out var from) || !int.TryParse(range[1], out var to) || from < 1 || to < from)
-                throw new ArgumentException(Loc.T("Intervallo di righe non valido."));
+            var (from, to) = ParseLineRange(paths);
             var t = SvnTarget.Resolve(paths[0]);
             if (t is null || t.IsDirectory || !File.Exists(t.Path)) { await ToastAsync(Loc.T("Nessun percorso valido selezionato.")); return; }
             if (t.WorkingCopyRoot is null) { await ToastAsync(SvnTarget.NotWorkingCopyMessage); return; }

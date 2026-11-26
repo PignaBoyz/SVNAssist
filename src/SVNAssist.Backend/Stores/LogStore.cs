@@ -53,6 +53,15 @@ internal sealed class LogStore : ViewStore
     private IReadOnlyList<SvnChange> _files = [];
     private readonly IHost? _host;
     private readonly ChangesStore? _changes;
+    // Storia delle righe selezionate nell'editor (null = log normale): il Log mostra solo le revisioni che le hanno toccate.
+    private LineScope? _line;
+
+    /// <summary>
+    /// "Show Log righe selezionate": <paramref name="File"/> = file aperto, <paramref name="Root"/> = radice della working copy
+    /// (il <c>svn log -g</c> va chiesto li': sul singolo file svn non sempre espande i merge), <paramref name="RelPath"/> = file
+    /// relativo alla radice con '/' (per tenere, dentro un merge, solo le revisioni che toccano quel file).
+    /// </summary>
+    private sealed record LineScope(string File, string Root, string RelPath, int From, int To, IReadOnlyList<long> Revisions, int LocalOnly);
     private readonly DiffOpener? _diffs;
 
     /// <param name="host">Serve ad aprire i diff nell'editor di VS; senza host (test) i comandi di diff falliscono con un messaggio.</param>
@@ -289,7 +298,10 @@ internal sealed class LogStore : ViewStore
 
         Merge?.Close(); // il merge riguardava un'altra working copy
         lock (_lock)
+        {
             _path = svnRoot;
+            _line = null;
+        }
         await LoadAsync(PageSize, ct);
     }
 
@@ -302,7 +314,10 @@ internal sealed class LogStore : ViewStore
         if (Merge is null)
             return;
         lock (_lock)
+        {
             _path = workingCopy;
+            _line = null;
+        }
         Merge.Begin(workingCopy, source);
         if (_host is not null)
             await _host.ShowLogWindowAsync(Merge.Title(source));
@@ -360,8 +375,82 @@ internal sealed class LogStore : ViewStore
 
         Merge?.Close();
         lock (_lock)
+        {
             _path = path;
+            _line = null;
+        }
         await LoadAsync(PageSize, ct);
+    }
+
+    /// <summary>
+    /// Tasto destro nell'editor > "SVN: Show Log righe selezionate": apre il Log sul file con le sole revisioni che hanno
+    /// toccato le righe <paramref name="from"/>..<paramref name="to"/> (1-based, del file di lavoro), merge compresi
+    /// (<c>-g</c>: sotto il merge le revisioni originali e il ramo da cui arrivano). Nessuna finestra nuova: e' il Log di sempre.
+    /// </summary>
+    internal async Task StartLineHistoryAsync(string file, int from, int to, CancellationToken ct)
+    {
+        var root = SvnService.FindSvnRoot(System.IO.Path.GetDirectoryName(file)!) ?? throw new ArgumentException(SvnTarget.NotWorkingCopyMessage);
+        var rel = System.IO.Path.GetRelativePath(root, file).Replace('\\', '/');
+        Merge?.Close();
+        _initialized = true; // il "ready" della finestra appena aperta non deve caricare il log della working copy al posto di questo
+        lock (_lock)
+        {
+            _path = file;
+            _line = null;
+            _entries = [];
+            _sel = null;
+            _diff = string.Empty;
+        }
+
+        CloseFiles();
+        if (_host is not null)
+            await _host.ShowLogWindowAsync(LineTitle(file, from, to));
+        Set(Loc.T("Ricerca delle revisioni che hanno toccato le righe {0}...", LineRange(from, to)), err: false, loading: true);
+        try
+        {
+            var localDiff = await _svnService.GetFileDiffAsync(file, ct);
+            var history = LineHistory.ParseLogDiff(await _svnService.GetLogWithDiffAsync(file, ct));
+            var result = LineHistory.Trace(localDiff, history, from, to);
+            lock (_lock)
+            {
+                if (!string.Equals(_path, file, StringComparison.OrdinalIgnoreCase))
+                    return; // nel frattempo l'utente ha caricato un altro log
+                _line = new LineScope(file, root, rel, from, to, result.Revisions, result.LocalOnly);
+            }
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            Set(Loc.T("Errore: {0}", ex.Message), err: true);
+            return;
+        }
+
+        await LoadAsync(PageSize, ct);
+    }
+
+    internal static string LineRange(int from, int to) => from == to ? from.ToString(System.Globalization.CultureInfo.InvariantCulture) : $"{from}-{to}";
+
+    internal static string LineTitle(string file, int from, int to)
+        => Loc.T("Log: {0} (righe {1})", System.IO.Path.GetFileName(file), LineRange(from, to));
+
+    /// <summary>
+    /// Dentro un merge (<c>-g</c> sulla radice) restano le revisioni che toccano il file (stesso percorso relativo, su qualunque ramo)
+    /// o che ne contengono una: la copia che ha creato un branch o le modifiche ad altri file non c'entrano con queste righe.
+    /// </summary>
+    internal static IReadOnlyList<SvnLogEntry>? KeepTouching(IReadOnlyList<SvnLogEntry>? children, string relPath)
+    {
+        if (children is null)
+            return null;
+        var suffix = "/" + relPath.TrimStart('/');
+        var kept = new List<SvnLogEntry>();
+        foreach (var c in children)
+        {
+            var sub = KeepTouching(c.Children, relPath);
+            var touches = (c.Paths ?? []).Any(p => p.Path.EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
+            if (touches || sub is { Count: > 0 })
+                kept.Add(c with { Children = sub });
+        }
+
+        return kept;
     }
 
     private void Set(string msg, bool err, bool loading = false)
@@ -381,11 +470,29 @@ internal sealed class LogStore : ViewStore
     private async Task LoadAsync(int limit, CancellationToken ct)
     {
         string path;
+        LineScope? line;
         lock (_lock)
+        {
             path = _path;
+            line = _line;
+        }
+
         if (string.IsNullOrWhiteSpace(path))
         {
             Set(Loc.T("Inserisci il percorso della working copy."), err: false);
+            return;
+        }
+
+        if (line is { Revisions.Count: 0 })
+        {
+            // Mai un log senza -r: caricherebbe tutta la storia invece di nessuna revisione.
+            lock (_lock)
+            {
+                _entries = [];
+                _canMore = false;
+            }
+
+            Set(line.LocalOnly > 0 ? Loc.T("Le righe selezionate non sono ancora committate: non hanno storia.") : Loc.T("Nessuna revisione trovata."), err: false);
             return;
         }
 
@@ -393,7 +500,25 @@ internal sealed class LogStore : ViewStore
         try
         {
             Set(Loc.T("Caricamento log..."), err: false, loading: true);
-            var entries = await _svnService.GetLogAsync(path, limit, _filter with { StopOnCopy = _stopOnCopy, IncludeMerged = _includeMerged }, ct);
+            IReadOnlyList<SvnLogEntry> entries;
+            if (line is not null)
+            {
+                limit = Math.Max(limit, line.Revisions.Count);
+                var lineFilter = _filter with { StopOnCopy = false, IncludeMerged = true, Revisions = line.Revisions };
+                try
+                {
+                    entries = (await _svnService.GetLogAsync(line.Root, limit, lineFilter, ct))
+                        .Select(e => e with { Children = KeepTouching(e.Children, line.RelPath) }).ToList();
+                }
+                catch (InvalidOperationException ex)
+                {
+                    // Il file e' arrivato da un'altra cartella (spostamento): la radice non ha quelle revisioni, si chiede il log al file.
+                    BackendLog.Info("Log righe: -g sulla radice non riuscito, log del solo file: " + ex.Message);
+                    entries = await _svnService.GetLogAsync(line.File, limit, lineFilter with { IncludeMerged = false }, ct);
+                }
+            }
+            else
+                entries = await _svnService.GetLogAsync(path, limit, _filter with { StopOnCopy = _stopOnCopy, IncludeMerged = _includeMerged }, ct);
 
             var dtos = entries.SelectMany(e => Flatten(e, 0)).ToList();
             await EnsureAffectedBaseAsync(path, ct);
@@ -402,8 +527,8 @@ internal sealed class LogStore : ViewStore
             {
                 _limit = limit;
                 _entries = dtos;
-                // Se svn ha restituito tutte quelle richieste, ce ne possono essere altre.
-                _canMore = entries.Count >= limit;
+                // Se svn ha restituito tutte quelle richieste, ce ne possono essere altre (non nella storia delle righe: l'elenco e' completo).
+                _canMore = line is null && entries.Count >= limit;
                 // La selezione sopravvive solo se la revisione e' ancora in elenco.
                 if (_sel is { } sel && !dtos.Any(d => d.Rev == sel))
                 {
@@ -412,7 +537,12 @@ internal sealed class LogStore : ViewStore
                 }
             }
 
-            Set(dtos.Count == 0 ? Loc.T("Nessuna revisione trovata.") : Loc.T("{0} revisioni caricate{1}.", dtos.Count, _filter.IsEmpty ? "" : Loc.T(" (filtro attivo)")), err: false);
+            if (line is not null)
+                Set(dtos.Count == 0 ? Loc.T("Nessuna revisione trovata.")
+                    : Loc.T("{0} revisioni hanno toccato le righe {1}{2}.", entries.Count, LineRange(line.From, line.To),
+                        line.LocalOnly > 0 ? Loc.T(" ({0} righe non ancora committate)", line.LocalOnly) : ""), err: false);
+            else
+                Set(dtos.Count == 0 ? Loc.T("Nessuna revisione trovata.") : Loc.T("{0} revisioni caricate{1}.", dtos.Count, _filter.IsEmpty ? "" : Loc.T(" (filtro attivo)")), err: false);
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {

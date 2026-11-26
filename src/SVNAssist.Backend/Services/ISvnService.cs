@@ -140,6 +140,12 @@ public interface ISvnService
     /// <summary>Come <see cref="GetLogAsync(string,int,CancellationToken)"/> ma con filtri (autore, testo, percorso, date).</summary>
     Task<IReadOnlyList<SvnLogEntry>> GetLogAsync(string targetPath, int maxEntries, SvnLogFilter filter, CancellationToken ct);
 
+    /// <summary>
+    /// Tutte le revisioni di un file con il diff di ciascuna (<c>svn log --diff</c>, dalla BASE indietro, seguendo copie e branch):
+    /// testo grezzo, lo legge <see cref="LineHistory.ParseLogDiff"/>. Serve alla storia delle righe selezionate.
+    /// </summary>
+    Task<string> GetLogWithDiffAsync(string filePath, CancellationToken ct);
+
     /// <summary>URL della radice del repository di un percorso o URL (<c>svn info --show-item repos-root-url</c>).</summary>
     Task<string> GetRepositoryRootAsync(string target, CancellationToken ct);
 

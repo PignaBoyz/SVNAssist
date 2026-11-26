@@ -2,6 +2,18 @@
 
 Elenco delle modifiche di SVNAssist per versione, dalla più recente alla più vecchia. I nomi di pulsanti, menu e finestre sono quelli dell'interfaccia, in inglese.
 
+## 0.8.0 (in preparazione)
+
+Contenuti: Show Log delle righe selezionate nell'editor, merge compresi.
+
+Installazione: sostituisce la 0.7.2.
+
+### Novità
+
+- **Show Log delle righe selezionate.** Nell'editor, tasto destro su una riga o su un blocco di righe > **SVN: Show Log for Selected Lines**: si apre il solito **Log** con solo le revisioni che hanno toccato quelle righe, dalla più recente a quella che le ha create.
+  - I merge compaiono con sotto le revisioni originali e il ramo da cui arrivano, anche dopo più merge a catena.
+  - Le righe modificate in locale si riportano alla versione committata; le righe aggiunte e non ancora committate non hanno storia e il Log lo dice.
+
 ## 0.7.2 (2026-11-25)
 
 Contenuti: regole di commit lette anche da `%USERPROFILE%\copilot-instructions.md`, il file personale di Visual Studio 2026.

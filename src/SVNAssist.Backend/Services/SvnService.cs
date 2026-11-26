@@ -568,7 +568,13 @@ public class SvnService : ISvnService
         if (filter.IncludeMerged)
             args.Add("-g");
         static string D(DateOnly d, string time) => "{" + d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + "T" + time + "}";
-        if (filter.From is { } f && filter.To is { } t)
+        if (filter.Revisions is { Count: > 0 } revs)
+        {
+            // Elenco preciso (storia delle righe): un -r per revisione, svn le restituisce in quest'ordine.
+            foreach (var r in revs)
+                args.AddRange(["-r", r.ToString(CultureInfo.InvariantCulture)]);
+        }
+        else if (filter.From is { } f && filter.To is { } t)
             args.AddRange(["-r", D(t, "23:59:59") + ":" + D(f, "00:00:00")]);
         else if (filter.From is { } f2)
             args.AddRange(["-r", "HEAD:" + D(f2, "00:00:00")]);
@@ -590,6 +596,16 @@ public class SvnService : ISvnService
         args.Add(SafeTarget(targetPath));
         return args;
     }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Senza <c>-r</c> svn parte dalla BASE del file di lavoro: i numeri di riga dell'ultima revisione sono quelli della BASE,
+    /// a cui il chiamante riporta le righe del file di lavoro con <see cref="GetFileDiffAsync"/>. Il contesto resta quello
+    /// standard (non <c>-U0</c>): con contesto i blocchi vuoti di <see cref="LineRevert.ParseHunks"/> hanno la riga giusta.
+    /// Nessun timeout: su file con molta storia puo' durare, e lo lancia l'utente.
+    /// </remarks>
+    public Task<string> GetLogWithDiffAsync(string filePath, CancellationToken ct)
+        => RunSvnAsync(["log", "--diff", Peg(SafeTarget(filePath))], workingDirectory: null, ct, applyTimeout: false);
 
     /// <inheritdoc />
     public async Task<string> GetRepositoryRootAsync(string target, CancellationToken ct)

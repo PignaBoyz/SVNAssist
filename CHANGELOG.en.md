@@ -2,6 +2,18 @@
 
 List of SVNAssist changes by version, from the most recent to the oldest. Button, menu and window names are those of the interface, in English.
 
+## 0.8.0 (in preparation)
+
+Contents: Show Log for the lines selected in the editor, merges included.
+
+Installation: replaces 0.7.2.
+
+### New
+
+- **Show Log for the selected lines.** In the editor, right-click a line or a block of lines > **SVN: Show Log for Selected Lines**: the usual **Log** opens with only the revisions that touched those lines, from the most recent to the one that created them.
+  - Merges show the original revisions and the branch they come from underneath, even after several chained merges.
+  - Lines modified locally are mapped to the committed version; lines added and not committed yet have no history and the Log says so.
+
 ## 0.7.2 (2026-11-25)
 
 Contents: commit rules also read from `%USERPROFILE%\copilot-instructions.md`, the Visual Studio 2026 personal file.

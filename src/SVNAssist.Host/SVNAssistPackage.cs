@@ -225,6 +225,7 @@ namespace SVNAssist.Host
             Add(Ids.CmdCreatePatch, () => Host.SendCommandAsync("changes", "createPatch", null));
             Add(Ids.CmdApplyPatch, () => Host.SendCommandAsync("changes", "applyPatch", null));
             Add(Ids.CmdRevertSel, RevertSelectedAsync);
+            Add(Ids.CmdLineLog, ShowLogSelectedLinesAsync);
             Add(Ids.CmdNextChange, () => DiffNavigateAsync(true));
             Add(Ids.CmdPrevChange, () => DiffNavigateAsync(false));
 
@@ -400,6 +401,28 @@ namespace SVNAssist.Host
         /// </summary>
         private async Task RevertSelectedAsync()
         {
+            var (file, from, to, lines) = await ActiveSelectionAsync();
+            if (string.IsNullOrEmpty(file)) { await MessageAsync(Loc.T("Nessun file aperto nell'editor.")); return; }
+            await RevertRangeAsync(file, from, to, lines as IVsPersistDocData);
+        }
+
+        /// <summary>
+        /// "SVN: Show Log for Selected Lines": apre il Log (lo stesso di sempre) con le sole revisioni che hanno toccato le righe
+        /// selezionate o quella del cursore, merge compresi. Salva il documento se modificato: le righe si calcolano dal file su disco.
+        /// </summary>
+        private async Task ShowLogSelectedLinesAsync()
+        {
+            var (file, from, to, lines) = await ActiveSelectionAsync();
+            if (string.IsNullOrEmpty(file)) { await MessageAsync(Loc.T("Nessun file aperto nell'editor.")); return; }
+            await JoinableTaskFactory.SwitchToMainThreadAsync();
+            if (lines is IVsPersistDocData doc && doc.IsDocDataDirty(out int dirty) == VSConstants.S_OK && dirty != 0)
+                doc.SaveDocData(VSSAVEFLAGS.VSSAVE_SilentSave, out _, out _);
+            await Host.RunPathCommandAsync("linelog", new[] { file, from + "-" + to });
+        }
+
+        /// <summary>File e righe selezionate (1-based; senza selezione la riga del cursore) della vista di testo attiva; file null se non c'e'.</summary>
+        private async Task<(string File, int From, int To, IVsTextLines Lines)> ActiveSelectionAsync()
+        {
             await JoinableTaskFactory.SwitchToMainThreadAsync();
             string file = null; int from = 0, to = 0;
             IVsTextLines lines = null;
@@ -411,9 +434,9 @@ namespace SVNAssist.Host
                 view.GetSelection(out int sl, out _, out int el, out int ec);
                 from = sl + 1; to = el + 1;
                 if (el > sl && ec == 0) to = el; // selezione che finisce a inizio riga: quella riga non e' inclusa
+                if (from > to) (from, to) = (to, from); // selezione fatta dal basso verso l'alto
             }
-            if (string.IsNullOrEmpty(file)) { await MessageAsync(Loc.T("Nessun file aperto nell'editor.")); return; }
-            await RevertRangeAsync(file, from, to, lines as IVsPersistDocData);
+            return (file, from, to, lines);
         }
 
         /// <summary>

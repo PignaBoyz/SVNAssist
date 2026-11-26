@@ -127,7 +127,7 @@ internal sealed class BackendServer : IBackend, IDisposable
             Changes.PendingMerges = new PendingMerge(PendingMerge.DefaultFile); // come il watcher: spento nei test, che non devono scrivere in %LOCALAPPDATA%
         Changes.MergeUndone = ct => Log.Merge?.RefreshAsync(ct) ?? Task.CompletedTask;
         _pathCommands = new PathCommands(services.Svn, host, () => Changes.RefreshAsync(_lifetime.Token), Changes.TempRoot,
-            (targets, ct) => Changes.OpenRevisionPickerAsync(targets, ct));
+            (targets, ct) => Changes.OpenRevisionPickerAsync(targets, ct), Log.StartLineHistoryAsync);
         _channels = new Dictionary<string, Channel>
         {
             ["changes"] = new Channel { View = "changes", Store = Changes },
