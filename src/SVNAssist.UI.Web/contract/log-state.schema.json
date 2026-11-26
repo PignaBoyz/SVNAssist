@@ -838,6 +838,10 @@
       "type": "string",
       "description": "Percorso nel repository della cartella o del file di cui si legge il log (es. /trunk/src). Serve all'opzione Solo percorsi interessati: i percorsi di una revisione fuori da qui si nascondono."
     },
+    "logTheme": {
+      "enum": ["same", "light", "dark"],
+      "description": "Tema della sola finestra Log: same = come le altre finestre SVNAssist."
+    },
     "current": {
       "type": "integer",
       "minimum": 0,

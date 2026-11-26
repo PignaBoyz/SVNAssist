@@ -199,6 +199,7 @@ pre.cmd{background:var(--bg0);border:1px solid var(--bd);padding:6px 8px;font:12
 .lf input[type=text]{width:auto;flex:1 1 90px;min-width:70px}
 .lf input[type=date]{background:var(--bg1);border:1px solid var(--bd2);border-radius:4px;padding:4px 6px;color:var(--fg)}
 .lo{display:flex;flex-wrap:wrap;gap:4px 16px;padding:0 8px 6px}
+.lo-t{margin-left:auto}.lo-t select{margin-left:6px}
 .lo-c{display:inline-flex;gap:6px;align-items:center;cursor:pointer;color:var(--fg2,inherit)}
 .lo-c input{width:auto;margin:0;accent-color:var(--acc)}
 .lr.mg{box-shadow:inset 2px 0 0 var(--bd2)}

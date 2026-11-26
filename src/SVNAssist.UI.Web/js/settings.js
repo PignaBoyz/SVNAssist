@@ -8,6 +8,7 @@
     aiProvider: [['auto', t('Automatico (consigliato)')], ['copilot', t('GitHub Copilot (abbonamento)')], ['claudecode', t('Claude Code (abbonamento Claude)')], ['claude', t('Claude API (API key Anthropic)')], ['openai', t('OpenAI-compatibile / GitHub Models')], ['gemini', t('Gemini (API key Google)')]],
     defaultLanguage: [['auto', t('Automatica')], ['italiano', t('Italiano')], ['english', t('English')]],
     windowTheme: [['auto', t('Automatico (segue Visual Studio)')], ['light', t('Chiaro')], ['dark', t('Scuro')], ['blue', t('Blu')]],
+    logTheme: [['same', t('Come le altre finestre SVNAssist')], ['light', t('Chiaro')], ['dark', t('Scuro')]],
     uiLanguage: [['auto', t('Automatica (lingua di Visual Studio)')], ['it', t('Italiano')], ['en', t('English')]],
   });
   const row = (inner, label, desc) => `<div class="set-r"><div class="set-l"><b>${esc(label)}</b>${desc ? `<small class="muted">${esc(desc)}</small>` : ''}</div><div class="set-c">${inner}</div></div>`;
@@ -57,6 +58,7 @@
         num('headCheckMinutes', t('Controllo nuove revisioni (minuti)'), t('Ogni quanti minuti SVNAssist chiede al server l\'ultima revisione del ramo (sola lettura). 0 = spento.')) +
         chk('lightweightMode', t('Modalità leggera (PC poco potenti)'), t('Disattiva il watcher continuo e i controlli automatici sul server: aggiorna al salvataggio in VS, al rientro del focus e con Refresh manuale.')) +
         sel('windowTheme', t('Tema delle finestre SVNAssist')) +
+        sel('logTheme', t('Tema della finestra Log'), t('Solo per la finestra Log (Show Log): ad esempio chiara anche con Visual Studio scuro.')) +
         sel('uiLanguage', t("Lingua dell'interfaccia"), t('Si applica subito a finestre e messaggi; la lingua dei commit message AI è un\'impostazione separata.')) +
         chk('showSccGlyphs', t('Mostra lo stato SVN in Solution Explorer'), t('Icone accanto ai file (modificato, aggiunto, non versionato, in conflitto). SVNAssist si registra come provider di source control: spegni se ne usi un altro.'))) +
       card(t('Scorciatoie'),

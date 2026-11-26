@@ -170,3 +170,12 @@ test('selezione ottimistica: la riga scelta e\' evidenziata finche\' il backend 
   s.merge = { selected: [] };
   assert.equal(U.logView(s, 123), s);
 });
+
+test('tema della sola finestra Log: select nelle opzioni, valore dello snapshot, comando valido', () => {
+  const s = fx(); s.logTheme = 'light';
+  assert.deepEqual(validate(S, j(s)), []);
+  const h = U.logHTML.opts(s);
+  assert.match(h, /id="logtheme"/);
+  assert.match(h, /<option value="light" selected>/);
+  valid({ name: 'setLogTheme', args: { mode: 'dark' } });
+});

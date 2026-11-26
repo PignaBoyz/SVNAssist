@@ -395,7 +395,7 @@ namespace SVNAssist.Host
             var o = _pkg.Options;
             if (!o.TrySet(key, value ?? "")) { Log.Write("setting sconosciuto: " + key); return; }
             o.SaveSettingsToStorage();
-            if (key == "windowTheme") { foreach (var v in Views()) Find(v)?.RefreshTheme(); NotifyBackendTheme(); }
+            if (key == "windowTheme" || key == "logTheme") { foreach (var v in Views()) Find(v)?.RefreshTheme(); NotifyBackendTheme(); }
         }
 
         public async Task OpenSettingsAsync()

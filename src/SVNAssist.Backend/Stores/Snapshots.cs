@@ -220,7 +220,8 @@ internal sealed record LogState(
     bool IncludeMerged = false,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ProgressDto? Progress = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Base = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? Current = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? Current = null,
+    string LogTheme = "same");
 
 /// <summary>Riepilogo della working copy sporca prima di uno switch: conteggi per tipo (i non versionati non portano modifiche ma si contano).</summary>
 internal sealed record DirtyCountsDto(int Modified, int Added, int Deleted, int Conflicted, int Unversioned);

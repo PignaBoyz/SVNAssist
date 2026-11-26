@@ -250,6 +250,7 @@ internal sealed class BackendServer : IBackend, IDisposable
             _hostSettings?.Invalidate();
             var languageChanged = await ApplyLanguageAsync();
             await Changes.OnSettingsChangedAsync(_lifetime.Token);
+            await Log.OnSettingsChangedAsync(); // tema della finestra Log cambiato da Strumenti > Opzioni
             // Cambio lingua a caldo: tutte le finestre aperte ricevono subito lo snapshot nella nuova lingua.
             if (languageChanged)
                 foreach (var channel in _channels.Values)

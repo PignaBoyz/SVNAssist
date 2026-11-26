@@ -2011,6 +2011,22 @@
       }
     },
     {
+      "title": "setLogTheme",
+      "description": "Tema della sola finestra Log (impostazione logTheme): same = come le altre finestre SVNAssist.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "args"],
+      "properties": {
+        "name": { "const": "setLogTheme" },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode"],
+          "properties": { "mode": { "enum": ["same", "light", "dark"] } }
+        }
+      }
+    },
+    {
       "title": "logOptions",
       "description": "Opzioni di Show Log (valgono per la sessione): ricarica da capo il log con --stop-on-copy e/o -g.",
       "type": "object",

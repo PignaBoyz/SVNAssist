@@ -79,6 +79,11 @@ namespace SVNAssist.Host
         public WindowThemeConverter() : base(("auto", Loc.K("Automatico (segue Visual Studio)")), ("light", Loc.K("Chiaro")), ("dark", Loc.K("Scuro")), ("blue", Loc.K("Blu"))) { }
     }
 
+    internal sealed class LogThemeConverter : ChoiceConverter
+    {
+        public LogThemeConverter() : base(("same", Loc.K("Come le altre finestre SVNAssist")), ("light", Loc.K("Chiaro")), ("dark", Loc.K("Scuro"))) { }
+    }
+
     /// <summary>
     /// Tools > Options > SVNAssist. Stesse impostazioni (e default) di SettingsService/SettingDefinitions della 0.1.0,
     /// piu' windowTheme. VS le salva da solo nel registro (DialogPage).
@@ -188,6 +193,14 @@ namespace SVNAssist.Host
         [LDescription("Automatico usa i colori del tema di Visual Studio (chiaro, scuro, blu, alto contrasto).")]
         public string WindowTheme { get; set; } = "auto";
 
+        [LCategory("Generale"), LDisplayName("Tema della finestra Log"), DefaultValue("same"), TypeConverter(typeof(LogThemeConverter))]
+        [LDescription("Solo per la finestra Log (Show Log): ad esempio chiara anche con Visual Studio scuro. Come le altre finestre SVNAssist segue il tema qui sopra.")]
+        public string LogTheme { get; set; } = "same";
+
+        /// <summary>Tema effettivo di una vista (auto|light|dark|blue): il Log puo' averne uno suo.</summary>
+        internal string ThemeFor(string view)
+            => view == "log" && (LogTheme == "light" || LogTheme == "dark") ? LogTheme : (WindowTheme ?? "auto");
+
         [LCategory("Generale"), LDisplayName("Lingua dell'interfaccia"), DefaultValue("auto"), TypeConverter(typeof(UiLanguageConverter))]
         [LDescription("Automatica usa la lingua di Visual Studio (italiano se è italiano, altrimenti inglese). Si applica subito a finestre e messaggi; la lingua dei commit message AI è un'impostazione separata.")]
         public string UiLanguage { get; set; } = "auto";
@@ -281,6 +294,7 @@ namespace SVNAssist.Host
                 ["headCheckMinutes"] = Math.Max(0, Math.Min(24 * 60, HeadCheckMinutes)).ToString(System.Globalization.CultureInfo.InvariantCulture),
                 ["lightweightMode"] = LightweightMode ? "true" : "false",
                 ["windowTheme"] = Pick(WindowTheme, new WindowThemeConverter(), "auto"),
+                ["logTheme"] = Pick(LogTheme, new LogThemeConverter(), "same"),
                 ["uiLanguage"] = Pick(UiLanguage, new UiLanguageConverter(), "auto"),
                 ["uiLanguageEffective"] = EffectiveLanguage,
             };
@@ -323,6 +337,7 @@ namespace SVNAssist.Host
                 case "headCheckMinutes": { int n; HeadCheckMinutes = int.TryParse(value, out n) ? n : 5; break; }
                 case "lightweightMode": LightweightMode = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase); break;
                 case "windowTheme": WindowTheme = value; break;
+                case "logTheme": LogTheme = value; break;
                 case "uiLanguage": UiLanguage = value; break;
                 case "showSccGlyphs": ShowSccGlyphs = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase); break;
                 case "nextChangeShortcut": NextChangeShortcut = value; break;

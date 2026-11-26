@@ -51,7 +51,7 @@ namespace SVNAssist.Host
 
         private string CurrentTheme()
         {
-            try { return SVNAssistPackage.Instance?.Options.WindowTheme ?? "auto"; } catch { return "auto"; }
+            try { return SVNAssistPackage.Instance?.Options.ThemeFor(_view) ?? "auto"; } catch { return "auto"; }
         }
 
         private static Task<CoreWebView2Environment> GetEnvironment()

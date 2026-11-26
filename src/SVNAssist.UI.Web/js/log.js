@@ -79,7 +79,10 @@
       const o = (n, on, label, tip) => `<label class="lo-c" title="${esc(tip)}"><input type="checkbox" name="${n}"${on ? ' checked' : ''}><span>${label}</span></label>`;
       return `<div class="lo" id="logopts" role="group" aria-label="${esc(t('Opzioni del log'))}">` +
         o('stopOnCopy', !!s.stopOnCopy, t('Ferma alla copia/rinomina'), t('Mostra la storia solo fino alla creazione del ramo (svn log --stop-on-copy); spento segue la storia oltre copie e rinomine')) +
-        o('merged', !!s.includeMerged, t('Includi revisioni unite'), t('Mostra sotto ogni merge le revisioni che ha portato (svn log -g)')) + `</div>`;
+        o('merged', !!s.includeMerged, t('Includi revisioni unite'), t('Mostra sotto ogni merge le revisioni che ha portato (svn log -g)')) +
+        `<label class="lo-c lo-t" title="${esc(t('Tema solo di questa finestra (anche in Strumenti > Opzioni > SVNAssist)'))}"><span>${t('Tema')}</span><select id="logtheme">` +
+        [['same', t('Come le altre finestre SVNAssist')], ['light', t('Chiaro')], ['dark', t('Scuro')]]
+          .map(([v, l]) => `<option value="${v}"${(s.logTheme || 'same') === v ? ' selected' : ''}>${esc(l)}</option>`).join('') + `</select></label></div>`;
     },
     files(s) {
       const f = s.files;
@@ -197,6 +200,7 @@
       });
       root.addEventListener('change', e => {
         if (e.target.id === 'lonly') { onlyAffected = e.target.checked; if (st) render(root); return; }
+        if (e.target.id === 'logtheme') { U.bridge.send('setLogTheme', { mode: e.target.value }); return; }
         if (!e.target.closest('#logopts')) return;
         const v = n => e.target.closest('#logopts').querySelector(`[name=${n}]`).checked;
         U.bridge.send('logOptions', { stopOnCopy: v('stopOnCopy'), merged: v('merged') });

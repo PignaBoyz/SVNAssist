@@ -55,6 +55,9 @@ internal sealed class LogStore : ViewStore
     private readonly ChangesStore? _changes;
     // Revisione dell'elenco in cui si trova la working copy (null = log di un URL o revisione non nota): evidenziata nel Log.
     private long? _current;
+    // Tema della sola finestra Log (impostazione "logTheme" dell'host): same = come le altre finestre SVNAssist.
+    private string _logTheme = "same";
+    private static readonly string[] LogThemes = ["same", "light", "dark"];
     // Storia delle righe selezionate nell'editor (null = log normale): il Log mostra solo le revisioni che le hanno toccate.
     private LineScope? _line;
 
@@ -109,7 +112,7 @@ internal sealed class LogStore : ViewStore
         }
 
         lock (_lock)
-            return new LogState(_path, _msgInitial ? Loc.T("Inserisci il percorso della working copy e premi Carica log.") : _msg, _err, _loading, _canMore, _sel, _entries, _diff, _filterText, FilesDto(), null, _stopOnCopy, _includeMerged, _changes?.Progress.GetSnapshot(), _affectedBase, _current);
+            return new LogState(_path, _msgInitial ? Loc.T("Inserisci il percorso della working copy e premi Carica log.") : _msg, _err, _loading, _canMore, _sel, _entries, _diff, _filterText, FilesDto(), null, _stopOnCopy, _includeMerged, _changes?.Progress.GetSnapshot(), _affectedBase, _current, _logTheme);
     }
 
     private LogFilesDto? FilesDto() => _filesKind is null
@@ -126,6 +129,7 @@ internal sealed class LogStore : ViewStore
     /// <summary>All'apertura della vista: se c'e' una working copy (solution o impostazioni) e non e' ancora stata caricata, parte da sola.</summary>
     internal override async Task OnReadyAsync(CancellationToken ct)
     {
+        await ReadLogThemeAsync();
         if (!_initialized && Merge?.Active != true)
         {
             _initialized = true;
@@ -233,6 +237,16 @@ internal sealed class LogStore : ViewStore
             case "mergeClose":
                 await CloseMergeAsync(ct);
                 break;
+            case "setLogTheme":
+                {
+                    var mode = Args.OneOf(args, "mode", LogThemes);
+                    if (_host is not null)
+                        await _host.SetSettingAsync("logTheme", mode); // l'host ridisegna la finestra Log con il tema scelto
+                    lock (_lock)
+                        _logTheme = mode;
+                    NotifyChanged();
+                    break;
+                }
             case "logLoad":
                 await LoadFromUserPathAsync(Args.Str(args, "path"), ct);
                 break;
@@ -436,6 +450,32 @@ internal sealed class LogStore : ViewStore
             first = _line is not null && _entries.FirstOrDefault(e => e.Depth == 0) is { } top ? top.Rev : null;
         if (first is { } rev)
             await SelectAsync(rev, ct);
+    }
+
+    /// <summary>Impostazioni cambiate nell'host: rilegge il tema della finestra Log (la tendina del Log resta allineata a Opzioni).</summary>
+    internal async Task OnSettingsChangedAsync()
+    {
+        var before = _logTheme;
+        await ReadLogThemeAsync();
+        if (_logTheme != before)
+            NotifyChanged();
+    }
+
+    private async Task ReadLogThemeAsync()
+    {
+        if (_host is null)
+            return;
+        try
+        {
+            var s = await _host.GetSettingsAsync();
+            if (s.TryGetValue("logTheme", out var v) && LogThemes.Contains(v))
+                lock (_lock)
+                    _logTheme = v;
+        }
+        catch (Exception ex)
+        {
+            BackendLog.Info("Log: tema non letto: " + ex.Message);
+        }
     }
 
     internal static string LineRange(int from, int to) => from == to ? from.ToString(System.Globalization.CultureInfo.InvariantCulture) : $"{from}-{to}";

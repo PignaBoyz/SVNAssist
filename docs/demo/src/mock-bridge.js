@@ -375,6 +375,7 @@ Il file .patch viene cancellato e non si recupera.`)) return;
       S.lvm.filter = f; S.lvm.msg = S.lvm.entries.filter(logMatch).length + ' revisioni caricate' + (Object.values(f).some(Boolean) ? ' (filtro attivo).' : '.'); render();
     },
     logOptions: a => { S.lvm.stopOnCopy = !!a.stopOnCopy; S.lvm.includeMerged = !!a.merged; return lvmLoad(50); },
+    setLogTheme: a => { S.lvm.logTheme = a.mode; },
     logOpenFile: a => { const e = logRows(S.lvm).find(x => x.rev === +a.rev), p = e && e.paths[+a.i]; if (p) toast('Diff a due pannelli aperto in Visual Studio: ' + p.p.split('/').pop() + ' r' + (e.rev - 1) + ' ↔ r' + e.rev); },
     logOpenRevFile: a => { const e = logRows(S.lvm).find(x => x.rev === +a.rev), p = e && e.paths[+a.i]; if (p) toast(p.a === 'D' ? p.p.split('/').pop() + ' eliminato in r' + e.rev + ': aperta la versione di r' + (e.rev - 1) + ' (sola lettura)' : p.p.split('/').pop() + ' aperto alla revisione r' + e.rev + ' (sola lettura)'); },
     logCompare: a => {
