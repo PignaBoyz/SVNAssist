@@ -146,6 +146,9 @@ public interface ISvnService
     /// </summary>
     Task<string> GetLogWithDiffAsync(string filePath, CancellationToken ct);
 
+    /// <summary><c>svn blame --xml</c> del file (la sua BASE): lo legge <see cref="Blame.Parse"/>.</summary>
+    Task<string> GetBlameXmlAsync(string filePath, CancellationToken ct);
+
     /// <summary>URL della radice del repository di un percorso o URL (<c>svn info --show-item repos-root-url</c>).</summary>
     Task<string> GetRepositoryRootAsync(string target, CancellationToken ct);
 

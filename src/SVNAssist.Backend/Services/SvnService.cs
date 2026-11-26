@@ -608,6 +608,11 @@ public class SvnService : ISvnService
         => RunSvnAsync(["log", "--diff", Peg(SafeTarget(filePath))], workingDirectory: null, ct, applyTimeout: false);
 
     /// <inheritdoc />
+    /// <remarks>Senza timeout: su file con lunga storia il server ci mette; lo chiede l'utente (blame acceso).</remarks>
+    public Task<string> GetBlameXmlAsync(string filePath, CancellationToken ct)
+        => RunSvnAsync(["blame", "--xml", Peg(SafeTarget(filePath))], workingDirectory: null, ct, applyTimeout: false);
+
+    /// <inheritdoc />
     public async Task<string> GetRepositoryRootAsync(string target, CancellationToken ct)
         => (await RunSvnAsync(["info", "--show-item", "repos-root-url", Peg(SafeTarget(target))], workingDirectory: null, ct)).Trim();
 

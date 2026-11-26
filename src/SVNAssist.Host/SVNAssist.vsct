@@ -51,6 +51,7 @@
       <Button guid="guidSVNAssistCmdSet" id="CmdPrevChange" priority="0x0041" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupMainSecondary" /><Strings><CommandName>SVNAssist.PreviousChange</CommandName><ButtonText>Previous Change in Diff</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdRevertSel" priority="0x0000" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupCode" /><Strings><CommandName>SVNAssist.RevertSelected</CommandName><ButtonText>SVN: Revert Selected Changes</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdLineLog" priority="0x0001" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupCode" /><Strings><CommandName>SVNAssist.ShowLogSelectedLines</CommandName><ButtonText>SVN: Show Log for Selected Lines</ButtonText></Strings></Button>
+      <Button guid="guidSVNAssistCmdSet" id="CmdWhoTouched" priority="0x0002" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupCode" /><Strings><CommandName>SVNAssist.WhoTouchedThisLine</CommandName><ButtonText>SVN: Who Changed This Line</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdSeLog" priority="0x0000" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSe" /><CommandFlag>DefaultInvisible</CommandFlag><CommandFlag>DynamicVisibility</CommandFlag><Strings><CommandName>SVNAssist.SeLog</CommandName><ButtonText>Show Log</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdSeAdd" priority="0x0001" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSe" /><CommandFlag>DefaultInvisible</CommandFlag><CommandFlag>DynamicVisibility</CommandFlag><Strings><CommandName>SVNAssist.SeAdd</CommandName><ButtonText>SVN Add</ButtonText></Strings></Button>
       <Button guid="guidSVNAssistCmdSet" id="CmdSeDiff" priority="0x0002" type="Button"><Parent guid="guidSVNAssistCmdSet" id="GroupSe" /><CommandFlag>DefaultInvisible</CommandFlag><CommandFlag>DynamicVisibility</CommandFlag><Strings><CommandName>SVNAssist.SeDiff</CommandName><ButtonText>Check for Modifications</ButtonText></Strings></Button>
@@ -94,6 +95,7 @@
       <IDSymbol name="CmdSeDiff" value="0x0122" />
       <IDSymbol name="CmdSeMerge" value="0x0160" />
       <IDSymbol name="CmdLineLog" value="0x0161" />
+      <IDSymbol name="CmdWhoTouched" value="0x0162" />
       <IDSymbol name="CmdRevertSel" value="0x011E" />
       <IDSymbol name="CmdNextChange" value="0x011F" />
       <IDSymbol name="CmdPrevChange" value="0x0120" />

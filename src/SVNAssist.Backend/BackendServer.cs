@@ -90,6 +90,7 @@ internal sealed class BackendServer : IBackend, IDisposable
     private readonly HostSettings? _hostSettings;
     private readonly ISvnAssistSettings _settings;
     private readonly PathCommands _pathCommands;
+    private readonly Blame _blame;
     private readonly IAiModelCatalog _modelCatalog;
 
     /// <summary>Una vista collegata a uno store, con il suo contatore di revisione e l'ultimo snapshot inviato.</summary>
@@ -126,6 +127,7 @@ internal sealed class BackendServer : IBackend, IDisposable
         if (services.EnableWatcher)
             Changes.PendingMerges = new PendingMerge(PendingMerge.DefaultFile); // come il watcher: spento nei test, che non devono scrivere in %LOCALAPPDATA%
         Changes.MergeUndone = ct => Log.Merge?.RefreshAsync(ct) ?? Task.CompletedTask;
+        _blame = new Blame(services.Svn);
         _pathCommands = new PathCommands(services.Svn, host, () => Changes.RefreshAsync(_lifetime.Token), Changes.TempRoot,
             (targets, ct) => Changes.OpenRevisionPickerAsync(targets, ct), Log.StartLineHistoryAsync);
         _channels = new Dictionary<string, Channel>
@@ -356,6 +358,10 @@ internal sealed class BackendServer : IBackend, IDisposable
 
     public Task OnMergeEditorClosedAsync(string filePath, int state)
         => Changes.OnMergeEditorClosedAsync(filePath, state, _lifetime.Token);
+
+    public Task<string> GetBlameAsync(string file) => _blame.GetJsonAsync(file, _lifetime.Token);
+
+    public Task<string> GetBlameMessageAsync(string file, long revision) => _blame.GetMessageAsync(file, revision, _lifetime.Token);
 
     public async Task<int[]> GetChangedBlocksAsync(string file)
     {

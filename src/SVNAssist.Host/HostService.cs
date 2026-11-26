@@ -204,6 +204,18 @@ namespace SVNAssist.Host
             await FromViewAsync(view, msg.ToString(Newtonsoft.Json.Formatting.None)).ConfigureAwait(false);
         }
 
+        public async Task<string> GetBlameAsync(string file)
+        {
+            var b = await _backend.GetAsync().ConfigureAwait(false);
+            return await b.GetBlameAsync(file).ConfigureAwait(false) ?? "{}";
+        }
+
+        public async Task<string> GetBlameMessageAsync(string file, long revision)
+        {
+            var b = await _backend.GetAsync().ConfigureAwait(false);
+            return await b.GetBlameMessageAsync(file, revision).ConfigureAwait(false) ?? string.Empty;
+        }
+
         public async Task<int[]> GetChangedBlocksAsync(string file)
         {
             var b = await _backend.GetAsync().ConfigureAwait(false);

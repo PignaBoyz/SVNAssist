@@ -226,6 +226,7 @@ namespace SVNAssist.Host
             Add(Ids.CmdApplyPatch, () => Host.SendCommandAsync("changes", "applyPatch", null));
             Add(Ids.CmdRevertSel, RevertSelectedAsync);
             Add(Ids.CmdLineLog, ShowLogSelectedLinesAsync);
+            Add(Ids.CmdWhoTouched, WhoTouchedLineAsync);
             Add(Ids.CmdNextChange, () => DiffNavigateAsync(true));
             Add(Ids.CmdPrevChange, () => DiffNavigateAsync(false));
 
@@ -418,6 +419,36 @@ namespace SVNAssist.Host
             if (lines is IVsPersistDocData doc && doc.IsDocDataDirty(out int dirty) == VSConstants.S_OK && dirty != 0)
                 doc.SaveDocData(VSSAVEFLAGS.VSSAVE_SilentSave, out _, out _);
             await Host.RunPathCommandAsync("linelog", new[] { file, from + "-" + to });
+        }
+
+        /// <summary>
+        /// "SVN: Who Changed This Line": risposta al volo per la riga del cursore (blame del file, in cache nel backend),
+        /// senza accendere il blame nella barra dell'editor. Dal messaggio si puo' aprire il Show Log della riga.
+        /// </summary>
+        private async Task WhoTouchedLineAsync()
+        {
+            var (file, from, _, _) = await ActiveSelectionAsync();
+            if (string.IsNullOrEmpty(file)) { await MessageAsync(Loc.T("Nessun file aperto nell'editor.")); return; }
+            var raw = await Host.GetBlameAsync(file);
+            await JoinableTaskFactory.SwitchToMainThreadAsync();
+            var o = Newtonsoft.Json.Linq.JObject.Parse(raw);
+            if (o["error"] != null) { await MessageAsync(Loc.T("Blame non disponibile: {0}", (string)o["error"])); return; }
+            var lines = o["lines"]?.ToObject<int[]>() ?? new int[0];
+            var revs = o["revs"] as Newtonsoft.Json.Linq.JArray;
+            var i = from >= 1 && from <= lines.Length ? lines[from - 1] : -1;
+            string text;
+            if (i < 0 || revs == null || i >= revs.Count)
+                text = Loc.T("Riga {0}: modifica locale non committata", from);
+            else
+            {
+                var r = revs[i];
+                var rev = (long)r["r"];
+                var msg = await Host.GetBlameMessageAsync(file, rev);
+                await JoinableTaskFactory.SwitchToMainThreadAsync();
+                text = Loc.T("Riga {0}: ultima modifica in r{1}", from, rev) + "\n" + (string)r["a"] + " · " + (string)r["d"] + (string.IsNullOrEmpty(msg) ? "" : "\n\n" + msg);
+            }
+            if (PromptDialog.Show(text, new[] { Loc.T("Show Log di questa riga"), "OK" }) == 0)
+                await Host.RunPathCommandAsync("linelog", new[] { file, from + "-" + from });
         }
 
         /// <summary>File e righe selezionate (1-based; senza selezione la riga del cursore) della vista di testo attiva; file null se non c'e'.</summary>

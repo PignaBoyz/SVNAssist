@@ -35,6 +35,16 @@ namespace SVNAssist.Rpc
         /// <summary>Righe iniziali (1-based, nel file di lavoro) dei blocchi modificati rispetto a BASE, per "prossima/precedente modifica" nell'editor. Vuoto se il file non e' versionato o non e' modificato.</summary>
         Task<int[]> GetChangedBlocksAsync(string file);
 
+        /// <summary>
+        /// "Chi ha toccato la riga" (blame acceso nell'editor): JSON <c>{"revs":[{"r","a","d"}],"lines":[indice in revs | -1]}</c>,
+        /// lines[i] = riga i+1 del file su disco (-1 = modifica locale non committata), oppure <c>{"error":"..."}</c>.
+        /// Il backend tiene il blame in cache finche' la revisione del file non cambia.
+        /// </summary>
+        Task<string> GetBlameAsync(string file);
+
+        /// <summary>Prima riga del messaggio di una revisione del file (per il testo del blame), "" se non disponibile.</summary>
+        Task<string> GetBlameMessageAsync(string file, long revision);
+
         /// <summary>Visual Studio e' diventata l'applicazione attiva (true) o ha perso il primo piano (false): il controllo delle nuove revisioni si ferma in secondo piano.</summary>
         Task IdeActiveChangedAsync(bool active);
 

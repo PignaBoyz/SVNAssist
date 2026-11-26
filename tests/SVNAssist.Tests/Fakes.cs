@@ -254,6 +254,15 @@ internal sealed class FakeSvnService : ISvnService
 
     public Task<string> GetLogWithDiffAsync(string filePath, CancellationToken ct) => Task.FromResult(LogWithDiff);
 
+    public string BlameXml { get; set; } = "<blame><target/></blame>";
+    public int BlameCalls { get; private set; }
+
+    public Task<string> GetBlameXmlAsync(string filePath, CancellationToken ct)
+    {
+        BlameCalls++;
+        return Task.FromResult(BlameXml);
+    }
+
     public Task<string> GetRepositoryRootAsync(string target, CancellationToken ct) => Task.FromResult("file:///repo");
 
     public List<(string Target, long Rev, string Destination)> ExportedRevisions { get; } = [];
