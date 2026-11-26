@@ -1564,7 +1564,10 @@
             "auth",
             "clientId",
             "tenant",
-            "feedback"
+            "feedback",
+            "orgs",
+            "projects",
+            "who"
           ],
           "properties": {
             "org": {
@@ -1612,6 +1615,38 @@
                   },
                   "detail": {
                     "type": "string"
+                  },
+                  "fix": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "additionalProperties": false,
+                    "required": [
+                      "text",
+                      "action",
+                      "command"
+                    ],
+                    "description": "Come sistemare un controllo fallito.",
+                    "properties": {
+                      "text": {
+                        "type": "string"
+                      },
+                      "action": {
+                        "enum": [
+                          "",
+                          "install",
+                          "login",
+                          "signin",
+                          "patpage"
+                        ],
+                        "description": "Vuoto = non si sistema da qui (il testo dice a chi chiedere)."
+                      },
+                      "command": {
+                        "type": "string",
+                        "description": "Comando PowerShell da eseguire o copiare."
+                      }
+                    }
                   }
                 }
               }
@@ -1646,6 +1681,23 @@
             "feedback": {
               "type": "string",
               "description": "Esito dell'ultima azione (accesso, console)."
+            },
+            "orgs": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Organizzazioni dell'account (tendina); vuoto se non leggibili (es. PAT di una sola organizzazione)."
+            },
+            "projects": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "who": {
+              "type": "string",
+              "description": "Account con cui l'accesso funziona; vuoto se non ancora."
             }
           }
         }

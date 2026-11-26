@@ -3,7 +3,13 @@ using SVNAssist.Services;
 namespace SVNAssist.Stores;
 
 /// <summary>Un controllo della procedura guidata: Ok null = da fare / in corso.</summary>
-internal sealed record AzCheckDto(string Id, string Label, bool? Ok, string Detail);
+internal sealed record AzCheckDto(string Id, string Label, bool? Ok, string Detail, AzFixDto? Fix = null);
+
+/// <summary>
+/// Come sistemare un controllo fallito. Action: install | login (console), signin (accesso Windows), patpage (pagina dei token)
+/// o vuoto se l'utente da solo non puo' (Text dice a chi chiedere cosa). Command: comando PowerShell da eseguire o copiare.
+/// </summary>
+internal sealed record AzFixDto(string Text, string Action, string Command);
 
 /// <summary>Work item per la UI (chip nel commit, tendina, badge del Log).</summary>
 internal sealed record AzItemDto(int Id, string Type, string Title, string State, string Url);
@@ -17,7 +23,8 @@ internal sealed record AzStateDto(string Name, IReadOnlyList<string> Via, bool O
 /// <summary>Procedura guidata "Collega Azure DevOps".</summary>
 /// <param name="Auth">pat | cli | sso (vedi <see cref="AzureSettings"/>).</param>
 internal sealed record AzWizardDto(string Org, string Project, bool HasPat, bool Busy, IReadOnlyList<AzCheckDto> Checks, bool CanEnable,
-    bool Enabled, bool LinkOnCommit, bool Comment, string Auth, string ClientId, string Tenant, string Feedback);
+    bool Enabled, bool LinkOnCommit, bool Comment, string Auth, string ClientId, string Tenant, string Feedback,
+    IReadOnlyList<string> Orgs, IReadOnlyList<string> Projects, string Who);
 
 /// <summary>
 /// Stato Azure nello snapshot di Changes: <c>Ready</c> = integrazione attiva e configurata (senza, la UI non mostra nulla di Azure
@@ -41,6 +48,8 @@ internal sealed class AzureStore
     private readonly AzureDevOpsClient _client;
     private readonly IAzureTokens _tokens;
     private string _wizFeedback = string.Empty;
+    private IReadOnlyList<string> _orgs = [], _projects = [];
+    private string _who = string.Empty;
     private readonly Func<DateTime> _now;
     private readonly object _lock = new();
     private readonly Dictionary<int, (WorkItemInfo Item, DateTime At)> _cache = new();
@@ -98,7 +107,8 @@ internal sealed class AzureStore
             var wiz = _wizOpen
                 ? new AzWizardDto(_wizSettings.Org, _wizSettings.Project, _wizSettings.Pat.Length > 0, _wizBusy, _checks,
                     _checks.Count > 0 && _checks.Where(c => c.Id != "write").All(c => c.Ok == true), _wizSettings.Enabled, _wizSettings.LinkOnCommit, _wizSettings.Comment,
-                    _wizSettings.Auth, _wizSettings.ClientId, _wizSettings.Tenant, _wizFeedback)
+                    _wizSettings.Auth, _wizSettings.ClientId, _wizSettings.Tenant, _wizFeedback,
+                    _orgs, _projects, _who)
                 : null;
             return new AzureDto(_ready, _busy, _error, linked, _suggest, _states, _targetState, wiz);
         }
@@ -398,8 +408,120 @@ internal sealed class AzureStore
     internal async Task OpenWizardAsync(CancellationToken ct)
     {
         var s = await SettingsAsync(ct);
-        lock (_lock) { _wizOpen = true; _wizSettings = s; _checks = []; _wizBusy = false; _wizFeedback = string.Empty; }
+        lock (_lock) { _wizOpen = true; _wizSettings = s; _checks = []; _wizBusy = true; _wizFeedback = string.Empty; _orgs = []; _projects = []; _who = string.Empty; }
         Notify();
+        try
+        {
+            // Prima configurazione: se Azure CLI ha gia' fatto l'accesso lo uso senza chiedere nulla.
+            if (s.Org.Length == 0 && s.Pat.Length == 0 && s.Auth == "pat" && await DiscoverAsync(s with { Auth = "cli" }, quiet: true, ct))
+                await _settings.SetSettingAsync(SettingDefinitions.AzAuth, "cli", ct);
+            else
+                await DiscoverAsync(s, quiet: true, ct);
+        }
+        finally
+        {
+            var now = await SettingsAsync(ct);
+            lock (_lock) { _wizSettings = now; _wizBusy = false; }
+            Notify();
+        }
+    }
+
+    /// <summary>"azDiscover": salva modo di accesso e organizzazione scritti, poi ricarica le tendine.</summary>
+    internal async Task DiscoverFromUiAsync(string org, string auth, string clientId, string tenant, CancellationToken ct)
+    {
+        await _settings.SetSettingAsync(SettingDefinitions.AzAuth, AzureSettings.AuthModes.Contains(auth) ? auth : "pat", ct);
+        await _settings.SetSettingAsync(SettingDefinitions.AzOrg, AzureSettings.NormalizeOrg(org), ct);
+        await _settings.SetSettingAsync(SettingDefinitions.AzClientId, (clientId ?? string.Empty).Trim(), ct);
+        await _settings.SetSettingAsync(SettingDefinitions.AzTenant, (tenant ?? string.Empty).Trim(), ct);
+        var s = await SettingsAsync(ct);
+        lock (_lock) { _wizSettings = s; _wizBusy = true; }
+        Notify();
+        try { await DiscoverAsync(s, quiet: false, ct); }
+        finally
+        {
+            var now = await SettingsAsync(ct);
+            lock (_lock) { _wizSettings = now; _wizBusy = false; }
+            Notify();
+        }
+    }
+
+    /// <summary>
+    /// Riempie le tendine: organizzazioni dell'account e progetti dell'organizzazione scelta. Se ce n'e' una sola la sceglie da solo.
+    /// true se l'accesso funziona. Con quiet gli errori non si mostrano (tentativo automatico).
+    /// </summary>
+    private async Task<bool> DiscoverAsync(AzureSettings s, bool quiet, CancellationToken ct)
+    {
+        if (s.Auth == "pat" && s.Pat.Length == 0 || s.Auth == "sso" && s.ClientId.Length == 0)
+            return false;
+        try
+        {
+            var (who, orgs) = await _client.OrganizationsAsync(s, ct);
+            lock (_lock) { _who = who; _orgs = orgs; _wizFeedback = who.Length > 0 ? Loc.T("Accesso come {0}", who) : _wizFeedback; }
+            if (s.Org.Length == 0 && orgs.Count == 1)
+            {
+                await _settings.SetSettingAsync(SettingDefinitions.AzOrg, orgs[0], ct);
+                s = s with { Org = orgs[0] };
+            }
+        }
+        catch (AzureDevOpsException ex)
+        {
+            BackendLog.Info("Azure: organizzazioni non lette: " + ex.Message);
+            // PAT limitato a una organizzazione: niente elenco, ma l'organizzazione scritta puo' funzionare lo stesso.
+            if (s.Org.Length == 0 || ex.Code is "cli-missing" or "cli-login" or "sso-login" or "sso-clientid")
+            {
+                if (!quiet) lock (_lock) _wizFeedback = ex.Message;
+                return false;
+            }
+        }
+
+        if (s.Org.Length == 0)
+            return true;
+        try
+        {
+            var projects = await _client.ProjectsAsync(s, ct);
+            lock (_lock) _projects = projects;
+            if ((s.Project.Length == 0 || !projects.Contains(s.Project, StringComparer.OrdinalIgnoreCase)) && projects.Count == 1)
+                await _settings.SetSettingAsync(SettingDefinitions.AzProject, projects[0], ct);
+            return true;
+        }
+        catch (AzureDevOpsException ex)
+        {
+            lock (_lock) { _projects = []; if (!quiet) _wizFeedback = ex.Message; }
+            return false;
+        }
+    }
+
+    /// <summary>Aiuto per un controllo fallito: cosa fare da qui (pulsante/comando) o a chi chiedere.</summary>
+    internal static AzFixDto? FixFor(string check, string code, string auth)
+    {
+        const string install = "winget install --id Microsoft.AzureCLI -e", login = "az login --allow-no-subscriptions";
+        switch (code)
+        {
+            case "cli-missing": return new(Loc.T("Installa Azure CLI (una volta sola), poi fai l'accesso."), "install", install);
+            case "cli-login": return new(Loc.T("Accedi con l'account aziendale nel browser, poi premi Verifica."), "login", login);
+            case "sso-login": return new(Loc.T("Premi Accedi e completa la finestra di Windows con l'account aziendale."), "signin", string.Empty);
+            case "sso-clientid":
+                return new(Loc.T("Serve una registrazione app in Entra ID: chiedi all'IT il client id (app pubblica, permesso delegato Azure DevOps user_impersonation, redirect del broker di Windows). Intanto puoi usare Azure CLI."), string.Empty, string.Empty);
+        }
+
+        if (check == "org")
+            return code == "auth"
+                ? auth switch
+                {
+                    "cli" => new(Loc.T("Rifai l'accesso con l'account che usi in Azure DevOps."), "login", login),
+                    "sso" => new(Loc.T("Rifai l'accesso con l'account che usi in Azure DevOps."), "signin", string.Empty),
+                    _ => new(Loc.T("Crea un nuovo token (Work Items: Read & write) e incollalo qui."), "patpage", string.Empty),
+                }
+                : new(Loc.T("Controlla l'indirizzo (https://dev.azure.com/nome) o scegli l'organizzazione dalla tendina."), string.Empty, string.Empty);
+        if (check == "project")
+            return new(Loc.T("Scegli il progetto dalla tendina: sono quelli che vedi con il tuo account."), string.Empty, string.Empty);
+        if (check is "read" or "write" && auth == "pat" && code is "forbidden" or "auth")
+            return new(Loc.T("Ricrea il token con il permesso Work Items: Read & write."), "patpage", string.Empty);
+        if (check == "read")
+            return new(Loc.T("Il tuo utente non vede i work item del progetto: chiedi all'amministratore del progetto di aggiungerti al team (livello di accesso Basic o Stakeholder)."), string.Empty, string.Empty);
+        if (check == "write")
+            return new(Loc.T("Puoi leggere ma non modificare: chiedi all'amministratore del progetto il permesso \"Edit work items in this node\" sull'Area Path dei tuoi work item. Intanto i pulsanti restano disattivati."), string.Empty, string.Empty);
+        return null;
     }
 
     internal void CloseWizard()
@@ -477,26 +599,30 @@ internal sealed class AzureStore
         lock (_lock) { _wizSettings = s; _checks = checks.ToList(); _wizBusy = true; }
         Notify();
 
-        void Set(string id, bool ok, string detail)
+        void Set(string id, bool ok, string detail, AzFixDto? fix = null)
         {
             lock (_lock)
-                _checks = _checks.Select(c => c.Id == id ? c with { Ok = ok, Detail = detail } : c).ToList();
+                _checks = _checks.Select(c => c.Id == id ? c with { Ok = ok, Detail = detail, Fix = fix } : c).ToList();
             Notify();
         }
+
+        void Fail(string id, AzureDevOpsException ex) => Set(id, false, ex.Message, FixFor(id, ex.Code, s.Auth));
 
         try
         {
             if (!s.Configured)
             {
-                Set("org", false, s.Auth == "sso" ? Loc.T("Compila organizzazione, progetto e client id dell'app Entra ID.") : s.Auth == "cli" ? Loc.T("Compila organizzazione e progetto.") : Loc.T("Compila organizzazione, progetto e token PAT."));
+                Set("org", false, s.Auth == "sso" ? Loc.T("Compila organizzazione, progetto e client id dell'app Entra ID.") : s.Auth == "cli" ? Loc.T("Compila organizzazione e progetto.") : Loc.T("Compila organizzazione, progetto e token PAT."),
+                    s.Auth == "sso" && s.ClientId.Length == 0 ? FixFor("org", "sso-clientid", s.Auth) : s.Auth == "pat" && s.Pat.Length == 0 ? FixFor("org", "auth", s.Auth) : null);
                 return;
             }
 
             try { Set("org", true, Loc.T("{0} · utente {1}", org, await _client.CheckUserAsync(s, ct))); }
-            catch (AzureDevOpsException ex) { Set("org", false, ex.Message); return; }
+            catch (AzureDevOpsException ex) { Fail("org", ex); return; }
 
+            await DiscoverAsync(s, quiet: true, ct);
             try { await _client.CheckProjectAsync(s, ct); Set("project", true, project); }
-            catch (AzureDevOpsException ex) { Set("project", false, ex.Message); return; }
+            catch (AzureDevOpsException ex) { Fail("project", ex); return; }
 
             IReadOnlyList<WorkItemInfo> mine;
             try
@@ -504,7 +630,7 @@ internal sealed class AzureStore
                 mine = await _client.MineAsync(s, ct);
                 Set("read", true, Loc.T("{0} work item aperti assegnati a te", mine.Count));
             }
-            catch (AzureDevOpsException ex) { Set("read", false, ex.Message); return; }
+            catch (AzureDevOpsException ex) { Fail("read", ex); return; }
 
             if (mine.Count == 0)
             {
@@ -513,7 +639,7 @@ internal sealed class AzureStore
             }
 
             try { await _client.CheckWriteAsync(s, mine[0].Id, ct); Set("write", true, Loc.T("verificata su #{0}, senza modificarlo", mine[0].Id)); }
-            catch (AzureDevOpsException ex) { Set("write", false, ex.Message); }
+            catch (AzureDevOpsException ex) { Fail("write", ex); }
         }
         finally
         {

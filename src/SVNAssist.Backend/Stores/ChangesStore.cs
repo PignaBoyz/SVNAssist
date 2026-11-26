@@ -1164,6 +1164,10 @@ internal sealed partial class ChangesStore : ViewStore, IDisposable
                 await Azure.CheckAsync(Args.Str(args, "org"), Args.Str(args, "project"), Args.Str(args, "pat"),
                     Args.OneOf(args, "auth", AzureSettings.AuthModes), Args.Str(args, "clientId"), Args.Str(args, "tenant"), ct);
                 break;
+            case "azDiscover":
+                await Azure.DiscoverFromUiAsync(Args.Str(args, "org"), Args.OneOf(args, "auth", AzureSettings.AuthModes),
+                    Args.Str(args, "clientId"), Args.Str(args, "tenant"), ct);
+                break;
             case "azSignIn":
                 await Azure.SignInAsync(ct);
                 break;

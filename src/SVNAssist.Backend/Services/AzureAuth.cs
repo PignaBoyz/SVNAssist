@@ -81,11 +81,11 @@ internal sealed class AzureTokens(Func<Task<long>>? windowHandle = null) : IAzur
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
-            throw new AzureDevOpsException(null, Loc.T("Azure CLI non avviabile: {0}", ex.Message));
+            throw new AzureDevOpsException(null, Loc.T("Azure CLI non avviabile: {0}", ex.Message), "cli-missing");
         }
 
         if (exit != 0)
-            throw new AzureDevOpsException(HttpStatusCode.Unauthorized, CliError(error));
+            throw new AzureDevOpsException(HttpStatusCode.Unauthorized, CliError(error), CliCode(error));
         var (token, expires) = ParseCliToken(output);
         lock (_lock)
             _cli = (token, expires);
@@ -102,6 +102,11 @@ internal sealed class AzureTokens(Func<Task<long>>? windowHandle = null) : IAzur
         var line = stderr.Split('\n').Select(l => l.Trim()).FirstOrDefault(l => l.Length > 0) ?? string.Empty;
         return Loc.T("Azure CLI: {0}", line);
     }
+
+    /// <summary>Codice per l'aiuto: cli-missing (non installato), cli-login (accesso da fare) o auth.</summary>
+    internal static string CliCode(string stderr)
+        => stderr.Contains("is not recognized", StringComparison.OrdinalIgnoreCase) || stderr.Contains("non è riconosciuto", StringComparison.OrdinalIgnoreCase) ? "cli-missing"
+            : stderr.Contains("az login", StringComparison.OrdinalIgnoreCase) ? "cli-login" : "auth";
 
     /// <summary>Token e scadenza dall'output JSON di <c>az account get-access-token</c> (<c>expires_on</c> in secondi, o <c>expiresOn</c> ora locale).</summary>
     internal static (string Token, DateTimeOffset Expires) ParseCliToken(string json)
@@ -141,7 +146,7 @@ internal sealed class AzureTokens(Func<Task<long>>? windowHandle = null) : IAzur
     private async Task<string> SsoTokenAsync(AzureSettings s, bool interactive, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(s.ClientId))
-            throw new AzureDevOpsException(HttpStatusCode.Unauthorized, Loc.T("Accesso Windows: manca il client id dell'app Entra ID (te lo da' l'IT)."));
+            throw new AzureDevOpsException(HttpStatusCode.Unauthorized, Loc.T("Accesso Windows: manca il client id dell'app Entra ID (te lo da' l'IT)."), "sso-clientid");
         if (windowHandle is not null)
         {
             try { Interlocked.Exchange(ref _hwnd, await windowHandle()); }
@@ -157,15 +162,15 @@ internal sealed class AzureTokens(Func<Task<long>>? windowHandle = null) : IAzur
         catch (MsalUiRequiredException) when (interactive)
         {
             try { return (await app.AcquireTokenInteractive(Scopes).ExecuteAsync(ct)).AccessToken; }
-            catch (MsalException ex) { throw new AzureDevOpsException(HttpStatusCode.Unauthorized, Loc.T("Accesso Windows non riuscito: {0}", ex.Message)); }
+            catch (MsalException ex) { throw new AzureDevOpsException(HttpStatusCode.Unauthorized, Loc.T("Accesso Windows non riuscito: {0}", ex.Message), "sso-login"); }
         }
         catch (MsalUiRequiredException)
         {
-            throw new AzureDevOpsException(HttpStatusCode.Unauthorized, Loc.T("Accesso aziendale richiesto: apri Collega Azure DevOps e premi Accedi."));
+            throw new AzureDevOpsException(HttpStatusCode.Unauthorized, Loc.T("Accesso aziendale richiesto: apri Collega Azure DevOps e premi Accedi."), "sso-login");
         }
         catch (MsalException ex)
         {
-            throw new AzureDevOpsException(HttpStatusCode.Unauthorized, Loc.T("Accesso Windows non riuscito: {0}", ex.Message));
+            throw new AzureDevOpsException(HttpStatusCode.Unauthorized, Loc.T("Accesso Windows non riuscito: {0}", ex.Message), "sso-login");
         }
     }
 }

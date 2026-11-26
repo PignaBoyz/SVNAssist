@@ -294,3 +294,36 @@ public class AzureAuthTests
         Assert.Contains("Microsoft.AzureCLI", ConsoleLauncher.Build(ConsoleCommand.InstallAzureCli).Arguments);
     }
 }
+
+[Collection("Loc")]
+public class AzureFixTests
+{
+    [Theory]
+    [InlineData("org", "cli-missing", "cli", "install")]
+    [InlineData("org", "cli-login", "cli", "login")]
+    [InlineData("org", "auth", "cli", "login")]
+    [InlineData("org", "auth", "sso", "signin")]
+    [InlineData("org", "auth", "pat", "patpage")]
+    [InlineData("org", "sso-clientid", "sso", "")]
+    [InlineData("write", "forbidden", "pat", "patpage")]
+    [InlineData("write", "forbidden", "cli", "")]
+    [InlineData("read", "forbidden", "sso", "")]
+    public void FixFor_DaQuiOAChiChiedere(string check, string code, string auth, string action)
+    {
+        var fix = AzureStore.FixFor(check, code, auth);
+
+        Assert.NotNull(fix);
+        Assert.Equal(action, fix!.Action);
+        Assert.NotEmpty(fix.Text);
+        if (action is "install" or "login")
+            Assert.StartsWith(action == "install" ? "winget" : "az login", fix.Command);
+    }
+
+    [Fact]
+    public void CliCode_DaStderr()
+    {
+        Assert.Equal("cli-missing", AzureTokens.CliCode("'az' is not recognized as an internal or external command"));
+        Assert.Equal("cli-login", AzureTokens.CliCode("ERROR: Please run 'az login' to setup account."));
+        Assert.Equal("auth", AzureTokens.CliCode("ERROR: something else"));
+    }
+}

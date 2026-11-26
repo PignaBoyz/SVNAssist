@@ -3445,6 +3445,49 @@
           }
         }
       }
+    },
+    {
+      "title": "azDiscover",
+      "description": "Salva modo di accesso e organizzazione, rilegge organizzazioni e progetti (tendine).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args"
+      ],
+      "properties": {
+        "name": {
+          "const": "azDiscover"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "org",
+            "auth",
+            "clientId",
+            "tenant"
+          ],
+          "properties": {
+            "org": {
+              "type": "string"
+            },
+            "auth": {
+              "enum": [
+                "pat",
+                "cli",
+                "sso"
+              ]
+            },
+            "clientId": {
+              "type": "string"
+            },
+            "tenant": {
+              "type": "string"
+            }
+          }
+        }
+      }
     }
   ]
 }

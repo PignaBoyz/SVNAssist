@@ -37,7 +37,17 @@
   // modo di accesso scelto nella procedura (resta alla UI finche' non si preme Verifica)
   A.authPick = null;
   A.auth = z => A.authPick || (z && z.auth) || 'pat';
-  const checkRow = c => `<div class="pi ${c.ok === true ? 'ok' : c.ok === false ? 'ko' : ''}"><span class="pm">${c.ok == null ? '<span class="spin"></span>' : U.icon(c.ok ? 'check' : 'x')}<span class="sr">${c.ok === true ? t('A posto') : c.ok === false ? t('Da sistemare') : t('In corso')}</span></span><div class="pt"><b>${esc(c.label)}</b><div class="muted small">${esc(c.detail || '')}</div></div></div>`;
+  /** Aiuto sotto un controllo fallito: cosa fare (pulsante, comando PowerShell da eseguire o copiare) o a chi chiedere. */
+  A.fixHTML = f => {
+    if (!f) return '';
+    const act = f.action === 'install' || f.action === 'login' ? U.btn('btn sm', t('Esegui'), null, 'azRun', { what: f.action }, t('Apre una console ed esegue il comando'))
+      : f.action === 'signin' ? `<button type="button" class="btn sm" data-az-signin>${t('Accedi')}</button>`
+      : f.action === 'patpage' ? `<button type="button" class="btn sm" data-az-patpage>${t('Crea un token in Azure DevOps')}</button>` : '';
+    const cmd = f.command ? `<div class="az-cmd"><code>PS&gt; ${esc(f.command)}</code><button type="button" class="ib" data-az-copy="${esc(f.command)}" title="${esc(t('Copia il comando'))}" aria-label="${esc(t('Copia il comando'))}">${U.icon('copy')}</button></div>` : '';
+    return `<div class="az-fix"><div class="small"><b>${t('Come sistemare')}:</b> ${esc(f.text)}</div>${cmd}${act ? `<div class="pb">${act}</div>` : ''}${!f.action ? `<div class="muted small">${t('Non si sistema da qui: serve qualcuno con i permessi.')}</div>` : ''}</div>`;
+  };
+  const checkRow = c => `<div class="pi ${c.ok === true ? 'ok' : c.ok === false ? 'ko' : ''}"><span class="pm">${c.ok == null ? '<span class="spin"></span>' : U.icon(c.ok ? 'check' : 'x')}<span class="sr">${c.ok === true ? t('A posto') : c.ok === false ? t('Da sistemare') : t('In corso')}</span></span><div class="pt"><b>${esc(c.label)}</b><div class="muted small">${esc(c.detail || '')}</div>${c.ok === false ? A.fixHTML(c.fix) : ''}</div></div>`;
+  const dl = (id, list) => list && list.length ? `<datalist id="${id}">${list.map(v => `<option value="${esc(v)}">`).join('')}</datalist>` : '';
 
   /** Procedura guidata: organizzazione, progetto, token; "Verifica" fa i controlli; poi si attiva. */
   A.wizardHTML = az => {
@@ -46,14 +56,15 @@
     const opt = (key, on, text, tip) => `<label class="az-o" title="${esc(tip)}"><input type="checkbox" data-az-opt="${key}"${on ? ' checked' : ''}> <span>${text}</span></label>`;
     return `<div class="wiz-scrim"><div class="wiz az-wiz" role="dialog" aria-modal="true" aria-labelledby="az-t"><div class="wiz-h"><h3 id="az-t" tabindex="-1">${t('Collega Azure DevOps')}</h3><span class="fill"></span>${U.btn('ib', '', 'x', 'azWizardClose', null, t('Chiudi (Esc)'))}</div>` +
       `<div class="wiz-b"><p class="muted">${t('Facoltativo: collega i commit ai work item. Il messaggio resta leggibile anche senza estensione. Se non lo configuri resta spento.')}</p>` +
-      `<label for="az-org">${t('Organizzazione')}</label><input id="az-org" type="text" spellcheck="false" autocomplete="off" placeholder="https://dev.azure.com/azienda" value="${esc(z.org)}">` +
-      `<label for="az-proj">${t('Progetto')}</label><input id="az-proj" type="text" spellcheck="false" autocomplete="off" value="${esc(z.project)}">` +
+      (z.who ? `<div class="small"><span class="chip ok">${U.icon('check')} ${esc(t('Accesso come {0}', z.who))}</span></div>` : '') +
+      `<label for="az-org">${t('Organizzazione')}</label><input id="az-org" type="text" list="az-orgs" spellcheck="false" autocomplete="off" placeholder="${esc((z.orgs || []).length ? t('Scegli dalla tendina') : 'https://dev.azure.com/azienda')}" value="${esc(z.org)}">${dl('az-orgs', z.orgs)}` +
+      `<label for="az-proj">${t('Progetto')}</label><input id="az-proj" type="text" list="az-projs" spellcheck="false" autocomplete="off" placeholder="${esc((z.projects || []).length ? t('Scegli dalla tendina') : '')}" value="${esc(z.project)}">${dl('az-projs', z.projects)}` +
       `<label>${t('Accesso')}</label><div class="az-auth" role="radiogroup">` +
       [['cli', t('Account aziendale con Azure CLI'), t('az login una volta, niente token. Serve Azure CLI installato.')],
        ['sso', t('Account Windows (accesso automatico)'), t('Accesso di Windows con l\'account aziendale. Serve il client id di un\'app Entra ID dal vostro IT.')],
        ['pat', t('Token PAT personale'), t('Token creato a mano in Azure DevOps, con scadenza.')]]
         .map(([v, l, d]) => `<label class="az-o"><input type="radio" name="az-auth" value="${v}"${A.auth(z) === v ? ' checked' : ''}> <span><b>${esc(l)}</b><br><span class="muted small">${esc(d)}</span></span></label>`).join('') + `</div>` +
-      (A.auth(z) === 'cli' ? `<div class="pb">${U.btn('btn sm', t('Installa Azure CLI'), null, 'azRun', { what: 'install' }, t('winget install Microsoft.AzureCLI in una console'))}${U.btn('btn sm', t('Accedi (az login)'), null, 'azRun', { what: 'login' }, t('Apre il browser per l\'accesso con l\'account aziendale'))}</div>` : '') +
+      (A.auth(z) === 'cli' && !z.who ? `<div class="pb">${U.btn('btn sm', t('Installa Azure CLI'), null, 'azRun', { what: 'install' }, t('winget install Microsoft.AzureCLI in una console'))}${U.btn('btn sm', t('Accedi (az login)'), null, 'azRun', { what: 'login' }, t('Apre il browser per l\'accesso con l\'account aziendale'))}${U.btn('btn sm ghost', t('Ho fatto, ricarica'), 'refresh', 'azDiscover', { org: z.org, auth: 'cli', clientId: z.clientId, tenant: z.tenant }, t('Rilegge accesso, organizzazioni e progetti'))}</div>` : '') +
       (A.auth(z) === 'sso' ? `<label for="az-cid">${t('Client id app Entra ID')}</label><input id="az-cid" type="text" spellcheck="false" autocomplete="off" value="${esc(z.clientId)}">` +
         `<label for="az-ten">${t('Tenant (facoltativo)')}</label><input id="az-ten" type="text" spellcheck="false" autocomplete="off" placeholder="organizations" value="${esc(z.tenant)}">` +
         `<div class="pb"><button type="button" class="btn sm" data-az-signin ${z.busy ? 'disabled' : ''}>${t('Accedi')}</button></div>` : '') +
@@ -90,11 +101,13 @@
         send('azSignIn');
         return;
       }
+      const cp = e.target.closest('[data-az-copy]'); if (cp) { A.copy(cp.dataset.azCopy); U.toast && U.toast(t('Comando copiato')); return; }
       if (e.target.closest('[data-az-patpage]')) send('azOpenPatPage', { org: (root.querySelector('#az-org') || { value: '' }).value });
     });
     root.addEventListener('change', e => {
       if (e.target.id === 'az-state') send('azState', { state: e.target.value });
-      else if (e.target.name === 'az-auth') { A.authPick = e.target.value; A.render(root, getState().azure); }
+      else if (e.target.name === 'az-auth') { A.authPick = e.target.value; A.render(root, getState().azure); A.discover(root, getState); }
+      else if (e.target.id === 'az-org') A.discover(root, getState);
       else if (e.target.dataset && e.target.dataset.azOpt) send('azOption', { key: e.target.dataset.azOpt, on: e.target.checked });
     });
     root.addEventListener('keydown', e => {
@@ -107,6 +120,17 @@
       else if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); link(az.suggest[Math.min(A.sel, n - 1)].id); }
       else if (e.key === 'Escape') { e.preventDefault(); A.sel = 0; send('azSuggestClose'); }
     }, true);
+  };
+
+  /** Rilegge organizzazioni e progetti con il modo di accesso e l'organizzazione scritti (tendine). */
+  A.discover = (root, getState) => {
+    const v = id => (root.querySelector(id) || { value: '' }).value, z = (getState().azure || {}).wizard || {}, a = A.auth(z);
+    U.bridge.send('azDiscover', { org: v('#az-org'), auth: a, clientId: a === 'sso' ? v('#az-cid') : (z.clientId || ''), tenant: a === 'sso' ? v('#az-ten') : (z.tenant || '') });
+  };
+  A.copy = text => {
+    const fb = () => { const a = document.createElement('textarea'); a.value = text; a.style.cssText = 'position:fixed;opacity:0;left:-1000px'; document.body.appendChild(a); a.select(); try { document.execCommand('copy'); } catch (e) { /* niente */ } a.remove(); };
+    try { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text).catch(fb); return; } } catch (e) { /* ripiego */ }
+    fb();
   };
 
   /** Ridisegna riga, tendina e procedura (chiamata dal render di Changes). */

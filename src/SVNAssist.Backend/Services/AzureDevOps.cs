@@ -192,8 +192,12 @@ internal static class WorkItemText
 }
 
 /// <summary>Errore di Azure DevOps con un messaggio comprensibile (token scaduto, permessi, non trovato).</summary>
-internal sealed class AzureDevOpsException(HttpStatusCode? status, string message) : Exception(message)
+internal sealed class AzureDevOpsException(HttpStatusCode? status, string message, string code = "") : Exception(message)
 {
+    /// <summary>Cosa sistemare (per l'aiuto della procedura guidata): cli-missing, cli-login, sso-clientid, sso-login, auth, forbidden, notfound o vuoto.</summary>
+    public string Code { get; } = code.Length > 0 ? code
+        : status == HttpStatusCode.Unauthorized ? "auth" : status == HttpStatusCode.Forbidden ? "forbidden" : status == HttpStatusCode.NotFound ? "notfound" : string.Empty;
+
     internal HttpStatusCode? Status { get; } = status;
 }
 
@@ -237,9 +241,9 @@ internal sealed class AzureDevOpsClient(HttpClient http, IAzureTokens? tokens = 
             // Un token non valido spesso non da' 401 ma la pagina di accesso (HTML, 203): va trattato come token non valido.
             var html = resp.Content.Headers.ContentType?.MediaType?.Contains("html", StringComparison.OrdinalIgnoreCase) == true;
             if (resp.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.NonAuthoritativeInformation || (resp.IsSuccessStatusCode && html))
-                throw new AzureDevOpsException(HttpStatusCode.Unauthorized, Loc.T("Token PAT non valido o scaduto."));
+                throw new AzureDevOpsException(HttpStatusCode.Unauthorized, spec.S.Auth == "pat" ? Loc.T("Token PAT non valido o scaduto.") : Loc.T("Accesso non valido o scaduto per questa organizzazione."));
             if (resp.StatusCode == HttpStatusCode.Forbidden)
-                throw new AzureDevOpsException(resp.StatusCode, Loc.T("Il token PAT non ha il permesso necessario (Work Items: Read & write)."));
+                throw new AzureDevOpsException(resp.StatusCode, spec.S.Auth == "pat" ? Loc.T("Il token PAT non ha il permesso necessario (Work Items: Read & write).") : Loc.T("Il tuo account non ha il permesso necessario su questo progetto."));
             if (resp.StatusCode == HttpStatusCode.NotFound)
                 throw new AzureDevOpsException(resp.StatusCode, Loc.T("Organizzazione, progetto o work item non trovato."));
             if (!resp.IsSuccessStatusCode)
@@ -274,6 +278,34 @@ internal sealed class AzureDevOpsClient(HttpClient http, IAzureTokens? tokens = 
         if (string.IsNullOrEmpty(name) || string.Equals(user?["descriptor"]?.GetValue<string>(), "System:PublicAccess;aad:anonymous", StringComparison.OrdinalIgnoreCase))
             throw new AzureDevOpsException(HttpStatusCode.Unauthorized, Loc.T("Token PAT non valido o scaduto."));
         return name;
+    }
+
+    /// <summary>
+    /// Organizzazioni a cui l'account appartiene (per la tendina della procedura guidata): profilo, poi account del membro.
+    /// Con un PAT funziona solo se creato per "All accessible organizations".
+    /// </summary>
+    public async Task<(string Who, IReadOnlyList<string> Orgs)> OrganizationsAsync(AzureSettings s, CancellationToken ct)
+    {
+        const string vssps = "https://app.vssps.visualstudio.com/_apis";
+        var me = await SendAsync(Request(HttpMethod.Get, $"{vssps}/profile/profiles/me?{Api}", s), ct);
+        var id = me?["id"]?.GetValue<string>() ?? string.Empty;
+        var who = me?["emailAddress"]?.GetValue<string>() ?? me?["displayName"]?.GetValue<string>() ?? string.Empty;
+        if (id.Length == 0)
+            return (who, []);
+        var json = await SendAsync(Request(HttpMethod.Get, $"{vssps}/accounts?memberId={Uri.EscapeDataString(id)}&{Api}", s), ct);
+        var orgs = (json?["value"]?.AsArray() ?? [])
+            .Select(a => a?["accountName"]?.GetValue<string>() ?? string.Empty)
+            .Where(n => n.Length > 0).Select(n => "https://dev.azure.com/" + n)
+            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
+        return (who, orgs);
+    }
+
+    /// <summary>Progetti dell'organizzazione visibili all'utente (tendina).</summary>
+    public async Task<IReadOnlyList<string>> ProjectsAsync(AzureSettings s, CancellationToken ct)
+    {
+        var json = await SendAsync(Request(HttpMethod.Get, $"{Org(s)}/_apis/projects?$top=500&{Api}", s), ct);
+        return (json?["value"]?.AsArray() ?? []).Select(p => p?["name"]?.GetValue<string>() ?? string.Empty)
+            .Where(n => n.Length > 0).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
     /// <summary>Il progetto esiste ed e' visibile con questo token.</summary>
